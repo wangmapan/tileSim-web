@@ -1,0 +1,11 @@
+.DS_Store
+.idea/
+.venv/
+node_modules/
+dist/
+runs/
+runtime/
+.vite/
+coverage/
+__pycache__/
+*.pyc
