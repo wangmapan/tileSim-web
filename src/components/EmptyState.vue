@@ -1,15 +1,17 @@
 <script setup>
 import { FileQuestion } from "@lucide/vue";
+import { useI18n } from "../i18n";
+const { t } = useI18n();
 defineProps({
-  title: { type: String, default: "暂无数据" },
-  description: { type: String, default: "请先打开一次完整运行或导入对应报告。" },
+  title: { type: String, default: "" },
+  description: { type: String, default: "" },
 });
 </script>
 
 <template>
   <div class="empty-state">
     <FileQuestion :size="24" />
-    <strong>{{ title }}</strong>
-    <p>{{ description }}</p>
+    <strong>{{ t(title || "暂无数据") }}</strong>
+    <p>{{ t(description || "请先打开一次完整运行或导入对应报告。") }}</p>
   </div>
 </template>

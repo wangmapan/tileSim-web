@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/run.schema.json",
+  "title": "ApiRun",
+  "type": "object",
+  "required": ["run_id"],
+  "properties": {
+    "run_id": { "type": "string", "pattern": "^run-[A-Za-z0-9._-]+$" },
+    "run_name": { "type": ["string", "null"] },
+    "status": { "enum": ["preparing", "running", "completed", "failed", "incomplete"] },
+    "input_mode": { "enum": ["controls", "json", "legacy"] },
+    "created_at": { "type": "string" },
+    "finished_at": { "type": "string" },
+    "scenario_id": { "type": "string" },
+    "fidelity_policy": { "type": "string" },
+    "gpu_participation_mode": { "type": "string" },
+    "design_space_mode": { "type": "string" },
+    "error": { "type": "string" },
+    "failure_code": { "type": "string" },
+    "exit_code": { "type": "integer" },
+    "digest": {
+      "type": "object",
+      "properties": {
+        "end_to_end_latency_us": { "type": ["number", "null"] },
+        "throughput_requests_per_second": { "type": ["number", "null"] },
+        "completed_request_count": { "type": ["integer", "null"] },
+        "request_count": { "type": ["integer", "null"] },
+        "validation_lane": { "type": ["string", "null"] },
+        "evidence_tier": { "type": ["string", "null"] }
+      }
+    },
+    "idempotent_replay": { "type": "boolean" }
+  },
+  "additionalProperties": true
+}

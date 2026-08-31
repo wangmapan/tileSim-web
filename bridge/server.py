@@ -7,17 +7,56 @@ strict, allow-listed execution surface for the local TileSimCLI binary.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import math
 import os
 import re
 import subprocess
+import sys
 import threading
+import time
 import uuid
 from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
+
+from api import responses
+from infra import identity
+from repositories import runs as run_repository
+from services import execution
+from services import evidence_agent as evidence_agent_service
+from services import week7
+
+from contracts import evidence_agent
+from contracts.experiment_descriptor import (
+    DESIGN_SPACE_MODES,
+    GPU_PARTICIPATION_MODES,
+    INPUT_MODES,
+    PARAMETER_DEFINITIONS,
+    REQUESTED_FIDELITY_OPTIONS,
+    SCENARIO_OPTIONS,
+    build_experiment_descriptor,
+)
+from contracts.validation import (
+    MAX_CUSTOM_INPUT_BYTES,
+    MAX_DESIGN_SPACE_CANDIDATES,
+    MAX_DESIGN_SPACE_TRANSFERS,
+    MAX_EXACT_JSON_INTEGER,
+    SCHEDULERS,
+    RequestValidationError,
+    bounded_number,
+    is_number,
+    pointer_for_label,
+    request_validation_error,
+    validate_custom_inputs,
+    validate_design_space_candidates,
+    validate_overrides,
+    validate_run_name,
+)
+from contracts.run_request import validate_run_request
 
 
 WEB_ROOT = Path(__file__).resolve().parents[1]
@@ -28,456 +67,397 @@ DEPLOYMENT_MANIFEST = Path(
     os.environ.get("TILESIM_DEPLOYMENT_MANIFEST", "/mnt/d/tileSim-web/runtime/backend-current.json")
 )
 RUNS_ROOT = WEB_ROOT / "runs"
+CONTRACT_ROOT = WEB_ROOT / "bridge/contracts"
+
+
+def load_contract_json(path: Path) -> dict:
+    """Load a checked-in contract document; startup must fail closed if it is invalid."""
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise RuntimeError(f"Bridge contract must be a JSON object: {path}")
+    return value
+
+
+OPENAPI_CONTRACT = load_contract_json(CONTRACT_ROOT / "openapi.json")
+CONTRACT_METADATA = OPENAPI_CONTRACT["x-tilesim-contract"]
 
 SCENARIOS = {
     "s1_des_example": {
-        "label": "S1 -> S6 synthetic runtime example",
+        "label": next(
+            option["label"]
+            for option in SCENARIO_OPTIONS
+            if option["scenario_id"] == "s1_des_example"
+        ),
         "from": "S1",
         "to": "S6",
         "trace": TILESIM_ROOT / "docs/examples/s1_runtime_trace.json",
         "topology": TILESIM_ROOT / "docs/examples/modular_fabric_scenario.json",
     }
 }
-ALLOWED_FIDELITY_POLICIES = {"default", "des"}
-ALLOWED_GPU_PARTICIPATION_MODES = {"gpu_free"}
-MAX_CUSTOM_INPUT_BYTES = 1_000_000
+ALLOWED_FIDELITY_POLICIES = {
+    option["fidelity_policy"] for option in REQUESTED_FIDELITY_OPTIONS if option["available"]
+}
+ALLOWED_GPU_PARTICIPATION_MODES = {
+    option["gpu_participation_mode"] for option in GPU_PARTICIPATION_MODES if option["available"]
+}
 MAX_REQUEST_BYTES = 2_100_000
+MAX_EVIDENCE_AGENT_REQUEST_BYTES = 1_500_000
+MAX_ACTIVE_RUNS = max(1, int(os.environ.get("TILESIM_MAX_ACTIVE_RUNS", "1")))
+SSE_WAIT_TIMEOUT_SECONDS = 15.0
+SSE_HEARTBEAT_SECONDS = 5.0
+API_VERSION = CONTRACT_METADATA["api_version"]
+API_MANIFEST_SCHEMA = CONTRACT_METADATA["manifest_schema"]
+ERROR_SCHEMA_VERSION = CONTRACT_METADATA["error_schema"]
+ARTIFACT_MANIFEST_SCHEMA = CONTRACT_METADATA["artifact_manifest_schema"]
+KNOWN_REPORT_SCHEMA_IDENTITIES = CONTRACT_METADATA["known_report_schema_identities"]
+EXPERIMENT_DESCRIPTOR_CONTRACT = CONTRACT_METADATA["experiment_descriptor"]
+REPORT_FILE_NAMES = CONTRACT_METADATA["report_files"]
+JSON_ARTIFACT_DEFINITIONS = CONTRACT_METADATA["artifacts"]
+RUN_CREATION_CONTRACT = CONTRACT_METADATA["run_creation"]
+RUN_EVENT_CONTRACT = CONTRACT_METADATA["run_events"]
+EVIDENCE_AGENT_CONTRACT = CONTRACT_METADATA["evidence_agent"]
+SCHEMA_SET_REVISION = "sha256:" + hashlib.sha256(
+    json.dumps(
+        {
+            path.relative_to(CONTRACT_ROOT).as_posix(): load_contract_json(path)
+            for path in sorted(CONTRACT_ROOT.rglob("*.json"))
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+).hexdigest()
 runs: dict[str, dict] = {}
 runs_lock = threading.Lock()
+metadata_lock = threading.RLock()
+BRIDGE_INSTANCE_ID = uuid.uuid4().hex
+week7_operation_lock = threading.Lock()
+evidence_agent_operation_lock = threading.Lock()
 
-SCHEDULERS = {"fifo", "decode_priority", "fabric_backpressure_aware"}
+def resolve_linked_git_dir(root: Path) -> Path | None:
+    return identity.resolve_linked_git_dir(root)
+
+
+def git_command(root: Path, *args: str) -> list[str]:
+    return identity.git_command(root, *args)
 
 
 def git_value(*args: str) -> str:
-    try:
-        completed = subprocess.run(
-            ["git", "-C", str(TILESIM_ROOT), *args],
-            text=True,
-            capture_output=True,
-            timeout=5,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return "unknown"
-    return completed.stdout.strip() if completed.returncode == 0 and completed.stdout.strip() else "unknown"
+    return identity.git_value(TILESIM_ROOT, *args)
+
+
+def worktree_state_digest(root: Path = TILESIM_ROOT) -> str:
+    return identity.worktree_state_digest(root)
 
 
 def deployment_manifest() -> dict:
-    try:
-        value = json.loads(DEPLOYMENT_MANIFEST.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return value if isinstance(value, dict) else {}
+    return identity.deployment_manifest(DEPLOYMENT_MANIFEST)
 
 
 def backend_identity() -> dict:
-    manifest = deployment_manifest()
-    source_revision = git_value("rev-parse", "HEAD")
-    build_revision = os.environ.get("TILESIM_BUILD_REVISION") or manifest.get("build_revision") or "unknown"
-    versions_match = source_revision != "unknown" and build_revision != "unknown" and source_revision == build_revision
-    branch = git_value("branch", "--show-current")
-    return {
-        "tilesim_root": str(TILESIM_ROOT),
-        "tilesim_cli": str(TILESIM_CLI),
-        "backend_revision": source_revision,
-        "backend_branch": branch if branch != "unknown" else manifest.get("source_ref", "detached"),
-        "source_revision": source_revision,
-        "build_revision": build_revision,
-        "versions_match": versions_match,
-        "deployment_mode": manifest.get("deployment_mode", "unmanaged"),
-        "deployment_ref": manifest.get("source_ref", "unknown"),
-        "deployed_at": manifest.get("deployed_at", "unknown"),
-        "deployment_manifest": str(DEPLOYMENT_MANIFEST),
-    }
+    return identity.backend_identity(TILESIM_ROOT, TILESIM_CLI, DEPLOYMENT_MANIFEST)
 
 
 def runtime_capabilities() -> dict:
-    unavailable = {
-        "schema_version": "tilesim.runtime_capabilities.v1",
-        "default_gpu_participation_mode": "gpu_free",
-        "cycle_scope": "S6_hotspot_refinement_only",
-        "dependencies": {
-            "gpu_hardware": {
-                "available": False,
-                "version": "",
-                "reason": "TileSimCLI_capability_discovery_unavailable",
-            },
-            "verilator_cycle": {
-                "available": False,
-                "version": "",
-                "reason": "TileSimCLI_capability_discovery_unavailable",
-            },
-            "astra_sim": {
-                "available": False,
-                "version": "",
-                "reason": "real_ASTRA_executable_and_Chakra_root_not_configured",
-            },
-        },
-    }
-    if not (TILESIM_CLI.is_file() and os.access(TILESIM_CLI, os.X_OK)):
-        return unavailable
-    try:
-        completed = subprocess.run(
-            [str(TILESIM_CLI), "capabilities"],
-            text=True,
-            capture_output=True,
-            timeout=5,
-            check=False,
-        )
-        discovered = json.loads(completed.stdout)
-    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
-        return unavailable
-    if completed.returncode != 0 or discovered.get("schema_version") != unavailable["schema_version"]:
-        return unavailable
-    discovered["run_surface"] = {
-        "gpu_participation_modes": ["gpu_free"],
-        "cycle_hotspot_request_available": False,
-        "cycle_hotspot_request_reason":
-            "The web bridge does not yet expose the explicit S6 hotspot window request schema.",
-        "real_network_observation_channel": "S8_evidence_only",
-    }
-    return discovered
+    return identity.runtime_capabilities(TILESIM_CLI)
 
 
 def now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def request_id_for(handler: SimpleHTTPRequestHandler) -> str:
+    return responses.request_id_for(handler)
+
+
+def add_contract_headers(handler: SimpleHTTPRequestHandler) -> None:
+    return responses.add_contract_headers(
+        handler,
+        api_version=API_VERSION,
+        schema_set_revision=SCHEMA_SET_REVISION,
+    )
+
+
 def write_json(handler: SimpleHTTPRequestHandler, status: HTTPStatus, payload: dict) -> None:
-    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    handler.send_response(status)
-    handler.send_header("Content-Type", "application/json; charset=utf-8")
-    handler.send_header("Content-Length", str(len(body)))
-    handler.send_header("Cache-Control", "no-store")
-    add_cors_headers(handler)
-    handler.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-    handler.send_header("Access-Control-Allow-Headers", "Content-Type")
-    handler.end_headers()
-    handler.wfile.write(body)
+    return responses.write_json(
+        handler,
+        status,
+        payload,
+        api_version=API_VERSION,
+        schema_set_revision=SCHEMA_SET_REVISION,
+    )
+
+
+def write_error(
+    handler: SimpleHTTPRequestHandler,
+    status: HTTPStatus,
+    code: str,
+    message: str,
+    *,
+    field_path: str | None = None,
+    retryable: bool | None = None,
+) -> None:
+    return responses.write_error(
+        handler,
+        status,
+        code,
+        message,
+        error_schema_version=ERROR_SCHEMA_VERSION,
+        api_version=API_VERSION,
+        schema_set_revision=SCHEMA_SET_REVISION,
+        field_path=field_path,
+        retryable=retryable,
+    )
+
+
+def api_manifest() -> dict:
+    return responses.api_manifest(
+        OPENAPI_CONTRACT,
+        manifest_schema=API_MANIFEST_SCHEMA,
+        api_version=API_VERSION,
+        schema_set_revision=SCHEMA_SET_REVISION,
+        error_schema_version=ERROR_SCHEMA_VERSION,
+        artifact_manifest_schema=ARTIFACT_MANIFEST_SCHEMA,
+        known_report_schema_identities=KNOWN_REPORT_SCHEMA_IDENTITIES,
+        experiment_descriptor_contract=EXPERIMENT_DESCRIPTOR_CONTRACT,
+        run_creation_contract=RUN_CREATION_CONTRACT,
+        run_event_contract=RUN_EVENT_CONTRACT,
+        evidence_agent_contract=EVIDENCE_AGENT_CONTRACT,
+    )
 
 
 def add_cors_headers(handler: SimpleHTTPRequestHandler) -> None:
-    """Allow only the local Vite development origin; production is same-origin."""
-    origin = handler.headers.get("Origin", "")
-    if origin in {"http://127.0.0.1:4173", "http://localhost:4173"}:
-        handler.send_header("Access-Control-Allow-Origin", origin)
-        handler.send_header("Vary", "Origin")
+    return responses.add_cors_headers(handler)
 
 
 def write_json_file(handler: SimpleHTTPRequestHandler, path: Path) -> None:
-    """Serve an allow-listed local JSON artifact for in-browser inspection."""
-    try:
-        body = path.read_bytes()
-        json.loads(body)
-    except (OSError, json.JSONDecodeError):
-        return write_json(handler, HTTPStatus.NOT_FOUND, {"error": "JSON artifact was not found."})
-    handler.send_response(HTTPStatus.OK)
-    handler.send_header("Content-Type", "application/json; charset=utf-8")
-    handler.send_header("Content-Length", str(len(body)))
-    handler.send_header("Cache-Control", "no-store")
-    handler.send_header("X-Content-Type-Options", "nosniff")
-    add_cors_headers(handler)
-    handler.end_headers()
-    handler.wfile.write(body)
+    return responses.write_json_file(
+        handler,
+        path,
+        api_version=API_VERSION,
+        schema_set_revision=SCHEMA_SET_REVISION,
+        write_not_found=lambda: write_error(
+            handler,
+            HTTPStatus.NOT_FOUND,
+            "artifact_not_found",
+            "JSON artifact was not found.",
+            retryable=False,
+        ),
+    )
+
+
+def write_json_artifact_body(handler: SimpleHTTPRequestHandler, body: bytes) -> None:
+    return responses.write_json_bytes(
+        handler,
+        body,
+        api_version=API_VERSION,
+        schema_set_revision=SCHEMA_SET_REVISION,
+    )
 
 
 def load_reports(run: dict) -> dict:
-    reports = {}
-    for kind, path in run["report_paths"].items():
-        if path.is_file():
-            reports[kind] = json.loads(path.read_text(encoding="utf-8"))
-    return reports
+    return run_repository.load_reports(run, JSON_ARTIFACT_DEFINITIONS)
 
 
 def report_paths_for(run_dir: Path) -> dict[str, Path]:
-    return {
-        "run": run_dir / "run-result.json",
-        "metrics": run_dir / "metrics.json",
-        "validation": run_dir / "validation.json",
-        "tail": run_dir / "tail-cause-chain.json",
-        "execution_envelope": run_dir / "execution-envelope.json",
-    }
+    return run_repository.report_paths_for(run_dir, REPORT_FILE_NAMES)
 
 
 def json_artifact_paths_for(run_dir: Path) -> dict[str, Path]:
-    """Return only the JSON artifacts that the browser may preview."""
-    return {
-        "input-runtime-trace": run_dir / "input-runtime-trace.json",
-        "input-topology": run_dir / "input-topology.json",
-        "run-result": run_dir / "run-result.json",
-        "metrics": run_dir / "metrics.json",
-        "validation": run_dir / "validation.json",
-        "tail-cause-chain": run_dir / "tail-cause-chain.json",
-        "execution-envelope": run_dir / "execution-envelope.json",
-        "metadata": run_dir / "run-metadata.json",
-    }
+    return run_repository.json_artifact_paths_for(run_dir, JSON_ARTIFACT_DEFINITIONS)
+
+
+def json_schema_identity(value: object) -> str:
+    return run_repository.json_schema_identity(value)
+
+
+def artifact_manifest_for(run_id: str, run_dir: Path) -> dict:
+    return run_repository.artifact_manifest_for(
+        run_id,
+        run_dir,
+        artifact_definitions=JSON_ARTIFACT_DEFINITIONS,
+        artifact_manifest_schema=ARTIFACT_MANIFEST_SCHEMA,
+        api_version=API_VERSION,
+        schema_set_revision=SCHEMA_SET_REVISION,
+    )
+
+
+def evidence_agent_artifact_documents(run_dir: Path, manifest: dict) -> dict[str, dict]:
+    """Freeze only verified, fixed-name JSON artifacts from the manifest snapshot."""
+    documents: dict[str, dict] = {}
+    for entry in manifest.get("artifacts", []):
+        if entry.get("contract_status") != "supported":
+            continue
+        artifact_id = entry.get("artifact_id")
+        definition = JSON_ARTIFACT_DEFINITIONS.get(artifact_id)
+        if not isinstance(definition, dict):
+            continue
+        path = run_dir / definition["file_name"]
+        try:
+            body = path.read_bytes()
+            document = json.loads(body)
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise run_repository.ArtifactManifestValidationError(
+                f"Evidence Agent artifact {artifact_id} cannot be frozen as valid JSON."
+            ) from error
+        if (
+            not isinstance(document, dict)
+            or len(body) != entry.get("bytes")
+            or hashlib.sha256(body).hexdigest() != entry.get("sha256")
+            or json_schema_identity(document) != entry.get("schema_identity")
+        ):
+            raise run_repository.ArtifactManifestValidationError(
+                f"Evidence Agent artifact {artifact_id} changed after manifest verification."
+            )
+        documents[artifact_id] = document
+    return documents
 
 
 def safe_run_directory(run_id: str) -> Path | None:
-    if not run_id.startswith("run-") or Path(run_id).name != run_id:
-        return None
-    candidate = (RUNS_ROOT / run_id).resolve()
-    return candidate if candidate.parent == RUNS_ROOT.resolve() and candidate.is_dir() else None
+    return run_repository.safe_run_directory(run_id, RUNS_ROOT)
 
 
 def read_json_file(path: Path) -> dict:
-    try:
-        return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
-    except (OSError, json.JSONDecodeError):
-        return {}
+    return run_repository.read_json_file(path)
+
+
+def is_valid_json_file(path: Path) -> bool:
+    return run_repository.is_valid_json_file(path)
+
+
+def atomic_write_json(path: Path, payload: dict) -> None:
+    return run_repository.atomic_write_json(path, payload)
 
 
 def update_run_metadata(run_dir: Path, **updates: object) -> None:
-    """Keep the durable run status aligned with the in-memory task state."""
-    metadata_path = run_dir / "run-metadata.json"
-    metadata = read_json_file(metadata_path)
-    metadata.update(updates)
-    metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+    with metadata_lock:
+        return run_repository.update_run_metadata(
+            run_dir,
+            read_json=read_json_file,
+            write_json=atomic_write_json,
+            **updates,
+        )
 
 
 def run_digest(report_paths: dict[str, Path]) -> dict:
-    run_report = read_json_file(report_paths["run"])
-    metrics = read_json_file(report_paths["metrics"])
-    validation = read_json_file(report_paths["validation"])
-    return {
-        "end_to_end_latency_us": run_report.get("summary", {}).get("end_to_end_latency_us"),
-        "throughput_requests_per_second": metrics.get("summary", {}).get("throughput_requests_per_second"),
-        "completed_request_count": metrics.get("summary", {}).get("completed_request_count"),
-        "request_count": metrics.get("summary", {}).get("request_count"),
-        "validation_lane": validation.get("validation_lane"),
-        "evidence_tier": metrics.get("evidence_tier") or validation.get("evidence_tier"),
-    }
+    return run_repository.run_digest(report_paths)
 
 
 def persisted_run(run_id: str) -> dict | None:
-    run_dir = safe_run_directory(run_id)
-    if run_dir is None:
-        return None
-    report_paths = report_paths_for(run_dir)
-    metadata = read_json_file(run_dir / "run-metadata.json")
-    if not metadata:
-        metadata = {"run_id": run_id, "created_at": datetime.fromtimestamp(
-            run_dir.stat().st_mtime, tz=timezone.utc
-        ).isoformat(), "scenario_id": "unknown", "input_mode": "legacy"}
-    metadata["run_id"] = run_id
-    metadata["status"] = "completed" if report_paths["run"].is_file() else metadata.get("status", "incomplete")
-    metadata["report_paths"] = report_paths
-    metadata["digest"] = run_digest(report_paths)
-    return metadata
+    return run_repository.persisted_run(
+        run_id,
+        runs_root=RUNS_ROOT,
+        report_file_names=REPORT_FILE_NAMES,
+        bridge_instance_id=BRIDGE_INSTANCE_ID,
+        now=now,
+        write_json=atomic_write_json,
+    )
 
 
 def public_run(run: dict) -> dict:
-    public = {key: value for key, value in run.items() if key not in {"report_paths", "stdout", "stderr"}}
-    if "digest" not in public and "report_paths" in run:
-        public["digest"] = run_digest(run["report_paths"])
-    return public
+    return run_repository.public_run(run)
 
 
-def validate_run_name(value: object) -> str:
-    if value is None:
-        return "未命名实验"
-    if not isinstance(value, str):
-        raise ValueError("run_name must be a string.")
-    name = value.strip()
-    if not name:
-        return "未命名实验"
-    if len(name) > 80 or any(ord(char) < 32 for char in name):
-        raise ValueError("run_name must contain 1 to 80 printable characters.")
-    return name
-
-
-def is_number(value: object) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool)
-
-
-def bounded_number(value: object, label: str, minimum: float, maximum: float, integer: bool = False) -> int | float:
-    if not is_number(value) or value < minimum or value > maximum:
-        raise ValueError(f"{label} must be between {minimum} and {maximum}.")
-    if integer and int(value) != value:
-        raise ValueError(f"{label} must be an integer.")
-    return int(value) if integer else float(value)
-
-
-def validate_overrides(value: object) -> dict:
-    if value is None:
-        return {}
-    if not isinstance(value, dict):
-        raise ValueError("overrides must be an object.")
-    allowed_sections = {"runtime", "workload", "fabric"}
-    if unknown := set(value) - allowed_sections:
-        raise ValueError(f"Unsupported override section: {', '.join(sorted(unknown))}.")
-
-    clean: dict[str, dict] = {}
-    runtime = value.get("runtime", {})
-    if not isinstance(runtime, dict):
-        raise ValueError("overrides.runtime must be an object.")
-    if unknown := set(runtime) - {"batch_scheduler", "max_batch_size", "kv_capacity_tokens"}:
-        raise ValueError(f"Unsupported runtime override: {', '.join(sorted(unknown))}.")
-    if "batch_scheduler" in runtime:
-        if runtime["batch_scheduler"] not in SCHEDULERS:
-            raise ValueError("batch_scheduler is not allow-listed.")
-        clean.setdefault("runtime", {})["batch_scheduler"] = runtime["batch_scheduler"]
-    if "max_batch_size" in runtime:
-        clean.setdefault("runtime", {})["max_batch_size"] = bounded_number(
-            runtime["max_batch_size"], "max_batch_size", 1, 64, integer=True
+def idempotency_key_for(handler: SimpleHTTPRequestHandler) -> str:
+    key = handler.headers.get("Idempotency-Key", "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9._:-]{8,128}", key):
+        raise RequestValidationError(
+            "Idempotency-Key must contain 8 to 128 safe characters.",
+            "/headers/Idempotency-Key",
         )
-    if "kv_capacity_tokens" in runtime:
-        clean.setdefault("runtime", {})["kv_capacity_tokens"] = bounded_number(
-            runtime["kv_capacity_tokens"], "kv_capacity_tokens", 256, 1_000_000, integer=True
-        )
-
-    workload = value.get("workload", {})
-    if not isinstance(workload, dict):
-        raise ValueError("overrides.workload must be an object.")
-    if unknown := set(workload) - {"message_size_multiplier"}:
-        raise ValueError(f"Unsupported workload override: {', '.join(sorted(unknown))}.")
-    if "message_size_multiplier" in workload:
-        clean.setdefault("workload", {})["message_size_multiplier"] = bounded_number(
-            workload["message_size_multiplier"], "message_size_multiplier", 0.25, 8.0
-        )
-
-    fabric = value.get("fabric", {})
-    if not isinstance(fabric, dict):
-        raise ValueError("overrides.fabric must be an object.")
-    fabric_bounds = {
-        "scale_up_bandwidth_gbps": (25, 2_000),
-        "scale_up_latency_us": (0.05, 100),
-        "scale_out_bandwidth_gbps": (10, 2_000),
-        "scale_out_latency_us": (0.1, 500),
-    }
-    if unknown := set(fabric) - set(fabric_bounds):
-        raise ValueError(f"Unsupported Fabric override: {', '.join(sorted(unknown))}.")
-    for key, (minimum, maximum) in fabric_bounds.items():
-        if key in fabric:
-            clean.setdefault("fabric", {})[key] = bounded_number(fabric[key], key, minimum, maximum)
-    return clean
+    return key
 
 
-def validate_custom_inputs(value: object) -> dict:
-    """Accept only a bounded pair of JSON documents for the fixed hosted S1->S6 path."""
-    if not isinstance(value, dict) or set(value) != {"runtime_trace", "topology"}:
-        raise ValueError("custom_inputs must contain runtime_trace and topology objects.")
-    for name, document in value.items():
-        if not isinstance(document, dict):
-            raise ValueError(f"custom_inputs.{name} must be a JSON object.")
-        if len(json.dumps(document, ensure_ascii=False).encode("utf-8")) > MAX_CUSTOM_INPUT_BYTES:
-            raise ValueError(f"custom_inputs.{name} exceeds the 1 MB limit.")
+def request_payload_digest(request: dict) -> str:
+    canonical = json.dumps(request, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
-    trace = value["runtime_trace"]
-    if not isinstance(trace.get("policy"), dict) or not isinstance(trace.get("requests"), list):
-        raise ValueError("runtime_trace requires policy and requests fields.")
-    if not 1 <= len(trace["requests"]) <= 1_024:
-        raise ValueError("runtime_trace.requests must contain between 1 and 1024 requests.")
-    if not all(isinstance(request, dict) for request in trace["requests"]):
-        raise ValueError("runtime_trace.requests must contain JSON objects.")
 
-    topology = value["topology"]
-    topology_root = topology.get("topology")
-    if not isinstance(topology_root, dict):
-        raise ValueError("topology requires a topology object.")
-    for key, maximum in {"devices": 1_024, "module_bindings": 64, "domains": 64}.items():
-        values = topology_root.get(key)
-        if not isinstance(values, list) or len(values) > maximum:
-            raise ValueError(f"topology.topology.{key} must be a list with at most {maximum} entries.")
-    return {"runtime_trace": trace, "topology": topology}
+def reject_nonfinite_json(value: str) -> None:
+    raise RequestValidationError(f"JSON number {value} is not finite.", "/")
+
+
+def idempotent_run(key: str) -> dict | None:
+    return run_repository.idempotent_run(
+        key,
+        runs=runs,
+        runs_root=RUNS_ROOT,
+        load_persisted_run=persisted_run,
+    )
+
+
+def creation_response(run: dict, *, idempotent_replay: bool) -> dict:
+    return run_repository.creation_response(run, idempotent_replay=idempotent_replay)
+
+
+def run_snapshot(run_id: str) -> dict | None:
+    return run_repository.run_snapshot(
+        run_id,
+        runs=runs,
+        runs_lock=runs_lock,
+        load_persisted_run=persisted_run,
+    )
+
+
+def is_terminal_run(run: dict) -> bool:
+    return run_repository.is_terminal_run(run)
+
+
+def write_sse_event(
+    handler: SimpleHTTPRequestHandler,
+    *,
+    event: str,
+    data: dict,
+    event_id: str | None = None,
+) -> None:
+    return responses.write_sse_event(handler, event=event, data=data, event_id=event_id)
 
 
 def materialize_inputs(run_dir: Path, scenario: dict, overrides: dict) -> dict:
-    """Create a run-local, schema-preserving input pair from an allow-listed base scenario."""
-    trace = json.loads(scenario["trace"].read_text(encoding="utf-8"))
-    topology = json.loads(scenario["topology"].read_text(encoding="utf-8"))
-
-    trace.setdefault("policy", {}).update(overrides.get("runtime", {}))
-    multiplier = overrides.get("workload", {}).get("message_size_multiplier", 1.0)
-    if multiplier != 1.0:
-        for request in trace.get("requests", []):
-            request["message_size_bytes"] = max(1, round(request["message_size_bytes"] * multiplier))
-
-    fabric = overrides.get("fabric", {})
-    for binding in topology.get("topology", {}).get("module_bindings", []):
-        params = binding.setdefault("override_params", {})
-        if binding.get("module_kind") == "scale_up":
-            if "scale_up_bandwidth_gbps" in fabric:
-                params["bandwidth_gbps"] = fabric["scale_up_bandwidth_gbps"]
-            if "scale_up_latency_us" in fabric:
-                params["latency_us"] = fabric["scale_up_latency_us"]
-        if binding.get("module_kind") == "scale_out":
-            if "scale_out_bandwidth_gbps" in fabric:
-                params["bandwidth_gbps"] = fabric["scale_out_bandwidth_gbps"]
-            if "scale_out_latency_us" in fabric:
-                params["latency_us"] = fabric["scale_out_latency_us"]
-
-    trace_path = run_dir / "input-runtime-trace.json"
-    topology_path = run_dir / "input-topology.json"
-    trace_path.write_text(json.dumps(trace, ensure_ascii=False, indent=2), encoding="utf-8")
-    topology_path.write_text(json.dumps(topology, ensure_ascii=False, indent=2), encoding="utf-8")
-    return {**scenario, "trace": trace_path, "topology": topology_path}
+    return execution.materialize_inputs(run_dir, scenario, overrides)
 
 
 def materialize_custom_inputs(run_dir: Path, scenario: dict, inputs: dict) -> dict:
-    trace_path = run_dir / "input-runtime-trace.json"
-    topology_path = run_dir / "input-topology.json"
-    trace_path.write_text(json.dumps(inputs["runtime_trace"], ensure_ascii=False, indent=2), encoding="utf-8")
-    topology_path.write_text(json.dumps(inputs["topology"], ensure_ascii=False, indent=2), encoding="utf-8")
-    return {**scenario, "trace": trace_path, "topology": topology_path}
+    return execution.materialize_custom_inputs(run_dir, scenario, inputs)
+
+
+def materialize_design_space_candidates(run_dir: Path, manifest: dict | None) -> Path | None:
+    return execution.materialize_design_space_candidates(run_dir, manifest)
 
 
 def execute_run(run_id: str, scenario: dict, fidelity_policy: str) -> None:
-    run_dir = RUNS_ROOT / run_id
-    report_paths = report_paths_for(run_dir)
-    command = [
-        str(TILESIM_CLI), "run", "--mode", "dev", "--from", scenario["from"], "--to", scenario["to"],
-        "--trace", str(scenario["trace"]), "--topology", str(scenario["topology"]),
-        "--fidelity-policy", fidelity_policy, "--out", str(report_paths["run"]),
-        "--metrics-report-out", str(report_paths["metrics"]),
-        "--validation-report-out", str(report_paths["validation"]),
-        "--tail-report-out", str(report_paths["tail"]),
-        "--execution-envelope-out", str(report_paths["execution_envelope"]),
-    ]
-    try:
-        completed = subprocess.run(
-            command, cwd=TILESIM_ROOT, text=True, capture_output=True, timeout=180, check=False
-        )
-        if completed.returncode == 0 and completed.stdout.strip():
-            try:
-                primary_report = json.loads(completed.stdout)
-                report_paths["run"].write_text(
-                    json.dumps(primary_report, ensure_ascii=False, indent=2), encoding="utf-8"
-                )
-            except json.JSONDecodeError:
-                # Artifact reports are still valid when a future CLI emits non-JSON stdout.
-                pass
-        with runs_lock:
-            run = runs[run_id]
-            run["finished_at"] = now()
-            run["exit_code"] = completed.returncode
-            run["stdout"] = completed.stdout[-4000:]
-            run["stderr"] = completed.stderr[-4000:]
-            run["report_paths"] = report_paths
-            if completed.returncode == 0:
-                run["status"] = "completed"
-            else:
-                run["status"] = "failed"
-                run["error"] = "TileSimCLI returned a non-zero exit code."
-            metadata_updates = {
-                "status": run["status"],
-                "finished_at": run["finished_at"],
-                "exit_code": run["exit_code"],
-                "error": run.get("error", ""),
-            }
-        update_run_metadata(run_dir, **metadata_updates)
-    except (OSError, subprocess.TimeoutExpired) as error:
-        with runs_lock:
-            run = runs[run_id]
-            run["status"] = "failed"
-            run["finished_at"] = now()
-            run["error"] = str(error)
-            failed_at = run["finished_at"]
-            failure = run["error"]
-        try:
-            update_run_metadata(run_dir, status="failed", finished_at=failed_at, error=failure)
-        except OSError:
-            pass
+    return execution.execute_run(
+        run_id,
+        scenario,
+        fidelity_policy,
+        runs_root=RUNS_ROOT,
+        tilesim_cli=TILESIM_CLI,
+        tilesim_root=TILESIM_ROOT,
+        runs=runs,
+        runs_lock=runs_lock,
+        report_paths_for=report_paths_for,
+        is_valid_json_file=is_valid_json_file,
+        update_run_metadata=update_run_metadata,
+        now=now,
+        process_runner=subprocess.run,
+    )
+
+
+def start_run_execution(run_id: str, scenario: dict, fidelity_policy: str) -> None:
+    return execution.start_run_execution(
+        run_id,
+        scenario,
+        fidelity_policy,
+        execute=execute_run,
+    )
+
+
+def execute_week7_operation(operation_id: str) -> dict:
+    return week7.execute_week7_operation(
+        operation_id,
+        tilesim_cli=TILESIM_CLI,
+        tilesim_root=TILESIM_ROOT,
+        process_runner=subprocess.run,
+    )
 
 
 class BridgeHandler(SimpleHTTPRequestHandler):
@@ -489,6 +469,8 @@ class BridgeHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = urlparse(self.path).path
+        if path == "/api/manifest":
+            return write_json(self, HTTPStatus.OK, api_manifest())
         if path == "/api/health":
             identity = backend_identity()
             cli_available = TILESIM_CLI.is_file() and os.access(TILESIM_CLI, os.X_OK)
@@ -504,18 +486,42 @@ class BridgeHandler(SimpleHTTPRequestHandler):
             return write_json(self, HTTPStatus.OK, {
                 "scenarios": [{"scenario_id": key, "label": value["label"]} for key, value in SCENARIOS.items()],
                 "fidelity_policies": sorted(ALLOWED_FIDELITY_POLICIES),
-                "input_modes": ["controls", "json"],
+                "input_modes": [option["input_mode"] for option in INPUT_MODES if option["available"]],
+                "design_space_modes": [
+                    option["design_space_mode"] for option in DESIGN_SPACE_MODES if option["available"]
+                ],
                 "gpu_participation_modes": sorted(ALLOWED_GPU_PARTICIPATION_MODES),
             })
         if path == "/api/capabilities":
             return write_json(self, HTTPStatus.OK, runtime_capabilities())
+        if path == "/api/experiment-schema":
+            return write_json(
+                self,
+                HTTPStatus.OK,
+                build_experiment_descriptor(SCHEMA_SET_REVISION, runtime_capabilities()),
+            )
+        if path == "/api/agent/evidence-capabilities":
+            return write_json(
+                self,
+                HTTPStatus.OK,
+                evidence_agent.build_descriptor(SCHEMA_SET_REVISION),
+            )
+        if path == "/api/week7/evidence-map":
+            return self.run_week7_operation("evidence_map")
         parts = path.strip("/").split("/")
         if path == "/api/runs":
             return self.list_runs()
         if len(parts) == 3 and parts[:2] == ["api", "templates"]:
             scenario = SCENARIOS.get(parts[2])
             if scenario is None:
-                return write_json(self, HTTPStatus.NOT_FOUND, {"error": "Template scenario was not found."})
+                return write_error(
+                    self,
+                    HTTPStatus.NOT_FOUND,
+                    "template_not_found",
+                    "Template scenario was not found.",
+                    field_path="/scenario_id",
+                    retryable=False,
+                )
             return write_json(self, HTTPStatus.OK, {
                 "scenario_id": parts[2],
                 "runtime_trace": json.loads(scenario["trace"].read_text(encoding="utf-8")),
@@ -523,34 +529,365 @@ class BridgeHandler(SimpleHTTPRequestHandler):
             })
         if len(parts) == 3 and parts[:2] == ["api", "runs"]:
             return self.get_run(parts[2])
+        if len(parts) == 4 and parts[:2] == ["api", "runs"] and parts[3] == "events":
+            return self.get_run_events(parts[2])
         if len(parts) == 4 and parts[:2] == ["api", "runs"] and parts[3] == "reports":
             return self.get_reports(parts[2])
+        if len(parts) == 4 and parts[:2] == ["api", "runs"] and parts[3] == "artifacts":
+            return self.get_artifact_manifest(parts[2])
         if len(parts) == 5 and parts[:2] == ["api", "runs"] and parts[3] == "files":
             return self.get_json_artifact(parts[2], parts[4])
+        if path == "/api" or path.startswith("/api/"):
+            return write_error(
+                self,
+                HTTPStatus.NOT_FOUND,
+                "unknown_endpoint",
+                "Unknown API endpoint.",
+                retryable=False,
+            )
+        if Path(path).suffix == "" and (STATIC_ROOT / "index.html").is_file():
+            self.path = "/index.html"
         return super().do_GET()
 
     def do_OPTIONS(self) -> None:
         self.send_response(HTTPStatus.NO_CONTENT)
+        add_contract_headers(self)
         add_cors_headers(self)
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header(
+            "Access-Control-Allow-Headers",
+            "Content-Type, X-Request-ID, Idempotency-Key, Last-Event-ID",
+        )
         self.send_header("Content-Length", "0")
         self.end_headers()
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
         parts = path.strip("/").split("/")
+        if path == "/api/week7/calibration-example":
+            return self.run_week7_operation("calibration_example")
+        if path == "/api/week7/orchestration-example":
+            return self.run_week7_operation("orchestration_example")
         if len(parts) == 4 and parts[:2] == ["api", "runs"] and parts[3] == "name":
             return self.rename_run(parts[2])
+        if (
+            len(parts) == 5
+            and parts[:2] == ["api", "runs"]
+            and parts[3:] == ["agent", "evidence-analyses"]
+        ):
+            return self.create_evidence_analysis(parts[2])
         if path != "/api/runs":
-            return write_json(self, HTTPStatus.NOT_FOUND, {"error": "Unknown endpoint."})
+            return write_error(
+                self,
+                HTTPStatus.NOT_FOUND,
+                "unknown_endpoint",
+                "Unknown API endpoint.",
+                retryable=False,
+            )
+
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if length <= 0 or length > MAX_REQUEST_BYTES:
+                raise RequestValidationError("Request body must be between 1 byte and 2.1 MB.", "/")
+            request = json.loads(self.rfile.read(length), parse_constant=reject_nonfinite_json)
+            if not isinstance(request, dict):
+                raise RequestValidationError("Request body must be a JSON object.", "/")
+            idempotency_key = idempotency_key_for(self)
+            payload_digest = request_payload_digest(request)
+        except (ValueError, json.JSONDecodeError) as error:
+            validation = request_validation_error(error)
+            return write_error(
+                self,
+                HTTPStatus.BAD_REQUEST,
+                "invalid_run_request",
+                str(validation),
+                field_path=validation.field_path,
+                retryable=False,
+            )
+
+        with runs_lock:
+            existing = idempotent_run(idempotency_key)
+            replay_digest = existing.get("request_payload_sha256") if existing is not None else None
+            replay_response = (
+                creation_response(existing, idempotent_replay=True) if existing is not None else None
+            )
+        if replay_response is not None:
+            if replay_digest != payload_digest:
+                return write_error(
+                    self,
+                    HTTPStatus.CONFLICT,
+                    "idempotency_payload_mismatch",
+                    "Idempotency-Key was already used with a different request payload.",
+                    field_path="/headers/Idempotency-Key",
+                    retryable=False,
+                )
+            return write_json(self, HTTPStatus.OK, replay_response)
+
+        try:
+            capabilities = runtime_capabilities()
+            command = validate_run_request(
+                request,
+                scenario_ids=set(SCENARIOS),
+                fidelity_policies=ALLOWED_FIDELITY_POLICIES,
+                gpu_participation_modes=ALLOWED_GPU_PARTICIPATION_MODES,
+                capabilities=capabilities,
+            )
+            scenario_id = command.scenario_id
+            fidelity_policy = command.fidelity_policy
+            gpu_participation_mode = command.gpu_participation_mode
+            run_name = command.run_name
+            overrides = command.overrides
+            custom_inputs = command.custom_inputs
+            design_space_candidates = command.design_space_candidates
+        except (ValueError, json.JSONDecodeError) as error:
+            validation = request_validation_error(error)
+            return write_error(
+                self,
+                HTTPStatus.BAD_REQUEST,
+                "invalid_run_request",
+                str(validation),
+                field_path=validation.field_path,
+                retryable=False,
+            )
+
         if not (TILESIM_CLI.is_file() and os.access(TILESIM_CLI, os.X_OK)):
-            return write_json(self, HTTPStatus.SERVICE_UNAVAILABLE, {"error": "TileSimCLI is not available to the bridge."})
+            return write_error(
+                self,
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "cli_unavailable",
+                "TileSimCLI is not available to the bridge.",
+            )
         identity = backend_identity()
         if not identity["versions_match"]:
-            return write_json(self, HTTPStatus.SERVICE_UNAVAILABLE, {
-                "error": "Backend source and TileSimCLI build revisions do not match; run scripts/update-backend.ps1."
-            })
+            return write_error(
+                self,
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "backend_identity_mismatch",
+                "Backend source and TileSimCLI build revisions do not match; run scripts/update-backend.ps1.",
+            )
+
+        with runs_lock:
+            existing = idempotent_run(idempotency_key)
+            if existing is not None:
+                replay_digest = existing.get("request_payload_sha256")
+                replay_response = creation_response(existing, idempotent_replay=True)
+                reservation_error = None
+                capacity_reached = False
+            else:
+                replay_digest = None
+                replay_response = None
+                active_run_count = sum(
+                    run.get("status") in {"preparing", "running"}
+                    for run in runs.values()
+                )
+                capacity_reached = active_run_count >= MAX_ACTIVE_RUNS
+                if capacity_reached:
+                    reservation_error = None
+                else:
+                    run_id = f"run-{datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:8]}"
+                    run_dir = RUNS_ROOT / run_id
+                    input_mode = "json" if custom_inputs is not None else "controls"
+                    metadata = {
+                        "run_id": run_id,
+                        "status": "preparing",
+                        "created_at": now(),
+                        "scenario_id": scenario_id,
+                        "run_name": run_name,
+                        "fidelity_policy": fidelity_policy,
+                        "gpu_participation_mode": gpu_participation_mode,
+                        "input_mode": input_mode,
+                        "overrides": overrides,
+                        "input_files": {
+                            "runtime_trace": "input-runtime-trace.json",
+                            "topology": "input-topology.json",
+                        },
+                        "design_space_mode": (
+                            "external_manifest" if design_space_candidates is not None else "built_in_synthetic"
+                        ),
+                        "idempotency_key": idempotency_key,
+                        "request_payload_sha256": payload_digest,
+                        "bridge_instance_id": BRIDGE_INSTANCE_ID,
+                        "bridge_pid": os.getpid(),
+                    }
+                    if design_space_candidates is not None:
+                        metadata["input_files"]["design_space_candidates"] = "input-design-space-candidates.json"
+                    try:
+                        run_dir.mkdir(parents=True, exist_ok=False)
+                        atomic_write_json(run_dir / "run-metadata.json", metadata)
+                    except OSError as error:
+                        reservation_error = error
+                    else:
+                        reservation_error = None
+                        runs[run_id] = metadata.copy()
+
+        if replay_response is not None:
+            if replay_digest != payload_digest:
+                return write_error(
+                    self,
+                    HTTPStatus.CONFLICT,
+                    "idempotency_payload_mismatch",
+                    "Idempotency-Key was already used with a different request payload.",
+                    field_path="/headers/Idempotency-Key",
+                    retryable=False,
+                )
+            return write_json(self, HTTPStatus.OK, replay_response)
+
+        if capacity_reached:
+            return write_error(
+                self,
+                HTTPStatus.TOO_MANY_REQUESTS,
+                "run_capacity_reached",
+                f"The local bridge already has {MAX_ACTIVE_RUNS} active run(s). Wait for completion and retry.",
+                retryable=True,
+            )
+
+        if reservation_error is not None:
+            return write_error(
+                self,
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                "idempotency_reservation_failed",
+                f"Could not reserve durable run metadata: {reservation_error}",
+                retryable=True,
+            )
+
+        try:
+            resolved_scenario = (
+                materialize_custom_inputs(run_dir, SCENARIOS[scenario_id], custom_inputs)
+                if custom_inputs is not None
+                else materialize_inputs(run_dir, SCENARIOS[scenario_id], overrides)
+            )
+            resolved_scenario["design_space_candidates"] = materialize_design_space_candidates(
+                run_dir,
+                design_space_candidates,
+            )
+            metadata["status"] = "running"
+            atomic_write_json(run_dir / "run-metadata.json", metadata)
+        except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+            metadata["status"] = "failed"
+            metadata["finished_at"] = now()
+            metadata["error"] = f"Could not prepare run inputs: {error}"
+            try:
+                atomic_write_json(run_dir / "run-metadata.json", metadata)
+            except OSError:
+                pass
+            with runs_lock:
+                runs[run_id] = metadata.copy()
+            return write_json(
+                self,
+                HTTPStatus.ACCEPTED,
+                creation_response(metadata, idempotent_replay=False),
+            )
+
+        with runs_lock:
+            runs[run_id] = metadata.copy()
+
+        start_run_execution(run_id, resolved_scenario, fidelity_policy)
+        return write_json(
+            self,
+            HTTPStatus.ACCEPTED,
+            creation_response(metadata, idempotent_replay=False),
+        )
+
+    def run_week7_operation(self, operation_id: str) -> None:
+        if not (TILESIM_CLI.is_file() and os.access(TILESIM_CLI, os.X_OK)):
+            return write_error(
+                self,
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "cli_unavailable",
+                "TileSimCLI is not available to the bridge.",
+                retryable=True,
+            )
+        backend = backend_identity()
+        if not backend["versions_match"]:
+            return write_error(
+                self,
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "backend_identity_mismatch",
+                "The deployed TileSim source and CLI identity do not match.",
+                retryable=True,
+            )
+        if not week7_operation_lock.acquire(blocking=False):
+            return write_error(
+                self,
+                HTTPStatus.TOO_MANY_REQUESTS,
+                "week7_capacity_reached",
+                "Another Week 7 evidence operation is active.",
+                retryable=True,
+            )
+        try:
+            payload = execute_week7_operation(operation_id)
+        except week7.Week7ExecutionError as error:
+            return write_error(
+                self,
+                HTTPStatus.GATEWAY_TIMEOUT if error.code == "week7_operation_timeout" else HTTPStatus.BAD_GATEWAY,
+                error.code,
+                error.message,
+                retryable=error.retryable,
+            )
+        finally:
+            week7_operation_lock.release()
+        return write_json(self, HTTPStatus.OK, payload)
+
+    def get_run(self, run_id: str) -> None:
+        run = run_snapshot(run_id)
+        if run is None:
+            return write_error(self, HTTPStatus.NOT_FOUND, "run_not_found", "Run was not found.", retryable=False)
+        return write_json(self, HTTPStatus.OK, public_run(run))
+
+    def get_run_events(self, run_id: str) -> None:
+        raw_last_event_id = self.headers.get("Last-Event-ID", "").strip()
+        if raw_last_event_id and raw_last_event_id not in {"0", "1", "2"}:
+            return write_error(
+                self,
+                HTTPStatus.BAD_REQUEST,
+                "invalid_last_event_id",
+                "Last-Event-ID must be 0, 1, or 2.",
+                field_path="/headers/Last-Event-ID",
+                retryable=False,
+            )
+        last_event_id = int(raw_last_event_id or "0")
+        run = run_snapshot(run_id)
+        if run is None:
+            return write_error(self, HTTPStatus.NOT_FOUND, "run_not_found", "Run was not found.", retryable=False)
+
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Connection", "close")
+        add_contract_headers(self)
+        add_cors_headers(self)
+        self.end_headers()
+
+        try:
+            if is_terminal_run(run):
+                if last_event_id < 2:
+                    write_sse_event(self, event="run", event_id="2", data=public_run(run))
+                return
+            if last_event_id < 1:
+                write_sse_event(self, event="run", event_id="1", data=public_run(run))
+
+            deadline = time.monotonic() + SSE_WAIT_TIMEOUT_SECONDS
+            heartbeat_at = time.monotonic() + SSE_HEARTBEAT_SECONDS
+            while time.monotonic() < deadline:
+                time.sleep(0.1)
+                run = run_snapshot(run_id)
+                if run is None:
+                    return
+                if is_terminal_run(run):
+                    write_sse_event(self, event="run", event_id="2", data=public_run(run))
+                    return
+                if time.monotonic() >= heartbeat_at:
+                    self.wfile.write(b": keep-alive\n\n")
+                    self.wfile.flush()
+                    heartbeat_at = time.monotonic() + SSE_HEARTBEAT_SECONDS
+            write_sse_event(self, event="timeout", data={"run_id": run_id})
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            return
+
+    def rename_run(self, run_id: str) -> None:
+        run_dir = safe_run_directory(run_id)
+        if run_dir is None:
+            return write_error(self, HTTPStatus.NOT_FOUND, "run_not_found", "Run was not found.", retryable=False)
         try:
             length = int(self.headers.get("Content-Length", "0"))
             if length <= 0 or length > MAX_REQUEST_BYTES:
@@ -558,98 +895,147 @@ class BridgeHandler(SimpleHTTPRequestHandler):
             request = json.loads(self.rfile.read(length))
             if not isinstance(request, dict):
                 raise ValueError("Request body must be a JSON object.")
-            scenario_id = request.get("scenario_id")
-            fidelity_policy = request.get("fidelity_policy", "des")
-            gpu_participation_mode = request.get("gpu_participation_mode", "gpu_free")
-            run_name = validate_run_name(request.get("run_name"))
-            if scenario_id not in SCENARIOS:
-                raise ValueError("Scenario is not allow-listed.")
-            if fidelity_policy not in ALLOWED_FIDELITY_POLICIES:
-                raise ValueError("Fidelity policy is not allow-listed.")
-            if gpu_participation_mode not in ALLOWED_GPU_PARTICIPATION_MODES:
-                raise ValueError(
-                    "GPU participation mode is unavailable on this controlled run surface; "
-                    "gpu_free is required."
-                )
-            has_overrides = "overrides" in request
-            has_custom_inputs = "custom_inputs" in request
-            if has_overrides and has_custom_inputs:
-                raise ValueError("Use either overrides or custom_inputs, not both.")
-            overrides = validate_overrides(request.get("overrides")) if has_overrides else {}
-            custom_inputs = validate_custom_inputs(request["custom_inputs"]) if has_custom_inputs else None
-        except (ValueError, json.JSONDecodeError) as error:
-            return write_json(self, HTTPStatus.BAD_REQUEST, {"error": str(error)})
-
-        run_id = f"run-{datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:8]}"
-        run_dir = RUNS_ROOT / run_id
-        run_dir.mkdir(parents=True, exist_ok=False)
-        try:
-            input_mode = "json" if custom_inputs is not None else "controls"
-            resolved_scenario = (
-                materialize_custom_inputs(run_dir, SCENARIOS[scenario_id], custom_inputs)
-                if custom_inputs is not None
-                else materialize_inputs(run_dir, SCENARIOS[scenario_id], overrides)
-            )
-        except (OSError, KeyError, TypeError, json.JSONDecodeError) as error:
-            return write_json(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"Could not prepare run inputs: {error}"})
-        metadata = {
-            "run_id": run_id, "status": "running", "created_at": now(), "scenario_id": scenario_id,
-            "run_name": run_name, "fidelity_policy": fidelity_policy,
-            "gpu_participation_mode": gpu_participation_mode,
-            "input_mode": input_mode, "overrides": overrides,
-            "input_files": {"runtime_trace": "input-runtime-trace.json", "topology": "input-topology.json"},
-        }
-        try:
-            (run_dir / "run-metadata.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
-        except OSError as error:
-            return write_json(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"Could not save run metadata: {error}"})
-        with runs_lock:
-            runs[run_id] = metadata.copy()
-        threading.Thread(target=execute_run, args=(run_id, resolved_scenario, fidelity_policy), daemon=True).start()
-        return write_json(self, HTTPStatus.ACCEPTED, {
-            "run_id": run_id, "run_name": run_name, "status": "running", "input_mode": input_mode, "overrides": overrides,
-            "input_files": {"runtime_trace": "input-runtime-trace.json", "topology": "input-topology.json"},
-        })
-
-    def get_run(self, run_id: str) -> None:
-        with runs_lock:
-            run = runs.get(run_id)
-        if run is None:
-            run = persisted_run(run_id)
-        if run is None:
-            return write_json(self, HTTPStatus.NOT_FOUND, {"error": "Run was not found."})
-        return write_json(self, HTTPStatus.OK, public_run(run))
-
-    def rename_run(self, run_id: str) -> None:
-        run_dir = safe_run_directory(run_id)
-        if run_dir is None:
-            return write_json(self, HTTPStatus.NOT_FOUND, {"error": "Run was not found."})
-        try:
-            length = int(self.headers.get("Content-Length", "0"))
-            request = json.loads(self.rfile.read(length))
-            if not isinstance(request, dict):
-                raise ValueError("Request body must be a JSON object.")
             run_name = validate_run_name(request.get("run_name"))
         except (ValueError, json.JSONDecodeError) as error:
-            return write_json(self, HTTPStatus.BAD_REQUEST, {"error": str(error)})
-
-        metadata = read_json_file(run_dir / "run-metadata.json")
-        if not metadata:
-            stored = persisted_run(run_id)
-            metadata = {key: value for key, value in (stored or {}).items()
-                        if key not in {"report_paths", "digest"}}
-        metadata["run_id"] = run_id
-        metadata["run_name"] = run_name
-        try:
-            (run_dir / "run-metadata.json").write_text(
-                json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8"
+            return write_error(
+                self,
+                HTTPStatus.BAD_REQUEST,
+                "invalid_run_name_request",
+                str(error),
+                field_path="/run_name",
+                retryable=False,
             )
+
+        try:
+            with metadata_lock:
+                metadata = read_json_file(run_dir / "run-metadata.json")
+                if not metadata:
+                    stored = persisted_run(run_id)
+                    metadata = {
+                        key: value
+                        for key, value in (stored or {}).items()
+                        if key not in {"report_paths", "digest"}
+                    }
+                metadata["run_id"] = run_id
+                metadata["run_name"] = run_name
+                atomic_write_json(run_dir / "run-metadata.json", metadata)
         except OSError as error:
-            return write_json(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"Could not save run name: {error}"})
+            return write_error(
+                self,
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                "run_name_write_failed",
+                f"Could not save run name: {error}",
+            )
         with runs_lock:
             if run_id in runs:
                 runs[run_id]["run_name"] = run_name
         return write_json(self, HTTPStatus.OK, {"run_id": run_id, "run_name": run_name})
+
+    def create_evidence_analysis(self, run_id: str) -> None:
+        run_dir = safe_run_directory(run_id)
+        if run_dir is None:
+            return write_error(
+                self, HTTPStatus.NOT_FOUND, "run_not_found", "Run was not found.", retryable=False
+            )
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if length <= 0 or length > MAX_EVIDENCE_AGENT_REQUEST_BYTES:
+                raise evidence_agent.EvidenceAgentContractError(
+                    "input_too_large",
+                    "Evidence Agent request body must be between 1 byte and 1.5 MB.",
+                    "/",
+                )
+            request = json.loads(self.rfile.read(length), parse_constant=reject_nonfinite_json)
+            if not isinstance(request, dict):
+                raise evidence_agent.EvidenceAgentContractError(
+                    "unsupported_schema", "Evidence Agent request must be a JSON object.", "/"
+                )
+            idempotency_key = idempotency_key_for(self)
+            payload_digest = request_payload_digest(request)
+            manifest = artifact_manifest_for(run_id, run_dir)
+            documents = evidence_agent_artifact_documents(run_dir, manifest)
+            evidence_agent.validate_request(
+                request,
+                path_run_id=run_id,
+                schema_set_revision=SCHEMA_SET_REVISION,
+                artifact_manifest=manifest,
+                artifact_documents=documents,
+                current_backend_identity=backend_identity(),
+            )
+        except evidence_agent.EvidenceAgentContractError as error:
+            return write_error(
+                self,
+                error.http_status,
+                error.reason_code,
+                str(error),
+                field_path=error.field_path,
+                retryable=False,
+            )
+        except RequestValidationError as error:
+            return write_error(
+                self,
+                HTTPStatus.BAD_REQUEST,
+                "unsupported_schema",
+                str(error),
+                field_path=error.field_path,
+                retryable=False,
+            )
+        except run_repository.ArtifactManifestValidationError as error:
+            return write_error(
+                self,
+                HTTPStatus.CONFLICT,
+                "citation_not_resolvable",
+                str(error),
+                retryable=False,
+            )
+        except (ValueError, json.JSONDecodeError):
+            return write_error(
+                self,
+                HTTPStatus.BAD_REQUEST,
+                "unsupported_schema",
+                "Evidence Agent request is not valid strict JSON.",
+                field_path="/",
+                retryable=False,
+            )
+
+        if not evidence_agent_operation_lock.acquire(blocking=False):
+            return write_error(
+                self,
+                HTTPStatus.TOO_MANY_REQUESTS,
+                "concurrency_limit",
+                "The single read-only evidence Agent operation slot is occupied.",
+                retryable=True,
+            )
+        try:
+            status, response, _ = evidence_agent_service.terminal_provider_unavailable(
+                run_dir=run_dir,
+                request=request,
+                idempotency_key=idempotency_key,
+                payload_digest=payload_digest,
+                schema_set_revision=SCHEMA_SET_REVISION,
+                read_json=read_json_file,
+                atomic_write_json=atomic_write_json,
+            )
+        except evidence_agent_service.EvidenceAgentIdempotencyConflict as error:
+            return write_error(
+                self,
+                HTTPStatus.CONFLICT,
+                "idempotency_payload_mismatch",
+                str(error),
+                field_path="/headers/Idempotency-Key",
+                retryable=False,
+            )
+        except (OSError, ValueError) as error:
+            return write_error(
+                self,
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                "terminal_recovery_failed",
+                str(error),
+                retryable=False,
+            )
+        finally:
+            evidence_agent_operation_lock.release()
+        return write_json(self, HTTPStatus(status), response)
 
     def get_reports(self, run_id: str) -> None:
         with runs_lock:
@@ -657,20 +1043,70 @@ class BridgeHandler(SimpleHTTPRequestHandler):
         if run is None:
             run = persisted_run(run_id)
         if run is None:
-            return write_json(self, HTTPStatus.NOT_FOUND, {"error": "Run was not found."})
+            return write_error(self, HTTPStatus.NOT_FOUND, "run_not_found", "Run was not found.", retryable=False)
         if run["status"] != "completed":
-            return write_json(self, HTTPStatus.CONFLICT, {"error": "Run has not completed."})
+            return write_error(
+                self,
+                HTTPStatus.CONFLICT,
+                "run_not_completed",
+                "Run has not completed.",
+                retryable=True,
+            )
         reports = load_reports(run)
+        if "run" not in reports:
+            return write_error(
+                self,
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                "primary_artifact_invalid",
+                "The completed run no longer has a valid primary report artifact.",
+                retryable=False,
+            )
         return write_json(self, HTTPStatus.OK, {"run_id": run_id, "reports": reports})
 
     def get_json_artifact(self, run_id: str, artifact: str) -> None:
         run_dir = safe_run_directory(run_id)
         if run_dir is None:
-            return write_json(self, HTTPStatus.NOT_FOUND, {"error": "Run was not found."})
+            return write_error(self, HTTPStatus.NOT_FOUND, "run_not_found", "Run was not found.", retryable=False)
         path = json_artifact_paths_for(run_dir).get(artifact)
         if path is None:
-            return write_json(self, HTTPStatus.NOT_FOUND, {"error": "JSON artifact was not found."})
-        return write_json_file(self, path)
+            return write_error(
+                self,
+                HTTPStatus.NOT_FOUND,
+                "artifact_not_found",
+                "JSON artifact was not found.",
+                field_path="/artifact_id",
+                retryable=False,
+            )
+        try:
+            inspected = run_repository.inspect_artifact(
+                run_id, path, JSON_ARTIFACT_DEFINITIONS[artifact]
+            )
+        except run_repository.ArtifactContractError as error:
+            return write_error(
+                self,
+                HTTPStatus.CONFLICT,
+                f"artifact_{error.reason}",
+                str(error),
+                field_path=error.json_pointer,
+                retryable=False,
+            )
+        return write_json_artifact_body(self, inspected["body"])
+
+    def get_artifact_manifest(self, run_id: str) -> None:
+        run_dir = safe_run_directory(run_id)
+        if run_dir is None:
+            return write_error(self, HTTPStatus.NOT_FOUND, "run_not_found", "Run was not found.", retryable=False)
+        try:
+            manifest = artifact_manifest_for(run_id, run_dir)
+        except run_repository.ArtifactManifestValidationError as error:
+            return write_error(
+                self,
+                HTTPStatus.CONFLICT,
+                "artifact_manifest_invalid",
+                str(error),
+                retryable=False,
+            )
+        return write_json(self, HTTPStatus.OK, manifest)
 
     def list_runs(self) -> None:
         with runs_lock:
@@ -687,10 +1123,22 @@ class BridgeHandler(SimpleHTTPRequestHandler):
 
 def main() -> None:
     RUNS_ROOT.mkdir(parents=True, exist_ok=True)
-    server = ThreadingHTTPServer(("127.0.0.1", 5173), BridgeHandler)
-    print(f"TileSim Web bridge listening at http://127.0.0.1:5173 (UI: {STATIC_ROOT}, CLI: {TILESIM_CLI})")
+    try:
+        port = int(os.environ.get("TILESIM_WEB_PORT", "5173"))
+    except ValueError as error:
+        raise SystemExit("TILESIM_WEB_PORT must be an integer from 1 to 65535.") from error
+    if not 1 <= port <= 65_535:
+        raise SystemExit("TILESIM_WEB_PORT must be an integer from 1 to 65535.")
+    server = ThreadingHTTPServer(("127.0.0.1", port), BridgeHandler)
+    print(f"TileSim Web bridge listening at http://127.0.0.1:{port} (UI: {STATIC_ROOT}, CLI: {TILESIM_CLI})")
     server.serve_forever()
 
 
 if __name__ == "__main__":
-    main()
+    if sys.argv[1:] == ["--print-source-state-digest"]:
+        value = worktree_state_digest()
+        if value == "unknown":
+            raise SystemExit("Could not calculate the TileSim source-state digest.")
+        print(value)
+    else:
+        main()

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/custom-run-inputs.schema.json",
+  "x-tilesim-schema-identity": "tilesim.bridge.custom_run_inputs.v1",
+  "title": "Controlled custom inputs for the hosted S1 to S6 path",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["runtime_trace", "topology"],
+  "properties": {
+    "runtime_trace": { "$ref": "runtime-trace-input.schema.json" },
+    "topology": { "$ref": "topology-request-input.schema.json" }
+  }
+}

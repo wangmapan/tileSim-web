@@ -1,0 +1,122 @@
+{
+  "schema_version": "tilesim.web.f2_validation.v1",
+  "captured_at": "2026-08-27T19:53:17+08:00",
+  "stage": "F2",
+  "status": "validated",
+  "validation_scope": "frontend_compatibility_contract",
+  "frontend": {
+    "root": "D:/tileSim-web",
+    "branch": "main",
+    "head_revision": "c7cad2821ef5bd83016019564630c5ea19642765",
+    "worktree_state": "dirty_preserved",
+    "product_viewport_scope": "desktop_web_only"
+  },
+  "contracts": {
+    "canonical_backend_json_schema_available": false,
+    "schema_kind": "frontend_compatibility_schema",
+    "schema_path": "src/contracts/schemas/report-identities.compat.schema.json",
+    "schema_bytes": 3972,
+    "schema_sha256": "48c61954bb9595c871df9eb7135f1429679d8a91fc96f8dc71d58b84f96557a9",
+    "generated_types_path": "src/contracts/generated/report-identities.ts",
+    "generated_types_bytes": 1931,
+    "generated_types_sha256": "9d5d68213c34b672dd8235546e2d31f79a55b4f8d93fdd3cb5c3c6414edb8c62",
+    "standalone_validators_path": "src/contracts/generated/report-validators.js",
+    "standalone_validators_bytes": 57001,
+    "standalone_validators_sha256": "901a7a6606560b5d17e00836a3c6d9069f1bb7be0036a35d306e812838e66113",
+    "known_malformed_result": "invalid_schema",
+    "unknown_explicit_result": "unsupported_schema",
+    "legacy_unversioned_compatible": true,
+    "raw_json_preserved_on_fail_closed": true
+  },
+  "data_semantics": {
+    "sourced_value_fields": ["value", "sourcePaths", "derivation", "availability"],
+    "availability": ["available", "expected_absence", "not_covered", "missing", "unsupported_schema"],
+    "unsafe_integer_representation": "decimal_string",
+    "safe_integer_representation": "number",
+    "decimal_representation": "number",
+    "duplicate_json_keys_rejected": true,
+    "s7_duration_arithmetic": "BigInt"
+  },
+  "validation": {
+    "typecheck": {
+      "status": "pass",
+      "command": "vue-tsc --noEmit"
+    },
+    "contract_generation_drift": {
+      "status": "pass"
+    },
+    "vitest": {
+      "status": "pass",
+      "files": 8,
+      "tests": 32
+    },
+    "eslint": {
+      "status": "pass",
+      "errors": 0,
+      "warnings": 0
+    },
+    "prettier": {
+      "status": "pass"
+    },
+    "bridge_unittest": {
+      "status": "pass",
+      "tests": 8
+    },
+    "production_build": {
+      "status": "pass",
+      "transformed_modules": 1840,
+      "css_bytes": 55120,
+      "css_gzip_bytes": 10693,
+      "javascript_bytes": 219954,
+      "javascript_gzip_bytes": 69845
+    },
+    "playwright": {
+      "status": "pass",
+      "project": "desktop",
+      "viewport": "1440x1100",
+      "tests": 5,
+      "unexpected_console_errors": 0,
+      "page_errors": 0,
+      "server_5xx": 0,
+      "axe_serious_or_critical": 0,
+      "unexpected_text_overflow": 0
+    },
+    "git_diff_check": {
+      "status": "pass",
+      "note": "Only existing Windows line-ending warnings were emitted."
+    }
+  },
+  "live_smoke": {
+    "status": "pass",
+    "deployment_ref": "local:codex/week6-design-space-closure",
+    "source_revision": "e06cab9d2a1a9509e8f99729f390236511a9a239",
+    "build_revision": "e06cab9d2a1a9509e8f99729f390236511a9a239",
+    "versions_match": true,
+    "state_digests_match": true,
+    "execution_ready": true,
+    "run_id": "run-20260825-221201-d892ba16",
+    "run_name": "week6-local-snapshot-smoke",
+    "structured_unsupported_alerts": 0,
+    "s0_s6_node_count": 7,
+    "s7_stage_count": 5,
+    "unexpected_text_overflow": 0,
+    "page_or_console_failures": 0
+  },
+  "external_blockers": [
+    {
+      "id": "canonical_backend_json_schema",
+      "status": "open",
+      "impact": "Current validation protects the frontend compatibility boundary but is not a canonical backend report contract.",
+      "closure": "Reconcile generated frontend contracts and compatibility fixtures with versioned canonical schemas published by the backend."
+    }
+  ],
+  "claim_boundary": {
+    "synthetic_is_held_out": false,
+    "boundary_absence_is_zero": false,
+    "s3_s4_s5_are_peer_subsystems": true,
+    "current_execution_range": "S1->S6",
+    "current_design_space_scope": "S6_only",
+    "formal_api_contract_stage": "F3_pending",
+    "router_and_state_restructure_stage": "F4_pending"
+  }
+}

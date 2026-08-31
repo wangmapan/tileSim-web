@@ -1,0 +1,232 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/evidence-agent-descriptor.schema.json",
+  "x-tilesim-schema-identity": "tilesim.bridge.evidence_agent_descriptor.v1",
+  "title": "EvidenceAgentDescriptor",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "schema_set_revision",
+    "descriptor_revision",
+    "availability",
+    "degradation",
+    "availability_predicate",
+    "schema_identities",
+    "provider",
+    "revisions",
+    "supported_locales",
+    "supported_task_kinds",
+    "limits",
+    "digest_contract",
+    "tools",
+    "persistence",
+    "redaction",
+    "execution"
+  ],
+  "properties": {
+    "schema_version": { "const": "tilesim.bridge.evidence_agent_descriptor.v1" },
+    "schema_set_revision": { "$ref": "#/$defs/revision" },
+    "descriptor_revision": { "$ref": "#/$defs/revision" },
+    "availability": { "enum": ["available", "degraded", "unavailable", "disabled"] },
+    "degradation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "reason_code", "detail"],
+      "properties": {
+        "state": { "enum": ["none", "not_configured", "temporarily_unavailable", "disabled_by_policy"] },
+        "reason_code": { "enum": ["none", "provider_unavailable", "provider_disabled"] },
+        "detail": { "type": "string", "minLength": 1 }
+      }
+    },
+    "availability_predicate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["capability_path", "operator", "expected_value", "evaluated_available"],
+      "properties": {
+        "capability_path": { "const": "/provider/configured" },
+        "operator": { "const": "equals" },
+        "expected_value": { "const": true },
+        "evaluated_available": { "type": "boolean" }
+      }
+    },
+    "schema_identities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request", "response", "citation", "snapshot_reference", "structured_report"],
+      "properties": {
+        "request": { "const": "tilesim.bridge.evidence_agent_request.v1" },
+        "response": { "const": "tilesim.bridge.evidence_agent_response.v1" },
+        "citation": { "const": "tilesim.bridge.evidence_agent_citation.v1" },
+        "snapshot_reference": { "const": "tilesim.bridge.evidence_snapshot_reference.v1" },
+        "structured_report": { "const": "tilesim.web.structured-performance-report.v2" }
+      }
+    },
+    "provider": { "$ref": "#/$defs/provider" },
+    "revisions": { "$ref": "#/$defs/revisions" },
+    "supported_locales": { "type": "array", "items": { "enum": ["en-US", "zh-CN"] }, "uniqueItems": true },
+    "supported_task_kinds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "enum": ["explain_p99", "explain_tail", "summarize_validation", "draft_conditional_recommendations"] }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maximum_request_bytes",
+        "maximum_question_characters",
+        "maximum_artifacts",
+        "maximum_records_per_artifact",
+        "maximum_claims",
+        "maximum_output_characters"
+      ],
+      "properties": {
+        "maximum_request_bytes": { "type": "integer", "minimum": 1 },
+        "maximum_question_characters": { "type": "integer", "minimum": 1 },
+        "maximum_artifacts": { "type": "integer", "minimum": 1 },
+        "maximum_records_per_artifact": { "type": "integer", "minimum": 1 },
+        "maximum_claims": { "type": "integer", "minimum": 1 },
+        "maximum_output_characters": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "digest_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "algorithm",
+        "output_encoding",
+        "canonicalization",
+        "text_encoding",
+        "object_key_order",
+        "array_order",
+        "separators",
+        "non_ascii_escaping",
+        "integer_encoding",
+        "non_finite_numbers",
+        "artifact_manifest_material",
+        "input_snapshot_material_fields",
+        "excluded_untrusted_fields"
+      ],
+      "properties": {
+        "algorithm": { "const": "sha256" },
+        "output_encoding": { "const": "lowercase_hex_with_sha256_prefix" },
+        "canonicalization": { "const": "tilesim.bridge.canonical_json.v1" },
+        "text_encoding": { "const": "utf-8" },
+        "object_key_order": { "const": "unicode_code_point_ascending" },
+        "array_order": { "const": "preserved" },
+        "separators": { "const": "comma_colon_no_whitespace" },
+        "non_ascii_escaping": { "const": "preserve_utf8" },
+        "integer_encoding": { "const": "canonical_decimal_json_token_lossless" },
+        "non_finite_numbers": { "const": "forbidden" },
+        "artifact_manifest_material": { "const": "entire_verified_manifest_object" },
+        "input_snapshot_material_fields": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "prefixItems": [
+            { "const": "schema_version" },
+            { "const": "schema_set_revision" },
+            { "const": "run_id" },
+            { "const": "structured_report_schema_identity" },
+            { "const": "snapshot_reference" },
+            { "const": "artifact_allow_list" }
+          ],
+          "items": false
+        },
+        "excluded_untrusted_fields": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "prefixItems": [
+            { "const": "locale" },
+            { "const": "task_kind" },
+            { "const": "client_request_id" },
+            { "const": "user_question" }
+          ],
+          "items": false
+        }
+      }
+    },
+    "tools": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowed", "forbidden", "allow_list_expansion"],
+      "properties": {
+        "allowed": {
+          "type": "array",
+          "items": { "enum": ["verified_snapshot_read", "citation_resolution"] },
+          "uniqueItems": true
+        },
+        "forbidden": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "allow_list_expansion": { "const": false }
+      }
+    },
+    "persistence": { "$ref": "#/$defs/persistencePolicy" },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["user_question", "artifact_content", "credentials", "hidden_chain_of_thought"],
+      "properties": {
+        "user_question": { "const": "digest_only" },
+        "artifact_content": { "const": "not_retained" },
+        "credentials": { "const": "never_retained" },
+        "hidden_chain_of_thought": { "const": "never_returned_or_retained" }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "timeout_ms", "cancellation", "maximum_concurrent_operations", "retry", "terminal_recovery"],
+      "properties": {
+        "mode": { "const": "synchronous_terminal" },
+        "timeout_ms": { "type": "integer", "minimum": 1 },
+        "cancellation": { "const": "not_applicable_after_synchronous_terminal_response" },
+        "maximum_concurrent_operations": { "const": 1 },
+        "retry": { "const": "same_idempotency_key_and_same_payload_replays_terminal_result" },
+        "terminal_recovery": { "const": "run_local_redacted_terminal_record" }
+      }
+    }
+  },
+  "$defs": {
+    "revision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["configured", "provider_id", "model_id", "model_revision"],
+      "properties": {
+        "configured": { "type": "boolean" },
+        "provider_id": { "type": "string", "minLength": 1 },
+        "model_id": { "type": "string", "minLength": 1 },
+        "model_revision": { "type": "string", "minLength": 1 }
+      }
+    },
+    "revisions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["prompt_template_revision", "policy_revision"],
+      "properties": {
+        "prompt_template_revision": { "type": "string", "minLength": 1 },
+        "policy_revision": { "type": "string", "minLength": 1 }
+      }
+    },
+    "persistencePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "retention_seconds",
+        "snapshot_payload_retained",
+        "user_question_retained",
+        "hidden_reasoning_retained"
+      ],
+      "properties": {
+        "mode": { "const": "run_local_terminal_metadata_only" },
+        "retention_seconds": { "type": "integer", "minimum": 0 },
+        "snapshot_payload_retained": { "const": false },
+        "user_question_retained": { "const": false },
+        "hidden_reasoning_retained": { "const": false }
+      }
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/week7-evidence-map.schema.json",
+  "title": "Week7EvidenceMapResponse",
+  "type": "object",
+  "required": ["schema_version", "status", "rules"],
+  "properties": {
+    "schema_version": { "const": "tilesim.s9.report_field_evidence_map.v1alpha1" },
+    "status": { "type": "string" },
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "report_kind",
+          "field_path",
+          "source_object",
+          "computation_rule",
+          "validation_check",
+          "allowed_claim"
+        ],
+        "properties": {
+          "report_kind": { "type": "string" },
+          "field_path": { "type": "string" },
+          "source_object": { "type": "string" },
+          "computation_rule": { "type": "string" },
+          "validation_check": { "type": "string" },
+          "allowed_claim": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

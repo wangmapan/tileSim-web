@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/f6b-common.schema.json",
+  "title": "F6BCommonContracts",
+  "$defs": {
+    "uint64": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709551615,
+      "tsType": "bigint",
+      "x-tilesim-lossless-json-integer": "uint64",
+      "description": "A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation."
+    },
+    "subjectRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "run",
+            "request",
+            "fabric_phase",
+            "memory_event",
+            "device_task",
+            "collective",
+            "cause",
+            "attribution",
+            "stage",
+            "check",
+            "candidate",
+            "fabric_domain",
+            "objective",
+            "executed_s6_knob",
+            "backend_run_instance"
+          ]
+        },
+        "id": { "type": "string", "minLength": 1 },
+        "request_id": { "type": "string", "minLength": 1 },
+        "phase_id": { "type": "string", "minLength": 1 },
+        "memory_event_id": { "type": "string", "minLength": 1 },
+        "device_task_id": { "type": "string", "minLength": 1 },
+        "collective_id": { "type": "string", "minLength": 1 },
+        "cause_id": { "type": "string", "minLength": 1 },
+        "attribution_id": { "type": "string", "minLength": 1 },
+        "stage_id": { "type": "string", "minLength": 1 },
+        "check_id": { "type": "string", "minLength": 1 },
+        "candidate_id": { "type": "string", "minLength": 1 },
+        "fabric_domain_id": { "type": "string", "minLength": 1 },
+        "objective_id": { "type": "string", "minLength": 1 },
+        "knob_id": { "type": "string", "minLength": 1 },
+        "backend_run_instance_id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "evidenceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "artifact_id", "schema_identity", "json_pointer", "availability", "subject"],
+      "properties": {
+        "run_id": { "type": "string", "minLength": 1 },
+        "artifact_id": {
+          "enum": [
+            "metrics",
+            "tail-cause-chain",
+            "execution-envelope",
+            "validation",
+            "week8-run-evidence",
+            "design-space",
+            "input-topology"
+          ]
+        },
+        "schema_identity": { "type": "string", "minLength": 1 },
+        "json_pointer": { "type": "string", "pattern": "^/" },
+        "availability": {
+          "enum": [
+            "available",
+            "partial",
+            "run_scope_only",
+            "not_applicable",
+            "missing",
+            "contract_gap",
+            "artifact_identity_missing",
+            "ambiguous_reference",
+            "not_covered",
+            "unsupported_schema",
+            "unresolved_not_executed"
+          ]
+        },
+        "subject": { "$ref": "#/$defs/subjectRef" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["source_mode", "calibration_level", "allowed_claim_scope"],
+      "properties": {
+        "source_mode": { "enum": ["real_trace", "synthetic_trace", "compatibility_harness_trace"] },
+        "calibration_level": { "type": "string", "minLength": 1 },
+        "allowed_claim_scope": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

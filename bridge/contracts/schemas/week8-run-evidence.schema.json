@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/week8-run-evidence.schema.json",
+  "title": "S7RunBoundDesEvidenceV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "requested_fidelity",
+    "resolved_fidelity",
+    "execution_mode",
+    "fallback",
+    "provenance",
+    "state_summary",
+    "differential",
+    "stream",
+    "checkpoint"
+  ],
+  "properties": {
+    "schema_version": { "const": "tilesim.s7_run_bound_des_evidence.v1" },
+    "run_id": { "type": "string", "minLength": 1 },
+    "requested_fidelity": { "const": "des" },
+    "resolved_fidelity": { "const": "des" },
+    "execution_mode": { "enum": ["partitioned_des", "single_process_fallback"] },
+    "fallback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy", "used", "reason"],
+      "properties": {
+        "policy": { "enum": ["fail_closed", "single_process_reference"] },
+        "used": { "type": "boolean" },
+        "reason": { "type": "string" }
+      }
+    },
+    "provenance": { "$ref": "f6b-common.schema.json#/$defs/provenance" },
+    "state_summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "schema_version",
+        "logical_time_ps",
+        "partition_count",
+        "committed_event_count",
+        "pending_event_count",
+        "provenance",
+        "stream_record_count",
+        "total_stream_record_count",
+        "stream_records_truncated"
+      ],
+      "properties": {
+        "schema_version": { "const": "tilesim.simulation.partitioned_des_state_summary.v1" },
+        "logical_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "partition_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "committed_event_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "pending_event_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "stream_record_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "total_stream_record_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "stream_records_truncated": { "type": "boolean" },
+        "provenance": { "$ref": "f6b-common.schema.json#/$defs/provenance" }
+      }
+    },
+    "differential": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["compared", "matched", "partitioned_digest", "reference_digest", "mismatch_code"],
+      "properties": {
+        "compared": { "type": "boolean" },
+        "matched": { "type": "boolean" },
+        "partitioned_digest": { "type": "string" },
+        "reference_digest": { "type": "string" },
+        "mismatch_code": { "type": "string" }
+      }
+    },
+    "stream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["record_count", "total_record_count", "truncated", "records"],
+      "properties": {
+        "record_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "total_record_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "truncated": { "type": "boolean" },
+        "records": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+      }
+    },
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "archive_schema_identity",
+        "archive_digest",
+        "partition_configuration_digest",
+        "checkpoint_logical_time_ps",
+        "committed_event_count",
+        "pending_event_count",
+        "completed_identity_count",
+        "subject_version_count",
+        "payload_availability",
+        "provenance"
+      ],
+      "properties": {
+        "archive_schema_identity": { "const": "tilesim.simulation.partitioned_des_checkpoint_archive.v1" },
+        "archive_digest": { "type": "string", "minLength": 1 },
+        "partition_configuration_digest": { "type": "string", "minLength": 1 },
+        "checkpoint_logical_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "committed_event_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "pending_event_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "completed_identity_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "subject_version_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "payload_availability": { "const": "not_exposed" },
+        "provenance": { "$ref": "f6b-common.schema.json#/$defs/provenance" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "execution_mode": { "const": "partitioned_des" } } },
+      "then": {
+        "properties": {
+          "fallback": { "properties": { "used": { "const": false }, "reason": { "maxLength": 0 } } },
+          "differential": {
+            "properties": {
+              "compared": { "const": true },
+              "matched": { "const": true },
+              "partitioned_digest": { "minLength": 1 },
+              "reference_digest": { "minLength": 1 }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "fallback": { "properties": { "used": { "const": true }, "reason": { "minLength": 1 } } },
+          "differential": { "properties": { "reference_digest": { "minLength": 1 } } }
+        }
+      }
+    }
+  ]
+}

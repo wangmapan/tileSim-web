@@ -1,0 +1,39 @@
+{
+  "schema_version": "tilesim.web.artifact_baseline.v1",
+  "measured_at": "2026-08-28T16:38:35.547Z",
+  "runtime": {
+    "node": "v24.19.0",
+    "platform": "win32",
+    "arch": "x64"
+  },
+  "fixture": {
+    "recipe": "large-artifact-fixture.mjs#createLargeLineArtifact",
+    "source_bytes": 14299360,
+    "source_lines": 100000,
+    "formatted_characters": 17999175,
+    "formatted_lines": 599975,
+    "lossless_integer_representation": "decimal string"
+  },
+  "current_main_thread_pipeline_ms": {
+    "samples": 5,
+    "fixture_generation": 31.379,
+    "parse_median": 15.986,
+    "pretty_format_median": 28.169,
+    "first_search_median": 36.835,
+    "parse_format_search_total_median": 80.224,
+    "total_samples": [84.238, 80.224, 79.565, 81.143, 79.346]
+  },
+  "memory": {
+    "heap_delta_bytes_median": 90010344
+  },
+  "current_render_model": {
+    "element": "pre",
+    "rendered_logical_lines": 599975,
+    "virtualized": false,
+    "note": "Browser paint/layout and interaction latency are not represented by this Node baseline."
+  },
+  "search": {
+    "query": "req-087654",
+    "match_count": 1
+  }
+}

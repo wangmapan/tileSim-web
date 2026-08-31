@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/evidence-agent-request.schema.json",
+  "x-tilesim-schema-identity": "tilesim.bridge.evidence_agent_request.v1",
+  "title": "EvidenceAgentRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "schema_set_revision",
+    "run_id",
+    "input_snapshot_digest",
+    "structured_report_schema_identity",
+    "snapshot_reference",
+    "artifact_allow_list",
+    "locale",
+    "task_kind",
+    "client_request_id",
+    "user_question"
+  ],
+  "properties": {
+    "schema_version": { "const": "tilesim.bridge.evidence_agent_request.v1" },
+    "schema_set_revision": { "$ref": "#/$defs/revision" },
+    "run_id": { "type": "string", "pattern": "^run-[A-Za-z0-9._-]+$" },
+    "input_snapshot_digest": { "$ref": "#/$defs/revision" },
+    "structured_report_schema_identity": { "const": "tilesim.web.structured-performance-report.v2" },
+    "snapshot_reference": { "$ref": "#/$defs/snapshotReference" },
+    "artifact_allow_list": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": { "$ref": "#/$defs/artifactAllowListEntry" }
+    },
+    "locale": { "enum": ["en-US", "zh-CN"] },
+    "task_kind": {
+      "enum": ["explain_p99", "explain_tail", "summarize_validation", "draft_conditional_recommendations"]
+    },
+    "client_request_id": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{8,128}$" },
+    "user_question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["content", "trust_level"],
+      "properties": {
+        "content": { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "trust_level": { "const": "untrusted_user_content" }
+      }
+    }
+  },
+  "$defs": {
+    "revision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "run",
+            "request",
+            "fabric_phase",
+            "memory_event",
+            "device_task",
+            "collective",
+            "cause",
+            "attribution",
+            "stage",
+            "check",
+            "candidate",
+            "fabric_domain",
+            "objective",
+            "executed_s6_knob"
+          ]
+        },
+        "id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "percentileSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selection_semantics", "selected_request_id", "member_request_ids"],
+      "properties": {
+        "selection_semantics": { "enum": ["single_request", "tie_no_single_request", "not_applicable", "missing"] },
+        "selected_request_id": { "type": ["string", "null"] },
+        "member_request_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      }
+    },
+    "evidenceScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_mode",
+        "calibration_level",
+        "allowed_claim_scope",
+        "claim_scope_class",
+        "requested_fidelity",
+        "resolved_fidelity",
+        "execution_mode",
+        "canonical_flow",
+        "resource_semantics_relation",
+        "execution_host",
+        "validation_plane",
+        "output_plane",
+        "percentile_subject",
+        "availability_states_present"
+      ],
+      "properties": {
+        "source_mode": { "enum": ["real_trace", "synthetic_trace", "compatibility_harness_trace"] },
+        "calibration_level": { "type": "string", "minLength": 1 },
+        "allowed_claim_scope": { "type": "string", "minLength": 1 },
+        "claim_scope_class": {
+          "enum": [
+            "synthetic_consistency",
+            "exploratory",
+            "compatibility_only",
+            "real_trace_calibrated",
+            "held_out_validated"
+          ]
+        },
+        "requested_fidelity": { "enum": ["policy_default", "analytical", "des"] },
+        "resolved_fidelity": { "enum": ["analytical", "des", "mixed", "not_applicable"] },
+        "execution_mode": {
+          "enum": ["analytical", "des", "partitioned_des", "single_process_fallback", "mixed", "not_applicable"]
+        },
+        "canonical_flow": { "const": "S0 -> S1 -> S2 -> {S3,S4,S5} -> S6" },
+        "resource_semantics_relation": { "const": "S3_S4_S5_peer" },
+        "execution_host": { "const": "S7" },
+        "validation_plane": { "const": "S8" },
+        "output_plane": { "const": "S9" },
+        "percentile_subject": { "$ref": "#/$defs/percentileSubject" },
+        "availability_states_present": {
+          "type": "array",
+          "items": {
+            "enum": ["available", "missing", "expected_absence", "not_covered", "unsupported_schema", "not_applicable"]
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "snapshotReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "artifact_manifest_schema_identity",
+        "artifact_manifest_canonical_sha256",
+        "backend_identity",
+        "evidence_scope"
+      ],
+      "properties": {
+        "schema_version": { "const": "tilesim.bridge.evidence_snapshot_reference.v1" },
+        "artifact_manifest_schema_identity": { "const": "tilesim.bridge.artifact_manifest.v2" },
+        "artifact_manifest_canonical_sha256": { "$ref": "#/$defs/revision" },
+        "backend_identity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "source_revision",
+            "build_revision",
+            "source_state_digest",
+            "build_state_digest",
+            "versions_match",
+            "state_digests_match"
+          ],
+          "properties": {
+            "source_revision": { "type": "string", "minLength": 1 },
+            "build_revision": { "type": "string", "minLength": 1 },
+            "source_state_digest": { "type": "string", "minLength": 1 },
+            "build_state_digest": { "type": "string", "minLength": 1 },
+            "versions_match": { "type": "boolean" },
+            "state_digests_match": { "type": "boolean" }
+          }
+        },
+        "evidence_scope": { "$ref": "#/$defs/evidenceScope" }
+      }
+    },
+    "allowedRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["json_pointer", "subject"],
+      "properties": {
+        "json_pointer": { "type": "string", "pattern": "^/" },
+        "subject": { "$ref": "#/$defs/subject" }
+      }
+    },
+    "artifactAllowListEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "artifact_id", "schema_identity", "sha256", "bytes", "allowed_records"],
+      "properties": {
+        "run_id": { "type": "string", "pattern": "^run-[A-Za-z0-9._-]+$" },
+        "artifact_id": { "type": "string", "minLength": 1 },
+        "schema_identity": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "bytes": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "allowed_records": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2048,
+          "items": { "$ref": "#/$defs/allowedRecord" }
+        }
+      }
+    }
+  }
+}

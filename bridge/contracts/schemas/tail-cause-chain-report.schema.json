@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/tail-cause-chain-report.schema.json",
+  "title": "TailCauseChainReportV1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "run_id", "cause_chain", "attribution_ranking"],
+  "properties": {
+    "schema_version": { "const": "tilesim.tail_cause_chain_report.v1" },
+    "run_id": { "type": "string", "minLength": 1 },
+    "cause_chain": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["cause_id", "subject_refs", "evidence_refs"],
+        "properties": {
+          "cause_id": { "type": "string", "minLength": 1 },
+          "subject_refs": { "type": "array", "items": { "$ref": "f6b-common.schema.json#/$defs/subjectRef" } },
+          "evidence_refs": { "type": "array", "items": { "$ref": "f6b-common.schema.json#/$defs/evidenceRef" } }
+        }
+      }
+    },
+    "attribution_ranking": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["attribution_id", "subject_refs", "evidence_refs"],
+        "properties": {
+          "attribution_id": { "type": "string", "minLength": 1 },
+          "subject_refs": { "type": "array", "items": { "$ref": "f6b-common.schema.json#/$defs/subjectRef" } },
+          "evidence_refs": { "type": "array", "items": { "$ref": "f6b-common.schema.json#/$defs/evidenceRef" } }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/api-manifest.schema.json",
+  "title": "ApiManifestResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "api_version",
+    "schema_set_revision",
+    "error_schema_version",
+    "artifact_manifest_schema_version",
+    "known_report_schema_identities",
+    "experiment_descriptor",
+    "evidence_agent",
+    "run_creation",
+    "run_events",
+    "endpoints"
+  ],
+  "properties": {
+    "schema_version": { "const": "tilesim.bridge.manifest.v1" },
+    "api_version": { "const": "tilesim.bridge.api.v1" },
+    "schema_set_revision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "error_schema_version": { "const": "tilesim.bridge.error.v1" },
+    "artifact_manifest_schema_version": { "const": "tilesim.bridge.artifact_manifest.v2" },
+    "known_report_schema_identities": {
+      "type": "object",
+      "additionalProperties": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+    },
+    "experiment_descriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["endpoint", "schema_identity", "create_run_schema_identity"],
+      "properties": {
+        "endpoint": { "const": "GET /api/experiment-schema" },
+        "schema_identity": { "const": "tilesim.bridge.experiment_descriptor.v1" },
+        "create_run_schema_identity": { "const": "tilesim.bridge.create_run_request.v1" }
+      }
+    },
+    "evidence_agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "capability_endpoint",
+        "analysis_endpoint",
+        "descriptor_schema_identity",
+        "request_schema_identity",
+        "response_schema_identity",
+        "citation_schema_identity",
+        "snapshot_reference_schema_identity",
+        "structured_report_schema_identity",
+        "idempotency_header",
+        "execution_mode"
+      ],
+      "properties": {
+        "capability_endpoint": { "const": "GET /api/agent/evidence-capabilities" },
+        "analysis_endpoint": { "const": "POST /api/runs/{run_id}/agent/evidence-analyses" },
+        "descriptor_schema_identity": { "const": "tilesim.bridge.evidence_agent_descriptor.v1" },
+        "request_schema_identity": { "const": "tilesim.bridge.evidence_agent_request.v1" },
+        "response_schema_identity": { "const": "tilesim.bridge.evidence_agent_response.v1" },
+        "citation_schema_identity": { "const": "tilesim.bridge.evidence_agent_citation.v1" },
+        "snapshot_reference_schema_identity": { "const": "tilesim.bridge.evidence_snapshot_reference.v1" },
+        "structured_report_schema_identity": { "const": "tilesim.web.structured-performance-report.v2" },
+        "idempotency_header": { "const": "Idempotency-Key" },
+        "execution_mode": { "const": "synchronous_terminal" }
+      }
+    },
+    "run_creation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["idempotency_header", "idempotency_required", "payload_identity"],
+      "properties": {
+        "idempotency_header": { "const": "Idempotency-Key" },
+        "idempotency_required": { "const": true },
+        "payload_identity": { "const": "canonical_json_sha256" }
+      }
+    },
+    "run_events": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["endpoint", "media_type", "resume_header", "event_ids"],
+      "properties": {
+        "endpoint": { "const": "GET /api/runs/{run_id}/events" },
+        "media_type": { "const": "text/event-stream" },
+        "resume_header": { "const": "Last-Event-ID" },
+        "event_ids": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["active", "terminal"],
+          "properties": { "active": { "const": "1" }, "terminal": { "const": "2" } }
+        }
+      }
+    },
+    "endpoints": { "type": "object", "additionalProperties": { "type": "string" } },
+    "legacy_unversioned": { "type": "boolean" }
+  }
+}

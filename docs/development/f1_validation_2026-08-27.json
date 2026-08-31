@@ -1,0 +1,99 @@
+{
+  "schema_version": "tilesim.web.f1_validation.v1",
+  "captured_at": "2026-08-27T18:21:01+08:00",
+  "stage": "F1",
+  "status": "validated",
+  "frontend": {
+    "root": "D:/tileSim-web",
+    "branch": "main",
+    "head_revision": "c7cad2821ef5bd83016019564630c5ea19642765",
+    "worktree_state": "dirty_preserved",
+    "product_viewport_scope": "desktop_web_only"
+  },
+  "fixtures": {
+    "schema_version": "tilesim.web.fixture.bundles.v1",
+    "case_count": 5,
+    "case_ids": [
+      "synthetic-s1-s6-complete",
+      "held-out-s1-s6",
+      "boundary-expected-absence",
+      "legacy-missing-optional",
+      "unknown-run-schema"
+    ],
+    "path": "tests/fixtures/report-bundles.json",
+    "bytes": 23919,
+    "sha256": "b7e13cc19d5052295e98550d3bf0c339b22414aba159b2419c52d789781ea202"
+  },
+  "field_audit": {
+    "schema_version": "tilesim.web.field_audit.v1",
+    "entry_count": 14,
+    "path": "tests/fixtures/field-audit.json",
+    "bytes": 3357,
+    "sha256": "69536e3aac1ee0dc1016a043cac1324139ef51df291cbe88d260eb9bc61c1375"
+  },
+  "validation": {
+    "vitest": {
+      "status": "pass",
+      "files": 5,
+      "tests": 25
+    },
+    "eslint": {
+      "status": "pass",
+      "errors": 0,
+      "warnings": 0
+    },
+    "bridge_unittest": {
+      "status": "pass",
+      "tests": 8
+    },
+    "production_build": {
+      "status": "pass",
+      "transformed_modules": 1814,
+      "css_bytes": 55120,
+      "css_gzip_bytes": 10693,
+      "javascript_bytes": 192829,
+      "javascript_gzip_bytes": 64792
+    },
+    "playwright": {
+      "status": "pass",
+      "project": "desktop",
+      "viewport": "1440x1100",
+      "tests": 5,
+      "unexpected_console_errors": 0,
+      "page_errors": 0,
+      "server_5xx": 0,
+      "axe_serious_or_critical": 0,
+      "unexpected_text_overflow": 0
+    },
+    "real_run_overflow_audit": {
+      "status": "pass",
+      "run_id": "run-20260825-221201-d892ba16",
+      "viewports": ["1440x1100", "1280x900"],
+      "document_horizontal_overflow": 0,
+      "unexpected_text_overflow": 0
+    },
+    "git_diff_check": {
+      "status": "pass",
+      "note": "Only existing Windows line-ending warnings were emitted."
+    }
+  },
+  "visual_evidence": [
+    {
+      "path": "tests/e2e/dashboard.spec.js-snapshots/synthetic-evidence-desktop-desktop-win32.png",
+      "bytes": 227843,
+      "sha256": "aaddb0b5b5b16eddf1eec5cf68e7eb125b94e8ecde857835094e6b44baa15058"
+    },
+    {
+      "path": "tests/e2e/dashboard.spec.js-snapshots/unknown-schema-desktop-desktop-win32.png",
+      "bytes": 111467,
+      "sha256": "7c701e3c35447ced185a49e7e11547d9754c5b91123ed5bed56257ee33ae2c6f"
+    }
+  ],
+  "claim_boundary": {
+    "synthetic_is_held_out": false,
+    "boundary_absence_is_zero": false,
+    "s3_s4_s5_are_peer_subsystems": true,
+    "current_execution_range": "S1->S6",
+    "current_design_space_scope": "S6_only"
+  }
+}

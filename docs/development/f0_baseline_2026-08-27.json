@@ -1,0 +1,227 @@
+{
+  "schema_version": "tilesim.web.f0_baseline.v1",
+  "captured_at": "2026-08-27T17:15:16+08:00",
+  "stage": "F0",
+  "status": "validated",
+  "frontend": {
+    "root": "D:/tileSim-web",
+    "branch": "main",
+    "head_revision": "c7cad2821ef5bd83016019564630c5ea19642765",
+    "worktree_state": "dirty_preserved",
+    "modified_tracked_paths_before_f0": [
+      "README.md",
+      "bridge/README.md",
+      "bridge/server.py",
+      "scripts/start-backend.ps1",
+      "scripts/update-backend.ps1",
+      "src/App.vue",
+      "src/components/AppSidebar.vue",
+      "src/lib/api.js",
+      "src/lib/api.test.js",
+      "src/lib/format.js",
+      "src/lib/reports.js",
+      "src/lib/reports.test.js",
+      "src/store/dashboard.js",
+      "src/styles/main.css",
+      "src/views/ExperimentView.vue",
+      "src/views/OverviewView.vue"
+    ],
+    "untracked_paths_before_f0": [
+      "bridge/test_server.py",
+      "docs/FRONTEND_DEVELOPMENT_PLAN.md",
+      "docs/WEEK6_RESULTS_UI.md",
+      "scripts/deploy-local-backend.ps1",
+      "src/components/JsonArtifactPanel.vue",
+      "src/lib/execution.js",
+      "src/lib/execution.test.js",
+      "src/views/DesignSpaceView.vue",
+      "src/views/ExecutionView.vue"
+    ]
+  },
+  "backend": {
+    "root": "D:/tileSim-week6",
+    "branch": "codex/week6-design-space-closure",
+    "deployment_mode": "local_worktree_snapshot",
+    "deployment_ref": "local:codex/week6-design-space-closure",
+    "source_revision": "e06cab9d2a1a9509e8f99729f390236511a9a239",
+    "build_revision": "e06cab9d2a1a9509e8f99729f390236511a9a239",
+    "source_state_digest": "3cb7e2ab72fb8e7a688a9a711ba1070be5f70193be13cde8356d5f70cb7278a1",
+    "build_state_digest": "3cb7e2ab72fb8e7a688a9a711ba1070be5f70193be13cde8356d5f70cb7278a1",
+    "versions_match": true,
+    "state_digests_match": true,
+    "execution_ready": true,
+    "capabilities_schema": "tilesim.runtime_capabilities.v1",
+    "gpu_participation_modes": ["gpu_free"],
+    "design_space_modes": ["built_in_synthetic", "strict_s6_manifest"],
+    "cycle_scope": "S6_hotspot_refinement_only",
+    "cycle_hotspot_request_available": false,
+    "hardware_constraints": {
+      "gpu_hardware": "nvidia_device_nodes_missing",
+      "verilator_cycle": "build_without_TILESIM_ENABLE_VERILATOR_CYCLE",
+      "astra_sim": "real_ASTRA_executable_and_Chakra_root_not_configured"
+    }
+  },
+  "sample_run": {
+    "run_id": "run-20260825-221201-d892ba16",
+    "run_name": "week6-local-snapshot-smoke",
+    "process_status": "completed",
+    "report_status": "partial",
+    "scenario_id": "s1_des_example",
+    "range_label": "S1->S6",
+    "host_path": "S7",
+    "fidelity_policy": "des",
+    "gpu_participation_mode": "gpu_free",
+    "source_mode": "synthetic_trace",
+    "calibration_level": "uncalibrated",
+    "validation_lane": "synthetic_consistency",
+    "validation_evidence_tier": "synthetic_consistency",
+    "metrics_evidence_tier": "synthetic_consistency_with_resource_convergence",
+    "allowed_claim_scope": "exploratory",
+    "design_space_execution_scope": "S6_only",
+    "design_space_allowed_claim_scope": "exploratory_s6_only",
+    "request_count": 3,
+    "completed_request_count": 3,
+    "throughput_requests_per_second": 102.64,
+    "end_to_end_latency_us": 29229.1,
+    "runtime_event_count": 137,
+    "fabric_record_count": 1164,
+    "phase_fabric_contribution_count": 1164,
+    "execution_stage_count": 5,
+    "design_space_candidate_count": 3,
+    "design_space_promoted_candidate_count": 1,
+    "validation_check_count": 21,
+    "validation_open_gap_count": 1,
+    "tail_attribution_count": 5,
+    "tail_cause_count": 2,
+    "artifacts": [
+      {
+        "name": "design-space.json",
+        "bytes": 8816,
+        "sha256": "45292a93a990d75d3d3436f0a50307f321c41cf7d9e14d101780afd840114360"
+      },
+      {
+        "name": "execution-envelope.json",
+        "bytes": 1653,
+        "sha256": "90d3c43d1bbd24df98eabebdb79d75a939360184194077907fbbba3d64da717b"
+      },
+      {
+        "name": "input-runtime-trace.json",
+        "bytes": 1914,
+        "sha256": "a0033c924862277a18e6839e6ae3ace1e6c54f5ce749023ecd59105b4f4b9821"
+      },
+      {
+        "name": "input-topology.json",
+        "bytes": 2309,
+        "sha256": "7987a1a3a5060d2a9a5ea2fd4c5b64ee0e491b565c0eb01948efff97560f78f3"
+      },
+      {
+        "name": "metrics.json",
+        "bytes": 1206260,
+        "sha256": "70da8db71022b7e35604a2f0b59aeaeceb36fde7feea112d98a5b694db0c8d10"
+      },
+      {
+        "name": "run-metadata.json",
+        "bytes": 559,
+        "sha256": "eb42a1ffe4ae12d4d680d786d42e3fc38aa83b3ca543aff4d8ffb824496d19f7"
+      },
+      {
+        "name": "run-result.json",
+        "bytes": 27236,
+        "sha256": "72a455e9053e621deee9feee07bab48b543b23b1605cc166da86dcb0762be3f0"
+      },
+      {
+        "name": "tail-cause-chain.json",
+        "bytes": 6496,
+        "sha256": "cc2210f7c9dc262c2a2827348876aad76f2500e490b0fb147ead7effb4935bc4"
+      },
+      {
+        "name": "validation.json",
+        "bytes": 8436,
+        "sha256": "13dc6bdf1dc60cb6112b945dcae5715e8fd90167e7c8a22a8d7e132eae2d714e"
+      }
+    ]
+  },
+  "validation": {
+    "frontend_unit_tests": {
+      "status": "pass",
+      "files": 3,
+      "tests": 14
+    },
+    "bridge_unit_tests": {
+      "status": "pass",
+      "tests": 8
+    },
+    "production_build": {
+      "status": "pass",
+      "transformed_modules": 1813,
+      "css_bytes": 54960,
+      "css_gzip_bytes": 10670,
+      "javascript_bytes": 191190,
+      "javascript_gzip_bytes": 64220
+    },
+    "browser": {
+      "status": "pass",
+      "desktop_viewport": "1440x1100",
+      "desktop_scroll_width": 1440,
+      "mobile_viewport": "390x844",
+      "mobile_scroll_width": 390,
+      "layer_buttons": 7,
+      "execution_stages": 5,
+      "console_errors": 0,
+      "metrics_search_matching_lines": 1164
+    }
+  },
+  "performance": {
+    "browser": "Microsoft Edge via Playwright Chromium",
+    "first_dom_content_loaded_ms": 117.57,
+    "run_restore_ready_ms": 11562.32,
+    "metrics_artifact_bytes": 1206260,
+    "metrics_pretty_json_characters": 1563269,
+    "sample_count": 5,
+    "median": {
+      "fetch_ms": 99.6,
+      "parse_ms": 9.2,
+      "stringify_ms": 4.3,
+      "search_ms": 3.5,
+      "total_ms": 116.6
+    }
+  },
+  "visual_evidence": [
+    {
+      "name": "week6-layer-results-desktop.png",
+      "bytes": 256970,
+      "sha256": "70f6cde90b8dd8025fedfad5642534e2e4f29866d566fcea048e2f423d0dc80c"
+    },
+    {
+      "name": "week6-layer-results-s3-detail.png",
+      "bytes": 282577,
+      "sha256": "7ccca4bce491c0b64e9f794c2ae8a5bb723ad5ddcdbd1776626c3473aa4adf3e"
+    },
+    {
+      "name": "week6-layer-results-mobile.png",
+      "bytes": 195087,
+      "sha256": "715cfbeb87f8f2cd905f16234baab90f506172590f6197cf60d5c65518b3f0a2"
+    },
+    {
+      "name": "week6-complete-json-search.png",
+      "bytes": 365363,
+      "sha256": "2f15a790badb394f297795787e0e7ab7b8d6e3fec38354207e5ff51a024f57c3"
+    }
+  ],
+  "claim_boundary": {
+    "allowed": [
+      "synthetic consistency",
+      "exploratory comparison",
+      "S6-only design-space comparison",
+      "analytical behavior validated where reported",
+      "DES behavior validated where reported"
+    ],
+    "prohibited": [
+      "held-out real-trace fidelity claim",
+      "real-system accuracy claim",
+      "full-stack Cycle claim",
+      "GPU-in-loop validation claim",
+      "executable S1/S3/S4/S5 design-space knob claim"
+    ]
+  }
+}

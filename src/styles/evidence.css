@@ -1,0 +1,188 @@
+.evidence-strip {
+  display: grid;
+  grid-template-columns: minmax(230px, 1fr) auto auto;
+  gap: 18px;
+  align-items: center;
+  margin-bottom: 25px;
+  padding: 13px 15px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--panel) 90%, transparent);
+  box-shadow: 0 5px 20px rgba(24, 34, 31, 0.025);
+  transition:
+    border-color var(--motion-base) var(--ease-standard),
+    background-color var(--motion-base) var(--ease-standard),
+    box-shadow var(--motion-base) var(--ease-standard);
+}
+.evidence-identity {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+.evidence-identity svg {
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+.evidence-identity div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.evidence-identity small {
+  color: var(--muted);
+  font-size: var(--text-md);
+}
+.evidence-identity strong {
+  overflow: hidden;
+  font: 600 var(--text-base)/1.4 var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.evidence-path {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ink-soft);
+  font: 600 var(--text-base) var(--font-mono);
+}
+.evidence-tags {
+  display: flex;
+  gap: 6px;
+}
+.evidence-warning {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: -2px -4px -4px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--warning-ink);
+  background: var(--warning-soft);
+  cursor: pointer;
+  font-size: var(--text-base);
+  text-align: left;
+  transition:
+    background-color var(--motion-fast) var(--ease-standard),
+    transform var(--motion-fast) var(--ease-emphasized);
+}
+.evidence-warning:hover {
+  background: color-mix(in srgb, var(--warning-soft) 88%, var(--panel));
+  transform: translateY(-1px);
+}
+.evidence-warning span {
+  flex: 1;
+}
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: var(--text-md);
+  font-weight: 700;
+  line-height: 1.15;
+}
+.status-pill--positive {
+  color: var(--positive-ink);
+  background: var(--positive-soft);
+}
+.status-pill--warning {
+  color: var(--warning-ink);
+  background: var(--warning-soft);
+}
+.status-pill--danger {
+  color: var(--danger-ink);
+  background: var(--danger-soft);
+}
+.status-pill--neutral {
+  color: var(--neutral-ink);
+  background: var(--surface-muted);
+}
+
+.view-stack {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+.navigation-error {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--danger) 38%, var(--line));
+  border-radius: 8px;
+  color: var(--ink);
+  background: var(--danger-soft);
+}
+.navigation-error strong,
+.navigation-error span {
+  overflow-wrap: anywhere;
+}
+.navigation-error span {
+  color: var(--ink-soft);
+  font-size: var(--text-base);
+}
+.panel {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  transition:
+    border-color var(--motion-base) var(--ease-standard),
+    background-color var(--motion-base) var(--ease-standard),
+    box-shadow var(--motion-base) var(--ease-standard);
+}
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 23px 25px 17px;
+}
+.panel-header--row {
+  align-items: center;
+}
+.panel-header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 670;
+  letter-spacing: -0.02em;
+}
+.panel-header p:not(.section-kicker) {
+  max-width: 780px;
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: var(--text-base);
+  line-height: 1.5;
+}
+.panel-count {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font: 600 var(--text-md) var(--font-mono);
+}
+.demo-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 14px;
+  border: 1px dashed #c5c3b6;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.32);
+}
+.demo-notice > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--ink-soft);
+}
+.demo-notice span {
+  display: flex;
+  gap: 9px;
+  font-size: var(--text-base);
+}

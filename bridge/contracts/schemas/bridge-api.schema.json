@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/bridge-api.schema.json",
+  "title": "BridgeApiContracts",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "manifest": { "$ref": "api-manifest.schema.json" },
+    "error": { "$ref": "error.schema.json" },
+    "artifactManifest": { "$ref": "artifact-manifest.schema.json" },
+    "createRunRequest": { "$ref": "create-run-request.schema.json" },
+    "runOverrides": { "$ref": "run-overrides.schema.json" },
+    "customRunInputs": { "$ref": "custom-run-inputs.schema.json" },
+    "runtimeTraceInput": { "$ref": "runtime-trace-input.schema.json" },
+    "topologyRequestInput": { "$ref": "topology-request-input.schema.json" },
+    "designSpaceCandidates": { "$ref": "design-space-candidates.schema.json" },
+    "experimentDescriptor": { "$ref": "experiment-descriptor.schema.json" },
+    "run": { "$ref": "run.schema.json" },
+    "runList": { "$ref": "run-list.schema.json" },
+    "reports": { "$ref": "reports.schema.json" },
+    "metricsReport": { "$ref": "metrics-report.schema.json" },
+    "designSpaceReport": { "$ref": "design-space-report.schema.json" },
+    "topologyInput": { "$ref": "topology-input.schema.json" },
+    "tailCauseChainReport": { "$ref": "tail-cause-chain-report.schema.json" },
+    "executionEnvelope": { "$ref": "execution-envelope.schema.json" },
+    "validationReport": { "$ref": "validation-report.schema.json" },
+    "week8RunEvidence": { "$ref": "week8-run-evidence.schema.json" },
+    "evidenceAgentDescriptor": { "$ref": "evidence-agent-descriptor.schema.json" },
+    "evidenceAgentRequest": { "$ref": "evidence-agent-request.schema.json" },
+    "evidenceAgentResponse": { "$ref": "evidence-agent-response.schema.json" },
+    "evidenceAgentCitation": { "$ref": "evidence-agent-citation.schema.json" }
+  }
+}

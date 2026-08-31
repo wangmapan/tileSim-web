@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/week7-orchestration.schema.json",
+  "title": "Week7OrchestrationResponse",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "intent_id",
+    "status",
+    "run_instance_id",
+    "frozen_configuration_digest",
+    "simulation_result_status",
+    "simulation_result_digest",
+    "tool_calls",
+    "artifact_results",
+    "errors"
+  ],
+  "properties": {
+    "schema_version": { "const": "tilesim.agent.orchestration_report.v1alpha1" },
+    "intent_id": { "type": "string" },
+    "status": { "type": "string" },
+    "run_instance_id": { "type": "string" },
+    "frozen_configuration_digest": { "type": "string" },
+    "simulation_result_status": { "type": "string" },
+    "simulation_result_digest": { "type": "string" },
+    "tool_calls": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["sequence", "tool_name", "status", "input_digest", "output_reference"],
+        "properties": {
+          "sequence": { "type": "integer", "minimum": 1 },
+          "tool_name": { "type": "string" },
+          "status": { "type": "string" },
+          "input_digest": { "type": "string" },
+          "output_reference": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "artifact_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["artifact_id", "state", "payload_digest"],
+        "properties": {
+          "artifact_id": { "type": "string" },
+          "state": { "type": "string" },
+          "payload_digest": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "errors": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+  },
+  "additionalProperties": true
+}

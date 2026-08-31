@@ -1,0 +1,208 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/design-space-report.schema.json",
+  "title": "DesignSpaceReportV1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "run_id",
+    "report_id",
+    "execution_scope",
+    "provenance",
+    "validation_lane",
+    "evidence_tier",
+    "claim_scope_summary",
+    "pareto_front_id",
+    "objective_set_id",
+    "candidate_count",
+    "candidates"
+  ],
+  "properties": {
+    "schema_version": { "const": "tilesim.design_space_report.v1" },
+    "contract_version": { "const": "tilesim.design_space_report.v1" },
+    "run_id": { "type": "string", "minLength": 1 },
+    "report_id": { "type": "string", "minLength": 1 },
+    "execution_scope": { "const": "S6_only" },
+    "provenance": { "$ref": "f6b-common.schema.json#/$defs/provenance" },
+    "validation_lane": { "type": "string", "minLength": 1 },
+    "evidence_tier": { "type": "string", "minLength": 1 },
+    "claim_scope_summary": { "type": "string", "minLength": 1 },
+    "pareto_front_id": { "type": "string", "minLength": 1 },
+    "objective_set_id": { "type": "string", "minLength": 1 },
+    "candidate_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "candidate_id",
+          "requested_fidelity",
+          "resolved_fidelity",
+          "subject_refs",
+          "evidence_refs",
+          "navigation",
+          "pareto_front_id",
+          "objective_set_id",
+          "pareto_member",
+          "dominated_by_candidate_ids",
+          "dominates_candidate_ids",
+          "dominance_status",
+          "dominance_reason_code",
+          "objectives",
+          "executed_s6_knobs"
+        ],
+        "properties": {
+          "candidate_id": { "type": "string", "minLength": 1 },
+          "requested_fidelity": { "enum": ["analytical", "des"] },
+          "resolved_fidelity": { "enum": ["analytical", "des"] },
+          "subject_refs": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "$ref": "f6b-common.schema.json#/$defs/subjectRef" }
+          },
+          "evidence_refs": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "$ref": "f6b-common.schema.json#/$defs/evidenceRef" }
+          },
+          "navigation": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "navigation_scope",
+              "bridge_run_id",
+              "backend_run_instance_id",
+              "parent_run_id",
+              "candidate_id",
+              "record_ref"
+            ],
+            "properties": {
+              "navigation_scope": { "const": "artifact_record" },
+              "bridge_run_id": { "type": "null" },
+              "backend_run_instance_id": { "type": "string", "minLength": 1 },
+              "parent_run_id": { "type": "string", "minLength": 1 },
+              "candidate_id": { "type": "string", "minLength": 1 },
+              "record_ref": { "$ref": "f6b-common.schema.json#/$defs/evidenceRef" }
+            }
+          },
+          "pareto_front_id": { "type": "string", "minLength": 1 },
+          "objective_set_id": { "type": "string", "minLength": 1 },
+          "pareto_member": { "type": ["boolean", "null"] },
+          "dominated_by_candidate_ids": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          },
+          "dominates_candidate_ids": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          },
+          "dominance_status": {
+            "enum": ["non_dominated", "dominated", "insufficient_objectives", "not_evaluated"]
+          },
+          "dominance_reason_code": { "type": "string", "minLength": 1 },
+          "objectives": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["objective_id", "metric_kind", "direction", "value", "unit", "availability", "evidence_ref"],
+              "properties": {
+                "objective_id": { "type": "string", "minLength": 1 },
+                "metric_kind": { "type": "string", "minLength": 1 },
+                "direction": { "enum": ["minimize", "maximize"] },
+                "value": { "type": ["number", "null"] },
+                "unit": { "type": "string", "minLength": 1 },
+                "availability": {
+                  "enum": ["available", "missing", "not_applicable", "not_covered"]
+                },
+                "evidence_ref": { "$ref": "f6b-common.schema.json#/$defs/evidenceRef" }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "properties": { "availability": { "const": "available" } },
+                    "required": ["availability"]
+                  },
+                  "then": { "properties": { "value": { "type": "number" } } },
+                  "else": { "properties": { "value": { "type": "null" } } }
+                }
+              ]
+            }
+          },
+          "executed_s6_knobs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "knob_id",
+                "subsystem",
+                "value_type",
+                "value",
+                "unit",
+                "availability",
+                "requested_value",
+                "resolved_value",
+                "source_ref",
+                "evidence_ref"
+              ],
+              "properties": {
+                "knob_id": { "type": "string", "minLength": 1 },
+                "subsystem": { "const": "S6" },
+                "value_type": { "enum": ["uint64", "real", "string"] },
+                "value": { "type": ["integer", "number", "string", "null"] },
+                "unit": { "type": "string", "minLength": 1 },
+                "availability": {
+                  "enum": ["available", "not_applicable", "unresolved_not_executed"]
+                },
+                "requested_value": { "type": ["integer", "number", "string", "null"] },
+                "resolved_value": { "type": ["integer", "number", "string", "null"] },
+                "source_ref": { "$ref": "f6b-common.schema.json#/$defs/evidenceRef" },
+                "evidence_ref": { "$ref": "f6b-common.schema.json#/$defs/evidenceRef" }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "value_type": { "const": "uint64" },
+                      "availability": { "const": "available" }
+                    },
+                    "required": ["value_type", "availability"]
+                  },
+                  "then": {
+                    "properties": {
+                      "value": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+                      "requested_value": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+                      "resolved_value": { "$ref": "f6b-common.schema.json#/$defs/uint64" }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "availability": {
+                        "enum": ["not_applicable", "unresolved_not_executed"]
+                      }
+                    },
+                    "required": ["availability"]
+                  },
+                  "then": {
+                    "properties": {
+                      "value": { "type": "null" },
+                      "requested_value": { "type": "null" },
+                      "resolved_value": { "type": "null" }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

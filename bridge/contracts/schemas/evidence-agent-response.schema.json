@@ -1,0 +1,208 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/evidence-agent-response.schema.json",
+  "x-tilesim-schema-identity": "tilesim.bridge.evidence_agent_response.v1",
+  "title": "EvidenceAgentResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "schema_set_revision",
+    "request_id",
+    "client_request_id",
+    "run_id",
+    "input_snapshot_digest",
+    "completion_state",
+    "provider",
+    "revisions",
+    "claims",
+    "refusal",
+    "partial",
+    "truncated",
+    "degradation",
+    "audit_summary",
+    "generated_at",
+    "persistence",
+    "staleness"
+  ],
+  "properties": {
+    "schema_version": { "const": "tilesim.bridge.evidence_agent_response.v1" },
+    "schema_set_revision": { "$ref": "#/$defs/revision" },
+    "request_id": { "type": "string", "pattern": "^agent-[A-Za-z0-9._:-]+$" },
+    "client_request_id": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{8,128}$" },
+    "run_id": { "type": "string", "pattern": "^run-[A-Za-z0-9._-]+$" },
+    "input_snapshot_digest": { "$ref": "#/$defs/revision" },
+    "completion_state": { "enum": ["completed", "refused", "partial", "truncated", "failed", "timeout", "cancelled"] },
+    "provider": { "$ref": "#/$defs/provider" },
+    "revisions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["prompt_template_revision", "policy_revision"],
+      "properties": {
+        "prompt_template_revision": { "type": "string", "minLength": 1 },
+        "policy_revision": { "type": "string", "minLength": 1 }
+      }
+    },
+    "claims": { "type": "array", "maxItems": 128, "items": { "$ref": "#/$defs/claim" } },
+    "refusal": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/refusal" }] },
+    "partial": { "type": "boolean" },
+    "truncated": { "type": "boolean" },
+    "degradation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "reason_code"],
+      "properties": {
+        "state": { "type": "string", "minLength": 1 },
+        "reason_code": { "type": "string", "minLength": 1 }
+      }
+    },
+    "audit_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operations", "tool_invocation_count", "hidden_reasoning_returned"],
+      "properties": {
+        "operations": {
+          "type": "array",
+          "items": { "enum": ["verified_snapshot_read", "citation_resolution"] },
+          "uniqueItems": true
+        },
+        "tool_invocation_count": { "type": "integer", "minimum": 0 },
+        "hidden_reasoning_returned": { "const": false }
+      }
+    },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "persistence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "retained_until", "snapshot_payload_retained", "user_question_retained"],
+      "properties": {
+        "mode": { "const": "run_local_terminal_metadata_only" },
+        "retained_until": { "type": ["string", "null"], "format": "date-time" },
+        "snapshot_payload_retained": { "const": false },
+        "user_question_retained": { "const": false }
+      }
+    },
+    "staleness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "binding_fields"],
+      "properties": {
+        "state": { "enum": ["current_at_generation", "stale"] },
+        "binding_fields": {
+          "type": "array",
+          "items": { "enum": ["run_id", "input_snapshot_digest", "schema_set_revision", "backend_identity"] },
+          "uniqueItems": true
+        }
+      }
+    }
+  },
+  "$defs": {
+    "revision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["configured", "provider_id", "model_id", "model_revision"],
+      "properties": {
+        "configured": { "type": "boolean" },
+        "provider_id": { "type": "string", "minLength": 1 },
+        "model_id": { "type": "string", "minLength": 1 },
+        "model_revision": { "type": "string", "minLength": 1 }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_mode",
+        "requested_fidelity",
+        "resolved_fidelity",
+        "execution_mode",
+        "resource_semantics_relation",
+        "causal_subsystems",
+        "attribution_semantics",
+        "recommendation_semantics"
+      ],
+      "properties": {
+        "source_mode": { "enum": ["real_trace", "synthetic_trace", "compatibility_harness_trace"] },
+        "requested_fidelity": { "enum": ["policy_default", "analytical", "des"] },
+        "resolved_fidelity": { "enum": ["analytical", "des", "mixed", "not_applicable"] },
+        "execution_mode": {
+          "enum": ["analytical", "des", "partitioned_des", "single_process_fallback", "mixed", "not_applicable"]
+        },
+        "resource_semantics_relation": { "const": "S3_S4_S5_peer" },
+        "causal_subsystems": {
+          "type": "array",
+          "items": { "enum": ["S0", "S1", "S2", "S3", "S4", "S5", "S6"] },
+          "uniqueItems": true
+        },
+        "attribution_semantics": { "enum": ["not_applicable", "reported_attribution_only"] },
+        "recommendation_semantics": { "enum": ["not_applicable", "conditional_not_executed"] }
+      }
+    },
+    "percentileSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selection_semantics", "selected_request_id", "member_request_ids"],
+      "properties": {
+        "selection_semantics": { "enum": ["single_request", "tie_no_single_request", "not_applicable", "missing"] },
+        "selected_request_id": { "type": ["string", "null"] },
+        "member_request_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      }
+    },
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claim_id", "claim_kind", "text", "citations", "scope"],
+      "properties": {
+        "claim_id": { "type": "string", "minLength": 1 },
+        "claim_kind": {
+          "enum": [
+            "numeric_fact",
+            "comparative_fact",
+            "reported_attribution",
+            "validation_boundary",
+            "provenance_boundary",
+            "fidelity_boundary",
+            "conditional_recommendation",
+            "architecture_correction",
+            "help_text"
+          ]
+        },
+        "text": { "type": "string", "minLength": 1 },
+        "citations": { "type": "array", "items": { "$ref": "evidence-agent-citation.schema.json" } },
+        "scope": { "$ref": "#/$defs/scope" },
+        "percentile_subject": { "$ref": "#/$defs/percentileSubject" }
+      }
+    },
+    "refusal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason_code", "detail", "retryable"],
+      "properties": {
+        "reason_code": {
+          "enum": [
+            "insufficient_evidence",
+            "citation_not_allowed",
+            "citation_not_resolvable",
+            "unsupported_schema",
+            "stale_schema_revision",
+            "run_binding_mismatch",
+            "ambiguous_reference",
+            "provenance_scope_violation",
+            "fidelity_scope_violation",
+            "unsafe_tool_request",
+            "prompt_injection",
+            "input_too_large",
+            "output_truncated",
+            "provider_unavailable",
+            "timeout",
+            "cancelled",
+            "concurrency_limit"
+          ]
+        },
+        "detail": { "type": "string", "minLength": 1 },
+        "retryable": { "type": "boolean" }
+      }
+    }
+  }
+}

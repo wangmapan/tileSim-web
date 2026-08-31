@@ -1,0 +1,61 @@
+{
+  "schema_version": "tilesim.web.artifact_virtual_baseline.v1",
+  "measured_at": "2026-08-28T17:45:03.264Z",
+  "runtime": { "node": "v24.19.0", "platform": "win32", "arch": "x64" },
+  "fixture": { "source_bytes": 14299360, "source_lines": 100000, "search_query": "req-087654" },
+  "samples": [
+    {
+      "index_ms": 714.692,
+      "first_search_ms": 296.52,
+      "line_window_ms": 0.18,
+      "line_window_count": 120,
+      "formatted_lines": 599975,
+      "pointer_count": 499978,
+      "match_count": 1,
+      "match_pointer": "/records/87654/request_id"
+    },
+    {
+      "index_ms": 613.057,
+      "first_search_ms": 329.021,
+      "line_window_ms": 0.056,
+      "line_window_count": 120,
+      "formatted_lines": 599975,
+      "pointer_count": 499978,
+      "match_count": 1,
+      "match_pointer": "/records/87654/request_id"
+    },
+    {
+      "index_ms": 600.852,
+      "first_search_ms": 366.383,
+      "line_window_ms": 0.032,
+      "line_window_count": 120,
+      "formatted_lines": 599975,
+      "pointer_count": 499978,
+      "match_count": 1,
+      "match_pointer": "/records/87654/request_id"
+    },
+    {
+      "index_ms": 627.528,
+      "first_search_ms": 186.026,
+      "line_window_ms": 0.026,
+      "line_window_count": 120,
+      "formatted_lines": 599975,
+      "pointer_count": 499978,
+      "match_count": 1,
+      "match_pointer": "/records/87654/request_id"
+    },
+    {
+      "index_ms": 598.867,
+      "first_search_ms": 173.634,
+      "line_window_ms": 0.031,
+      "line_window_count": 120,
+      "formatted_lines": 599975,
+      "pointer_count": 499978,
+      "match_count": 1,
+      "match_pointer": "/records/87654/request_id"
+    }
+  ],
+  "median": { "index_ms": 613.057, "first_search_ms": 296.52, "line_window_ms": 0.032 },
+  "budget": { "first_search_ms": 500, "maximum_dom_lines": 300, "passed": true },
+  "note": "Measures index, search, and line-window algorithms in vite-node; browser Worker transfer, main-thread responsiveness, and DOM size are covered separately."
+}

@@ -1,0 +1,51 @@
+{
+  "schema_version": "tilesim.web.artifact_worker_baseline.v1",
+  "measured_at": "2026-08-28T17:23:42.171Z",
+  "runtime": { "node": "v24.19.0", "platform": "win32", "arch": "x64" },
+  "fixture": { "source_bytes": 14299360, "source_lines": 100000, "search_query": "req-087654" },
+  "samples": [
+    {
+      "index_ms": 633.328,
+      "first_search_ms": 280.692,
+      "formatted_lines": 599975,
+      "pointer_count": 499978,
+      "match_count": 1,
+      "match_pointer": "/records/87654/request_id"
+    },
+    {
+      "index_ms": 607.81,
+      "first_search_ms": 354.021,
+      "formatted_lines": 599975,
+      "pointer_count": 499978,
+      "match_count": 1,
+      "match_pointer": "/records/87654/request_id"
+    },
+    {
+      "index_ms": 627.076,
+      "first_search_ms": 391.843,
+      "formatted_lines": 599975,
+      "pointer_count": 499978,
+      "match_count": 1,
+      "match_pointer": "/records/87654/request_id"
+    },
+    {
+      "index_ms": 611.077,
+      "first_search_ms": 172.071,
+      "formatted_lines": 599975,
+      "pointer_count": 499978,
+      "match_count": 1,
+      "match_pointer": "/records/87654/request_id"
+    },
+    {
+      "index_ms": 614.176,
+      "first_search_ms": 162.431,
+      "formatted_lines": 599975,
+      "pointer_count": 499978,
+      "match_count": 1,
+      "match_pointer": "/records/87654/request_id"
+    }
+  ],
+  "median": { "index_ms": 614.176, "first_search_ms": 280.692 },
+  "budget": { "first_search_ms": 500, "passed": true },
+  "note": "Measures the Worker index algorithm in vite-node; browser Worker transfer and paint are covered separately."
+}

@@ -1,0 +1,194 @@
+html[data-appearance="dark"] {
+  --canvas: #09111a;
+  --panel: #111c27;
+  --panel-strong: #162330;
+  --ink: #edf4f8;
+  --ink-soft: #c4d1da;
+  --muted: #91a5b4;
+  --line: #243746;
+  --line-strong: #3a5264;
+  --accent: #70b9e2;
+  --accent-hover: #91cae9;
+  --accent-soft: #173247;
+  --blue: #70b9e2;
+  --warning: #e1a760;
+  --warning-soft: #362718;
+  --warning-ink: #f0bd7d;
+  --danger: #ef8d83;
+  --danger-soft: #3a211f;
+  --danger-ink: #f4aaa3;
+  --positive: #71cda4;
+  --positive-soft: #17352a;
+  --positive-ink: #8adbb8;
+  --neutral-ink: #b0bec8;
+  --shadow: 0 14px 38px rgba(0, 0, 0, 0.18);
+  --shadow-raised: 0 18px 44px rgba(0, 0, 0, 0.28);
+  --shadow-overlay: 0 24px 64px rgba(0, 0, 0, 0.48);
+  --header-bg: rgba(9, 17, 26, 0.88);
+  --surface: #111c27;
+  --surface-subtle: #0e1822;
+  --surface-muted: #192734;
+  --surface-inset: #0d1720;
+  --control-bg: #101b25;
+  --table-header: #1a2a38;
+  --nav: #060d14;
+  --nav-soft: #173449;
+  --nav-text: #eef6fb;
+  --nav-text-soft: #c2d4df;
+  --nav-muted: #829bab;
+  --nav-border: #294354;
+  --nav-brand-bg: #102331;
+  --nav-glyph: #76bce2;
+  --nav-button: #245f82;
+  --nav-button-hover: #30769d;
+  --nav-hover: #102634;
+  --nav-card: #08141d;
+  --nav-card-border: #203a4b;
+  --nav-active-mark: #7bc1e7;
+  --hero-surface: linear-gradient(135deg, #102b3e, #1f5574);
+  --hero-surface-strong: linear-gradient(155deg, #173f59, #0a1c29);
+  --hero-border: #315f79;
+  --hero-text: #f2f8fb;
+  --hero-text-soft: #c5d9e5;
+  --hero-accent: #92cce9;
+  --editor-bg: #071019;
+  --editor-border: #345064;
+  --editor-text: #dceaf2;
+}
+
+html[data-appearance="dark"][data-theme="cloud"] {
+  --accent: #a2bed0;
+  --accent-hover: #bdd1de;
+  --accent-soft: #223542;
+  --nav-soft: #2a3b47;
+  --nav-button: #4a7087;
+  --nav-button-hover: #5b849b;
+  --nav-active-mark: #b5cedd;
+  --hero-surface: linear-gradient(135deg, #253641, #4a6474);
+  --hero-surface-strong: linear-gradient(155deg, #344b59, #16242d);
+  --hero-border: #597180;
+  --hero-accent: #c1d6e1;
+}
+
+html[data-appearance="dark"][data-theme="mint"] {
+  --accent: #72c7b7;
+  --accent-hover: #91d8ca;
+  --accent-soft: #163a34;
+  --nav: #06110f;
+  --nav-soft: #173b35;
+  --nav-border: #275047;
+  --nav-brand-bg: #102821;
+  --nav-glyph: #79cdbd;
+  --nav-button: #276f62;
+  --nav-button-hover: #2d776b;
+  --nav-hover: #102c27;
+  --nav-card: #071713;
+  --nav-card-border: #21463e;
+  --nav-active-mark: #78cdbc;
+  --hero-surface: linear-gradient(135deg, #10352f, #276d62);
+  --hero-surface-strong: linear-gradient(155deg, #1b5047, #081f1b);
+  --hero-border: #367c70;
+  --hero-accent: #91d4c7;
+}
+
+html[data-appearance="dark"][data-theme="classic"] {
+  --accent: #7bbba2;
+  --accent-hover: #9bcdb9;
+  --accent-soft: #1c392f;
+  --nav: #080f0d;
+  --nav-soft: #203a31;
+  --nav-border: #324d43;
+  --nav-brand-bg: #13251f;
+  --nav-glyph: #83bba4;
+  --nav-button: #2b6656;
+  --nav-button-hover: #397a68;
+  --nav-hover: #142720;
+  --nav-card: #091512;
+  --nav-card-border: #294238;
+  --nav-active-mark: #87bca7;
+  --hero-surface: linear-gradient(135deg, #11271f, #285746);
+  --hero-surface-strong: linear-gradient(155deg, #1c3c31, #091611);
+  --hero-border: #3d6656;
+  --hero-accent: #99c8b5;
+}
+
+html[data-appearance="dark"] body {
+  background:
+    radial-gradient(circle at 78% -12%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 36rem),
+    var(--canvas);
+}
+
+html[data-appearance="dark"] .button--primary,
+html[data-appearance="dark"] .layer-code,
+html[data-appearance="dark"] .execution-current-selection > span,
+html[data-appearance="dark"] .layer-attribution-list > li > span,
+html[data-appearance="dark"] .run-row.selected .compare-check {
+  color: #07131b;
+}
+
+html[data-appearance="dark"] .field input,
+html[data-appearance="dark"] .field select,
+html[data-appearance="dark"] .modal-form input,
+html[data-appearance="dark"] .search-field,
+html[data-appearance="dark"] .json-artifact-body select,
+html[data-appearance="dark"] .json-search-field > span,
+html[data-appearance="dark"] .run-bound-request-picker select {
+  color: var(--ink);
+  background: var(--control-bg);
+}
+
+html[data-appearance="dark"] input::placeholder,
+html[data-appearance="dark"] textarea::placeholder {
+  color: var(--muted);
+  opacity: 0.84;
+}
+
+html[data-appearance="dark"] .theme-swatch {
+  border-color: var(--line-strong);
+  background: #101a23;
+}
+html[data-appearance="dark"] .theme-swatch i:nth-child(3) {
+  border-color: #344958;
+  background: #172430;
+}
+html[data-appearance="dark"] .theme-swatch--cloud {
+  background: #151b20;
+}
+html[data-appearance="dark"] .theme-swatch--mint {
+  background: #0b1c18;
+}
+html[data-appearance="dark"] .theme-swatch--classic {
+  background: #0c1512;
+}
+
+html[data-appearance="dark"] .demo-notice,
+html[data-appearance="dark"] .empty-state {
+  border-color: var(--line-strong);
+}
+
+html[data-appearance="dark"] .comparison-highlights article.improved {
+  border-color: color-mix(in srgb, var(--positive) 32%, var(--line));
+}
+html[data-appearance="dark"] .comparison-highlights article.worsened {
+  border-color: color-mix(in srgb, var(--danger) 32%, var(--line));
+}
+
+html[data-appearance="dark"] .gap-panel,
+html[data-appearance="dark"] .design-scope-banner,
+html[data-appearance="dark"] .service-warning {
+  border-color: color-mix(in srgb, var(--warning) 36%, var(--line));
+  color: var(--warning-ink);
+}
+
+html[data-appearance="dark"] .artifact-virtual-line--active {
+  background: color-mix(in srgb, var(--accent-soft) 84%, var(--panel));
+}
+
+html[data-appearance="dark"] .modal-layer {
+  background: rgba(1, 6, 10, 0.72);
+}
+
+html[data-appearance="dark"] ::selection {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--accent) 38%, transparent);
+}

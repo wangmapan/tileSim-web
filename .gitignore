@@ -7,5 +7,7 @@ runs/
 runtime/
 .vite/
 coverage/
+test-results/
+playwright-report/
 __pycache__/
 *.pyc

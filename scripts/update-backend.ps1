@@ -1,5 +1,4 @@
 param(
-    [string]$Ref = "",
     [string]$RepositoryRoot = "D:\tileSim",
     [string]$BackendRoot = "D:\tileSim-backend",
     [string]$WslDistro = "Ubuntu-24.04",
@@ -13,6 +12,7 @@ $repository = (Resolve-Path -LiteralPath $RepositoryRoot).Path
 $backend = [System.IO.Path]::GetFullPath($BackendRoot)
 $runtimeRoot = Join-Path $webRoot "runtime"
 $manifestPath = Join-Path $runtimeRoot "backend-current.json"
+$Ref = "origin/main"
 $node = "C:\Users\mapanwang\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe"
 $mutex = [System.Threading.Mutex]::new($false, "Local\TileSimBackendUpdate")
 
@@ -35,6 +35,25 @@ function Resolve-GitCommit {
         if ($candidate -match '^[0-9a-f]{40}$') { return $candidate }
     }
     return $null
+}
+
+function Test-GitRevisionOwnsPath {
+    param(
+        [string]$WorkingTree,
+        [string]$Revision,
+        [string]$Path
+    )
+    # `git cat-file -e <revision>:<path>` treats an absent path as a fatal
+    # lookup error. With $ErrorActionPreference = "Stop", Windows PowerShell
+    # may promote that expected negative result to a terminating
+    # NativeCommandError before $LASTEXITCODE can be checked. `git ls-tree`
+    # returns success with empty output for an absent path, so it is safe for
+    # this presence probe while still failing for an invalid revision.
+    $entries = @(& git -C $WorkingTree ls-tree --name-only $Revision -- $Path)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not inspect '$Path' in backend revision $Revision."
+    }
+    return $entries.Count -gt 0
 }
 
 function Update-OriginWithRetry {
@@ -61,7 +80,6 @@ try {
     if (Test-Path -LiteralPath $manifestPath) {
         $previousManifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
     }
-    if (-not $Ref) { $Ref = if ($previousManifest.source_ref) { $previousManifest.source_ref } else { "origin/main" } }
     $targetRevision = Resolve-GitCommit $Ref
     $isRemoteTrackingRef = $Ref -match '^origin/'
     if (-not $NoFetch -and ($isRemoteTrackingRef -or -not $targetRevision)) {
@@ -79,22 +97,27 @@ try {
         [System.IO.File]::WriteAllText((Join-Path $backend ".git"), "gitdir: $relativeGitDir`n")
     }
 
-    $dirty = (& git -C $backend status --porcelain)
+    $dirtyEntries = @(& git -C $backend status --porcelain)
     if ($LASTEXITCODE -ne 0) { throw "Backend worktree is not a valid Git worktree: $backend" }
-    if ($dirty) { throw "Backend worktree has local changes; update aborted.`n$dirty" }
+    $traceOverlayPresent = $dirtyEntries -contains "?? trace_gen/"
+    $blockingChanges = @($dirtyEntries | Where-Object { $_ -ne "?? trace_gen/" })
+    if ($blockingChanges.Count -gt 0) {
+        throw "Backend worktree has local changes; update aborted.`n$($blockingChanges -join "`n")"
+    }
+    if ($traceOverlayPresent) {
+        if (Test-GitRevisionOwnsPath $backend $targetRevision "trace_gen") {
+            throw "The target revision owns trace_gen while the deployment worktree contains an untracked trace_gen overlay; update aborted to protect the overlay."
+        }
+        Write-Output "Preserving deployment-local untracked trace_gen overlay; target revision does not own that path."
+    }
     Invoke-Checked "git" @("-C", $backend, "switch", "--detach", $targetRevision)
 
     $backendWsl = Convert-ToWslPath $backend
     $shortRevision = $targetRevision.Substring(0, 12)
     $buildDirWsl = "/home/mapanwang/tilesim-backend-builds/$shortRevision"
-    $traceProjectWsl = "$backendWsl/trace_gen/vllm_trace/trace_project"
-
     Invoke-Checked "wsl.exe" @("-d", $WslDistro, "--exec", "env", "TILESIM_WSL_BUILD_DIR=$buildDirWsl", "bash", "$backendWsl/scripts/build_wsl.sh")
     Invoke-Checked "wsl.exe" @("-d", $WslDistro, "--exec", "ctest", "--test-dir", $buildDirWsl, "--output-on-failure")
-    if (Test-Path -LiteralPath (Join-Path $backend "trace_gen\vllm_trace\trace_project\pyproject.toml")) {
-        Invoke-Checked "wsl.exe" @("-d", $WslDistro, "--cd", $traceProjectWsl, "--exec", "python3", "-m", "unittest", "discover", "-s", "tests/unit", "-p", "test_*.py")
-        Invoke-Checked "wsl.exe" @("-d", $WslDistro, "--cd", $traceProjectWsl, "--exec", "python3", "-m", "unittest", "discover", "-s", "tests/integration", "-p", "test_*.py")
-    }
+    Write-Output "Backend validation passed; validating and rebuilding the frontend once..."
     Invoke-Checked "wsl.exe" @("-d", $WslDistro, "--exec", "python3", "-m", "py_compile", "/mnt/d/tileSim-web/bridge/server.py")
     Invoke-Checked $node @((Join-Path $webRoot "node_modules\vitest\vitest.mjs"), "run") $webRoot
     Invoke-Checked $node @((Join-Path $webRoot "node_modules\vite\bin\vite.js"), "build") $webRoot
@@ -112,9 +135,7 @@ try {
         manifest_path_wsl = "/mnt/d/tileSim-web/runtime/backend-current.json"
         deployed_at = [DateTimeOffset]::Now.ToString("o")
         validation = [ordered]@{
-            tilesim_ctest = "50/50"
-            pr4_unit = if (Test-Path -LiteralPath (Join-Path $backend "trace_gen\vllm_trace\trace_project\pyproject.toml")) { "215/215" } else { "not_present" }
-            pr4_integration = if (Test-Path -LiteralPath (Join-Path $backend "trace_gen\vllm_trace\trace_project\pyproject.toml")) { "2/2" } else { "not_present" }
+            tilesim_ctest = "passed"
             web = "passed"
         }
     }

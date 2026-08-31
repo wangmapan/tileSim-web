@@ -1,0 +1,609 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "TileSim Local Bridge API",
+    "version": "tilesim.bridge.api.v1",
+    "description": "Loopback-only controlled execution and evidence API for the desktop TileSim web client."
+  },
+  "servers": [{ "url": "/api" }],
+  "x-tilesim-contract": {
+    "api_version": "tilesim.bridge.api.v1",
+    "manifest_schema": "tilesim.bridge.manifest.v1",
+    "error_schema": "tilesim.bridge.error.v1",
+    "artifact_manifest_schema": "tilesim.bridge.artifact_manifest.v2",
+    "experiment_descriptor": {
+      "endpoint": "GET /api/experiment-schema",
+      "schema_identity": "tilesim.bridge.experiment_descriptor.v1",
+      "create_run_schema_identity": "tilesim.bridge.create_run_request.v1"
+    },
+    "known_report_schema_identities": {
+      "run": ["wind_tunnel.run.v1alpha1"],
+      "metrics": ["tilesim.metrics_report.v1"],
+      "validation": ["tilesim.validation_report.v1"],
+      "tail": ["tilesim.tail_cause_chain_report.v1"],
+      "design_space": ["tilesim.design_space_report.v1"],
+      "topology": ["tilesim.s6_topology_input.v1"],
+      "execution_envelope": ["tilesim.s7_execution_envelope.v1"],
+      "run_bound_des_evidence": ["tilesim.s7_run_bound_des_evidence.v1"]
+    },
+    "report_files": {
+      "run": "run-result.json",
+      "metrics": "metrics.json",
+      "validation": "validation.json",
+      "tail": "tail-cause-chain.json",
+      "design_space": "design-space.json",
+      "execution_envelope": "execution-envelope.json",
+      "run_bound_des_evidence": "week8-run-evidence.json"
+    },
+    "artifacts": {
+      "input-runtime-trace": { "file_name": "input-runtime-trace.json", "report_kind": null },
+      "input-topology": {
+        "file_name": "input-topology.json",
+        "report_kind": null,
+        "schema_identities": ["tilesim.s6_topology_input.v1"],
+        "run_id_pointer": "/run_id",
+        "forbid_self_sha256": true
+      },
+      "input-design-space-candidates": { "file_name": "input-design-space-candidates.json", "report_kind": null },
+      "run-result": {
+        "file_name": "run-result.json",
+        "report_kind": "run",
+        "schema_identities": ["wind_tunnel.run.v1alpha1"],
+        "run_id_pointer": "/summary/run_id"
+      },
+      "metrics": {
+        "file_name": "metrics.json",
+        "report_kind": "metrics",
+        "schema_identities": ["tilesim.metrics_report.v1"],
+        "run_id_pointer": "/run_id",
+        "allow_legacy_unversioned": true,
+        "forbid_self_sha256": true
+      },
+      "validation": {
+        "file_name": "validation.json",
+        "report_kind": "validation",
+        "schema_identities": ["tilesim.validation_report.v1"],
+        "run_id_pointer": "/run_id",
+        "allow_legacy_unversioned": true
+      },
+      "tail-cause-chain": {
+        "file_name": "tail-cause-chain.json",
+        "report_kind": "tail",
+        "schema_identities": ["tilesim.tail_cause_chain_report.v1"],
+        "run_id_pointer": "/run_id",
+        "allow_legacy_unversioned": true
+      },
+      "design-space": {
+        "file_name": "design-space.json",
+        "report_kind": "design_space",
+        "schema_identities": ["tilesim.design_space_report.v1"],
+        "legacy_schema_identities": ["design_space.report.v1alpha1"],
+        "run_id_pointer": "/run_id",
+        "forbid_self_sha256": true
+      },
+      "execution-envelope": {
+        "file_name": "execution-envelope.json",
+        "report_kind": "execution_envelope",
+        "schema_identities": ["tilesim.s7_execution_envelope.v1"],
+        "run_id_pointer": "/run_id",
+        "allow_legacy_unversioned": true
+      },
+      "week8-run-evidence": {
+        "file_name": "week8-run-evidence.json",
+        "report_kind": "run_bound_des_evidence",
+        "schema_identities": ["tilesim.s7_run_bound_des_evidence.v1"],
+        "run_id_pointer": "/run_id",
+        "forbid_self_sha256": true
+      }
+    },
+    "run_creation": {
+      "idempotency_header": "Idempotency-Key",
+      "idempotency_required": true,
+      "payload_identity": "canonical_json_sha256"
+    },
+    "run_events": {
+      "endpoint": "GET /api/runs/{run_id}/events",
+      "media_type": "text/event-stream",
+      "resume_header": "Last-Event-ID",
+      "event_ids": { "active": "1", "terminal": "2" }
+    },
+    "evidence_agent": {
+      "capability_endpoint": "GET /api/agent/evidence-capabilities",
+      "analysis_endpoint": "POST /api/runs/{run_id}/agent/evidence-analyses",
+      "descriptor_schema_identity": "tilesim.bridge.evidence_agent_descriptor.v1",
+      "request_schema_identity": "tilesim.bridge.evidence_agent_request.v1",
+      "response_schema_identity": "tilesim.bridge.evidence_agent_response.v1",
+      "citation_schema_identity": "tilesim.bridge.evidence_agent_citation.v1",
+      "snapshot_reference_schema_identity": "tilesim.bridge.evidence_snapshot_reference.v1",
+      "structured_report_schema_identity": "tilesim.web.structured-performance-report.v2",
+      "idempotency_header": "Idempotency-Key",
+      "execution_mode": "synchronous_terminal"
+    }
+  },
+  "paths": {
+    "/manifest": {
+      "get": {
+        "operationId": "manifest",
+        "x-client-response-type": "ApiManifestResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/Manifest" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health",
+        "x-client-response-type": "HealthResponse",
+        "responses": { "200": { "$ref": "#/components/responses/Health" } }
+      }
+    },
+    "/catalog": {
+      "get": {
+        "operationId": "catalog",
+        "x-client-response-type": "CatalogResponse",
+        "responses": { "200": { "$ref": "#/components/responses/Catalog" } }
+      }
+    },
+    "/capabilities": {
+      "get": {
+        "operationId": "capabilities",
+        "x-client-response-type": "CapabilitiesResponse",
+        "responses": { "200": { "$ref": "#/components/responses/Capabilities" } }
+      }
+    },
+    "/experiment-schema": {
+      "get": {
+        "operationId": "experimentSchema",
+        "x-client-response-type": "ExperimentDescriptorResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/ExperimentDescriptor" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/evidence-capabilities": {
+      "get": {
+        "operationId": "evidenceAgentCapabilities",
+        "x-client-response-type": "EvidenceAgentDescriptorResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/EvidenceAgentDescriptor" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/week7/evidence-map": {
+      "get": {
+        "operationId": "week7EvidenceMap",
+        "x-client-response-type": "Week7EvidenceMapResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/Week7EvidenceMap" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/week7/calibration-example": {
+      "post": {
+        "operationId": "runWeek7CalibrationExample",
+        "x-client-response-type": "Week7CalibrationResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/Week7Calibration" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/week7/orchestration-example": {
+      "post": {
+        "operationId": "runWeek7OrchestrationExample",
+        "x-client-response-type": "Week7OrchestrationResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/Week7Orchestration" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/templates/{scenario_id}": {
+      "parameters": [{ "$ref": "#/components/parameters/ScenarioId" }],
+      "get": {
+        "operationId": "getTemplate",
+        "x-client-response-type": "TemplateResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/Template" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/runs": {
+      "get": {
+        "operationId": "listRuns",
+        "x-client-response-type": "RunListResponse",
+        "responses": { "200": { "$ref": "#/components/responses/RunList" } }
+      },
+      "post": {
+        "operationId": "createRun",
+        "x-client-response-type": "CreateRunResponse",
+        "x-client-request-type": "CreateRunRequest",
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "./schemas/create-run-request.schema.json" } } }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/CreateRun" },
+          "202": { "$ref": "#/components/responses/CreateRun" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/runs/{run_id}": {
+      "parameters": [{ "$ref": "#/components/parameters/RunId" }],
+      "get": {
+        "operationId": "getRun",
+        "x-client-response-type": "ApiRun",
+        "responses": {
+          "200": { "$ref": "#/components/responses/Run" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/runs/{run_id}/events": {
+      "parameters": [{ "$ref": "#/components/parameters/RunId" }],
+      "get": {
+        "operationId": "getRunEvents",
+        "parameters": [{ "$ref": "#/components/parameters/LastEventId" }],
+        "responses": {
+          "200": {
+            "description": "Resumable run status event stream",
+            "content": { "text/event-stream": { "schema": { "type": "string" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/runs/{run_id}/reports": {
+      "parameters": [{ "$ref": "#/components/parameters/RunId" }],
+      "get": {
+        "operationId": "getReports",
+        "x-client-response-type": "ReportsResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/Reports" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/runs/{run_id}/artifacts": {
+      "parameters": [{ "$ref": "#/components/parameters/RunId" }],
+      "get": {
+        "operationId": "getArtifactManifest",
+        "x-client-response-type": "ArtifactManifestResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/ArtifactManifest" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/runs/{run_id}/files/{artifact_id}": {
+      "parameters": [{ "$ref": "#/components/parameters/RunId" }, { "$ref": "#/components/parameters/ArtifactId" }],
+      "get": {
+        "operationId": "getArtifact",
+        "x-client-response-type": "unknown",
+        "responses": {
+          "200": { "description": "Allow-listed JSON artifact", "content": { "application/json": { "schema": {} } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/runs/{run_id}/name": {
+      "parameters": [{ "$ref": "#/components/parameters/RunId" }],
+      "post": {
+        "operationId": "renameRun",
+        "x-client-response-type": "RenameRunResponse",
+        "x-client-request-type": "RenameRunRequest",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RenameRunRequest" } } }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/RenameRun" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/runs/{run_id}/agent/evidence-analyses": {
+      "parameters": [{ "$ref": "#/components/parameters/RunId" }],
+      "post": {
+        "operationId": "createEvidenceAnalysis",
+        "x-client-request-type": "EvidenceAgentRequest",
+        "x-client-response-type": "EvidenceAgentResponse",
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "./schemas/evidence-agent-request.schema.json" } } }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/EvidenceAgentResponse" },
+          "503": { "$ref": "#/components/responses/EvidenceAgentResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "RunId": { "name": "run_id", "in": "path", "required": true, "schema": { "type": "string" } },
+      "ScenarioId": { "name": "scenario_id", "in": "path", "required": true, "schema": { "type": "string" } },
+      "ArtifactId": { "name": "artifact_id", "in": "path", "required": true, "schema": { "type": "string" } },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "schema": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{8,128}$" }
+      },
+      "LastEventId": {
+        "name": "Last-Event-ID",
+        "in": "header",
+        "required": false,
+        "schema": { "enum": ["0", "1", "2"] }
+      }
+    },
+    "schemas": {
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "versions_match": { "type": "boolean" },
+          "execution_ready": { "type": "boolean" },
+          "cli_available": { "type": "boolean" },
+          "source_revision": { "type": "string" },
+          "build_revision": { "type": "string" },
+          "source_state_digest": { "type": "string" },
+          "build_state_digest": { "type": "string" },
+          "state_digests_match": { "type": "boolean" },
+          "deployment_mode": { "type": "string" },
+          "deployment_ref": { "type": "string" },
+          "deployed_at": { "type": "string" },
+          "backend_branch": { "type": "string" },
+          "tilesim_root": { "type": "string" },
+          "tilesim_cli": { "type": "string" }
+        },
+        "additionalProperties": true
+      },
+      "CatalogResponse": {
+        "type": "object",
+        "required": ["scenarios", "fidelity_policies", "input_modes", "design_space_modes", "gpu_participation_modes"],
+        "properties": {
+          "scenarios": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["scenario_id", "label"],
+              "properties": { "scenario_id": { "type": "string" }, "label": { "type": "string" } },
+              "additionalProperties": false
+            }
+          },
+          "fidelity_policies": {
+            "type": "array",
+            "items": { "enum": ["default", "des"] },
+            "uniqueItems": true
+          },
+          "input_modes": {
+            "type": "array",
+            "items": { "enum": ["controls", "json"] },
+            "uniqueItems": true
+          },
+          "design_space_modes": {
+            "type": "array",
+            "items": { "enum": ["built_in_synthetic", "strict_s6_manifest"] },
+            "uniqueItems": true
+          },
+          "gpu_participation_modes": {
+            "type": "array",
+            "items": { "const": "gpu_free" },
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "CapabilitiesResponse": {
+        "type": "object",
+        "required": ["schema_version", "default_gpu_participation_mode", "cycle_scope", "dependencies", "run_surface"],
+        "properties": {
+          "schema_version": { "const": "tilesim.runtime_capabilities.v1" },
+          "default_gpu_participation_mode": { "type": "string" },
+          "cycle_scope": { "type": "string" },
+          "dependencies": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "available": { "type": "boolean" },
+                "version": { "type": "string" },
+                "reason": { "type": "string" }
+              },
+              "additionalProperties": true
+            }
+          },
+          "run_surface": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "gpu_participation_modes",
+              "input_modes",
+              "design_space_modes",
+              "source_modes",
+              "override_parameter_subsystems",
+              "override_parameter_field_ids",
+              "cycle_hotspot_request_available",
+              "cycle_hotspot_request_reason",
+              "real_trace_submission_available",
+              "compatibility_harness_submission_available",
+              "real_network_observation_channel"
+            ],
+            "properties": {
+              "gpu_participation_modes": {
+                "type": "array",
+                "items": { "const": "gpu_free" },
+                "uniqueItems": true
+              },
+              "input_modes": {
+                "type": "array",
+                "items": { "enum": ["controls", "json"] },
+                "uniqueItems": true
+              },
+              "design_space_modes": {
+                "type": "array",
+                "items": { "enum": ["built_in_synthetic", "strict_s6_manifest"] },
+                "uniqueItems": true
+              },
+              "source_modes": {
+                "type": "array",
+                "items": { "const": "synthetic_trace" },
+                "uniqueItems": true
+              },
+              "override_parameter_subsystems": {
+                "type": "array",
+                "items": { "enum": ["S0", "S1", "S6"] },
+                "uniqueItems": true
+              },
+              "override_parameter_field_ids": {
+                "type": "array",
+                "items": { "type": "string", "pattern": "^s[016]\\." },
+                "uniqueItems": true
+              },
+              "cycle_hotspot_request_available": { "const": false },
+              "cycle_hotspot_request_reason": { "type": "string", "minLength": 1 },
+              "real_trace_submission_available": { "const": false },
+              "compatibility_harness_submission_available": { "const": false },
+              "real_network_observation_channel": { "const": "S8_evidence_only" }
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "ExperimentDescriptorResponse": { "$ref": "./schemas/experiment-descriptor.schema.json" },
+      "EvidenceAgentDescriptorResponse": { "$ref": "./schemas/evidence-agent-descriptor.schema.json" },
+      "EvidenceAgentRequest": { "$ref": "./schemas/evidence-agent-request.schema.json" },
+      "EvidenceAgentResponse": { "$ref": "./schemas/evidence-agent-response.schema.json" },
+      "TemplateResponse": {
+        "type": "object",
+        "required": ["scenario_id", "runtime_trace", "topology"],
+        "properties": {
+          "scenario_id": { "type": "string" },
+          "runtime_trace": { "type": "object" },
+          "topology": { "type": "object" }
+        },
+        "additionalProperties": false
+      },
+      "RenameRunRequest": {
+        "type": "object",
+        "required": ["run_name"],
+        "properties": { "run_name": { "type": "string", "maxLength": 80 } },
+        "additionalProperties": false
+      },
+      "RenameRunResponse": {
+        "type": "object",
+        "required": ["run_id", "run_name"],
+        "properties": { "run_id": { "type": "string" }, "run_name": { "type": "string" } },
+        "additionalProperties": false
+      },
+      "Week7EvidenceMapResponse": { "$ref": "./schemas/week7-evidence-map.schema.json" },
+      "Week7CalibrationResponse": { "$ref": "./schemas/week7-calibration.schema.json" },
+      "Week7OrchestrationResponse": { "$ref": "./schemas/week7-orchestration.schema.json" },
+      "CreateRunResponse": {
+        "allOf": [
+          { "$ref": "./schemas/run.schema.json" },
+          {
+            "type": "object",
+            "required": ["idempotent_replay"],
+            "properties": { "idempotent_replay": { "type": "boolean" } }
+          }
+        ]
+      }
+    },
+    "responses": {
+      "Manifest": {
+        "description": "Contract discovery",
+        "content": { "application/json": { "schema": { "$ref": "./schemas/api-manifest.schema.json" } } }
+      },
+      "Error": {
+        "description": "Structured API error",
+        "content": { "application/json": { "schema": { "$ref": "./schemas/error.schema.json" } } }
+      },
+      "ArtifactManifest": {
+        "description": "Verified artifact inventory",
+        "content": { "application/json": { "schema": { "$ref": "./schemas/artifact-manifest.schema.json" } } }
+      },
+      "Run": {
+        "description": "Run state",
+        "content": { "application/json": { "schema": { "$ref": "./schemas/run.schema.json" } } }
+      },
+      "CreateRun": {
+        "description": "Created or replayed run",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateRunResponse" } } }
+      },
+      "RunList": {
+        "description": "Recent runs",
+        "content": { "application/json": { "schema": { "$ref": "./schemas/run-list.schema.json" } } }
+      },
+      "Reports": {
+        "description": "Available reports",
+        "content": { "application/json": { "schema": { "$ref": "./schemas/reports.schema.json" } } }
+      },
+      "Health": {
+        "description": "Local runtime health",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/HealthResponse" } } }
+      },
+      "Catalog": {
+        "description": "Allow-listed inputs",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CatalogResponse" } } }
+      },
+      "Capabilities": {
+        "description": "Runtime capabilities",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CapabilitiesResponse" } } }
+      },
+      "ExperimentDescriptor": {
+        "description": "Schema-set-bound F8 experiment parameter descriptor",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/ExperimentDescriptorResponse" } }
+        }
+      },
+      "EvidenceAgentDescriptor": {
+        "description": "Read-only evidence Agent capability and degradation contract",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/EvidenceAgentDescriptorResponse" } }
+        }
+      },
+      "EvidenceAgentResponse": {
+        "description": "Run-bound terminal evidence analysis or structured refusal",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/EvidenceAgentResponse" } }
+        }
+      },
+      "Week7EvidenceMap": {
+        "description": "S9 report-field evidence lineage",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Week7EvidenceMapResponse" } }
+        }
+      },
+      "Week7Calibration": {
+        "description": "Allow-listed S8 offline calibration workflow example",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Week7CalibrationResponse" } }
+        }
+      },
+      "Week7Orchestration": {
+        "description": "Allow-listed deterministic Agent orchestration example",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Week7OrchestrationResponse" } }
+        }
+      },
+      "Template": {
+        "description": "Scenario inputs",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TemplateResponse" } } }
+      },
+      "RenameRun": {
+        "description": "Updated run name",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RenameRunResponse" } } }
+      }
+    }
+  }
+}
