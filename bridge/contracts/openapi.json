@@ -110,7 +110,8 @@
     "evidence_agent": {
       "capability_endpoint": "GET /api/agent/evidence-capabilities",
       "analysis_endpoint": "POST /api/runs/{run_id}/agent/evidence-analyses",
-      "descriptor_schema_identity": "tilesim.bridge.evidence_agent_descriptor.v1",
+      "descriptor_schema_identity": "tilesim.bridge.evidence_agent_descriptor.v2",
+      "descriptor_revision": "sha256:d68d4d18046e99452e56ac442ac9e4382e3cbcb593cf2bf228fbbd06a7c6f851",
       "request_schema_identity": "tilesim.bridge.evidence_agent_request.v1",
       "response_schema_identity": "tilesim.bridge.evidence_agent_response.v1",
       "citation_schema_identity": "tilesim.bridge.evidence_agent_citation.v1",
@@ -322,7 +323,10 @@
         },
         "responses": {
           "200": { "$ref": "#/components/responses/EvidenceAgentResponse" },
+          "409": { "$ref": "#/components/responses/Error" },
+          "502": { "$ref": "#/components/responses/EvidenceAgentResponse" },
           "503": { "$ref": "#/components/responses/EvidenceAgentResponse" },
+          "504": { "$ref": "#/components/responses/EvidenceAgentResponse" },
           "default": { "$ref": "#/components/responses/Error" }
         }
       }

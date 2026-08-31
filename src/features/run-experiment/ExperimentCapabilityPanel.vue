@@ -66,7 +66,7 @@ function statusClass(value) {
     <section class="experiment-schema-panel">
       <header>
         <div>
-          <strong>{{ t("F8 编排契约") }}</strong>
+          <strong>{{ t("实验编排契约") }}</strong>
           <small>{{ t("顶层选项来自 create-run schema 与运行时 capabilities 的交集。") }}</small>
         </div>
         <span :class="surface.contractStatus === 'supported' ? 'available' : 'partial'">{{

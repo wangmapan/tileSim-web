@@ -1,8 +1,9 @@
 # F9 Evidence Agent Contract Audit
 
-**Audit date**: 2026-08-31  
+**Audit date**: 2026-09-01
 **Scope**: read-only evidence Agent for the TileSim desktop web product  
-**Status**: runtime contract delivered and frontend adapted; live success remains blocked by `provider_unavailable`
+**Status**: Bridge descriptor v2 recovery/retention contract, generated DTO/runtime validators and frontend consumers closed;
+deployment, authenticated configuration and live model evaluation remain open
 
 ## 1. Decision
 
@@ -11,10 +12,23 @@ TileSim Web now consumes the versioned read-only Agent contract published by the
 The next safe split is:
 
 - **F9A, complete**: contract audit, evaluation specification, 36-case machine-readable catalog and deterministic contract tests.
-- **F9B, frontend adapted**: generated DTO/client/runtime validators, capability discovery, canonical request digest, idempotency recovery, atomic citation validation, stale isolation and desktop unavailable presentation are implemented.
-- **F9C/live acceptance, blocked**: the formal descriptor reports `provider.configured=false`, `availability=unavailable` and `provider_unavailable`; no mock success is used to close this boundary.
+- **F9B, frontend descriptor v2 adaptation complete**: generated DTO/runtime validators, fixture, manifest-bound API validation,
+  stable descriptor policy adapter, UI retry/recovery/persistence/payload-retention rendering and both structured 409 recovery
+  states consume the v2 policy. The adapter performs no digest or integer conversion.
+- **F9C, backend ready**: the fixed-endpoint Provider adapter, authenticated capability probe, read-only record projection,
+  strict output validation and safe terminal failures are implemented and covered by Bridge tests.
+- **F9C live acceptance, blocked**: no TileSim-specific Provider configuration is present, live repetitions are `0`, and the
+  current 5173 deployment predates the Agent endpoints. No fake success is used to close this boundary.
 
-The active schema-set revision is `sha256:5c6653e0fd7c367300ce5eba3200575e81170911ec952557f948931c6cb545aa`. The frontend discovers `GET /api/agent/evidence-capabilities` and `POST /api/runs/{run_id}/agent/evidence-analyses` from `/api/manifest.evidence_agent`, then binds manifest, payload and response headers to that revision.
+The current source schema-set revision is
+`sha256:be0c2274a37b765de93ced0c2720d36da9e8db10977b1e688da8fd7e91882f4d`; descriptor revision is
+`sha256:d68d4d18046e99452e56ac442ac9e4382e3cbcb593cf2bf228fbbd06a7c6f851`, prompt revision is
+`tilesim.evidence_agent.prompt_template.v2`, and policy revision is `tilesim.evidence_agent.read_only_policy.v2`.
+The frontend discovers `GET /api/agent/evidence-capabilities` and
+`POST /api/runs/{run_id}/agent/evidence-analyses` from `/api/manifest.evidence_agent`, then binds manifest, payload and
+response headers to that revision. The running 5173 service still publishes
+`sha256:b1136c7acf028d9bcf0e28ed9744f68bce6faa0b00c40342337c99abbe611159` and returns `unknown_endpoint` for the
+capability route, so this source contract has not received live deployment acceptance.
 
 ## 2. Evidence inspected
 
@@ -145,12 +159,41 @@ The following names are published in OpenAPI and consumed through generated fron
 
 | Surface                                           | Identity                                      | Purpose                                                  |
 | ------------------------------------------------- | --------------------------------------------- | -------------------------------------------------------- |
-| `GET /api/agent/evidence-capabilities`            | `tilesim.bridge.evidence_agent_descriptor.v1` | capability, revisions, limits and policy                 |
+| `GET /api/agent/evidence-capabilities`            | `tilesim.bridge.evidence_agent_descriptor.v2` | capability, revisions, limits and policy                 |
 | `POST /api/runs/{run_id}/agent/evidence-analyses` | `tilesim.bridge.evidence_agent_request.v1`    | create one immutable run-bound analysis                  |
 | response/result                                   | `tilesim.bridge.evidence_agent_response.v1`   | completion, claims, citations, refusal and audit summary |
 | citation definition                               | `tilesim.bridge.evidence_agent_citation.v1`   | exact evidence identity and subject binding              |
 
 If asynchronous execution is used, OpenAPI must additionally define status polling or SSE, cancellation and terminal-state recovery. Idempotency must specify same-key/same-payload reuse and same-key/different-payload conflict.
+
+### 5.1 Delivered F9C Provider boundary
+
+The Bridge owns one versioned JSON/HTTPS protocol, `tilesim.evidence_agent_provider.v1`. Provider configuration is read only
+from the following process environment variables; browser requests cannot supply or override them:
+
+- `TILESIM_EVIDENCE_AGENT_PROVIDER=tilesim_json_https_v1`
+- `TILESIM_EVIDENCE_AGENT_ENDPOINT`
+- `TILESIM_EVIDENCE_AGENT_API_KEY`
+- `TILESIM_EVIDENCE_AGENT_MODEL`
+- `TILESIM_EVIDENCE_AGENT_MODEL_REVISION`
+- optional `TILESIM_EVIDENCE_AGENT_TIMEOUT_MS`
+- optional `TILESIM_EVIDENCE_AGENT_PROBE_CACHE_SECONDS`
+
+The adapter does not consume generic `OPENAI_*` variables. It rejects non-loopback HTTP, redirects, URL userinfo, query and
+fragment components. Availability becomes true only after an authenticated probe exactly matches protocol, capability,
+provider, model and model revision.
+
+Analysis input contains a fixed system policy, an empty tool list, untrusted user-question isolation and only the allow-listed
+records resolved from already verified artifacts. The Bridge validates the returned request/run/digest, schema-set,
+provider/model revisions, claim IDs, citations, SHA-256, JSON Pointers, stable subjects, provenance, fidelity and subsystem
+scope before returning claims. Timeout, transport failure, invalid JSON, invalid citation and provider identity mismatch
+become closed `EvidenceAgentResponse` terminals using the documented `502/503/504` statuses; raw Provider output is never
+used as a fallback answer.
+
+Python and Node golden vectors independently verify Unicode code-point key ordering, array preservation and lossless uint64
+canonical decimal tokens. The request snapshot digest now uses the request-root identity
+`tilesim.bridge.evidence_agent_request.v1`; locale, task kind, client request ID and untrusted question remain outside the
+material digest as declared by the descriptor.
 
 ## 6. Mandatory claim rules
 
@@ -209,16 +252,42 @@ F9 needs distinct presentation states; these are frontend view semantics, not pr
 - manifest-driven capability/analysis endpoint discovery and schema revision failure closure;
 - canonical UTF-8 JSON with Unicode code-point ordering and lossless bigint decimal tokens;
 - supported-artifact allow-list construction from verified manifest identities and exact stable-ID Pointers;
-- same-key/same-payload idempotency recovery without retaining question/result content;
+- same-key/same-payload in-process exact recovery, plus disk recovery for claim-free Bridge terminals, without retaining the
+  question or claims-bearing model response;
+- frontend submission leases remain bound to the original Idempotency-Key after a terminal response; the same canonical
+  payload replays that terminal, while a different payload remains a visible conflict until explicit user discard;
 - atomic citation validation, stale-result isolation and exact artifact navigation;
+- current-context validation compares run, backend identity, schema-set revision and input snapshot digest after the response
+  arrives; any changed binding hides claims, preserves the old key and requires explicit discard before a new analysis;
+- once a submission key exists, completion, retryable failures and non-retryable contract/transport failures all retain the
+  lease; stale responses still undergo complete terminal, output-limit, claim and citation validation before claims are hidden;
+- distinct `failed`/`provider_unavailable`/`timeout` presentation for formal `502/503/504` response contracts;
+- explicit `terminal_result_not_retained` recovery boundary that preserves and locks the original Idempotency-Key until the
+  user discards it, without automatic Provider replay or a recovered label;
 - formal `provider_unavailable` desktop presentation with no successful mock claim.
 
 ### Still blocked by provider availability
 
-- a configured provider and formally available capability descriptor;
+- deployment of the F9C source revision to the user service after explicit authorization;
+- a complete TileSim-specific provider configuration and successful authenticated capability probe;
 - a real terminal success/refusal response from the live endpoint;
 - repeated live model evaluation, human entailment review and production latency/timeout observations;
 - any claim that F9 is live-validated rather than contract-adapted.
+
+### Versioned persistence contract closure
+
+Descriptor identity `tilesim.bridge.evidence_agent_descriptor.v2` replaces the contradictory v1 strings with closed branch
+objects. `/execution/retry/same_key_same_canonical_payload` states that every in-process terminal is replayed exactly, a
+claim-free Bridge terminal is reconstructed after restart from redacted metadata, and claims-bearing or claim-free Provider
+terminals return `error_terminal_result_not_retained`; `/execution/retry/.../provider_reinvocation=forbidden` prevents silent
+regeneration. `/execution/retry/same_key_different_canonical_payload` fixes HTTP 409, `idempotency_payload_mismatch`,
+`/headers/Idempotency-Key` and `retryable=false`.
+
+`/execution/terminal_recovery` publishes the same branches and formal 409 envelope. `/persistence/mode` is now a structured
+object with `storage_scope=run_local`, `record_kind=redacted_terminal_metadata_only` and record identity
+`tilesim.bridge.evidence_agent_terminal_record.v2`. The persistence policy explicitly forbids retention of user questions,
+snapshot/artifact payloads, Provider raw responses, validated model claims, credentials and hidden reasoning. Request,
+response, citation and snapshot-reference fields did not change and remain v1.
 
 ## 10. Closure checklist
 
@@ -231,3 +300,26 @@ F9 may be marked validated only when:
 - the draft remains separate from deterministic report facts and requires user confirmation;
 - desktop Chinese/English, overflow, keyboard, axe and reduced-motion acceptance passes;
 - live tests use a real contract surface and do not weaken evidence rules with mocks.
+- authenticated provider identity and all prompt/policy/model revisions are recorded for every live repetition;
+- cross-process terminal recovery semantics are versioned consistently without contradicting the retention policy.
+
+## 11. Current verification evidence
+
+- source revisions printed by the Bridge match schema set `sha256:be0c2274…`, descriptor `sha256:d68d4d18…`, prompt v2 and
+  policy v2;
+- `pnpm contracts:generate` updates only `bridge-contracts.ts` and `evidence-agent-validators.js`; `pnpm contracts:check` passes;
+- `pnpm typecheck`, dependency boundaries, lint and production build pass with no descriptor v1 consumer remaining;
+- Bridge discovery runs 75/75 tests, including Provider configuration/probe/transport/output/recovery coverage and explicit
+  removal of claim-free Provider refusal content from the redacted terminal record;
+- the F9 Schema/OpenAPI inventory remains 36/36;
+- Python and Node canonical digest golden gates both pass two vectors;
+- frontend unit/component tests pass 226/226, including 61/61 targeted Agent descriptor-adapter, API, validation, store and
+  component cases;
+- desktop fixture Playwright passes 25/25, including configured availability, atomic citation navigation, partial/truncated,
+  stale isolation, formal `502/503/504` terminals, idempotency, `409 terminal_result_not_retained` and
+  `409 idempotency_payload_mismatch` recovery boundaries;
+- the generated Evidence Agent validator bundle now includes `tilesim.bridge.error.v1`; informal error objects, stale error
+  headers, malformed fixed-409 fields, `502/503/504` error envelopes and HTTP/completion-state contradictions fail closed;
+- live model repetitions remain `0`, and the running 5173 service has not been upgraded to the F9C source revision;
+- repo-wide Prettier and `git diff --check` pass; `bridge/test_f9_canonical_digest.mjs` was changed only by Prettier and both
+  canonical digest implementations still pass the same two golden vectors.

@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/evidence-agent-terminal-record.schema.json",
+  "x-tilesim-schema-identity": "tilesim.bridge.evidence_agent_terminal_record.v2",
+  "title": "EvidenceAgentTerminalRecord",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "record_schema_version",
+    "request_payload_sha256",
+    "idempotency_key_sha256",
+    "run_id",
+    "input_snapshot_digest",
+    "schema_set_revision",
+    "http_status",
+    "terminal_class",
+    "terminal_metadata",
+    "redaction"
+  ],
+  "properties": {
+    "record_schema_version": { "const": "tilesim.bridge.evidence_agent_terminal_record.v2" },
+    "request_payload_sha256": { "$ref": "#/$defs/revision" },
+    "idempotency_key_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "run_id": { "type": "string", "pattern": "^run-[A-Za-z0-9._-]+$" },
+    "input_snapshot_digest": { "$ref": "#/$defs/revision" },
+    "schema_set_revision": { "$ref": "#/$defs/revision" },
+    "http_status": { "enum": [200, 502, 503, 504] },
+    "terminal_class": {
+      "enum": ["claim_free_bridge_terminal", "claims_bearing_terminal", "claim_free_provider_terminal"]
+    },
+    "terminal_metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_id",
+        "client_request_id",
+        "completion_state",
+        "provider",
+        "revisions",
+        "refusal",
+        "partial",
+        "truncated",
+        "degradation",
+        "audit_summary",
+        "generated_at",
+        "persistence",
+        "staleness",
+        "claim_count",
+        "response_canonical_sha256"
+      ],
+      "properties": {
+        "request_id": { "type": "string", "pattern": "^agent-[A-Za-z0-9._:-]+$" },
+        "client_request_id": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{8,128}$" },
+        "completion_state": {
+          "enum": ["completed", "refused", "partial", "truncated", "failed", "timeout", "cancelled"]
+        },
+        "provider": { "$ref": "evidence-agent-response.schema.json#/$defs/provider" },
+        "revisions": { "$ref": "evidence-agent-response.schema.json#/properties/revisions" },
+        "refusal": { "$ref": "evidence-agent-response.schema.json#/properties/refusal" },
+        "partial": { "type": "boolean" },
+        "truncated": { "type": "boolean" },
+        "degradation": { "$ref": "evidence-agent-response.schema.json#/properties/degradation" },
+        "audit_summary": { "$ref": "evidence-agent-response.schema.json#/properties/audit_summary" },
+        "generated_at": { "type": "string", "format": "date-time" },
+        "persistence": { "$ref": "evidence-agent-response.schema.json#/properties/persistence" },
+        "staleness": { "$ref": "evidence-agent-response.schema.json#/properties/staleness" },
+        "claim_count": { "type": "integer", "minimum": 0 },
+        "response_canonical_sha256": { "$ref": "#/$defs/revision" }
+      }
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "snapshot_payload_retained",
+        "artifact_payload_retained",
+        "user_question_retained",
+        "provider_raw_response_retained",
+        "validated_model_claims_retained",
+        "hidden_reasoning_retained",
+        "credentials_retained"
+      ],
+      "properties": {
+        "snapshot_payload_retained": { "const": false },
+        "artifact_payload_retained": { "const": false },
+        "user_question_retained": { "const": false },
+        "provider_raw_response_retained": { "const": false },
+        "validated_model_claims_retained": { "const": false },
+        "hidden_reasoning_retained": { "const": false },
+        "credentials_retained": { "const": false }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "type": "object", "properties": { "terminal_class": { "const": "claims_bearing_terminal" } } },
+      "then": {
+        "type": "object",
+        "properties": {
+          "terminal_metadata": {
+            "type": "object",
+            "properties": { "claim_count": { "type": "integer", "minimum": 1 } }
+          }
+        }
+      },
+      "else": {
+        "type": "object",
+        "properties": {
+          "terminal_metadata": {
+            "type": "object",
+            "properties": { "claim_count": { "type": "integer", "const": 0 } }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "revision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}

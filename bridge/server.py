@@ -29,6 +29,7 @@ from repositories import runs as run_repository
 from services import execution
 from services import evidence_agent as evidence_agent_service
 from services import week7
+from providers import evidence_agent as evidence_agent_provider_contract
 
 from contracts import evidence_agent
 from contracts.experiment_descriptor import (
@@ -132,6 +133,7 @@ metadata_lock = threading.RLock()
 BRIDGE_INSTANCE_ID = uuid.uuid4().hex
 week7_operation_lock = threading.Lock()
 evidence_agent_operation_lock = threading.Lock()
+evidence_agent_provider = evidence_agent_provider_contract.ProviderRuntime.from_environment()
 
 def resolve_linked_git_dir(root: Path) -> Path | None:
     return identity.resolve_linked_git_dir(root)
@@ -504,7 +506,9 @@ class BridgeHandler(SimpleHTTPRequestHandler):
             return write_json(
                 self,
                 HTTPStatus.OK,
-                evidence_agent.build_descriptor(SCHEMA_SET_REVISION),
+                evidence_agent.build_descriptor(
+                    SCHEMA_SET_REVISION, evidence_agent_provider.capability()
+                ),
             )
         if path == "/api/week7/evidence-map":
             return self.run_week7_operation("evidence_map")
@@ -951,7 +955,7 @@ class BridgeHandler(SimpleHTTPRequestHandler):
                     "unsupported_schema", "Evidence Agent request must be a JSON object.", "/"
                 )
             idempotency_key = idempotency_key_for(self)
-            payload_digest = request_payload_digest(request)
+            payload_digest = evidence_agent.canonical_sha256(request)
             manifest = artifact_manifest_for(run_id, run_dir)
             documents = evidence_agent_artifact_documents(run_dir, manifest)
             evidence_agent.validate_request(
@@ -1007,12 +1011,14 @@ class BridgeHandler(SimpleHTTPRequestHandler):
                 retryable=True,
             )
         try:
-            status, response, _ = evidence_agent_service.terminal_provider_unavailable(
+            status, response, _ = evidence_agent_service.terminal_analysis(
                 run_dir=run_dir,
                 request=request,
+                artifact_documents=documents,
                 idempotency_key=idempotency_key,
                 payload_digest=payload_digest,
                 schema_set_revision=SCHEMA_SET_REVISION,
+                provider_runtime=evidence_agent_provider,
                 read_json=read_json_file,
                 atomic_write_json=atomic_write_json,
             )
@@ -1021,6 +1027,15 @@ class BridgeHandler(SimpleHTTPRequestHandler):
                 self,
                 HTTPStatus.CONFLICT,
                 "idempotency_payload_mismatch",
+                str(error),
+                field_path="/headers/Idempotency-Key",
+                retryable=False,
+            )
+        except evidence_agent_service.EvidenceAgentTerminalNotRetained as error:
+            return write_error(
+                self,
+                HTTPStatus.CONFLICT,
+                "terminal_result_not_retained",
                 str(error),
                 field_path="/headers/Idempotency-Key",
                 retryable=False,
@@ -1140,5 +1155,7 @@ if __name__ == "__main__":
         if value == "unknown":
             raise SystemExit("Could not calculate the TileSim source-state digest.")
         print(value)
+    elif sys.argv[1:] == ["--print-schema-set-revision"]:
+        print(SCHEMA_SET_REVISION)
     else:
         main()

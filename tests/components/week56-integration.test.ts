@@ -200,7 +200,7 @@ describe("Week 5 and Week 6 frontend integration", () => {
     expect(wrapper.text()).toContain("local_worktree_snapshot");
     expect(wrapper.text()).toContain("week6");
     expect(wrapper.text()).toContain("1234567890ab");
-    expect(wrapper.text()).toContain("F8 编排契约");
+    expect(wrapper.text()).toContain("实验编排契约");
     expect(wrapper.text()).toContain("experiment_descriptor_unavailable");
   });
 

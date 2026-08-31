@@ -10,6 +10,8 @@ export function evidenceAgentErrorState(code: string) {
   if (code === "timeout") return "timeout" as const;
   if (code === "cancelled") return "cancelled" as const;
   if (code === "unsupported_schema") return "unsupported_schema" as const;
+  if (code === "terminal_result_not_retained") return "terminal_result_not_retained" as const;
+  if (code === "idempotency_payload_mismatch") return "idempotency_payload_mismatch" as const;
   return "contract_error" as const;
 }
 
@@ -17,13 +19,13 @@ export async function submitEvidenceAgentAnalysis({
   manifest,
   descriptor,
   prepared,
-  binding,
+  currentBinding,
   idempotencyKey,
 }: {
   manifest: ApiManifestResponse;
   descriptor: EvidenceAgentDescriptorResponse;
   prepared: PreparedEvidenceAgentRequest;
-  binding: EvidenceAgentBinding;
+  currentBinding: () => EvidenceAgentBinding | Promise<EvidenceAgentBinding>;
   idempotencyKey: string;
 }) {
   const terminal = await bridgeApi.createEvidenceAnalysis(
@@ -32,7 +34,7 @@ export async function submitEvidenceAgentAnalysis({
     prepared.canonicalText,
     idempotencyKey,
   );
-  return validateEvidenceAgentResult(terminal.payload, prepared, descriptor, binding);
+  return validateEvidenceAgentResult(terminal.payload, prepared, descriptor, await currentBinding());
 }
 
 export function evidenceAgentFailure(error: unknown) {
@@ -43,6 +45,5 @@ export function evidenceAgentFailure(error: unknown) {
   return {
     code,
     state: evidenceAgentErrorState(code),
-    keepPending: error instanceof BridgeApiError && error.retryable,
   };
 }

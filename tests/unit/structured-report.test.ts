@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildStructuredPerformanceReport,
   createStructuredReportExport,
+  createStructuredReportExportAsync,
   renderStructuredPerformanceReportHtml,
   type StructuredReportContext,
 } from "../../src/features/structured-report";
@@ -9,6 +10,7 @@ import type { ArtifactManifestResponse } from "../../src/contracts/bridge-api";
 import type { EvidenceRef, ReportBundle } from "../../src/contracts/report-model";
 import { fixtureCase } from "../helpers/fixtures";
 import { setLocale } from "../../src/i18n";
+import { buildStructuredReportWorkerResponse } from "../../src/features/structured-report/worker-contract";
 
 const generatedAt = "2026-08-28T01:02:03.000Z";
 
@@ -321,6 +323,25 @@ describe("structured performance report", () => {
     expect(exported.html).toContain("\\u003c/script\\u003e");
     expect(exported.filename).not.toMatch(/[<>:"/\\|?*]/);
     expect(exported.filename).toMatch(/-structured-performance-report\.html$/);
+  });
+
+  it("keeps the asynchronous export API equivalent when Worker execution is unavailable", async () => {
+    const reportContext = context();
+    const synchronous = createStructuredReportExport(reportContext);
+    const asynchronous = await createStructuredReportExportAsync(reportContext);
+    expect(asynchronous).toEqual(synchronous);
+  });
+
+  it("builds the complete report and HTML through the Worker contract", () => {
+    const response = buildStructuredReportWorkerResponse({
+      requestId: "structured-report:test",
+      context: context(),
+      locale: "en-US",
+    });
+    expect(response.requestId).toBe("structured-report:test");
+    expect(response.report.schema_version).toBe("tilesim.web.structured-performance-report.v2");
+    expect(response.html).toContain('<html lang="en">');
+    setLocale("zh-CN");
   });
 
   it("renders human-readable charts, complete evidence appendix, and explicit pending analysis", () => {

@@ -58,7 +58,7 @@ onMounted(() => void load());
   <div class="view-stack week7-view">
     <section class="week7-hero">
       <div>
-        <p class="section-kicker">WEEK 7 · S8 / S9 / AGENT</p>
+        <p class="section-kicker">CALIBRATION · LINEAGE · TOOLS</p>
         <h2>{{ t("校准、证据血缘与确定性编排") }}</h2>
         <p>
           {{
@@ -89,7 +89,7 @@ onMounted(() => void load());
     </section>
 
     <section v-if="loadError" class="navigation-error" role="alert">
-      <strong>{{ t("Week 7 证据读取失败") }}</strong>
+      <strong>{{ t("校准证据读取失败") }}</strong>
       <span>{{ loadError }}</span>
       <button class="button button--secondary button--small" type="button" @click="load(true)">{{ t("重试") }}</button>
     </section>

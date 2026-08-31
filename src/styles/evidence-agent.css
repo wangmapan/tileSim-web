@@ -162,6 +162,73 @@
   overflow-wrap: anywhere;
 }
 
+.evidence-agent-contract-detail {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: var(--text-md);
+}
+
+.evidence-agent-contract-subtitle {
+  display: block;
+  margin: 16px 0 8px;
+  font-size: var(--text-md);
+}
+
+.evidence-agent-retention-list,
+.evidence-agent-terminal-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.evidence-agent-retention-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.evidence-agent-retention-list li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-muted);
+}
+
+.evidence-agent-retention-list span,
+.evidence-agent-retention-list code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.evidence-agent-terminal-list li {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.evidence-agent-terminal-list li > span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.evidence-agent-terminal-list code {
+  overflow-wrap: anywhere;
+}
+
+.evidence-agent-http-status {
+  white-space: nowrap;
+}
+
 .evidence-agent-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -307,6 +374,10 @@
 @media (max-width: 1050px) {
   .evidence-agent-identity-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .evidence-agent-retention-list {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

@@ -4,7 +4,7 @@ export const evidenceAgentDescriptor = validate20;
 const schema31 = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://tilesim.local/contracts/evidence-agent-descriptor.schema.json",
-  "x-tilesim-schema-identity": "tilesim.bridge.evidence_agent_descriptor.v1",
+  "x-tilesim-schema-identity": "tilesim.bridge.evidence_agent_descriptor.v2",
   title: "EvidenceAgentDescriptor",
   type: "object",
   additionalProperties: false,
@@ -28,7 +28,7 @@ const schema31 = {
     "execution",
   ],
   properties: {
-    schema_version: { const: "tilesim.bridge.evidence_agent_descriptor.v1" },
+    schema_version: { const: "tilesim.bridge.evidence_agent_descriptor.v2" },
     schema_set_revision: { $ref: "#/$defs/revision" },
     descriptor_revision: { $ref: "#/$defs/revision" },
     availability: { enum: ["available", "degraded", "unavailable", "disabled"] },
@@ -169,10 +169,21 @@ const schema31 = {
     redaction: {
       type: "object",
       additionalProperties: false,
-      required: ["user_question", "artifact_content", "credentials", "hidden_chain_of_thought"],
+      required: [
+        "user_question",
+        "snapshot_payload",
+        "artifact_payload",
+        "provider_raw_response",
+        "validated_model_claims",
+        "credentials",
+        "hidden_chain_of_thought",
+      ],
       properties: {
-        user_question: { const: "digest_only" },
-        artifact_content: { const: "not_retained" },
+        user_question: { const: "not_retained" },
+        snapshot_payload: { const: "not_retained" },
+        artifact_payload: { const: "not_retained" },
+        provider_raw_response: { const: "not_retained" },
+        validated_model_claims: { const: "memory_only_until_process_exit" },
         credentials: { const: "never_retained" },
         hidden_chain_of_thought: { const: "never_returned_or_retained" },
       },
@@ -186,8 +197,8 @@ const schema31 = {
         timeout_ms: { type: "integer", minimum: 1 },
         cancellation: { const: "not_applicable_after_synchronous_terminal_response" },
         maximum_concurrent_operations: { const: 1 },
-        retry: { const: "same_idempotency_key_and_same_payload_replays_terminal_result" },
-        terminal_recovery: { const: "run_local_redacted_terminal_record" },
+        retry: { $ref: "#/$defs/retryPolicy" },
+        terminal_recovery: { $ref: "#/$defs/terminalRecoveryPolicy" },
       },
     },
   },
@@ -216,19 +227,164 @@ const schema31 = {
     persistencePolicy: {
       type: "object",
       additionalProperties: false,
+      required: ["mode", "retention_seconds", "terminal_classes", "payload_retention"],
+      properties: {
+        mode: {
+          type: "object",
+          additionalProperties: false,
+          required: ["storage_scope", "record_kind", "record_schema_identity"],
+          properties: {
+            storage_scope: { const: "run_local" },
+            record_kind: { const: "redacted_terminal_metadata_only" },
+            record_schema_identity: { const: "tilesim.bridge.evidence_agent_terminal_record.v2" },
+          },
+        },
+        retention_seconds: { type: "integer", minimum: 0 },
+        terminal_classes: {
+          type: "object",
+          additionalProperties: false,
+          required: ["claim_free_bridge_terminal", "claims_bearing_terminal", "claim_free_provider_terminal"],
+          properties: {
+            claim_free_bridge_terminal: {
+              type: "object",
+              additionalProperties: false,
+              required: ["terminal_metadata_retained", "exact_response_recoverable_after_restart"],
+              properties: {
+                terminal_metadata_retained: { const: true },
+                exact_response_recoverable_after_restart: { const: true },
+              },
+            },
+            claims_bearing_terminal: {
+              type: "object",
+              additionalProperties: false,
+              required: [
+                "terminal_metadata_retained",
+                "validated_model_claims_retained",
+                "exact_response_recoverable_after_restart",
+              ],
+              properties: {
+                terminal_metadata_retained: { const: true },
+                validated_model_claims_retained: { const: false },
+                exact_response_recoverable_after_restart: { const: false },
+              },
+            },
+            claim_free_provider_terminal: {
+              type: "object",
+              additionalProperties: false,
+              required: [
+                "terminal_metadata_retained",
+                "validated_provider_response_retained",
+                "exact_response_recoverable_after_restart",
+              ],
+              properties: {
+                terminal_metadata_retained: { const: true },
+                validated_provider_response_retained: { const: false },
+                exact_response_recoverable_after_restart: { const: false },
+              },
+            },
+          },
+        },
+        payload_retention: {
+          type: "object",
+          additionalProperties: false,
+          required: [
+            "user_question_retained",
+            "snapshot_payload_retained",
+            "artifact_payload_retained",
+            "provider_raw_response_retained",
+            "validated_model_claims_retained",
+            "credentials_retained",
+            "hidden_reasoning_retained",
+          ],
+          properties: {
+            user_question_retained: { const: false },
+            snapshot_payload_retained: { const: false },
+            artifact_payload_retained: { const: false },
+            provider_raw_response_retained: { const: false },
+            validated_model_claims_retained: { const: false },
+            credentials_retained: { const: false },
+            hidden_reasoning_retained: { const: false },
+          },
+        },
+      },
+    },
+    errorOutcome: {
+      type: "object",
+      additionalProperties: false,
+      required: ["outcome", "http_status", "code", "field_path", "retryable"],
+      properties: {
+        outcome: { const: "error" },
+        http_status: { const: 409 },
+        code: { enum: ["idempotency_payload_mismatch", "terminal_result_not_retained"] },
+        field_path: { const: "/headers/Idempotency-Key" },
+        retryable: { const: false },
+      },
+    },
+    retryPolicy: {
+      type: "object",
+      additionalProperties: false,
+      required: ["payload_identity", "same_key_same_canonical_payload", "same_key_different_canonical_payload"],
+      properties: {
+        payload_identity: { const: "tilesim.bridge.canonical_json.v1_sha256" },
+        same_key_same_canonical_payload: {
+          type: "object",
+          additionalProperties: false,
+          required: [
+            "in_process",
+            "after_restart_claim_free_bridge_terminal",
+            "after_restart_claims_bearing_terminal",
+            "after_restart_claim_free_provider_terminal",
+            "provider_reinvocation",
+          ],
+          properties: {
+            in_process: { const: "exact_terminal_replay" },
+            after_restart_claim_free_bridge_terminal: { const: "exact_terminal_replay_from_redacted_record" },
+            after_restart_claims_bearing_terminal: { const: "error_terminal_result_not_retained" },
+            after_restart_claim_free_provider_terminal: { const: "error_terminal_result_not_retained" },
+            provider_reinvocation: { const: "forbidden" },
+          },
+        },
+        same_key_different_canonical_payload: {
+          allOf: [
+            { $ref: "#/$defs/errorOutcome" },
+            { type: "object", properties: { code: { const: "idempotency_payload_mismatch" } } },
+          ],
+        },
+      },
+    },
+    terminalRecoveryPolicy: {
+      type: "object",
+      additionalProperties: false,
       required: [
-        "mode",
-        "retention_seconds",
-        "snapshot_payload_retained",
-        "user_question_retained",
-        "hidden_reasoning_retained",
+        "record_scope",
+        "record_schema_identity",
+        "claim_free_bridge_terminal",
+        "claims_bearing_terminal",
+        "claim_free_provider_terminal",
+        "provider_reinvocation",
       ],
       properties: {
-        mode: { const: "run_local_terminal_metadata_only" },
-        retention_seconds: { type: "integer", minimum: 0 },
-        snapshot_payload_retained: { const: false },
-        user_question_retained: { const: false },
-        hidden_reasoning_retained: { const: false },
+        record_scope: { const: "run_local" },
+        record_schema_identity: { const: "tilesim.bridge.evidence_agent_terminal_record.v2" },
+        claim_free_bridge_terminal: {
+          type: "object",
+          additionalProperties: false,
+          required: ["outcome", "source"],
+          properties: { outcome: { const: "exact_terminal_replay" }, source: { const: "redacted_terminal_metadata" } },
+        },
+        claims_bearing_terminal: {
+          allOf: [
+            { $ref: "#/$defs/errorOutcome" },
+            { type: "object", properties: { code: { const: "terminal_result_not_retained" } } },
+          ],
+        },
+        claim_free_provider_terminal: {
+          allOf: [
+            { $ref: "#/$defs/errorOutcome" },
+            { type: "object", properties: { code: { const: "terminal_result_not_retained" } } },
+          ],
+        },
+        provider_reinvocation: { const: "forbidden" },
       },
     },
   },
@@ -257,25 +413,1498 @@ const schema35 = {
 const schema36 = {
   type: "object",
   additionalProperties: false,
-  required: [
-    "mode",
-    "retention_seconds",
-    "snapshot_payload_retained",
-    "user_question_retained",
-    "hidden_reasoning_retained",
-  ],
+  required: ["mode", "retention_seconds", "terminal_classes", "payload_retention"],
   properties: {
-    mode: { const: "run_local_terminal_metadata_only" },
+    mode: {
+      type: "object",
+      additionalProperties: false,
+      required: ["storage_scope", "record_kind", "record_schema_identity"],
+      properties: {
+        storage_scope: { const: "run_local" },
+        record_kind: { const: "redacted_terminal_metadata_only" },
+        record_schema_identity: { const: "tilesim.bridge.evidence_agent_terminal_record.v2" },
+      },
+    },
     retention_seconds: { type: "integer", minimum: 0 },
-    snapshot_payload_retained: { const: false },
-    user_question_retained: { const: false },
-    hidden_reasoning_retained: { const: false },
+    terminal_classes: {
+      type: "object",
+      additionalProperties: false,
+      required: ["claim_free_bridge_terminal", "claims_bearing_terminal", "claim_free_provider_terminal"],
+      properties: {
+        claim_free_bridge_terminal: {
+          type: "object",
+          additionalProperties: false,
+          required: ["terminal_metadata_retained", "exact_response_recoverable_after_restart"],
+          properties: {
+            terminal_metadata_retained: { const: true },
+            exact_response_recoverable_after_restart: { const: true },
+          },
+        },
+        claims_bearing_terminal: {
+          type: "object",
+          additionalProperties: false,
+          required: [
+            "terminal_metadata_retained",
+            "validated_model_claims_retained",
+            "exact_response_recoverable_after_restart",
+          ],
+          properties: {
+            terminal_metadata_retained: { const: true },
+            validated_model_claims_retained: { const: false },
+            exact_response_recoverable_after_restart: { const: false },
+          },
+        },
+        claim_free_provider_terminal: {
+          type: "object",
+          additionalProperties: false,
+          required: [
+            "terminal_metadata_retained",
+            "validated_provider_response_retained",
+            "exact_response_recoverable_after_restart",
+          ],
+          properties: {
+            terminal_metadata_retained: { const: true },
+            validated_provider_response_retained: { const: false },
+            exact_response_recoverable_after_restart: { const: false },
+          },
+        },
+      },
+    },
+    payload_retention: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "user_question_retained",
+        "snapshot_payload_retained",
+        "artifact_payload_retained",
+        "provider_raw_response_retained",
+        "validated_model_claims_retained",
+        "credentials_retained",
+        "hidden_reasoning_retained",
+      ],
+      properties: {
+        user_question_retained: { const: false },
+        snapshot_payload_retained: { const: false },
+        artifact_payload_retained: { const: false },
+        provider_raw_response_retained: { const: false },
+        validated_model_claims_retained: { const: false },
+        credentials_retained: { const: false },
+        hidden_reasoning_retained: { const: false },
+      },
+    },
   },
 };
 const func1 = Object.prototype.hasOwnProperty;
 import func2 from "ajv/dist/runtime/ucs2length";
 import func0 from "ajv/dist/runtime/equal";
 const pattern4 = new RegExp("^sha256:[0-9a-f]{64}$", "u");
+const schema37 = {
+  type: "object",
+  additionalProperties: false,
+  required: ["payload_identity", "same_key_same_canonical_payload", "same_key_different_canonical_payload"],
+  properties: {
+    payload_identity: { const: "tilesim.bridge.canonical_json.v1_sha256" },
+    same_key_same_canonical_payload: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "in_process",
+        "after_restart_claim_free_bridge_terminal",
+        "after_restart_claims_bearing_terminal",
+        "after_restart_claim_free_provider_terminal",
+        "provider_reinvocation",
+      ],
+      properties: {
+        in_process: { const: "exact_terminal_replay" },
+        after_restart_claim_free_bridge_terminal: { const: "exact_terminal_replay_from_redacted_record" },
+        after_restart_claims_bearing_terminal: { const: "error_terminal_result_not_retained" },
+        after_restart_claim_free_provider_terminal: { const: "error_terminal_result_not_retained" },
+        provider_reinvocation: { const: "forbidden" },
+      },
+    },
+    same_key_different_canonical_payload: {
+      allOf: [
+        { $ref: "#/$defs/errorOutcome" },
+        { type: "object", properties: { code: { const: "idempotency_payload_mismatch" } } },
+      ],
+    },
+  },
+};
+const schema38 = {
+  type: "object",
+  additionalProperties: false,
+  required: ["outcome", "http_status", "code", "field_path", "retryable"],
+  properties: {
+    outcome: { const: "error" },
+    http_status: { const: 409 },
+    code: { enum: ["idempotency_payload_mismatch", "terminal_result_not_retained"] },
+    field_path: { const: "/headers/Idempotency-Key" },
+    retryable: { const: false },
+  },
+};
+function validate21(
+  data,
+  { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {},
+) {
+  let vErrors = null;
+  let errors = 0;
+  const evaluated0 = validate21.evaluated;
+  if (evaluated0.dynamicProps) {
+    evaluated0.props = undefined;
+  }
+  if (evaluated0.dynamicItems) {
+    evaluated0.items = undefined;
+  }
+  if (data && typeof data == "object" && !Array.isArray(data)) {
+    if (data.payload_identity === undefined) {
+      const err0 = {
+        instancePath,
+        schemaPath: "#/required",
+        keyword: "required",
+        params: { missingProperty: "payload_identity" },
+        message: "must have required property '" + "payload_identity" + "'",
+      };
+      if (vErrors === null) {
+        vErrors = [err0];
+      } else {
+        vErrors.push(err0);
+      }
+      errors++;
+    }
+    if (data.same_key_same_canonical_payload === undefined) {
+      const err1 = {
+        instancePath,
+        schemaPath: "#/required",
+        keyword: "required",
+        params: { missingProperty: "same_key_same_canonical_payload" },
+        message: "must have required property '" + "same_key_same_canonical_payload" + "'",
+      };
+      if (vErrors === null) {
+        vErrors = [err1];
+      } else {
+        vErrors.push(err1);
+      }
+      errors++;
+    }
+    if (data.same_key_different_canonical_payload === undefined) {
+      const err2 = {
+        instancePath,
+        schemaPath: "#/required",
+        keyword: "required",
+        params: { missingProperty: "same_key_different_canonical_payload" },
+        message: "must have required property '" + "same_key_different_canonical_payload" + "'",
+      };
+      if (vErrors === null) {
+        vErrors = [err2];
+      } else {
+        vErrors.push(err2);
+      }
+      errors++;
+    }
+    for (const key0 in data) {
+      if (!(
+        key0 === "payload_identity" ||
+        key0 === "same_key_same_canonical_payload" ||
+        key0 === "same_key_different_canonical_payload"
+      )) {
+        const err3 = {
+          instancePath,
+          schemaPath: "#/additionalProperties",
+          keyword: "additionalProperties",
+          params: { additionalProperty: key0 },
+          message: "must NOT have additional properties",
+        };
+        if (vErrors === null) {
+          vErrors = [err3];
+        } else {
+          vErrors.push(err3);
+        }
+        errors++;
+      }
+    }
+    if (data.payload_identity !== undefined) {
+      if ("tilesim.bridge.canonical_json.v1_sha256" !== data.payload_identity) {
+        const err4 = {
+          instancePath: instancePath + "/payload_identity",
+          schemaPath: "#/properties/payload_identity/const",
+          keyword: "const",
+          params: { allowedValue: "tilesim.bridge.canonical_json.v1_sha256" },
+          message: "must be equal to constant",
+        };
+        if (vErrors === null) {
+          vErrors = [err4];
+        } else {
+          vErrors.push(err4);
+        }
+        errors++;
+      }
+    }
+    if (data.same_key_same_canonical_payload !== undefined) {
+      let data1 = data.same_key_same_canonical_payload;
+      if (data1 && typeof data1 == "object" && !Array.isArray(data1)) {
+        if (data1.in_process === undefined) {
+          const err5 = {
+            instancePath: instancePath + "/same_key_same_canonical_payload",
+            schemaPath: "#/properties/same_key_same_canonical_payload/required",
+            keyword: "required",
+            params: { missingProperty: "in_process" },
+            message: "must have required property '" + "in_process" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err5];
+          } else {
+            vErrors.push(err5);
+          }
+          errors++;
+        }
+        if (data1.after_restart_claim_free_bridge_terminal === undefined) {
+          const err6 = {
+            instancePath: instancePath + "/same_key_same_canonical_payload",
+            schemaPath: "#/properties/same_key_same_canonical_payload/required",
+            keyword: "required",
+            params: { missingProperty: "after_restart_claim_free_bridge_terminal" },
+            message: "must have required property '" + "after_restart_claim_free_bridge_terminal" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err6];
+          } else {
+            vErrors.push(err6);
+          }
+          errors++;
+        }
+        if (data1.after_restart_claims_bearing_terminal === undefined) {
+          const err7 = {
+            instancePath: instancePath + "/same_key_same_canonical_payload",
+            schemaPath: "#/properties/same_key_same_canonical_payload/required",
+            keyword: "required",
+            params: { missingProperty: "after_restart_claims_bearing_terminal" },
+            message: "must have required property '" + "after_restart_claims_bearing_terminal" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err7];
+          } else {
+            vErrors.push(err7);
+          }
+          errors++;
+        }
+        if (data1.after_restart_claim_free_provider_terminal === undefined) {
+          const err8 = {
+            instancePath: instancePath + "/same_key_same_canonical_payload",
+            schemaPath: "#/properties/same_key_same_canonical_payload/required",
+            keyword: "required",
+            params: { missingProperty: "after_restart_claim_free_provider_terminal" },
+            message: "must have required property '" + "after_restart_claim_free_provider_terminal" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err8];
+          } else {
+            vErrors.push(err8);
+          }
+          errors++;
+        }
+        if (data1.provider_reinvocation === undefined) {
+          const err9 = {
+            instancePath: instancePath + "/same_key_same_canonical_payload",
+            schemaPath: "#/properties/same_key_same_canonical_payload/required",
+            keyword: "required",
+            params: { missingProperty: "provider_reinvocation" },
+            message: "must have required property '" + "provider_reinvocation" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err9];
+          } else {
+            vErrors.push(err9);
+          }
+          errors++;
+        }
+        for (const key1 in data1) {
+          if (!(
+            key1 === "in_process" ||
+            key1 === "after_restart_claim_free_bridge_terminal" ||
+            key1 === "after_restart_claims_bearing_terminal" ||
+            key1 === "after_restart_claim_free_provider_terminal" ||
+            key1 === "provider_reinvocation"
+          )) {
+            const err10 = {
+              instancePath: instancePath + "/same_key_same_canonical_payload",
+              schemaPath: "#/properties/same_key_same_canonical_payload/additionalProperties",
+              keyword: "additionalProperties",
+              params: { additionalProperty: key1 },
+              message: "must NOT have additional properties",
+            };
+            if (vErrors === null) {
+              vErrors = [err10];
+            } else {
+              vErrors.push(err10);
+            }
+            errors++;
+          }
+        }
+        if (data1.in_process !== undefined) {
+          if ("exact_terminal_replay" !== data1.in_process) {
+            const err11 = {
+              instancePath: instancePath + "/same_key_same_canonical_payload/in_process",
+              schemaPath: "#/properties/same_key_same_canonical_payload/properties/in_process/const",
+              keyword: "const",
+              params: { allowedValue: "exact_terminal_replay" },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err11];
+            } else {
+              vErrors.push(err11);
+            }
+            errors++;
+          }
+        }
+        if (data1.after_restart_claim_free_bridge_terminal !== undefined) {
+          if ("exact_terminal_replay_from_redacted_record" !== data1.after_restart_claim_free_bridge_terminal) {
+            const err12 = {
+              instancePath: instancePath + "/same_key_same_canonical_payload/after_restart_claim_free_bridge_terminal",
+              schemaPath:
+                "#/properties/same_key_same_canonical_payload/properties/after_restart_claim_free_bridge_terminal/const",
+              keyword: "const",
+              params: { allowedValue: "exact_terminal_replay_from_redacted_record" },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err12];
+            } else {
+              vErrors.push(err12);
+            }
+            errors++;
+          }
+        }
+        if (data1.after_restart_claims_bearing_terminal !== undefined) {
+          if ("error_terminal_result_not_retained" !== data1.after_restart_claims_bearing_terminal) {
+            const err13 = {
+              instancePath: instancePath + "/same_key_same_canonical_payload/after_restart_claims_bearing_terminal",
+              schemaPath:
+                "#/properties/same_key_same_canonical_payload/properties/after_restart_claims_bearing_terminal/const",
+              keyword: "const",
+              params: { allowedValue: "error_terminal_result_not_retained" },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err13];
+            } else {
+              vErrors.push(err13);
+            }
+            errors++;
+          }
+        }
+        if (data1.after_restart_claim_free_provider_terminal !== undefined) {
+          if ("error_terminal_result_not_retained" !== data1.after_restart_claim_free_provider_terminal) {
+            const err14 = {
+              instancePath:
+                instancePath + "/same_key_same_canonical_payload/after_restart_claim_free_provider_terminal",
+              schemaPath:
+                "#/properties/same_key_same_canonical_payload/properties/after_restart_claim_free_provider_terminal/const",
+              keyword: "const",
+              params: { allowedValue: "error_terminal_result_not_retained" },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err14];
+            } else {
+              vErrors.push(err14);
+            }
+            errors++;
+          }
+        }
+        if (data1.provider_reinvocation !== undefined) {
+          if ("forbidden" !== data1.provider_reinvocation) {
+            const err15 = {
+              instancePath: instancePath + "/same_key_same_canonical_payload/provider_reinvocation",
+              schemaPath: "#/properties/same_key_same_canonical_payload/properties/provider_reinvocation/const",
+              keyword: "const",
+              params: { allowedValue: "forbidden" },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err15];
+            } else {
+              vErrors.push(err15);
+            }
+            errors++;
+          }
+        }
+      } else {
+        const err16 = {
+          instancePath: instancePath + "/same_key_same_canonical_payload",
+          schemaPath: "#/properties/same_key_same_canonical_payload/type",
+          keyword: "type",
+          params: { type: "object" },
+          message: "must be object",
+        };
+        if (vErrors === null) {
+          vErrors = [err16];
+        } else {
+          vErrors.push(err16);
+        }
+        errors++;
+      }
+    }
+    if (data.same_key_different_canonical_payload !== undefined) {
+      let data7 = data.same_key_different_canonical_payload;
+      if (data7 && typeof data7 == "object" && !Array.isArray(data7)) {
+        if (data7.outcome === undefined) {
+          const err17 = {
+            instancePath: instancePath + "/same_key_different_canonical_payload",
+            schemaPath: "#/$defs/errorOutcome/required",
+            keyword: "required",
+            params: { missingProperty: "outcome" },
+            message: "must have required property '" + "outcome" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err17];
+          } else {
+            vErrors.push(err17);
+          }
+          errors++;
+        }
+        if (data7.http_status === undefined) {
+          const err18 = {
+            instancePath: instancePath + "/same_key_different_canonical_payload",
+            schemaPath: "#/$defs/errorOutcome/required",
+            keyword: "required",
+            params: { missingProperty: "http_status" },
+            message: "must have required property '" + "http_status" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err18];
+          } else {
+            vErrors.push(err18);
+          }
+          errors++;
+        }
+        if (data7.code === undefined) {
+          const err19 = {
+            instancePath: instancePath + "/same_key_different_canonical_payload",
+            schemaPath: "#/$defs/errorOutcome/required",
+            keyword: "required",
+            params: { missingProperty: "code" },
+            message: "must have required property '" + "code" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err19];
+          } else {
+            vErrors.push(err19);
+          }
+          errors++;
+        }
+        if (data7.field_path === undefined) {
+          const err20 = {
+            instancePath: instancePath + "/same_key_different_canonical_payload",
+            schemaPath: "#/$defs/errorOutcome/required",
+            keyword: "required",
+            params: { missingProperty: "field_path" },
+            message: "must have required property '" + "field_path" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err20];
+          } else {
+            vErrors.push(err20);
+          }
+          errors++;
+        }
+        if (data7.retryable === undefined) {
+          const err21 = {
+            instancePath: instancePath + "/same_key_different_canonical_payload",
+            schemaPath: "#/$defs/errorOutcome/required",
+            keyword: "required",
+            params: { missingProperty: "retryable" },
+            message: "must have required property '" + "retryable" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err21];
+          } else {
+            vErrors.push(err21);
+          }
+          errors++;
+        }
+        for (const key2 in data7) {
+          if (!(
+            key2 === "outcome" ||
+            key2 === "http_status" ||
+            key2 === "code" ||
+            key2 === "field_path" ||
+            key2 === "retryable"
+          )) {
+            const err22 = {
+              instancePath: instancePath + "/same_key_different_canonical_payload",
+              schemaPath: "#/$defs/errorOutcome/additionalProperties",
+              keyword: "additionalProperties",
+              params: { additionalProperty: key2 },
+              message: "must NOT have additional properties",
+            };
+            if (vErrors === null) {
+              vErrors = [err22];
+            } else {
+              vErrors.push(err22);
+            }
+            errors++;
+          }
+        }
+        if (data7.outcome !== undefined) {
+          if ("error" !== data7.outcome) {
+            const err23 = {
+              instancePath: instancePath + "/same_key_different_canonical_payload/outcome",
+              schemaPath: "#/$defs/errorOutcome/properties/outcome/const",
+              keyword: "const",
+              params: { allowedValue: "error" },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err23];
+            } else {
+              vErrors.push(err23);
+            }
+            errors++;
+          }
+        }
+        if (data7.http_status !== undefined) {
+          if (409 !== data7.http_status) {
+            const err24 = {
+              instancePath: instancePath + "/same_key_different_canonical_payload/http_status",
+              schemaPath: "#/$defs/errorOutcome/properties/http_status/const",
+              keyword: "const",
+              params: { allowedValue: 409 },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err24];
+            } else {
+              vErrors.push(err24);
+            }
+            errors++;
+          }
+        }
+        if (data7.code !== undefined) {
+          let data10 = data7.code;
+          if (!(data10 === "idempotency_payload_mismatch" || data10 === "terminal_result_not_retained")) {
+            const err25 = {
+              instancePath: instancePath + "/same_key_different_canonical_payload/code",
+              schemaPath: "#/$defs/errorOutcome/properties/code/enum",
+              keyword: "enum",
+              params: { allowedValues: schema38.properties.code.enum },
+              message: "must be equal to one of the allowed values",
+            };
+            if (vErrors === null) {
+              vErrors = [err25];
+            } else {
+              vErrors.push(err25);
+            }
+            errors++;
+          }
+        }
+        if (data7.field_path !== undefined) {
+          if ("/headers/Idempotency-Key" !== data7.field_path) {
+            const err26 = {
+              instancePath: instancePath + "/same_key_different_canonical_payload/field_path",
+              schemaPath: "#/$defs/errorOutcome/properties/field_path/const",
+              keyword: "const",
+              params: { allowedValue: "/headers/Idempotency-Key" },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err26];
+            } else {
+              vErrors.push(err26);
+            }
+            errors++;
+          }
+        }
+        if (data7.retryable !== undefined) {
+          if (false !== data7.retryable) {
+            const err27 = {
+              instancePath: instancePath + "/same_key_different_canonical_payload/retryable",
+              schemaPath: "#/$defs/errorOutcome/properties/retryable/const",
+              keyword: "const",
+              params: { allowedValue: false },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err27];
+            } else {
+              vErrors.push(err27);
+            }
+            errors++;
+          }
+        }
+      } else {
+        const err28 = {
+          instancePath: instancePath + "/same_key_different_canonical_payload",
+          schemaPath: "#/$defs/errorOutcome/type",
+          keyword: "type",
+          params: { type: "object" },
+          message: "must be object",
+        };
+        if (vErrors === null) {
+          vErrors = [err28];
+        } else {
+          vErrors.push(err28);
+        }
+        errors++;
+      }
+      if (data7 && typeof data7 == "object" && !Array.isArray(data7)) {
+        if (data7.code !== undefined) {
+          if ("idempotency_payload_mismatch" !== data7.code) {
+            const err29 = {
+              instancePath: instancePath + "/same_key_different_canonical_payload/code",
+              schemaPath: "#/properties/same_key_different_canonical_payload/allOf/1/properties/code/const",
+              keyword: "const",
+              params: { allowedValue: "idempotency_payload_mismatch" },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err29];
+            } else {
+              vErrors.push(err29);
+            }
+            errors++;
+          }
+        }
+      } else {
+        const err30 = {
+          instancePath: instancePath + "/same_key_different_canonical_payload",
+          schemaPath: "#/properties/same_key_different_canonical_payload/allOf/1/type",
+          keyword: "type",
+          params: { type: "object" },
+          message: "must be object",
+        };
+        if (vErrors === null) {
+          vErrors = [err30];
+        } else {
+          vErrors.push(err30);
+        }
+        errors++;
+      }
+    }
+  } else {
+    const err31 = {
+      instancePath,
+      schemaPath: "#/type",
+      keyword: "type",
+      params: { type: "object" },
+      message: "must be object",
+    };
+    if (vErrors === null) {
+      vErrors = [err31];
+    } else {
+      vErrors.push(err31);
+    }
+    errors++;
+  }
+  validate21.errors = vErrors;
+  return errors === 0;
+}
+validate21.evaluated = { props: true, dynamicProps: false, dynamicItems: false };
+const schema39 = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "record_scope",
+    "record_schema_identity",
+    "claim_free_bridge_terminal",
+    "claims_bearing_terminal",
+    "claim_free_provider_terminal",
+    "provider_reinvocation",
+  ],
+  properties: {
+    record_scope: { const: "run_local" },
+    record_schema_identity: { const: "tilesim.bridge.evidence_agent_terminal_record.v2" },
+    claim_free_bridge_terminal: {
+      type: "object",
+      additionalProperties: false,
+      required: ["outcome", "source"],
+      properties: { outcome: { const: "exact_terminal_replay" }, source: { const: "redacted_terminal_metadata" } },
+    },
+    claims_bearing_terminal: {
+      allOf: [
+        { $ref: "#/$defs/errorOutcome" },
+        { type: "object", properties: { code: { const: "terminal_result_not_retained" } } },
+      ],
+    },
+    claim_free_provider_terminal: {
+      allOf: [
+        { $ref: "#/$defs/errorOutcome" },
+        { type: "object", properties: { code: { const: "terminal_result_not_retained" } } },
+      ],
+    },
+    provider_reinvocation: { const: "forbidden" },
+  },
+};
+function validate23(
+  data,
+  { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {},
+) {
+  let vErrors = null;
+  let errors = 0;
+  const evaluated0 = validate23.evaluated;
+  if (evaluated0.dynamicProps) {
+    evaluated0.props = undefined;
+  }
+  if (evaluated0.dynamicItems) {
+    evaluated0.items = undefined;
+  }
+  if (data && typeof data == "object" && !Array.isArray(data)) {
+    if (data.record_scope === undefined) {
+      const err0 = {
+        instancePath,
+        schemaPath: "#/required",
+        keyword: "required",
+        params: { missingProperty: "record_scope" },
+        message: "must have required property '" + "record_scope" + "'",
+      };
+      if (vErrors === null) {
+        vErrors = [err0];
+      } else {
+        vErrors.push(err0);
+      }
+      errors++;
+    }
+    if (data.record_schema_identity === undefined) {
+      const err1 = {
+        instancePath,
+        schemaPath: "#/required",
+        keyword: "required",
+        params: { missingProperty: "record_schema_identity" },
+        message: "must have required property '" + "record_schema_identity" + "'",
+      };
+      if (vErrors === null) {
+        vErrors = [err1];
+      } else {
+        vErrors.push(err1);
+      }
+      errors++;
+    }
+    if (data.claim_free_bridge_terminal === undefined) {
+      const err2 = {
+        instancePath,
+        schemaPath: "#/required",
+        keyword: "required",
+        params: { missingProperty: "claim_free_bridge_terminal" },
+        message: "must have required property '" + "claim_free_bridge_terminal" + "'",
+      };
+      if (vErrors === null) {
+        vErrors = [err2];
+      } else {
+        vErrors.push(err2);
+      }
+      errors++;
+    }
+    if (data.claims_bearing_terminal === undefined) {
+      const err3 = {
+        instancePath,
+        schemaPath: "#/required",
+        keyword: "required",
+        params: { missingProperty: "claims_bearing_terminal" },
+        message: "must have required property '" + "claims_bearing_terminal" + "'",
+      };
+      if (vErrors === null) {
+        vErrors = [err3];
+      } else {
+        vErrors.push(err3);
+      }
+      errors++;
+    }
+    if (data.claim_free_provider_terminal === undefined) {
+      const err4 = {
+        instancePath,
+        schemaPath: "#/required",
+        keyword: "required",
+        params: { missingProperty: "claim_free_provider_terminal" },
+        message: "must have required property '" + "claim_free_provider_terminal" + "'",
+      };
+      if (vErrors === null) {
+        vErrors = [err4];
+      } else {
+        vErrors.push(err4);
+      }
+      errors++;
+    }
+    if (data.provider_reinvocation === undefined) {
+      const err5 = {
+        instancePath,
+        schemaPath: "#/required",
+        keyword: "required",
+        params: { missingProperty: "provider_reinvocation" },
+        message: "must have required property '" + "provider_reinvocation" + "'",
+      };
+      if (vErrors === null) {
+        vErrors = [err5];
+      } else {
+        vErrors.push(err5);
+      }
+      errors++;
+    }
+    for (const key0 in data) {
+      if (!(
+        key0 === "record_scope" ||
+        key0 === "record_schema_identity" ||
+        key0 === "claim_free_bridge_terminal" ||
+        key0 === "claims_bearing_terminal" ||
+        key0 === "claim_free_provider_terminal" ||
+        key0 === "provider_reinvocation"
+      )) {
+        const err6 = {
+          instancePath,
+          schemaPath: "#/additionalProperties",
+          keyword: "additionalProperties",
+          params: { additionalProperty: key0 },
+          message: "must NOT have additional properties",
+        };
+        if (vErrors === null) {
+          vErrors = [err6];
+        } else {
+          vErrors.push(err6);
+        }
+        errors++;
+      }
+    }
+    if (data.record_scope !== undefined) {
+      if ("run_local" !== data.record_scope) {
+        const err7 = {
+          instancePath: instancePath + "/record_scope",
+          schemaPath: "#/properties/record_scope/const",
+          keyword: "const",
+          params: { allowedValue: "run_local" },
+          message: "must be equal to constant",
+        };
+        if (vErrors === null) {
+          vErrors = [err7];
+        } else {
+          vErrors.push(err7);
+        }
+        errors++;
+      }
+    }
+    if (data.record_schema_identity !== undefined) {
+      if ("tilesim.bridge.evidence_agent_terminal_record.v2" !== data.record_schema_identity) {
+        const err8 = {
+          instancePath: instancePath + "/record_schema_identity",
+          schemaPath: "#/properties/record_schema_identity/const",
+          keyword: "const",
+          params: { allowedValue: "tilesim.bridge.evidence_agent_terminal_record.v2" },
+          message: "must be equal to constant",
+        };
+        if (vErrors === null) {
+          vErrors = [err8];
+        } else {
+          vErrors.push(err8);
+        }
+        errors++;
+      }
+    }
+    if (data.claim_free_bridge_terminal !== undefined) {
+      let data2 = data.claim_free_bridge_terminal;
+      if (data2 && typeof data2 == "object" && !Array.isArray(data2)) {
+        if (data2.outcome === undefined) {
+          const err9 = {
+            instancePath: instancePath + "/claim_free_bridge_terminal",
+            schemaPath: "#/properties/claim_free_bridge_terminal/required",
+            keyword: "required",
+            params: { missingProperty: "outcome" },
+            message: "must have required property '" + "outcome" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err9];
+          } else {
+            vErrors.push(err9);
+          }
+          errors++;
+        }
+        if (data2.source === undefined) {
+          const err10 = {
+            instancePath: instancePath + "/claim_free_bridge_terminal",
+            schemaPath: "#/properties/claim_free_bridge_terminal/required",
+            keyword: "required",
+            params: { missingProperty: "source" },
+            message: "must have required property '" + "source" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err10];
+          } else {
+            vErrors.push(err10);
+          }
+          errors++;
+        }
+        for (const key1 in data2) {
+          if (!(key1 === "outcome" || key1 === "source")) {
+            const err11 = {
+              instancePath: instancePath + "/claim_free_bridge_terminal",
+              schemaPath: "#/properties/claim_free_bridge_terminal/additionalProperties",
+              keyword: "additionalProperties",
+              params: { additionalProperty: key1 },
+              message: "must NOT have additional properties",
+            };
+            if (vErrors === null) {
+              vErrors = [err11];
+            } else {
+              vErrors.push(err11);
+            }
+            errors++;
+          }
+        }
+        if (data2.outcome !== undefined) {
+          if ("exact_terminal_replay" !== data2.outcome) {
+            const err12 = {
+              instancePath: instancePath + "/claim_free_bridge_terminal/outcome",
+              schemaPath: "#/properties/claim_free_bridge_terminal/properties/outcome/const",
+              keyword: "const",
+              params: { allowedValue: "exact_terminal_replay" },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err12];
+            } else {
+              vErrors.push(err12);
+            }
+            errors++;
+          }
+        }
+        if (data2.source !== undefined) {
+          if ("redacted_terminal_metadata" !== data2.source) {
+            const err13 = {
+              instancePath: instancePath + "/claim_free_bridge_terminal/source",
+              schemaPath: "#/properties/claim_free_bridge_terminal/properties/source/const",
+              keyword: "const",
+              params: { allowedValue: "redacted_terminal_metadata" },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err13];
+            } else {
+              vErrors.push(err13);
+            }
+            errors++;
+          }
+        }
+      } else {
+        const err14 = {
+          instancePath: instancePath + "/claim_free_bridge_terminal",
+          schemaPath: "#/properties/claim_free_bridge_terminal/type",
+          keyword: "type",
+          params: { type: "object" },
+          message: "must be object",
+        };
+        if (vErrors === null) {
+          vErrors = [err14];
+        } else {
+          vErrors.push(err14);
+        }
+        errors++;
+      }
+    }
+    if (data.claims_bearing_terminal !== undefined) {
+      let data5 = data.claims_bearing_terminal;
+      if (data5 && typeof data5 == "object" && !Array.isArray(data5)) {
+        if (data5.outcome === undefined) {
+          const err15 = {
+            instancePath: instancePath + "/claims_bearing_terminal",
+            schemaPath: "#/$defs/errorOutcome/required",
+            keyword: "required",
+            params: { missingProperty: "outcome" },
+            message: "must have required property '" + "outcome" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err15];
+          } else {
+            vErrors.push(err15);
+          }
+          errors++;
+        }
+        if (data5.http_status === undefined) {
+          const err16 = {
+            instancePath: instancePath + "/claims_bearing_terminal",
+            schemaPath: "#/$defs/errorOutcome/required",
+            keyword: "required",
+            params: { missingProperty: "http_status" },
+            message: "must have required property '" + "http_status" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err16];
+          } else {
+            vErrors.push(err16);
+          }
+          errors++;
+        }
+        if (data5.code === undefined) {
+          const err17 = {
+            instancePath: instancePath + "/claims_bearing_terminal",
+            schemaPath: "#/$defs/errorOutcome/required",
+            keyword: "required",
+            params: { missingProperty: "code" },
+            message: "must have required property '" + "code" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err17];
+          } else {
+            vErrors.push(err17);
+          }
+          errors++;
+        }
+        if (data5.field_path === undefined) {
+          const err18 = {
+            instancePath: instancePath + "/claims_bearing_terminal",
+            schemaPath: "#/$defs/errorOutcome/required",
+            keyword: "required",
+            params: { missingProperty: "field_path" },
+            message: "must have required property '" + "field_path" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err18];
+          } else {
+            vErrors.push(err18);
+          }
+          errors++;
+        }
+        if (data5.retryable === undefined) {
+          const err19 = {
+            instancePath: instancePath + "/claims_bearing_terminal",
+            schemaPath: "#/$defs/errorOutcome/required",
+            keyword: "required",
+            params: { missingProperty: "retryable" },
+            message: "must have required property '" + "retryable" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err19];
+          } else {
+            vErrors.push(err19);
+          }
+          errors++;
+        }
+        for (const key2 in data5) {
+          if (!(
+            key2 === "outcome" ||
+            key2 === "http_status" ||
+            key2 === "code" ||
+            key2 === "field_path" ||
+            key2 === "retryable"
+          )) {
+            const err20 = {
+              instancePath: instancePath + "/claims_bearing_terminal",
+              schemaPath: "#/$defs/errorOutcome/additionalProperties",
+              keyword: "additionalProperties",
+              params: { additionalProperty: key2 },
+              message: "must NOT have additional properties",
+            };
+            if (vErrors === null) {
+              vErrors = [err20];
+            } else {
+              vErrors.push(err20);
+            }
+            errors++;
+          }
+        }
+        if (data5.outcome !== undefined) {
+          if ("error" !== data5.outcome) {
+            const err21 = {
+              instancePath: instancePath + "/claims_bearing_terminal/outcome",
+              schemaPath: "#/$defs/errorOutcome/properties/outcome/const",
+              keyword: "const",
+              params: { allowedValue: "error" },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err21];
+            } else {
+              vErrors.push(err21);
+            }
+            errors++;
+          }
+        }
+        if (data5.http_status !== undefined) {
+          if (409 !== data5.http_status) {
+            const err22 = {
+              instancePath: instancePath + "/claims_bearing_terminal/http_status",
+              schemaPath: "#/$defs/errorOutcome/properties/http_status/const",
+              keyword: "const",
+              params: { allowedValue: 409 },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err22];
+            } else {
+              vErrors.push(err22);
+            }
+            errors++;
+          }
+        }
+        if (data5.code !== undefined) {
+          let data8 = data5.code;
+          if (!(data8 === "idempotency_payload_mismatch" || data8 === "terminal_result_not_retained")) {
+            const err23 = {
+              instancePath: instancePath + "/claims_bearing_terminal/code",
+              schemaPath: "#/$defs/errorOutcome/properties/code/enum",
+              keyword: "enum",
+              params: { allowedValues: schema38.properties.code.enum },
+              message: "must be equal to one of the allowed values",
+            };
+            if (vErrors === null) {
+              vErrors = [err23];
+            } else {
+              vErrors.push(err23);
+            }
+            errors++;
+          }
+        }
+        if (data5.field_path !== undefined) {
+          if ("/headers/Idempotency-Key" !== data5.field_path) {
+            const err24 = {
+              instancePath: instancePath + "/claims_bearing_terminal/field_path",
+              schemaPath: "#/$defs/errorOutcome/properties/field_path/const",
+              keyword: "const",
+              params: { allowedValue: "/headers/Idempotency-Key" },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err24];
+            } else {
+              vErrors.push(err24);
+            }
+            errors++;
+          }
+        }
+        if (data5.retryable !== undefined) {
+          if (false !== data5.retryable) {
+            const err25 = {
+              instancePath: instancePath + "/claims_bearing_terminal/retryable",
+              schemaPath: "#/$defs/errorOutcome/properties/retryable/const",
+              keyword: "const",
+              params: { allowedValue: false },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err25];
+            } else {
+              vErrors.push(err25);
+            }
+            errors++;
+          }
+        }
+      } else {
+        const err26 = {
+          instancePath: instancePath + "/claims_bearing_terminal",
+          schemaPath: "#/$defs/errorOutcome/type",
+          keyword: "type",
+          params: { type: "object" },
+          message: "must be object",
+        };
+        if (vErrors === null) {
+          vErrors = [err26];
+        } else {
+          vErrors.push(err26);
+        }
+        errors++;
+      }
+      if (data5 && typeof data5 == "object" && !Array.isArray(data5)) {
+        if (data5.code !== undefined) {
+          if ("terminal_result_not_retained" !== data5.code) {
+            const err27 = {
+              instancePath: instancePath + "/claims_bearing_terminal/code",
+              schemaPath: "#/properties/claims_bearing_terminal/allOf/1/properties/code/const",
+              keyword: "const",
+              params: { allowedValue: "terminal_result_not_retained" },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err27];
+            } else {
+              vErrors.push(err27);
+            }
+            errors++;
+          }
+        }
+      } else {
+        const err28 = {
+          instancePath: instancePath + "/claims_bearing_terminal",
+          schemaPath: "#/properties/claims_bearing_terminal/allOf/1/type",
+          keyword: "type",
+          params: { type: "object" },
+          message: "must be object",
+        };
+        if (vErrors === null) {
+          vErrors = [err28];
+        } else {
+          vErrors.push(err28);
+        }
+        errors++;
+      }
+    }
+    if (data.claim_free_provider_terminal !== undefined) {
+      let data12 = data.claim_free_provider_terminal;
+      if (data12 && typeof data12 == "object" && !Array.isArray(data12)) {
+        if (data12.outcome === undefined) {
+          const err29 = {
+            instancePath: instancePath + "/claim_free_provider_terminal",
+            schemaPath: "#/$defs/errorOutcome/required",
+            keyword: "required",
+            params: { missingProperty: "outcome" },
+            message: "must have required property '" + "outcome" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err29];
+          } else {
+            vErrors.push(err29);
+          }
+          errors++;
+        }
+        if (data12.http_status === undefined) {
+          const err30 = {
+            instancePath: instancePath + "/claim_free_provider_terminal",
+            schemaPath: "#/$defs/errorOutcome/required",
+            keyword: "required",
+            params: { missingProperty: "http_status" },
+            message: "must have required property '" + "http_status" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err30];
+          } else {
+            vErrors.push(err30);
+          }
+          errors++;
+        }
+        if (data12.code === undefined) {
+          const err31 = {
+            instancePath: instancePath + "/claim_free_provider_terminal",
+            schemaPath: "#/$defs/errorOutcome/required",
+            keyword: "required",
+            params: { missingProperty: "code" },
+            message: "must have required property '" + "code" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err31];
+          } else {
+            vErrors.push(err31);
+          }
+          errors++;
+        }
+        if (data12.field_path === undefined) {
+          const err32 = {
+            instancePath: instancePath + "/claim_free_provider_terminal",
+            schemaPath: "#/$defs/errorOutcome/required",
+            keyword: "required",
+            params: { missingProperty: "field_path" },
+            message: "must have required property '" + "field_path" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err32];
+          } else {
+            vErrors.push(err32);
+          }
+          errors++;
+        }
+        if (data12.retryable === undefined) {
+          const err33 = {
+            instancePath: instancePath + "/claim_free_provider_terminal",
+            schemaPath: "#/$defs/errorOutcome/required",
+            keyword: "required",
+            params: { missingProperty: "retryable" },
+            message: "must have required property '" + "retryable" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err33];
+          } else {
+            vErrors.push(err33);
+          }
+          errors++;
+        }
+        for (const key3 in data12) {
+          if (!(
+            key3 === "outcome" ||
+            key3 === "http_status" ||
+            key3 === "code" ||
+            key3 === "field_path" ||
+            key3 === "retryable"
+          )) {
+            const err34 = {
+              instancePath: instancePath + "/claim_free_provider_terminal",
+              schemaPath: "#/$defs/errorOutcome/additionalProperties",
+              keyword: "additionalProperties",
+              params: { additionalProperty: key3 },
+              message: "must NOT have additional properties",
+            };
+            if (vErrors === null) {
+              vErrors = [err34];
+            } else {
+              vErrors.push(err34);
+            }
+            errors++;
+          }
+        }
+        if (data12.outcome !== undefined) {
+          if ("error" !== data12.outcome) {
+            const err35 = {
+              instancePath: instancePath + "/claim_free_provider_terminal/outcome",
+              schemaPath: "#/$defs/errorOutcome/properties/outcome/const",
+              keyword: "const",
+              params: { allowedValue: "error" },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err35];
+            } else {
+              vErrors.push(err35);
+            }
+            errors++;
+          }
+        }
+        if (data12.http_status !== undefined) {
+          if (409 !== data12.http_status) {
+            const err36 = {
+              instancePath: instancePath + "/claim_free_provider_terminal/http_status",
+              schemaPath: "#/$defs/errorOutcome/properties/http_status/const",
+              keyword: "const",
+              params: { allowedValue: 409 },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err36];
+            } else {
+              vErrors.push(err36);
+            }
+            errors++;
+          }
+        }
+        if (data12.code !== undefined) {
+          let data15 = data12.code;
+          if (!(data15 === "idempotency_payload_mismatch" || data15 === "terminal_result_not_retained")) {
+            const err37 = {
+              instancePath: instancePath + "/claim_free_provider_terminal/code",
+              schemaPath: "#/$defs/errorOutcome/properties/code/enum",
+              keyword: "enum",
+              params: { allowedValues: schema38.properties.code.enum },
+              message: "must be equal to one of the allowed values",
+            };
+            if (vErrors === null) {
+              vErrors = [err37];
+            } else {
+              vErrors.push(err37);
+            }
+            errors++;
+          }
+        }
+        if (data12.field_path !== undefined) {
+          if ("/headers/Idempotency-Key" !== data12.field_path) {
+            const err38 = {
+              instancePath: instancePath + "/claim_free_provider_terminal/field_path",
+              schemaPath: "#/$defs/errorOutcome/properties/field_path/const",
+              keyword: "const",
+              params: { allowedValue: "/headers/Idempotency-Key" },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err38];
+            } else {
+              vErrors.push(err38);
+            }
+            errors++;
+          }
+        }
+        if (data12.retryable !== undefined) {
+          if (false !== data12.retryable) {
+            const err39 = {
+              instancePath: instancePath + "/claim_free_provider_terminal/retryable",
+              schemaPath: "#/$defs/errorOutcome/properties/retryable/const",
+              keyword: "const",
+              params: { allowedValue: false },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err39];
+            } else {
+              vErrors.push(err39);
+            }
+            errors++;
+          }
+        }
+      } else {
+        const err40 = {
+          instancePath: instancePath + "/claim_free_provider_terminal",
+          schemaPath: "#/$defs/errorOutcome/type",
+          keyword: "type",
+          params: { type: "object" },
+          message: "must be object",
+        };
+        if (vErrors === null) {
+          vErrors = [err40];
+        } else {
+          vErrors.push(err40);
+        }
+        errors++;
+      }
+      if (data12 && typeof data12 == "object" && !Array.isArray(data12)) {
+        if (data12.code !== undefined) {
+          if ("terminal_result_not_retained" !== data12.code) {
+            const err41 = {
+              instancePath: instancePath + "/claim_free_provider_terminal/code",
+              schemaPath: "#/properties/claim_free_provider_terminal/allOf/1/properties/code/const",
+              keyword: "const",
+              params: { allowedValue: "terminal_result_not_retained" },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err41];
+            } else {
+              vErrors.push(err41);
+            }
+            errors++;
+          }
+        }
+      } else {
+        const err42 = {
+          instancePath: instancePath + "/claim_free_provider_terminal",
+          schemaPath: "#/properties/claim_free_provider_terminal/allOf/1/type",
+          keyword: "type",
+          params: { type: "object" },
+          message: "must be object",
+        };
+        if (vErrors === null) {
+          vErrors = [err42];
+        } else {
+          vErrors.push(err42);
+        }
+        errors++;
+      }
+    }
+    if (data.provider_reinvocation !== undefined) {
+      if ("forbidden" !== data.provider_reinvocation) {
+        const err43 = {
+          instancePath: instancePath + "/provider_reinvocation",
+          schemaPath: "#/properties/provider_reinvocation/const",
+          keyword: "const",
+          params: { allowedValue: "forbidden" },
+          message: "must be equal to constant",
+        };
+        if (vErrors === null) {
+          vErrors = [err43];
+        } else {
+          vErrors.push(err43);
+        }
+        errors++;
+      }
+    }
+  } else {
+    const err44 = {
+      instancePath,
+      schemaPath: "#/type",
+      keyword: "type",
+      params: { type: "object" },
+      message: "must be object",
+    };
+    if (vErrors === null) {
+      vErrors = [err44];
+    } else {
+      vErrors.push(err44);
+    }
+    errors++;
+  }
+  validate23.errors = vErrors;
+  return errors === 0;
+}
+validate23.evaluated = { props: true, dynamicProps: false, dynamicItems: false };
 function validate20(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {},
@@ -563,12 +2192,12 @@ function validate20(
       }
     }
     if (data.schema_version !== undefined) {
-      if ("tilesim.bridge.evidence_agent_descriptor.v1" !== data.schema_version) {
+      if ("tilesim.bridge.evidence_agent_descriptor.v2" !== data.schema_version) {
         const err18 = {
           instancePath: instancePath + "/schema_version",
           schemaPath: "#/properties/schema_version/const",
           keyword: "const",
-          params: { allowedValue: "tilesim.bridge.evidence_agent_descriptor.v1" },
+          params: { allowedValue: "tilesim.bridge.evidence_agent_descriptor.v2" },
           message: "must be equal to constant",
         };
         if (vErrors === null) {
@@ -2998,13 +4627,13 @@ function validate20(
           }
           errors++;
         }
-        if (data68.snapshot_payload_retained === undefined) {
+        if (data68.terminal_classes === undefined) {
           const err160 = {
             instancePath: instancePath + "/persistence",
             schemaPath: "#/$defs/persistencePolicy/required",
             keyword: "required",
-            params: { missingProperty: "snapshot_payload_retained" },
-            message: "must have required property '" + "snapshot_payload_retained" + "'",
+            params: { missingProperty: "terminal_classes" },
+            message: "must have required property '" + "terminal_classes" + "'",
           };
           if (vErrors === null) {
             vErrors = [err160];
@@ -3013,13 +4642,13 @@ function validate20(
           }
           errors++;
         }
-        if (data68.user_question_retained === undefined) {
+        if (data68.payload_retention === undefined) {
           const err161 = {
             instancePath: instancePath + "/persistence",
             schemaPath: "#/$defs/persistencePolicy/required",
             keyword: "required",
-            params: { missingProperty: "user_question_retained" },
-            message: "must have required property '" + "user_question_retained" + "'",
+            params: { missingProperty: "payload_retention" },
+            message: "must have required property '" + "payload_retention" + "'",
           };
           if (vErrors === null) {
             vErrors = [err161];
@@ -3028,30 +4657,14 @@ function validate20(
           }
           errors++;
         }
-        if (data68.hidden_reasoning_retained === undefined) {
-          const err162 = {
-            instancePath: instancePath + "/persistence",
-            schemaPath: "#/$defs/persistencePolicy/required",
-            keyword: "required",
-            params: { missingProperty: "hidden_reasoning_retained" },
-            message: "must have required property '" + "hidden_reasoning_retained" + "'",
-          };
-          if (vErrors === null) {
-            vErrors = [err162];
-          } else {
-            vErrors.push(err162);
-          }
-          errors++;
-        }
         for (const key9 in data68) {
           if (!(
             key9 === "mode" ||
             key9 === "retention_seconds" ||
-            key9 === "snapshot_payload_retained" ||
-            key9 === "user_question_retained" ||
-            key9 === "hidden_reasoning_retained"
+            key9 === "terminal_classes" ||
+            key9 === "payload_retention"
           )) {
-            const err163 = {
+            const err162 = {
               instancePath: instancePath + "/persistence",
               schemaPath: "#/$defs/persistencePolicy/additionalProperties",
               keyword: "additionalProperties",
@@ -3059,34 +4672,149 @@ function validate20(
               message: "must NOT have additional properties",
             };
             if (vErrors === null) {
-              vErrors = [err163];
+              vErrors = [err162];
             } else {
-              vErrors.push(err163);
+              vErrors.push(err162);
             }
             errors++;
           }
         }
         if (data68.mode !== undefined) {
-          if ("run_local_terminal_metadata_only" !== data68.mode) {
-            const err164 = {
+          let data69 = data68.mode;
+          if (data69 && typeof data69 == "object" && !Array.isArray(data69)) {
+            if (data69.storage_scope === undefined) {
+              const err163 = {
+                instancePath: instancePath + "/persistence/mode",
+                schemaPath: "#/$defs/persistencePolicy/properties/mode/required",
+                keyword: "required",
+                params: { missingProperty: "storage_scope" },
+                message: "must have required property '" + "storage_scope" + "'",
+              };
+              if (vErrors === null) {
+                vErrors = [err163];
+              } else {
+                vErrors.push(err163);
+              }
+              errors++;
+            }
+            if (data69.record_kind === undefined) {
+              const err164 = {
+                instancePath: instancePath + "/persistence/mode",
+                schemaPath: "#/$defs/persistencePolicy/properties/mode/required",
+                keyword: "required",
+                params: { missingProperty: "record_kind" },
+                message: "must have required property '" + "record_kind" + "'",
+              };
+              if (vErrors === null) {
+                vErrors = [err164];
+              } else {
+                vErrors.push(err164);
+              }
+              errors++;
+            }
+            if (data69.record_schema_identity === undefined) {
+              const err165 = {
+                instancePath: instancePath + "/persistence/mode",
+                schemaPath: "#/$defs/persistencePolicy/properties/mode/required",
+                keyword: "required",
+                params: { missingProperty: "record_schema_identity" },
+                message: "must have required property '" + "record_schema_identity" + "'",
+              };
+              if (vErrors === null) {
+                vErrors = [err165];
+              } else {
+                vErrors.push(err165);
+              }
+              errors++;
+            }
+            for (const key10 in data69) {
+              if (!(key10 === "storage_scope" || key10 === "record_kind" || key10 === "record_schema_identity")) {
+                const err166 = {
+                  instancePath: instancePath + "/persistence/mode",
+                  schemaPath: "#/$defs/persistencePolicy/properties/mode/additionalProperties",
+                  keyword: "additionalProperties",
+                  params: { additionalProperty: key10 },
+                  message: "must NOT have additional properties",
+                };
+                if (vErrors === null) {
+                  vErrors = [err166];
+                } else {
+                  vErrors.push(err166);
+                }
+                errors++;
+              }
+            }
+            if (data69.storage_scope !== undefined) {
+              if ("run_local" !== data69.storage_scope) {
+                const err167 = {
+                  instancePath: instancePath + "/persistence/mode/storage_scope",
+                  schemaPath: "#/$defs/persistencePolicy/properties/mode/properties/storage_scope/const",
+                  keyword: "const",
+                  params: { allowedValue: "run_local" },
+                  message: "must be equal to constant",
+                };
+                if (vErrors === null) {
+                  vErrors = [err167];
+                } else {
+                  vErrors.push(err167);
+                }
+                errors++;
+              }
+            }
+            if (data69.record_kind !== undefined) {
+              if ("redacted_terminal_metadata_only" !== data69.record_kind) {
+                const err168 = {
+                  instancePath: instancePath + "/persistence/mode/record_kind",
+                  schemaPath: "#/$defs/persistencePolicy/properties/mode/properties/record_kind/const",
+                  keyword: "const",
+                  params: { allowedValue: "redacted_terminal_metadata_only" },
+                  message: "must be equal to constant",
+                };
+                if (vErrors === null) {
+                  vErrors = [err168];
+                } else {
+                  vErrors.push(err168);
+                }
+                errors++;
+              }
+            }
+            if (data69.record_schema_identity !== undefined) {
+              if ("tilesim.bridge.evidence_agent_terminal_record.v2" !== data69.record_schema_identity) {
+                const err169 = {
+                  instancePath: instancePath + "/persistence/mode/record_schema_identity",
+                  schemaPath: "#/$defs/persistencePolicy/properties/mode/properties/record_schema_identity/const",
+                  keyword: "const",
+                  params: { allowedValue: "tilesim.bridge.evidence_agent_terminal_record.v2" },
+                  message: "must be equal to constant",
+                };
+                if (vErrors === null) {
+                  vErrors = [err169];
+                } else {
+                  vErrors.push(err169);
+                }
+                errors++;
+              }
+            }
+          } else {
+            const err170 = {
               instancePath: instancePath + "/persistence/mode",
-              schemaPath: "#/$defs/persistencePolicy/properties/mode/const",
-              keyword: "const",
-              params: { allowedValue: "run_local_terminal_metadata_only" },
-              message: "must be equal to constant",
+              schemaPath: "#/$defs/persistencePolicy/properties/mode/type",
+              keyword: "type",
+              params: { type: "object" },
+              message: "must be object",
             };
             if (vErrors === null) {
-              vErrors = [err164];
+              vErrors = [err170];
             } else {
-              vErrors.push(err164);
+              vErrors.push(err170);
             }
             errors++;
           }
         }
         if (data68.retention_seconds !== undefined) {
-          let data70 = data68.retention_seconds;
-          if (!(typeof data70 == "number" && !(data70 % 1) && !isNaN(data70))) {
-            const err165 = {
+          let data73 = data68.retention_seconds;
+          if (!(typeof data73 == "number" && !(data73 % 1) && !isNaN(data73))) {
+            const err171 = {
               instancePath: instancePath + "/persistence/retention_seconds",
               schemaPath: "#/$defs/persistencePolicy/properties/retention_seconds/type",
               keyword: "type",
@@ -3094,15 +4822,15 @@ function validate20(
               message: "must be integer",
             };
             if (vErrors === null) {
-              vErrors = [err165];
+              vErrors = [err171];
             } else {
-              vErrors.push(err165);
+              vErrors.push(err171);
             }
             errors++;
           }
-          if (typeof data70 == "number") {
-            if (data70 < 0 || isNaN(data70)) {
-              const err166 = {
+          if (typeof data73 == "number") {
+            if (data73 < 0 || isNaN(data73)) {
+              const err172 = {
                 instancePath: instancePath + "/persistence/retention_seconds",
                 schemaPath: "#/$defs/persistencePolicy/properties/retention_seconds/minimum",
                 keyword: "minimum",
@@ -3110,67 +4838,788 @@ function validate20(
                 message: "must be >= 0",
               };
               if (vErrors === null) {
-                vErrors = [err166];
+                vErrors = [err172];
               } else {
-                vErrors.push(err166);
+                vErrors.push(err172);
               }
               errors++;
             }
           }
         }
-        if (data68.snapshot_payload_retained !== undefined) {
-          if (false !== data68.snapshot_payload_retained) {
-            const err167 = {
-              instancePath: instancePath + "/persistence/snapshot_payload_retained",
-              schemaPath: "#/$defs/persistencePolicy/properties/snapshot_payload_retained/const",
-              keyword: "const",
-              params: { allowedValue: false },
-              message: "must be equal to constant",
+        if (data68.terminal_classes !== undefined) {
+          let data74 = data68.terminal_classes;
+          if (data74 && typeof data74 == "object" && !Array.isArray(data74)) {
+            if (data74.claim_free_bridge_terminal === undefined) {
+              const err173 = {
+                instancePath: instancePath + "/persistence/terminal_classes",
+                schemaPath: "#/$defs/persistencePolicy/properties/terminal_classes/required",
+                keyword: "required",
+                params: { missingProperty: "claim_free_bridge_terminal" },
+                message: "must have required property '" + "claim_free_bridge_terminal" + "'",
+              };
+              if (vErrors === null) {
+                vErrors = [err173];
+              } else {
+                vErrors.push(err173);
+              }
+              errors++;
+            }
+            if (data74.claims_bearing_terminal === undefined) {
+              const err174 = {
+                instancePath: instancePath + "/persistence/terminal_classes",
+                schemaPath: "#/$defs/persistencePolicy/properties/terminal_classes/required",
+                keyword: "required",
+                params: { missingProperty: "claims_bearing_terminal" },
+                message: "must have required property '" + "claims_bearing_terminal" + "'",
+              };
+              if (vErrors === null) {
+                vErrors = [err174];
+              } else {
+                vErrors.push(err174);
+              }
+              errors++;
+            }
+            if (data74.claim_free_provider_terminal === undefined) {
+              const err175 = {
+                instancePath: instancePath + "/persistence/terminal_classes",
+                schemaPath: "#/$defs/persistencePolicy/properties/terminal_classes/required",
+                keyword: "required",
+                params: { missingProperty: "claim_free_provider_terminal" },
+                message: "must have required property '" + "claim_free_provider_terminal" + "'",
+              };
+              if (vErrors === null) {
+                vErrors = [err175];
+              } else {
+                vErrors.push(err175);
+              }
+              errors++;
+            }
+            for (const key11 in data74) {
+              if (!(
+                key11 === "claim_free_bridge_terminal" ||
+                key11 === "claims_bearing_terminal" ||
+                key11 === "claim_free_provider_terminal"
+              )) {
+                const err176 = {
+                  instancePath: instancePath + "/persistence/terminal_classes",
+                  schemaPath: "#/$defs/persistencePolicy/properties/terminal_classes/additionalProperties",
+                  keyword: "additionalProperties",
+                  params: { additionalProperty: key11 },
+                  message: "must NOT have additional properties",
+                };
+                if (vErrors === null) {
+                  vErrors = [err176];
+                } else {
+                  vErrors.push(err176);
+                }
+                errors++;
+              }
+            }
+            if (data74.claim_free_bridge_terminal !== undefined) {
+              let data75 = data74.claim_free_bridge_terminal;
+              if (data75 && typeof data75 == "object" && !Array.isArray(data75)) {
+                if (data75.terminal_metadata_retained === undefined) {
+                  const err177 = {
+                    instancePath: instancePath + "/persistence/terminal_classes/claim_free_bridge_terminal",
+                    schemaPath:
+                      "#/$defs/persistencePolicy/properties/terminal_classes/properties/claim_free_bridge_terminal/required",
+                    keyword: "required",
+                    params: { missingProperty: "terminal_metadata_retained" },
+                    message: "must have required property '" + "terminal_metadata_retained" + "'",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err177];
+                  } else {
+                    vErrors.push(err177);
+                  }
+                  errors++;
+                }
+                if (data75.exact_response_recoverable_after_restart === undefined) {
+                  const err178 = {
+                    instancePath: instancePath + "/persistence/terminal_classes/claim_free_bridge_terminal",
+                    schemaPath:
+                      "#/$defs/persistencePolicy/properties/terminal_classes/properties/claim_free_bridge_terminal/required",
+                    keyword: "required",
+                    params: { missingProperty: "exact_response_recoverable_after_restart" },
+                    message: "must have required property '" + "exact_response_recoverable_after_restart" + "'",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err178];
+                  } else {
+                    vErrors.push(err178);
+                  }
+                  errors++;
+                }
+                for (const key12 in data75) {
+                  if (!(
+                    key12 === "terminal_metadata_retained" || key12 === "exact_response_recoverable_after_restart"
+                  )) {
+                    const err179 = {
+                      instancePath: instancePath + "/persistence/terminal_classes/claim_free_bridge_terminal",
+                      schemaPath:
+                        "#/$defs/persistencePolicy/properties/terminal_classes/properties/claim_free_bridge_terminal/additionalProperties",
+                      keyword: "additionalProperties",
+                      params: { additionalProperty: key12 },
+                      message: "must NOT have additional properties",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err179];
+                    } else {
+                      vErrors.push(err179);
+                    }
+                    errors++;
+                  }
+                }
+                if (data75.terminal_metadata_retained !== undefined) {
+                  if (true !== data75.terminal_metadata_retained) {
+                    const err180 = {
+                      instancePath:
+                        instancePath +
+                        "/persistence/terminal_classes/claim_free_bridge_terminal/terminal_metadata_retained",
+                      schemaPath:
+                        "#/$defs/persistencePolicy/properties/terminal_classes/properties/claim_free_bridge_terminal/properties/terminal_metadata_retained/const",
+                      keyword: "const",
+                      params: { allowedValue: true },
+                      message: "must be equal to constant",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err180];
+                    } else {
+                      vErrors.push(err180);
+                    }
+                    errors++;
+                  }
+                }
+                if (data75.exact_response_recoverable_after_restart !== undefined) {
+                  if (true !== data75.exact_response_recoverable_after_restart) {
+                    const err181 = {
+                      instancePath:
+                        instancePath +
+                        "/persistence/terminal_classes/claim_free_bridge_terminal/exact_response_recoverable_after_restart",
+                      schemaPath:
+                        "#/$defs/persistencePolicy/properties/terminal_classes/properties/claim_free_bridge_terminal/properties/exact_response_recoverable_after_restart/const",
+                      keyword: "const",
+                      params: { allowedValue: true },
+                      message: "must be equal to constant",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err181];
+                    } else {
+                      vErrors.push(err181);
+                    }
+                    errors++;
+                  }
+                }
+              } else {
+                const err182 = {
+                  instancePath: instancePath + "/persistence/terminal_classes/claim_free_bridge_terminal",
+                  schemaPath:
+                    "#/$defs/persistencePolicy/properties/terminal_classes/properties/claim_free_bridge_terminal/type",
+                  keyword: "type",
+                  params: { type: "object" },
+                  message: "must be object",
+                };
+                if (vErrors === null) {
+                  vErrors = [err182];
+                } else {
+                  vErrors.push(err182);
+                }
+                errors++;
+              }
+            }
+            if (data74.claims_bearing_terminal !== undefined) {
+              let data78 = data74.claims_bearing_terminal;
+              if (data78 && typeof data78 == "object" && !Array.isArray(data78)) {
+                if (data78.terminal_metadata_retained === undefined) {
+                  const err183 = {
+                    instancePath: instancePath + "/persistence/terminal_classes/claims_bearing_terminal",
+                    schemaPath:
+                      "#/$defs/persistencePolicy/properties/terminal_classes/properties/claims_bearing_terminal/required",
+                    keyword: "required",
+                    params: { missingProperty: "terminal_metadata_retained" },
+                    message: "must have required property '" + "terminal_metadata_retained" + "'",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err183];
+                  } else {
+                    vErrors.push(err183);
+                  }
+                  errors++;
+                }
+                if (data78.validated_model_claims_retained === undefined) {
+                  const err184 = {
+                    instancePath: instancePath + "/persistence/terminal_classes/claims_bearing_terminal",
+                    schemaPath:
+                      "#/$defs/persistencePolicy/properties/terminal_classes/properties/claims_bearing_terminal/required",
+                    keyword: "required",
+                    params: { missingProperty: "validated_model_claims_retained" },
+                    message: "must have required property '" + "validated_model_claims_retained" + "'",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err184];
+                  } else {
+                    vErrors.push(err184);
+                  }
+                  errors++;
+                }
+                if (data78.exact_response_recoverable_after_restart === undefined) {
+                  const err185 = {
+                    instancePath: instancePath + "/persistence/terminal_classes/claims_bearing_terminal",
+                    schemaPath:
+                      "#/$defs/persistencePolicy/properties/terminal_classes/properties/claims_bearing_terminal/required",
+                    keyword: "required",
+                    params: { missingProperty: "exact_response_recoverable_after_restart" },
+                    message: "must have required property '" + "exact_response_recoverable_after_restart" + "'",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err185];
+                  } else {
+                    vErrors.push(err185);
+                  }
+                  errors++;
+                }
+                for (const key13 in data78) {
+                  if (!(
+                    key13 === "terminal_metadata_retained" ||
+                    key13 === "validated_model_claims_retained" ||
+                    key13 === "exact_response_recoverable_after_restart"
+                  )) {
+                    const err186 = {
+                      instancePath: instancePath + "/persistence/terminal_classes/claims_bearing_terminal",
+                      schemaPath:
+                        "#/$defs/persistencePolicy/properties/terminal_classes/properties/claims_bearing_terminal/additionalProperties",
+                      keyword: "additionalProperties",
+                      params: { additionalProperty: key13 },
+                      message: "must NOT have additional properties",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err186];
+                    } else {
+                      vErrors.push(err186);
+                    }
+                    errors++;
+                  }
+                }
+                if (data78.terminal_metadata_retained !== undefined) {
+                  if (true !== data78.terminal_metadata_retained) {
+                    const err187 = {
+                      instancePath:
+                        instancePath +
+                        "/persistence/terminal_classes/claims_bearing_terminal/terminal_metadata_retained",
+                      schemaPath:
+                        "#/$defs/persistencePolicy/properties/terminal_classes/properties/claims_bearing_terminal/properties/terminal_metadata_retained/const",
+                      keyword: "const",
+                      params: { allowedValue: true },
+                      message: "must be equal to constant",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err187];
+                    } else {
+                      vErrors.push(err187);
+                    }
+                    errors++;
+                  }
+                }
+                if (data78.validated_model_claims_retained !== undefined) {
+                  if (false !== data78.validated_model_claims_retained) {
+                    const err188 = {
+                      instancePath:
+                        instancePath +
+                        "/persistence/terminal_classes/claims_bearing_terminal/validated_model_claims_retained",
+                      schemaPath:
+                        "#/$defs/persistencePolicy/properties/terminal_classes/properties/claims_bearing_terminal/properties/validated_model_claims_retained/const",
+                      keyword: "const",
+                      params: { allowedValue: false },
+                      message: "must be equal to constant",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err188];
+                    } else {
+                      vErrors.push(err188);
+                    }
+                    errors++;
+                  }
+                }
+                if (data78.exact_response_recoverable_after_restart !== undefined) {
+                  if (false !== data78.exact_response_recoverable_after_restart) {
+                    const err189 = {
+                      instancePath:
+                        instancePath +
+                        "/persistence/terminal_classes/claims_bearing_terminal/exact_response_recoverable_after_restart",
+                      schemaPath:
+                        "#/$defs/persistencePolicy/properties/terminal_classes/properties/claims_bearing_terminal/properties/exact_response_recoverable_after_restart/const",
+                      keyword: "const",
+                      params: { allowedValue: false },
+                      message: "must be equal to constant",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err189];
+                    } else {
+                      vErrors.push(err189);
+                    }
+                    errors++;
+                  }
+                }
+              } else {
+                const err190 = {
+                  instancePath: instancePath + "/persistence/terminal_classes/claims_bearing_terminal",
+                  schemaPath:
+                    "#/$defs/persistencePolicy/properties/terminal_classes/properties/claims_bearing_terminal/type",
+                  keyword: "type",
+                  params: { type: "object" },
+                  message: "must be object",
+                };
+                if (vErrors === null) {
+                  vErrors = [err190];
+                } else {
+                  vErrors.push(err190);
+                }
+                errors++;
+              }
+            }
+            if (data74.claim_free_provider_terminal !== undefined) {
+              let data82 = data74.claim_free_provider_terminal;
+              if (data82 && typeof data82 == "object" && !Array.isArray(data82)) {
+                if (data82.terminal_metadata_retained === undefined) {
+                  const err191 = {
+                    instancePath: instancePath + "/persistence/terminal_classes/claim_free_provider_terminal",
+                    schemaPath:
+                      "#/$defs/persistencePolicy/properties/terminal_classes/properties/claim_free_provider_terminal/required",
+                    keyword: "required",
+                    params: { missingProperty: "terminal_metadata_retained" },
+                    message: "must have required property '" + "terminal_metadata_retained" + "'",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err191];
+                  } else {
+                    vErrors.push(err191);
+                  }
+                  errors++;
+                }
+                if (data82.validated_provider_response_retained === undefined) {
+                  const err192 = {
+                    instancePath: instancePath + "/persistence/terminal_classes/claim_free_provider_terminal",
+                    schemaPath:
+                      "#/$defs/persistencePolicy/properties/terminal_classes/properties/claim_free_provider_terminal/required",
+                    keyword: "required",
+                    params: { missingProperty: "validated_provider_response_retained" },
+                    message: "must have required property '" + "validated_provider_response_retained" + "'",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err192];
+                  } else {
+                    vErrors.push(err192);
+                  }
+                  errors++;
+                }
+                if (data82.exact_response_recoverable_after_restart === undefined) {
+                  const err193 = {
+                    instancePath: instancePath + "/persistence/terminal_classes/claim_free_provider_terminal",
+                    schemaPath:
+                      "#/$defs/persistencePolicy/properties/terminal_classes/properties/claim_free_provider_terminal/required",
+                    keyword: "required",
+                    params: { missingProperty: "exact_response_recoverable_after_restart" },
+                    message: "must have required property '" + "exact_response_recoverable_after_restart" + "'",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err193];
+                  } else {
+                    vErrors.push(err193);
+                  }
+                  errors++;
+                }
+                for (const key14 in data82) {
+                  if (!(
+                    key14 === "terminal_metadata_retained" ||
+                    key14 === "validated_provider_response_retained" ||
+                    key14 === "exact_response_recoverable_after_restart"
+                  )) {
+                    const err194 = {
+                      instancePath: instancePath + "/persistence/terminal_classes/claim_free_provider_terminal",
+                      schemaPath:
+                        "#/$defs/persistencePolicy/properties/terminal_classes/properties/claim_free_provider_terminal/additionalProperties",
+                      keyword: "additionalProperties",
+                      params: { additionalProperty: key14 },
+                      message: "must NOT have additional properties",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err194];
+                    } else {
+                      vErrors.push(err194);
+                    }
+                    errors++;
+                  }
+                }
+                if (data82.terminal_metadata_retained !== undefined) {
+                  if (true !== data82.terminal_metadata_retained) {
+                    const err195 = {
+                      instancePath:
+                        instancePath +
+                        "/persistence/terminal_classes/claim_free_provider_terminal/terminal_metadata_retained",
+                      schemaPath:
+                        "#/$defs/persistencePolicy/properties/terminal_classes/properties/claim_free_provider_terminal/properties/terminal_metadata_retained/const",
+                      keyword: "const",
+                      params: { allowedValue: true },
+                      message: "must be equal to constant",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err195];
+                    } else {
+                      vErrors.push(err195);
+                    }
+                    errors++;
+                  }
+                }
+                if (data82.validated_provider_response_retained !== undefined) {
+                  if (false !== data82.validated_provider_response_retained) {
+                    const err196 = {
+                      instancePath:
+                        instancePath +
+                        "/persistence/terminal_classes/claim_free_provider_terminal/validated_provider_response_retained",
+                      schemaPath:
+                        "#/$defs/persistencePolicy/properties/terminal_classes/properties/claim_free_provider_terminal/properties/validated_provider_response_retained/const",
+                      keyword: "const",
+                      params: { allowedValue: false },
+                      message: "must be equal to constant",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err196];
+                    } else {
+                      vErrors.push(err196);
+                    }
+                    errors++;
+                  }
+                }
+                if (data82.exact_response_recoverable_after_restart !== undefined) {
+                  if (false !== data82.exact_response_recoverable_after_restart) {
+                    const err197 = {
+                      instancePath:
+                        instancePath +
+                        "/persistence/terminal_classes/claim_free_provider_terminal/exact_response_recoverable_after_restart",
+                      schemaPath:
+                        "#/$defs/persistencePolicy/properties/terminal_classes/properties/claim_free_provider_terminal/properties/exact_response_recoverable_after_restart/const",
+                      keyword: "const",
+                      params: { allowedValue: false },
+                      message: "must be equal to constant",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err197];
+                    } else {
+                      vErrors.push(err197);
+                    }
+                    errors++;
+                  }
+                }
+              } else {
+                const err198 = {
+                  instancePath: instancePath + "/persistence/terminal_classes/claim_free_provider_terminal",
+                  schemaPath:
+                    "#/$defs/persistencePolicy/properties/terminal_classes/properties/claim_free_provider_terminal/type",
+                  keyword: "type",
+                  params: { type: "object" },
+                  message: "must be object",
+                };
+                if (vErrors === null) {
+                  vErrors = [err198];
+                } else {
+                  vErrors.push(err198);
+                }
+                errors++;
+              }
+            }
+          } else {
+            const err199 = {
+              instancePath: instancePath + "/persistence/terminal_classes",
+              schemaPath: "#/$defs/persistencePolicy/properties/terminal_classes/type",
+              keyword: "type",
+              params: { type: "object" },
+              message: "must be object",
             };
             if (vErrors === null) {
-              vErrors = [err167];
+              vErrors = [err199];
             } else {
-              vErrors.push(err167);
+              vErrors.push(err199);
             }
             errors++;
           }
         }
-        if (data68.user_question_retained !== undefined) {
-          if (false !== data68.user_question_retained) {
-            const err168 = {
-              instancePath: instancePath + "/persistence/user_question_retained",
-              schemaPath: "#/$defs/persistencePolicy/properties/user_question_retained/const",
-              keyword: "const",
-              params: { allowedValue: false },
-              message: "must be equal to constant",
-            };
-            if (vErrors === null) {
-              vErrors = [err168];
-            } else {
-              vErrors.push(err168);
+        if (data68.payload_retention !== undefined) {
+          let data86 = data68.payload_retention;
+          if (data86 && typeof data86 == "object" && !Array.isArray(data86)) {
+            if (data86.user_question_retained === undefined) {
+              const err200 = {
+                instancePath: instancePath + "/persistence/payload_retention",
+                schemaPath: "#/$defs/persistencePolicy/properties/payload_retention/required",
+                keyword: "required",
+                params: { missingProperty: "user_question_retained" },
+                message: "must have required property '" + "user_question_retained" + "'",
+              };
+              if (vErrors === null) {
+                vErrors = [err200];
+              } else {
+                vErrors.push(err200);
+              }
+              errors++;
             }
-            errors++;
-          }
-        }
-        if (data68.hidden_reasoning_retained !== undefined) {
-          if (false !== data68.hidden_reasoning_retained) {
-            const err169 = {
-              instancePath: instancePath + "/persistence/hidden_reasoning_retained",
-              schemaPath: "#/$defs/persistencePolicy/properties/hidden_reasoning_retained/const",
-              keyword: "const",
-              params: { allowedValue: false },
-              message: "must be equal to constant",
+            if (data86.snapshot_payload_retained === undefined) {
+              const err201 = {
+                instancePath: instancePath + "/persistence/payload_retention",
+                schemaPath: "#/$defs/persistencePolicy/properties/payload_retention/required",
+                keyword: "required",
+                params: { missingProperty: "snapshot_payload_retained" },
+                message: "must have required property '" + "snapshot_payload_retained" + "'",
+              };
+              if (vErrors === null) {
+                vErrors = [err201];
+              } else {
+                vErrors.push(err201);
+              }
+              errors++;
+            }
+            if (data86.artifact_payload_retained === undefined) {
+              const err202 = {
+                instancePath: instancePath + "/persistence/payload_retention",
+                schemaPath: "#/$defs/persistencePolicy/properties/payload_retention/required",
+                keyword: "required",
+                params: { missingProperty: "artifact_payload_retained" },
+                message: "must have required property '" + "artifact_payload_retained" + "'",
+              };
+              if (vErrors === null) {
+                vErrors = [err202];
+              } else {
+                vErrors.push(err202);
+              }
+              errors++;
+            }
+            if (data86.provider_raw_response_retained === undefined) {
+              const err203 = {
+                instancePath: instancePath + "/persistence/payload_retention",
+                schemaPath: "#/$defs/persistencePolicy/properties/payload_retention/required",
+                keyword: "required",
+                params: { missingProperty: "provider_raw_response_retained" },
+                message: "must have required property '" + "provider_raw_response_retained" + "'",
+              };
+              if (vErrors === null) {
+                vErrors = [err203];
+              } else {
+                vErrors.push(err203);
+              }
+              errors++;
+            }
+            if (data86.validated_model_claims_retained === undefined) {
+              const err204 = {
+                instancePath: instancePath + "/persistence/payload_retention",
+                schemaPath: "#/$defs/persistencePolicy/properties/payload_retention/required",
+                keyword: "required",
+                params: { missingProperty: "validated_model_claims_retained" },
+                message: "must have required property '" + "validated_model_claims_retained" + "'",
+              };
+              if (vErrors === null) {
+                vErrors = [err204];
+              } else {
+                vErrors.push(err204);
+              }
+              errors++;
+            }
+            if (data86.credentials_retained === undefined) {
+              const err205 = {
+                instancePath: instancePath + "/persistence/payload_retention",
+                schemaPath: "#/$defs/persistencePolicy/properties/payload_retention/required",
+                keyword: "required",
+                params: { missingProperty: "credentials_retained" },
+                message: "must have required property '" + "credentials_retained" + "'",
+              };
+              if (vErrors === null) {
+                vErrors = [err205];
+              } else {
+                vErrors.push(err205);
+              }
+              errors++;
+            }
+            if (data86.hidden_reasoning_retained === undefined) {
+              const err206 = {
+                instancePath: instancePath + "/persistence/payload_retention",
+                schemaPath: "#/$defs/persistencePolicy/properties/payload_retention/required",
+                keyword: "required",
+                params: { missingProperty: "hidden_reasoning_retained" },
+                message: "must have required property '" + "hidden_reasoning_retained" + "'",
+              };
+              if (vErrors === null) {
+                vErrors = [err206];
+              } else {
+                vErrors.push(err206);
+              }
+              errors++;
+            }
+            for (const key15 in data86) {
+              if (!(
+                key15 === "user_question_retained" ||
+                key15 === "snapshot_payload_retained" ||
+                key15 === "artifact_payload_retained" ||
+                key15 === "provider_raw_response_retained" ||
+                key15 === "validated_model_claims_retained" ||
+                key15 === "credentials_retained" ||
+                key15 === "hidden_reasoning_retained"
+              )) {
+                const err207 = {
+                  instancePath: instancePath + "/persistence/payload_retention",
+                  schemaPath: "#/$defs/persistencePolicy/properties/payload_retention/additionalProperties",
+                  keyword: "additionalProperties",
+                  params: { additionalProperty: key15 },
+                  message: "must NOT have additional properties",
+                };
+                if (vErrors === null) {
+                  vErrors = [err207];
+                } else {
+                  vErrors.push(err207);
+                }
+                errors++;
+              }
+            }
+            if (data86.user_question_retained !== undefined) {
+              if (false !== data86.user_question_retained) {
+                const err208 = {
+                  instancePath: instancePath + "/persistence/payload_retention/user_question_retained",
+                  schemaPath:
+                    "#/$defs/persistencePolicy/properties/payload_retention/properties/user_question_retained/const",
+                  keyword: "const",
+                  params: { allowedValue: false },
+                  message: "must be equal to constant",
+                };
+                if (vErrors === null) {
+                  vErrors = [err208];
+                } else {
+                  vErrors.push(err208);
+                }
+                errors++;
+              }
+            }
+            if (data86.snapshot_payload_retained !== undefined) {
+              if (false !== data86.snapshot_payload_retained) {
+                const err209 = {
+                  instancePath: instancePath + "/persistence/payload_retention/snapshot_payload_retained",
+                  schemaPath:
+                    "#/$defs/persistencePolicy/properties/payload_retention/properties/snapshot_payload_retained/const",
+                  keyword: "const",
+                  params: { allowedValue: false },
+                  message: "must be equal to constant",
+                };
+                if (vErrors === null) {
+                  vErrors = [err209];
+                } else {
+                  vErrors.push(err209);
+                }
+                errors++;
+              }
+            }
+            if (data86.artifact_payload_retained !== undefined) {
+              if (false !== data86.artifact_payload_retained) {
+                const err210 = {
+                  instancePath: instancePath + "/persistence/payload_retention/artifact_payload_retained",
+                  schemaPath:
+                    "#/$defs/persistencePolicy/properties/payload_retention/properties/artifact_payload_retained/const",
+                  keyword: "const",
+                  params: { allowedValue: false },
+                  message: "must be equal to constant",
+                };
+                if (vErrors === null) {
+                  vErrors = [err210];
+                } else {
+                  vErrors.push(err210);
+                }
+                errors++;
+              }
+            }
+            if (data86.provider_raw_response_retained !== undefined) {
+              if (false !== data86.provider_raw_response_retained) {
+                const err211 = {
+                  instancePath: instancePath + "/persistence/payload_retention/provider_raw_response_retained",
+                  schemaPath:
+                    "#/$defs/persistencePolicy/properties/payload_retention/properties/provider_raw_response_retained/const",
+                  keyword: "const",
+                  params: { allowedValue: false },
+                  message: "must be equal to constant",
+                };
+                if (vErrors === null) {
+                  vErrors = [err211];
+                } else {
+                  vErrors.push(err211);
+                }
+                errors++;
+              }
+            }
+            if (data86.validated_model_claims_retained !== undefined) {
+              if (false !== data86.validated_model_claims_retained) {
+                const err212 = {
+                  instancePath: instancePath + "/persistence/payload_retention/validated_model_claims_retained",
+                  schemaPath:
+                    "#/$defs/persistencePolicy/properties/payload_retention/properties/validated_model_claims_retained/const",
+                  keyword: "const",
+                  params: { allowedValue: false },
+                  message: "must be equal to constant",
+                };
+                if (vErrors === null) {
+                  vErrors = [err212];
+                } else {
+                  vErrors.push(err212);
+                }
+                errors++;
+              }
+            }
+            if (data86.credentials_retained !== undefined) {
+              if (false !== data86.credentials_retained) {
+                const err213 = {
+                  instancePath: instancePath + "/persistence/payload_retention/credentials_retained",
+                  schemaPath:
+                    "#/$defs/persistencePolicy/properties/payload_retention/properties/credentials_retained/const",
+                  keyword: "const",
+                  params: { allowedValue: false },
+                  message: "must be equal to constant",
+                };
+                if (vErrors === null) {
+                  vErrors = [err213];
+                } else {
+                  vErrors.push(err213);
+                }
+                errors++;
+              }
+            }
+            if (data86.hidden_reasoning_retained !== undefined) {
+              if (false !== data86.hidden_reasoning_retained) {
+                const err214 = {
+                  instancePath: instancePath + "/persistence/payload_retention/hidden_reasoning_retained",
+                  schemaPath:
+                    "#/$defs/persistencePolicy/properties/payload_retention/properties/hidden_reasoning_retained/const",
+                  keyword: "const",
+                  params: { allowedValue: false },
+                  message: "must be equal to constant",
+                };
+                if (vErrors === null) {
+                  vErrors = [err214];
+                } else {
+                  vErrors.push(err214);
+                }
+                errors++;
+              }
+            }
+          } else {
+            const err215 = {
+              instancePath: instancePath + "/persistence/payload_retention",
+              schemaPath: "#/$defs/persistencePolicy/properties/payload_retention/type",
+              keyword: "type",
+              params: { type: "object" },
+              message: "must be object",
             };
             if (vErrors === null) {
-              vErrors = [err169];
+              vErrors = [err215];
             } else {
-              vErrors.push(err169);
+              vErrors.push(err215);
             }
             errors++;
           }
         }
       } else {
-        const err170 = {
+        const err216 = {
           instancePath: instancePath + "/persistence",
           schemaPath: "#/$defs/persistencePolicy/type",
           keyword: "type",
@@ -3178,18 +5627,18 @@ function validate20(
           message: "must be object",
         };
         if (vErrors === null) {
-          vErrors = [err170];
+          vErrors = [err216];
         } else {
-          vErrors.push(err170);
+          vErrors.push(err216);
         }
         errors++;
       }
     }
     if (data.redaction !== undefined) {
-      let data74 = data.redaction;
-      if (data74 && typeof data74 == "object" && !Array.isArray(data74)) {
-        if (data74.user_question === undefined) {
-          const err171 = {
+      let data94 = data.redaction;
+      if (data94 && typeof data94 == "object" && !Array.isArray(data94)) {
+        if (data94.user_question === undefined) {
+          const err217 = {
             instancePath: instancePath + "/redaction",
             schemaPath: "#/properties/redaction/required",
             keyword: "required",
@@ -3197,29 +5646,74 @@ function validate20(
             message: "must have required property '" + "user_question" + "'",
           };
           if (vErrors === null) {
-            vErrors = [err171];
+            vErrors = [err217];
           } else {
-            vErrors.push(err171);
+            vErrors.push(err217);
           }
           errors++;
         }
-        if (data74.artifact_content === undefined) {
-          const err172 = {
+        if (data94.snapshot_payload === undefined) {
+          const err218 = {
             instancePath: instancePath + "/redaction",
             schemaPath: "#/properties/redaction/required",
             keyword: "required",
-            params: { missingProperty: "artifact_content" },
-            message: "must have required property '" + "artifact_content" + "'",
+            params: { missingProperty: "snapshot_payload" },
+            message: "must have required property '" + "snapshot_payload" + "'",
           };
           if (vErrors === null) {
-            vErrors = [err172];
+            vErrors = [err218];
           } else {
-            vErrors.push(err172);
+            vErrors.push(err218);
           }
           errors++;
         }
-        if (data74.credentials === undefined) {
-          const err173 = {
+        if (data94.artifact_payload === undefined) {
+          const err219 = {
+            instancePath: instancePath + "/redaction",
+            schemaPath: "#/properties/redaction/required",
+            keyword: "required",
+            params: { missingProperty: "artifact_payload" },
+            message: "must have required property '" + "artifact_payload" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err219];
+          } else {
+            vErrors.push(err219);
+          }
+          errors++;
+        }
+        if (data94.provider_raw_response === undefined) {
+          const err220 = {
+            instancePath: instancePath + "/redaction",
+            schemaPath: "#/properties/redaction/required",
+            keyword: "required",
+            params: { missingProperty: "provider_raw_response" },
+            message: "must have required property '" + "provider_raw_response" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err220];
+          } else {
+            vErrors.push(err220);
+          }
+          errors++;
+        }
+        if (data94.validated_model_claims === undefined) {
+          const err221 = {
+            instancePath: instancePath + "/redaction",
+            schemaPath: "#/properties/redaction/required",
+            keyword: "required",
+            params: { missingProperty: "validated_model_claims" },
+            message: "must have required property '" + "validated_model_claims" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err221];
+          } else {
+            vErrors.push(err221);
+          }
+          errors++;
+        }
+        if (data94.credentials === undefined) {
+          const err222 = {
             instancePath: instancePath + "/redaction",
             schemaPath: "#/properties/redaction/required",
             keyword: "required",
@@ -3227,14 +5721,14 @@ function validate20(
             message: "must have required property '" + "credentials" + "'",
           };
           if (vErrors === null) {
-            vErrors = [err173];
+            vErrors = [err222];
           } else {
-            vErrors.push(err173);
+            vErrors.push(err222);
           }
           errors++;
         }
-        if (data74.hidden_chain_of_thought === undefined) {
-          const err174 = {
+        if (data94.hidden_chain_of_thought === undefined) {
+          const err223 = {
             instancePath: instancePath + "/redaction",
             schemaPath: "#/properties/redaction/required",
             keyword: "required",
@@ -3242,71 +5736,125 @@ function validate20(
             message: "must have required property '" + "hidden_chain_of_thought" + "'",
           };
           if (vErrors === null) {
-            vErrors = [err174];
+            vErrors = [err223];
           } else {
-            vErrors.push(err174);
+            vErrors.push(err223);
           }
           errors++;
         }
-        for (const key10 in data74) {
+        for (const key16 in data94) {
           if (!(
-            key10 === "user_question" ||
-            key10 === "artifact_content" ||
-            key10 === "credentials" ||
-            key10 === "hidden_chain_of_thought"
+            key16 === "user_question" ||
+            key16 === "snapshot_payload" ||
+            key16 === "artifact_payload" ||
+            key16 === "provider_raw_response" ||
+            key16 === "validated_model_claims" ||
+            key16 === "credentials" ||
+            key16 === "hidden_chain_of_thought"
           )) {
-            const err175 = {
+            const err224 = {
               instancePath: instancePath + "/redaction",
               schemaPath: "#/properties/redaction/additionalProperties",
               keyword: "additionalProperties",
-              params: { additionalProperty: key10 },
+              params: { additionalProperty: key16 },
               message: "must NOT have additional properties",
             };
             if (vErrors === null) {
-              vErrors = [err175];
+              vErrors = [err224];
             } else {
-              vErrors.push(err175);
+              vErrors.push(err224);
             }
             errors++;
           }
         }
-        if (data74.user_question !== undefined) {
-          if ("digest_only" !== data74.user_question) {
-            const err176 = {
+        if (data94.user_question !== undefined) {
+          if ("not_retained" !== data94.user_question) {
+            const err225 = {
               instancePath: instancePath + "/redaction/user_question",
               schemaPath: "#/properties/redaction/properties/user_question/const",
-              keyword: "const",
-              params: { allowedValue: "digest_only" },
-              message: "must be equal to constant",
-            };
-            if (vErrors === null) {
-              vErrors = [err176];
-            } else {
-              vErrors.push(err176);
-            }
-            errors++;
-          }
-        }
-        if (data74.artifact_content !== undefined) {
-          if ("not_retained" !== data74.artifact_content) {
-            const err177 = {
-              instancePath: instancePath + "/redaction/artifact_content",
-              schemaPath: "#/properties/redaction/properties/artifact_content/const",
               keyword: "const",
               params: { allowedValue: "not_retained" },
               message: "must be equal to constant",
             };
             if (vErrors === null) {
-              vErrors = [err177];
+              vErrors = [err225];
             } else {
-              vErrors.push(err177);
+              vErrors.push(err225);
             }
             errors++;
           }
         }
-        if (data74.credentials !== undefined) {
-          if ("never_retained" !== data74.credentials) {
-            const err178 = {
+        if (data94.snapshot_payload !== undefined) {
+          if ("not_retained" !== data94.snapshot_payload) {
+            const err226 = {
+              instancePath: instancePath + "/redaction/snapshot_payload",
+              schemaPath: "#/properties/redaction/properties/snapshot_payload/const",
+              keyword: "const",
+              params: { allowedValue: "not_retained" },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err226];
+            } else {
+              vErrors.push(err226);
+            }
+            errors++;
+          }
+        }
+        if (data94.artifact_payload !== undefined) {
+          if ("not_retained" !== data94.artifact_payload) {
+            const err227 = {
+              instancePath: instancePath + "/redaction/artifact_payload",
+              schemaPath: "#/properties/redaction/properties/artifact_payload/const",
+              keyword: "const",
+              params: { allowedValue: "not_retained" },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err227];
+            } else {
+              vErrors.push(err227);
+            }
+            errors++;
+          }
+        }
+        if (data94.provider_raw_response !== undefined) {
+          if ("not_retained" !== data94.provider_raw_response) {
+            const err228 = {
+              instancePath: instancePath + "/redaction/provider_raw_response",
+              schemaPath: "#/properties/redaction/properties/provider_raw_response/const",
+              keyword: "const",
+              params: { allowedValue: "not_retained" },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err228];
+            } else {
+              vErrors.push(err228);
+            }
+            errors++;
+          }
+        }
+        if (data94.validated_model_claims !== undefined) {
+          if ("memory_only_until_process_exit" !== data94.validated_model_claims) {
+            const err229 = {
+              instancePath: instancePath + "/redaction/validated_model_claims",
+              schemaPath: "#/properties/redaction/properties/validated_model_claims/const",
+              keyword: "const",
+              params: { allowedValue: "memory_only_until_process_exit" },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err229];
+            } else {
+              vErrors.push(err229);
+            }
+            errors++;
+          }
+        }
+        if (data94.credentials !== undefined) {
+          if ("never_retained" !== data94.credentials) {
+            const err230 = {
               instancePath: instancePath + "/redaction/credentials",
               schemaPath: "#/properties/redaction/properties/credentials/const",
               keyword: "const",
@@ -3314,16 +5862,16 @@ function validate20(
               message: "must be equal to constant",
             };
             if (vErrors === null) {
-              vErrors = [err178];
+              vErrors = [err230];
             } else {
-              vErrors.push(err178);
+              vErrors.push(err230);
             }
             errors++;
           }
         }
-        if (data74.hidden_chain_of_thought !== undefined) {
-          if ("never_returned_or_retained" !== data74.hidden_chain_of_thought) {
-            const err179 = {
+        if (data94.hidden_chain_of_thought !== undefined) {
+          if ("never_returned_or_retained" !== data94.hidden_chain_of_thought) {
+            const err231 = {
               instancePath: instancePath + "/redaction/hidden_chain_of_thought",
               schemaPath: "#/properties/redaction/properties/hidden_chain_of_thought/const",
               keyword: "const",
@@ -3331,15 +5879,15 @@ function validate20(
               message: "must be equal to constant",
             };
             if (vErrors === null) {
-              vErrors = [err179];
+              vErrors = [err231];
             } else {
-              vErrors.push(err179);
+              vErrors.push(err231);
             }
             errors++;
           }
         }
       } else {
-        const err180 = {
+        const err232 = {
           instancePath: instancePath + "/redaction",
           schemaPath: "#/properties/redaction/type",
           keyword: "type",
@@ -3347,18 +5895,18 @@ function validate20(
           message: "must be object",
         };
         if (vErrors === null) {
-          vErrors = [err180];
+          vErrors = [err232];
         } else {
-          vErrors.push(err180);
+          vErrors.push(err232);
         }
         errors++;
       }
     }
     if (data.execution !== undefined) {
-      let data79 = data.execution;
-      if (data79 && typeof data79 == "object" && !Array.isArray(data79)) {
-        if (data79.mode === undefined) {
-          const err181 = {
+      let data102 = data.execution;
+      if (data102 && typeof data102 == "object" && !Array.isArray(data102)) {
+        if (data102.mode === undefined) {
+          const err233 = {
             instancePath: instancePath + "/execution",
             schemaPath: "#/properties/execution/required",
             keyword: "required",
@@ -3366,14 +5914,14 @@ function validate20(
             message: "must have required property '" + "mode" + "'",
           };
           if (vErrors === null) {
-            vErrors = [err181];
+            vErrors = [err233];
           } else {
-            vErrors.push(err181);
+            vErrors.push(err233);
           }
           errors++;
         }
-        if (data79.timeout_ms === undefined) {
-          const err182 = {
+        if (data102.timeout_ms === undefined) {
+          const err234 = {
             instancePath: instancePath + "/execution",
             schemaPath: "#/properties/execution/required",
             keyword: "required",
@@ -3381,14 +5929,14 @@ function validate20(
             message: "must have required property '" + "timeout_ms" + "'",
           };
           if (vErrors === null) {
-            vErrors = [err182];
+            vErrors = [err234];
           } else {
-            vErrors.push(err182);
+            vErrors.push(err234);
           }
           errors++;
         }
-        if (data79.cancellation === undefined) {
-          const err183 = {
+        if (data102.cancellation === undefined) {
+          const err235 = {
             instancePath: instancePath + "/execution",
             schemaPath: "#/properties/execution/required",
             keyword: "required",
@@ -3396,14 +5944,14 @@ function validate20(
             message: "must have required property '" + "cancellation" + "'",
           };
           if (vErrors === null) {
-            vErrors = [err183];
+            vErrors = [err235];
           } else {
-            vErrors.push(err183);
+            vErrors.push(err235);
           }
           errors++;
         }
-        if (data79.maximum_concurrent_operations === undefined) {
-          const err184 = {
+        if (data102.maximum_concurrent_operations === undefined) {
+          const err236 = {
             instancePath: instancePath + "/execution",
             schemaPath: "#/properties/execution/required",
             keyword: "required",
@@ -3411,14 +5959,14 @@ function validate20(
             message: "must have required property '" + "maximum_concurrent_operations" + "'",
           };
           if (vErrors === null) {
-            vErrors = [err184];
+            vErrors = [err236];
           } else {
-            vErrors.push(err184);
+            vErrors.push(err236);
           }
           errors++;
         }
-        if (data79.retry === undefined) {
-          const err185 = {
+        if (data102.retry === undefined) {
+          const err237 = {
             instancePath: instancePath + "/execution",
             schemaPath: "#/properties/execution/required",
             keyword: "required",
@@ -3426,14 +5974,14 @@ function validate20(
             message: "must have required property '" + "retry" + "'",
           };
           if (vErrors === null) {
-            vErrors = [err185];
+            vErrors = [err237];
           } else {
-            vErrors.push(err185);
+            vErrors.push(err237);
           }
           errors++;
         }
-        if (data79.terminal_recovery === undefined) {
-          const err186 = {
+        if (data102.terminal_recovery === undefined) {
+          const err238 = {
             instancePath: instancePath + "/execution",
             schemaPath: "#/properties/execution/required",
             keyword: "required",
@@ -3441,39 +5989,39 @@ function validate20(
             message: "must have required property '" + "terminal_recovery" + "'",
           };
           if (vErrors === null) {
-            vErrors = [err186];
+            vErrors = [err238];
           } else {
-            vErrors.push(err186);
+            vErrors.push(err238);
           }
           errors++;
         }
-        for (const key11 in data79) {
+        for (const key17 in data102) {
           if (!(
-            key11 === "mode" ||
-            key11 === "timeout_ms" ||
-            key11 === "cancellation" ||
-            key11 === "maximum_concurrent_operations" ||
-            key11 === "retry" ||
-            key11 === "terminal_recovery"
+            key17 === "mode" ||
+            key17 === "timeout_ms" ||
+            key17 === "cancellation" ||
+            key17 === "maximum_concurrent_operations" ||
+            key17 === "retry" ||
+            key17 === "terminal_recovery"
           )) {
-            const err187 = {
+            const err239 = {
               instancePath: instancePath + "/execution",
               schemaPath: "#/properties/execution/additionalProperties",
               keyword: "additionalProperties",
-              params: { additionalProperty: key11 },
+              params: { additionalProperty: key17 },
               message: "must NOT have additional properties",
             };
             if (vErrors === null) {
-              vErrors = [err187];
+              vErrors = [err239];
             } else {
-              vErrors.push(err187);
+              vErrors.push(err239);
             }
             errors++;
           }
         }
-        if (data79.mode !== undefined) {
-          if ("synchronous_terminal" !== data79.mode) {
-            const err188 = {
+        if (data102.mode !== undefined) {
+          if ("synchronous_terminal" !== data102.mode) {
+            const err240 = {
               instancePath: instancePath + "/execution/mode",
               schemaPath: "#/properties/execution/properties/mode/const",
               keyword: "const",
@@ -3481,17 +6029,17 @@ function validate20(
               message: "must be equal to constant",
             };
             if (vErrors === null) {
-              vErrors = [err188];
+              vErrors = [err240];
             } else {
-              vErrors.push(err188);
+              vErrors.push(err240);
             }
             errors++;
           }
         }
-        if (data79.timeout_ms !== undefined) {
-          let data81 = data79.timeout_ms;
-          if (!(typeof data81 == "number" && !(data81 % 1) && !isNaN(data81))) {
-            const err189 = {
+        if (data102.timeout_ms !== undefined) {
+          let data104 = data102.timeout_ms;
+          if (!(typeof data104 == "number" && !(data104 % 1) && !isNaN(data104))) {
+            const err241 = {
               instancePath: instancePath + "/execution/timeout_ms",
               schemaPath: "#/properties/execution/properties/timeout_ms/type",
               keyword: "type",
@@ -3499,15 +6047,15 @@ function validate20(
               message: "must be integer",
             };
             if (vErrors === null) {
-              vErrors = [err189];
+              vErrors = [err241];
             } else {
-              vErrors.push(err189);
+              vErrors.push(err241);
             }
             errors++;
           }
-          if (typeof data81 == "number") {
-            if (data81 < 1 || isNaN(data81)) {
-              const err190 = {
+          if (typeof data104 == "number") {
+            if (data104 < 1 || isNaN(data104)) {
+              const err242 = {
                 instancePath: instancePath + "/execution/timeout_ms",
                 schemaPath: "#/properties/execution/properties/timeout_ms/minimum",
                 keyword: "minimum",
@@ -3515,17 +6063,17 @@ function validate20(
                 message: "must be >= 1",
               };
               if (vErrors === null) {
-                vErrors = [err190];
+                vErrors = [err242];
               } else {
-                vErrors.push(err190);
+                vErrors.push(err242);
               }
               errors++;
             }
           }
         }
-        if (data79.cancellation !== undefined) {
-          if ("not_applicable_after_synchronous_terminal_response" !== data79.cancellation) {
-            const err191 = {
+        if (data102.cancellation !== undefined) {
+          if ("not_applicable_after_synchronous_terminal_response" !== data102.cancellation) {
+            const err243 = {
               instancePath: instancePath + "/execution/cancellation",
               schemaPath: "#/properties/execution/properties/cancellation/const",
               keyword: "const",
@@ -3533,16 +6081,16 @@ function validate20(
               message: "must be equal to constant",
             };
             if (vErrors === null) {
-              vErrors = [err191];
+              vErrors = [err243];
             } else {
-              vErrors.push(err191);
+              vErrors.push(err243);
             }
             errors++;
           }
         }
-        if (data79.maximum_concurrent_operations !== undefined) {
-          if (1 !== data79.maximum_concurrent_operations) {
-            const err192 = {
+        if (data102.maximum_concurrent_operations !== undefined) {
+          if (1 !== data102.maximum_concurrent_operations) {
+            const err244 = {
               instancePath: instancePath + "/execution/maximum_concurrent_operations",
               schemaPath: "#/properties/execution/properties/maximum_concurrent_operations/const",
               keyword: "const",
@@ -3550,49 +6098,43 @@ function validate20(
               message: "must be equal to constant",
             };
             if (vErrors === null) {
-              vErrors = [err192];
+              vErrors = [err244];
             } else {
-              vErrors.push(err192);
+              vErrors.push(err244);
             }
             errors++;
           }
         }
-        if (data79.retry !== undefined) {
-          if ("same_idempotency_key_and_same_payload_replays_terminal_result" !== data79.retry) {
-            const err193 = {
+        if (data102.retry !== undefined) {
+          if (
+            !validate21(data102.retry, {
               instancePath: instancePath + "/execution/retry",
-              schemaPath: "#/properties/execution/properties/retry/const",
-              keyword: "const",
-              params: { allowedValue: "same_idempotency_key_and_same_payload_replays_terminal_result" },
-              message: "must be equal to constant",
-            };
-            if (vErrors === null) {
-              vErrors = [err193];
-            } else {
-              vErrors.push(err193);
-            }
-            errors++;
+              parentData: data102,
+              parentDataProperty: "retry",
+              rootData,
+              dynamicAnchors,
+            })
+          ) {
+            vErrors = vErrors === null ? validate21.errors : vErrors.concat(validate21.errors);
+            errors = vErrors.length;
           }
         }
-        if (data79.terminal_recovery !== undefined) {
-          if ("run_local_redacted_terminal_record" !== data79.terminal_recovery) {
-            const err194 = {
+        if (data102.terminal_recovery !== undefined) {
+          if (
+            !validate23(data102.terminal_recovery, {
               instancePath: instancePath + "/execution/terminal_recovery",
-              schemaPath: "#/properties/execution/properties/terminal_recovery/const",
-              keyword: "const",
-              params: { allowedValue: "run_local_redacted_terminal_record" },
-              message: "must be equal to constant",
-            };
-            if (vErrors === null) {
-              vErrors = [err194];
-            } else {
-              vErrors.push(err194);
-            }
-            errors++;
+              parentData: data102,
+              parentDataProperty: "terminal_recovery",
+              rootData,
+              dynamicAnchors,
+            })
+          ) {
+            vErrors = vErrors === null ? validate23.errors : vErrors.concat(validate23.errors);
+            errors = vErrors.length;
           }
         }
       } else {
-        const err195 = {
+        const err245 = {
           instancePath: instancePath + "/execution",
           schemaPath: "#/properties/execution/type",
           keyword: "type",
@@ -3600,15 +6142,15 @@ function validate20(
           message: "must be object",
         };
         if (vErrors === null) {
-          vErrors = [err195];
+          vErrors = [err245];
         } else {
-          vErrors.push(err195);
+          vErrors.push(err245);
         }
         errors++;
       }
     }
   } else {
-    const err196 = {
+    const err246 = {
       instancePath,
       schemaPath: "#/type",
       keyword: "type",
@@ -3616,9 +6158,9 @@ function validate20(
       message: "must be object",
     };
     if (vErrors === null) {
-      vErrors = [err196];
+      vErrors = [err246];
     } else {
-      vErrors.push(err196);
+      vErrors.push(err246);
     }
     errors++;
   }
@@ -3626,8 +6168,8 @@ function validate20(
   return errors === 0;
 }
 validate20.evaluated = { props: true, dynamicProps: false, dynamicItems: false };
-export const evidenceAgentResponse = validate21;
-const schema37 = {
+export const evidenceAgentResponse = validate25;
+const schema42 = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://tilesim.local/contracts/evidence-agent-response.schema.json",
   "x-tilesim-schema-identity": "tilesim.bridge.evidence_agent_response.v1",
@@ -3832,8 +6374,8 @@ const schema37 = {
     },
   },
 };
-const schema38 = { type: "string", pattern: "^sha256:[0-9a-f]{64}$" };
-const schema40 = {
+const schema43 = { type: "string", pattern: "^sha256:[0-9a-f]{64}$" };
+const schema45 = {
   type: "object",
   additionalProperties: false,
   required: ["configured", "provider_id", "model_id", "model_revision"],
@@ -3844,7 +6386,7 @@ const schema40 = {
     model_revision: { type: "string", minLength: 1 },
   },
 };
-const schema47 = {
+const schema52 = {
   type: "object",
   additionalProperties: false,
   required: ["reason_code", "detail", "retryable"],
@@ -3877,7 +6419,7 @@ const schema47 = {
 const pattern7 = new RegExp("^agent-[A-Za-z0-9._:-]+$", "u");
 const pattern8 = new RegExp("^[A-Za-z0-9._:-]{8,128}$", "u");
 const pattern9 = new RegExp("^run-[A-Za-z0-9._-]+$", "u");
-const schema41 = {
+const schema46 = {
   type: "object",
   additionalProperties: false,
   required: ["claim_id", "claim_kind", "text", "citations", "scope"],
@@ -3902,7 +6444,7 @@ const schema41 = {
     percentile_subject: { $ref: "#/$defs/percentileSubject" },
   },
 };
-const schema45 = {
+const schema50 = {
   type: "object",
   additionalProperties: false,
   required: [
@@ -3932,7 +6474,7 @@ const schema45 = {
     recommendation_semantics: { enum: ["not_applicable", "conditional_not_executed"] },
   },
 };
-const schema46 = {
+const schema51 = {
   type: "object",
   additionalProperties: false,
   required: ["selection_semantics", "selected_request_id", "member_request_ids"],
@@ -3942,7 +6484,7 @@ const schema46 = {
     member_request_ids: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true },
   },
 };
-const schema42 = {
+const schema47 = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://tilesim.local/contracts/evidence-agent-citation.schema.json",
   "x-tilesim-schema-identity": "tilesim.bridge.evidence_agent_citation.v1",
@@ -4024,7 +6566,7 @@ const schema42 = {
     },
   },
 };
-const schema43 = {
+const schema48 = {
   type: "object",
   additionalProperties: false,
   required: ["kind", "id"],
@@ -4050,7 +6592,7 @@ const schema43 = {
     id: { type: "string", minLength: 1 },
   },
 };
-const schema44 = {
+const schema49 = {
   type: "object",
   additionalProperties: false,
   required: ["encoding", "numeric_kind", "decimal"],
@@ -4063,13 +6605,13 @@ const schema44 = {
 const pattern12 = new RegExp("^[0-9a-f]{64}$", "u");
 const pattern13 = new RegExp("^/", "u");
 const pattern14 = new RegExp("^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$", "u");
-function validate23(
+function validate27(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {},
 ) {
   /*# sourceURL="https://tilesim.local/contracts/evidence-agent-citation.schema.json" */ let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate23.evaluated;
+  const evaluated0 = validate27.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = undefined;
   }
@@ -4213,7 +6755,7 @@ function validate23(
       errors++;
     }
     for (const key0 in data) {
-      if (!func1.call(schema42.properties, key0)) {
+      if (!func1.call(schema47.properties, key0)) {
         const err9 = {
           instancePath,
           schemaPath: "#/additionalProperties",
@@ -4488,7 +7030,7 @@ function validate23(
               instancePath: instancePath + "/subject/kind",
               schemaPath: "#/$defs/subject/properties/kind/enum",
               keyword: "enum",
-              params: { allowedValues: schema43.properties.kind.enum },
+              params: { allowedValues: schema48.properties.kind.enum },
               message: "must be equal to one of the allowed values",
             };
             if (vErrors === null) {
@@ -4563,7 +7105,7 @@ function validate23(
           instancePath: instancePath + "/citation_role",
           schemaPath: "#/properties/citation_role/enum",
           keyword: "enum",
-          params: { allowedValues: schema42.properties.citation_role.enum },
+          params: { allowedValues: schema47.properties.citation_role.enum },
           message: "must be equal to one of the allowed values",
         };
         if (vErrors === null) {
@@ -4588,7 +7130,7 @@ function validate23(
           instancePath: instancePath + "/availability",
           schemaPath: "#/properties/availability/enum",
           keyword: "enum",
-          params: { allowedValues: schema42.properties.availability.enum },
+          params: { allowedValues: schema47.properties.availability.enum },
           message: "must be equal to one of the allowed values",
         };
         if (vErrors === null) {
@@ -4688,7 +7230,7 @@ function validate23(
               instancePath: instancePath + "/value/numeric_kind",
               schemaPath: "#/$defs/losslessNumber/properties/numeric_kind/enum",
               keyword: "enum",
-              params: { allowedValues: schema44.properties.numeric_kind.enum },
+              params: { allowedValues: schema49.properties.numeric_kind.enum },
               message: "must be equal to one of the allowed values",
             };
             if (vErrors === null) {
@@ -4832,17 +7374,17 @@ function validate23(
     }
     errors++;
   }
-  validate23.errors = vErrors;
+  validate27.errors = vErrors;
   return errors === 0;
 }
-validate23.evaluated = { props: true, dynamicProps: false, dynamicItems: false };
-function validate22(
+validate27.evaluated = { props: true, dynamicProps: false, dynamicItems: false };
+function validate26(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {},
 ) {
   let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate22.evaluated;
+  const evaluated0 = validate26.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = undefined;
   }
@@ -5000,7 +7542,7 @@ function validate22(
           instancePath: instancePath + "/claim_kind",
           schemaPath: "#/properties/claim_kind/enum",
           keyword: "enum",
-          params: { allowedValues: schema41.properties.claim_kind.enum },
+          params: { allowedValues: schema46.properties.claim_kind.enum },
           message: "must be equal to one of the allowed values",
         };
         if (vErrors === null) {
@@ -5051,7 +7593,7 @@ function validate22(
         const len0 = data3.length;
         for (let i0 = 0; i0 < len0; i0++) {
           if (
-            !validate23(data3[i0], {
+            !validate27(data3[i0], {
               instancePath: instancePath + "/citations/" + i0,
               parentData: data3,
               parentDataProperty: i0,
@@ -5059,7 +7601,7 @@ function validate22(
               dynamicAnchors,
             })
           ) {
-            vErrors = vErrors === null ? validate23.errors : vErrors.concat(validate23.errors);
+            vErrors = vErrors === null ? validate27.errors : vErrors.concat(validate27.errors);
             errors = vErrors.length;
           }
         }
@@ -5235,7 +7777,7 @@ function validate22(
               instancePath: instancePath + "/scope/source_mode",
               schemaPath: "#/$defs/scope/properties/source_mode/enum",
               keyword: "enum",
-              params: { allowedValues: schema45.properties.source_mode.enum },
+              params: { allowedValues: schema50.properties.source_mode.enum },
               message: "must be equal to one of the allowed values",
             };
             if (vErrors === null) {
@@ -5253,7 +7795,7 @@ function validate22(
               instancePath: instancePath + "/scope/requested_fidelity",
               schemaPath: "#/$defs/scope/properties/requested_fidelity/enum",
               keyword: "enum",
-              params: { allowedValues: schema45.properties.requested_fidelity.enum },
+              params: { allowedValues: schema50.properties.requested_fidelity.enum },
               message: "must be equal to one of the allowed values",
             };
             if (vErrors === null) {
@@ -5271,7 +7813,7 @@ function validate22(
               instancePath: instancePath + "/scope/resolved_fidelity",
               schemaPath: "#/$defs/scope/properties/resolved_fidelity/enum",
               keyword: "enum",
-              params: { allowedValues: schema45.properties.resolved_fidelity.enum },
+              params: { allowedValues: schema50.properties.resolved_fidelity.enum },
               message: "must be equal to one of the allowed values",
             };
             if (vErrors === null) {
@@ -5296,7 +7838,7 @@ function validate22(
               instancePath: instancePath + "/scope/execution_mode",
               schemaPath: "#/$defs/scope/properties/execution_mode/enum",
               keyword: "enum",
-              params: { allowedValues: schema45.properties.execution_mode.enum },
+              params: { allowedValues: schema50.properties.execution_mode.enum },
               message: "must be equal to one of the allowed values",
             };
             if (vErrors === null) {
@@ -5343,7 +7885,7 @@ function validate22(
                   instancePath: instancePath + "/scope/causal_subsystems/" + i1,
                   schemaPath: "#/$defs/scope/properties/causal_subsystems/items/enum",
                   keyword: "enum",
-                  params: { allowedValues: schema45.properties.causal_subsystems.items.enum },
+                  params: { allowedValues: schema50.properties.causal_subsystems.items.enum },
                   message: "must be equal to one of the allowed values",
                 };
                 if (vErrors === null) {
@@ -5401,7 +7943,7 @@ function validate22(
               instancePath: instancePath + "/scope/attribution_semantics",
               schemaPath: "#/$defs/scope/properties/attribution_semantics/enum",
               keyword: "enum",
-              params: { allowedValues: schema45.properties.attribution_semantics.enum },
+              params: { allowedValues: schema50.properties.attribution_semantics.enum },
               message: "must be equal to one of the allowed values",
             };
             if (vErrors === null) {
@@ -5419,7 +7961,7 @@ function validate22(
               instancePath: instancePath + "/scope/recommendation_semantics",
               schemaPath: "#/$defs/scope/properties/recommendation_semantics/enum",
               keyword: "enum",
-              params: { allowedValues: schema45.properties.recommendation_semantics.enum },
+              params: { allowedValues: schema50.properties.recommendation_semantics.enum },
               message: "must be equal to one of the allowed values",
             };
             if (vErrors === null) {
@@ -5523,7 +8065,7 @@ function validate22(
               instancePath: instancePath + "/percentile_subject/selection_semantics",
               schemaPath: "#/$defs/percentileSubject/properties/selection_semantics/enum",
               keyword: "enum",
-              params: { allowedValues: schema46.properties.selection_semantics.enum },
+              params: { allowedValues: schema51.properties.selection_semantics.enum },
               message: "must be equal to one of the allowed values",
             };
             if (vErrors === null) {
@@ -5541,7 +8083,7 @@ function validate22(
               instancePath: instancePath + "/percentile_subject/selected_request_id",
               schemaPath: "#/$defs/percentileSubject/properties/selected_request_id/type",
               keyword: "type",
-              params: { type: schema46.properties.selected_request_id.type },
+              params: { type: schema51.properties.selected_request_id.type },
               message: "must be string,null",
             };
             if (vErrors === null) {
@@ -5666,17 +8208,17 @@ function validate22(
     }
     errors++;
   }
-  validate22.errors = vErrors;
+  validate26.errors = vErrors;
   return errors === 0;
 }
-validate22.evaluated = { props: true, dynamicProps: false, dynamicItems: false };
-function validate21(
+validate26.evaluated = { props: true, dynamicProps: false, dynamicItems: false };
+function validate25(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {},
 ) {
   /*# sourceURL="https://tilesim.local/contracts/evidence-agent-response.schema.json" */ let vErrors = null;
   let errors = 0;
-  const evaluated0 = validate21.evaluated;
+  const evaluated0 = validate25.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = undefined;
   }
@@ -5955,7 +8497,7 @@ function validate21(
       errors++;
     }
     for (const key0 in data) {
-      if (!func1.call(schema37.properties, key0)) {
+      if (!func1.call(schema42.properties, key0)) {
         const err18 = {
           instancePath,
           schemaPath: "#/additionalProperties",
@@ -6173,7 +8715,7 @@ function validate21(
           instancePath: instancePath + "/completion_state",
           schemaPath: "#/properties/completion_state/enum",
           keyword: "enum",
-          params: { allowedValues: schema37.properties.completion_state.enum },
+          params: { allowedValues: schema42.properties.completion_state.enum },
           message: "must be equal to one of the allowed values",
         };
         if (vErrors === null) {
@@ -6554,7 +9096,7 @@ function validate21(
         const len0 = data15.length;
         for (let i0 = 0; i0 < len0; i0++) {
           if (
-            !validate22(data15[i0], {
+            !validate26(data15[i0], {
               instancePath: instancePath + "/claims/" + i0,
               parentData: data15,
               parentDataProperty: i0,
@@ -6562,7 +9104,7 @@ function validate21(
               dynamicAnchors,
             })
           ) {
-            vErrors = vErrors === null ? validate22.errors : vErrors.concat(validate22.errors);
+            vErrors = vErrors === null ? validate26.errors : vErrors.concat(validate26.errors);
             errors = vErrors.length;
           }
         }
@@ -6697,7 +9239,7 @@ function validate21(
               instancePath: instancePath + "/refusal/reason_code",
               schemaPath: "#/$defs/refusal/properties/reason_code/enum",
               keyword: "enum",
-              params: { allowedValues: schema47.properties.reason_code.enum },
+              params: { allowedValues: schema52.properties.reason_code.enum },
               message: "must be equal to one of the allowed values",
             };
             if (vErrors === null) {
@@ -7053,7 +9595,7 @@ function validate21(
                   instancePath: instancePath + "/audit_summary/operations/" + i1,
                   schemaPath: "#/properties/audit_summary/properties/operations/items/enum",
                   keyword: "enum",
-                  params: { allowedValues: schema37.properties.audit_summary.properties.operations.items.enum },
+                  params: { allowedValues: schema42.properties.audit_summary.properties.operations.items.enum },
                   message: "must be equal to one of the allowed values",
                 };
                 if (vErrors === null) {
@@ -7298,7 +9840,7 @@ function validate21(
               instancePath: instancePath + "/persistence/retained_until",
               schemaPath: "#/properties/persistence/properties/retained_until/type",
               keyword: "type",
-              params: { type: schema37.properties.persistence.properties.retained_until.type },
+              params: { type: schema42.properties.persistence.properties.retained_until.type },
               message: "must be string,null",
             };
             if (vErrors === null) {
@@ -7416,7 +9958,7 @@ function validate21(
               instancePath: instancePath + "/staleness/state",
               schemaPath: "#/properties/staleness/properties/state/enum",
               keyword: "enum",
-              params: { allowedValues: schema37.properties.staleness.properties.state.enum },
+              params: { allowedValues: schema42.properties.staleness.properties.state.enum },
               message: "must be equal to one of the allowed values",
             };
             if (vErrors === null) {
@@ -7443,7 +9985,7 @@ function validate21(
                   instancePath: instancePath + "/staleness/binding_fields/" + i3,
                   schemaPath: "#/properties/staleness/properties/binding_fields/items/enum",
                   keyword: "enum",
-                  params: { allowedValues: schema37.properties.staleness.properties.binding_fields.items.enum },
+                  params: { allowedValues: schema42.properties.staleness.properties.binding_fields.items.enum },
                   message: "must be equal to one of the allowed values",
                 };
                 if (vErrors === null) {
@@ -7525,8 +10067,360 @@ function validate21(
     }
     errors++;
   }
-  validate21.errors = vErrors;
+  validate25.errors = vErrors;
   return errors === 0;
 }
-validate21.evaluated = { props: true, dynamicProps: false, dynamicItems: false };
-export const evidenceAgentCitation = validate23;
+validate25.evaluated = { props: true, dynamicProps: false, dynamicItems: false };
+export const evidenceAgentCitation = validate27;
+export const evidenceAgentError = validate30;
+const schema53 = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: "https://tilesim.local/contracts/error.schema.json",
+  title: "ErrorResponse",
+  type: "object",
+  additionalProperties: false,
+  required: ["schema_version", "error", "request_id"],
+  properties: {
+    schema_version: { const: "tilesim.bridge.error.v1" },
+    error: {
+      type: "object",
+      additionalProperties: false,
+      required: ["code", "message", "field_path", "retryable"],
+      properties: {
+        code: { type: "string", minLength: 1 },
+        message: { type: "string" },
+        field_path: { type: ["string", "null"] },
+        retryable: { type: "boolean" },
+      },
+    },
+    request_id: { type: "string", minLength: 1 },
+  },
+};
+function validate30(
+  data,
+  { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {},
+) {
+  /*# sourceURL="https://tilesim.local/contracts/error.schema.json" */ let vErrors = null;
+  let errors = 0;
+  const evaluated0 = validate30.evaluated;
+  if (evaluated0.dynamicProps) {
+    evaluated0.props = undefined;
+  }
+  if (evaluated0.dynamicItems) {
+    evaluated0.items = undefined;
+  }
+  if (data && typeof data == "object" && !Array.isArray(data)) {
+    if (data.schema_version === undefined) {
+      const err0 = {
+        instancePath,
+        schemaPath: "#/required",
+        keyword: "required",
+        params: { missingProperty: "schema_version" },
+        message: "must have required property '" + "schema_version" + "'",
+      };
+      if (vErrors === null) {
+        vErrors = [err0];
+      } else {
+        vErrors.push(err0);
+      }
+      errors++;
+    }
+    if (data.error === undefined) {
+      const err1 = {
+        instancePath,
+        schemaPath: "#/required",
+        keyword: "required",
+        params: { missingProperty: "error" },
+        message: "must have required property '" + "error" + "'",
+      };
+      if (vErrors === null) {
+        vErrors = [err1];
+      } else {
+        vErrors.push(err1);
+      }
+      errors++;
+    }
+    if (data.request_id === undefined) {
+      const err2 = {
+        instancePath,
+        schemaPath: "#/required",
+        keyword: "required",
+        params: { missingProperty: "request_id" },
+        message: "must have required property '" + "request_id" + "'",
+      };
+      if (vErrors === null) {
+        vErrors = [err2];
+      } else {
+        vErrors.push(err2);
+      }
+      errors++;
+    }
+    for (const key0 in data) {
+      if (!(key0 === "schema_version" || key0 === "error" || key0 === "request_id")) {
+        const err3 = {
+          instancePath,
+          schemaPath: "#/additionalProperties",
+          keyword: "additionalProperties",
+          params: { additionalProperty: key0 },
+          message: "must NOT have additional properties",
+        };
+        if (vErrors === null) {
+          vErrors = [err3];
+        } else {
+          vErrors.push(err3);
+        }
+        errors++;
+      }
+    }
+    if (data.schema_version !== undefined) {
+      if ("tilesim.bridge.error.v1" !== data.schema_version) {
+        const err4 = {
+          instancePath: instancePath + "/schema_version",
+          schemaPath: "#/properties/schema_version/const",
+          keyword: "const",
+          params: { allowedValue: "tilesim.bridge.error.v1" },
+          message: "must be equal to constant",
+        };
+        if (vErrors === null) {
+          vErrors = [err4];
+        } else {
+          vErrors.push(err4);
+        }
+        errors++;
+      }
+    }
+    if (data.error !== undefined) {
+      let data1 = data.error;
+      if (data1 && typeof data1 == "object" && !Array.isArray(data1)) {
+        if (data1.code === undefined) {
+          const err5 = {
+            instancePath: instancePath + "/error",
+            schemaPath: "#/properties/error/required",
+            keyword: "required",
+            params: { missingProperty: "code" },
+            message: "must have required property '" + "code" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err5];
+          } else {
+            vErrors.push(err5);
+          }
+          errors++;
+        }
+        if (data1.message === undefined) {
+          const err6 = {
+            instancePath: instancePath + "/error",
+            schemaPath: "#/properties/error/required",
+            keyword: "required",
+            params: { missingProperty: "message" },
+            message: "must have required property '" + "message" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err6];
+          } else {
+            vErrors.push(err6);
+          }
+          errors++;
+        }
+        if (data1.field_path === undefined) {
+          const err7 = {
+            instancePath: instancePath + "/error",
+            schemaPath: "#/properties/error/required",
+            keyword: "required",
+            params: { missingProperty: "field_path" },
+            message: "must have required property '" + "field_path" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err7];
+          } else {
+            vErrors.push(err7);
+          }
+          errors++;
+        }
+        if (data1.retryable === undefined) {
+          const err8 = {
+            instancePath: instancePath + "/error",
+            schemaPath: "#/properties/error/required",
+            keyword: "required",
+            params: { missingProperty: "retryable" },
+            message: "must have required property '" + "retryable" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err8];
+          } else {
+            vErrors.push(err8);
+          }
+          errors++;
+        }
+        for (const key1 in data1) {
+          if (!(key1 === "code" || key1 === "message" || key1 === "field_path" || key1 === "retryable")) {
+            const err9 = {
+              instancePath: instancePath + "/error",
+              schemaPath: "#/properties/error/additionalProperties",
+              keyword: "additionalProperties",
+              params: { additionalProperty: key1 },
+              message: "must NOT have additional properties",
+            };
+            if (vErrors === null) {
+              vErrors = [err9];
+            } else {
+              vErrors.push(err9);
+            }
+            errors++;
+          }
+        }
+        if (data1.code !== undefined) {
+          let data2 = data1.code;
+          if (typeof data2 === "string") {
+            if (func2(data2) < 1) {
+              const err10 = {
+                instancePath: instancePath + "/error/code",
+                schemaPath: "#/properties/error/properties/code/minLength",
+                keyword: "minLength",
+                params: { limit: 1 },
+                message: "must NOT have fewer than 1 characters",
+              };
+              if (vErrors === null) {
+                vErrors = [err10];
+              } else {
+                vErrors.push(err10);
+              }
+              errors++;
+            }
+          } else {
+            const err11 = {
+              instancePath: instancePath + "/error/code",
+              schemaPath: "#/properties/error/properties/code/type",
+              keyword: "type",
+              params: { type: "string" },
+              message: "must be string",
+            };
+            if (vErrors === null) {
+              vErrors = [err11];
+            } else {
+              vErrors.push(err11);
+            }
+            errors++;
+          }
+        }
+        if (data1.message !== undefined) {
+          if (typeof data1.message !== "string") {
+            const err12 = {
+              instancePath: instancePath + "/error/message",
+              schemaPath: "#/properties/error/properties/message/type",
+              keyword: "type",
+              params: { type: "string" },
+              message: "must be string",
+            };
+            if (vErrors === null) {
+              vErrors = [err12];
+            } else {
+              vErrors.push(err12);
+            }
+            errors++;
+          }
+        }
+        if (data1.field_path !== undefined) {
+          let data4 = data1.field_path;
+          if (typeof data4 !== "string" && data4 !== null) {
+            const err13 = {
+              instancePath: instancePath + "/error/field_path",
+              schemaPath: "#/properties/error/properties/field_path/type",
+              keyword: "type",
+              params: { type: schema53.properties.error.properties.field_path.type },
+              message: "must be string,null",
+            };
+            if (vErrors === null) {
+              vErrors = [err13];
+            } else {
+              vErrors.push(err13);
+            }
+            errors++;
+          }
+        }
+        if (data1.retryable !== undefined) {
+          if (typeof data1.retryable !== "boolean") {
+            const err14 = {
+              instancePath: instancePath + "/error/retryable",
+              schemaPath: "#/properties/error/properties/retryable/type",
+              keyword: "type",
+              params: { type: "boolean" },
+              message: "must be boolean",
+            };
+            if (vErrors === null) {
+              vErrors = [err14];
+            } else {
+              vErrors.push(err14);
+            }
+            errors++;
+          }
+        }
+      } else {
+        const err15 = {
+          instancePath: instancePath + "/error",
+          schemaPath: "#/properties/error/type",
+          keyword: "type",
+          params: { type: "object" },
+          message: "must be object",
+        };
+        if (vErrors === null) {
+          vErrors = [err15];
+        } else {
+          vErrors.push(err15);
+        }
+        errors++;
+      }
+    }
+    if (data.request_id !== undefined) {
+      let data6 = data.request_id;
+      if (typeof data6 === "string") {
+        if (func2(data6) < 1) {
+          const err16 = {
+            instancePath: instancePath + "/request_id",
+            schemaPath: "#/properties/request_id/minLength",
+            keyword: "minLength",
+            params: { limit: 1 },
+            message: "must NOT have fewer than 1 characters",
+          };
+          if (vErrors === null) {
+            vErrors = [err16];
+          } else {
+            vErrors.push(err16);
+          }
+          errors++;
+        }
+      } else {
+        const err17 = {
+          instancePath: instancePath + "/request_id",
+          schemaPath: "#/properties/request_id/type",
+          keyword: "type",
+          params: { type: "string" },
+          message: "must be string",
+        };
+        if (vErrors === null) {
+          vErrors = [err17];
+        } else {
+          vErrors.push(err17);
+        }
+        errors++;
+      }
+    }
+  } else {
+    const err18 = {
+      instancePath,
+      schemaPath: "#/type",
+      keyword: "type",
+      params: { type: "object" },
+      message: "must be object",
+    };
+    if (vErrors === null) {
+      vErrors = [err18];
+    } else {
+      vErrors.push(err18);
+    }
+    errors++;
+  }
+  validate30.errors = vErrors;
+  return errors === 0;
+}
+validate30.evaluated = { props: true, dynamicProps: false, dynamicItems: false };

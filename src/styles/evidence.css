@@ -1,10 +1,10 @@
 .evidence-strip {
   display: grid;
-  grid-template-columns: minmax(230px, 1fr) auto auto;
-  gap: 18px;
+  grid-template-columns: minmax(220px, 1fr) auto minmax(0, auto);
+  gap: 14px;
   align-items: center;
-  margin-bottom: 25px;
-  padding: 13px 15px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 9px;
   background: color-mix(in srgb, var(--panel) 90%, transparent);
@@ -48,32 +48,55 @@
 }
 .evidence-tags {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
-.evidence-warning {
-  grid-column: 1 / -1;
+.evidence-context-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+.evidence-warning {
+  display: inline-flex;
+  align-items: center;
   gap: 7px;
-  margin: -2px -4px -4px;
-  padding: 8px 10px;
-  border: 0;
+  flex: 0 0 auto;
+  padding: 6px 8px;
+  border: 1px solid color-mix(in srgb, var(--warning) 28%, var(--line));
   border-radius: 6px;
   color: var(--warning-ink);
   background: var(--warning-soft);
   cursor: pointer;
-  font-size: var(--text-base);
+  font-size: var(--text-xs);
+  font-weight: 650;
   text-align: left;
   transition:
     background-color var(--motion-fast) var(--ease-standard),
     transform var(--motion-fast) var(--ease-emphasized);
 }
+.evidence-warning > svg {
+  flex: 0 0 auto;
+}
 .evidence-warning:hover {
   background: color-mix(in srgb, var(--warning-soft) 88%, var(--panel));
   transform: translateY(-1px);
 }
-.evidence-warning span {
-  flex: 1;
+.evidence-warning-copy {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  max-width: 260px;
+}
+.evidence-warning-copy strong,
+.evidence-warning-copy small {
+  overflow-wrap: anywhere;
+}
+.evidence-warning-copy small {
+  color: inherit;
+  font-size: inherit;
+  font-weight: 500;
 }
 .status-pill {
   display: inline-flex;
@@ -104,7 +127,7 @@
 
 .view-stack {
   display: grid;
-  gap: 20px;
+  gap: 16px;
   min-width: 0;
 }
 .navigation-error {
@@ -128,7 +151,7 @@
 .panel {
   min-width: 0;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--panel);
   box-shadow: var(--shadow);
   transition:
@@ -139,8 +162,8 @@
 .panel-header {
   display: flex;
   justify-content: space-between;
-  gap: 24px;
-  padding: 23px 25px 17px;
+  gap: 20px;
+  padding: 18px 20px 14px;
 }
 .panel-header--row {
   align-items: center;

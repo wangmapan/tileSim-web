@@ -213,6 +213,7 @@ const f9SchemaNames = [
   "evidence-agent-descriptor.schema.json",
   "evidence-agent-request.schema.json",
   "evidence-agent-response.schema.json",
+  "error.schema.json",
 ];
 const f9Schemas = await Promise.all(
   f9SchemaNames.map(async (name) => JSON.parse(await readFile(resolve(schemaDirectory, name), "utf8"))),
@@ -223,6 +224,7 @@ const evidenceAgentValidatorIds = {
   evidenceAgentDescriptor: f9Schemas[2].$id,
   evidenceAgentResponse: f9Schemas[4].$id,
   evidenceAgentCitation: f9Schemas[1].$id,
+  evidenceAgentError: f9Schemas[5].$id,
 };
 for (const schemaId of Object.values(evidenceAgentValidatorIds)) {
   if (!evidenceAgentAjv.getSchema(schemaId)) throw new Error(`Unable to compile F9 schema: ${schemaId}`);

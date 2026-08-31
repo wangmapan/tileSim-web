@@ -1,4 +1,4 @@
-import type { ExecutionRecord, LayerVisualization } from "../execution-inspector";
+import type { ExecutionRecord, LayerVisualization } from "../execution-inspector/model-api";
 import type { ReportValue, StructuredPerformanceReport, StructuredSubsystemSection } from "./model";
 import { currentLocale, t } from "../../i18n";
 
@@ -211,8 +211,8 @@ function renderDesignSpace(report: StructuredPerformanceReport["design_space_app
   )}</article><article><h3>${translated("排名解释边界")}</h3><p>${translated(
     "排名以报告中的确定性 final_rank 为准；promotion hint 仅作输入备注。",
   )}</p><p><b>${translated("执行范围")}</b> ${escapeHtml(report.execution_scope || t("缺失"))}</p></article></div><h3>${translated(
-    "F7 契约能力",
-  )}</h3>${renderChecks(report.contract_capabilities, t("F7 契约能力"))}
+    "设计空间契约能力",
+  )}</h3>${renderChecks(report.contract_capabilities, t("设计空间契约能力"))}
   <h3>${translated("候选完整证据")}</h3>${candidates || `<p class="empty">${translated("没有报告记录")}</p>`}
   <h3>${translated("Analytical / DES 分歧")}</h3>${renderChecks(
     report.analytical_vs_des_disagreements,
@@ -249,7 +249,7 @@ function renderRunBoundEvidence(report: StructuredPerformanceReport["run_bound_e
   return `<div class="two-column"><article><h3>${translated("请求选择")}</h3><p>${selectedRequest}</p><dl class="key-values"><div><dt>selection_availability</dt><dd>${escapeHtml(
     report.selection_availability,
   )}</dd></div><div><dt>contract_state</dt><dd>${escapeHtml(report.contract_state)}</dd></div></dl></article><article><h3>${translated(
-    "Week 8 执行摘要",
+    "S7 执行摘要",
   )}</h3>${renderKeyValues({
     availability: week8.availability,
     requested_fidelity: week8.requested_fidelity,
@@ -285,7 +285,7 @@ export function renderStructuredPerformanceReportHtml(report: StructuredPerforma
     ["s7", t("S7 执行宿主")],
     ["s8", t("S8 验证")],
     ["s9", t("S9 指标与归因")],
-    ["run-bound", t("运行绑定证据链")],
+    ["run-bound", t("请求证据链")],
     ["design-space", t("设计空间")],
     ["appendix", t("完整性能明细")],
     ["agent", t("Agent 分析预留")],
@@ -300,7 +300,7 @@ export function renderStructuredPerformanceReportHtml(report: StructuredPerforma
   <section id="s7" class="page-section"><header class="section-header"><span>S7</span><div><small>Unified Simulation Kernel</small><h2>${translated("统一执行宿主")}</h2><p>${escapeHtml(report.execution_host_s7.description)}</p></div><em>${report.execution_host_s7.stages.length ? "reported" : "missing"}</em></header>${renderVisualization(report.execution_host_s7.timeline)}${renderRecords(report.execution_host_s7.stages, "Execution envelope stages")}</section>
   <section id="s8" class="page-section"><header class="section-header"><span>S8</span><div><small>Calibration and Validation</small><h2>${translated("证据与验证")}</h2><p>${translated("展示报告声明的 provenance、fidelity resolution、检查与未关闭问题。")}</p></div><em>${escapeHtml(report.validation_s8.status)}</em></header><div class="two-column"><article><h3>${translated("验证身份")}</h3>${renderKeyValues({ completeness: report.validation_s8.completeness, lane: report.validation_s8.lane, evidence_tier: report.validation_s8.evidence_tier, claim_scope_summary: report.validation_s8.claim_scope_summary })}</article><article><h3>Trace provenance</h3>${renderKeyValues(report.validation_s8.provenance)}</article></div><h3>Fidelity resolution</h3>${renderChecks(report.validation_s8.fidelity_resolution, "fidelity resolution")}<h3>Validation checks</h3>${renderChecks(report.validation_s8.checks, "validation checks")}<h3>Open gaps</h3>${report.validation_s8.open_gaps.length ? `<ul>${report.validation_s8.open_gaps.map((gap) => `<li>${escapeHtml(gap)}</li>`).join("")}</ul>` : `<p class="empty">${translated("报告没有 open gaps；这不自动代表真实留出验证已经完成。")}</p>`}</section>
   <section id="s9" class="page-section"><header class="section-header"><span>S9</span><div><small>Metrics and Attribution</small><h2>${translated("指标与报告归因")}</h2><p>${translated("保留请求级性能、tail summary 以及后端已报告的 attribution/cause chain。")}</p></div><em>${escapeHtml(report.metrics_and_attribution_s9.status)}</em></header><h3>Tail latency summary</h3>${renderKeyValues(report.metrics_and_attribution_s9.tail_latency_summary)}<h3>${translated("归因守恒与传播审计")}</h3>${renderKeyValues(report.metrics_and_attribution_s9.attribution_audit)}<h3>Request metrics</h3>${renderChecks(report.metrics_and_attribution_s9.request_metrics, "request metrics")}<h3>${translated("后端报告归因")}</h3>${renderChecks(report.metrics_and_attribution_s9.reported_attribution, "reported attribution")}<h3>${translated("后端报告原因链")}</h3>${renderChecks(report.metrics_and_attribution_s9.reported_cause_chain, "reported cause chain")}</section>
-  <section id="run-bound" class="page-section"><header class="section-header"><span>LINK</span><div><small>F6B / WEEK 8</small><h2>${translated("运行绑定证据链")}</h2><p>${translated("仅使用后端稳定 ID、manifest 身份和 JSON Pointer 连接当前 request 的 S1-S9 证据。")}</p></div><em>${escapeHtml(report.run_bound_evidence.contract_state)}</em></header>${renderRunBoundEvidence(report.run_bound_evidence)}</section>
+  <section id="run-bound" class="page-section"><header class="section-header"><span>LINK</span><div><small>REQUEST EVIDENCE</small><h2>${translated("请求证据链")}</h2><p>${translated("仅使用后端稳定 ID、manifest 身份和 JSON Pointer 连接当前 request 的 S1-S9 证据。")}</p></div><em>${escapeHtml(report.run_bound_evidence.contract_state)}</em></header>${renderRunBoundEvidence(report.run_bound_evidence)}</section>
   <section id="design-space" class="page-section"><header class="section-header"><span>DS</span><div><small>S6 DESIGN SPACE</small><h2>${translated("设计空间与选择性 DES")}</h2><p>${translated("保留候选排名、晋级过程、运行实例、证据边界和完整候选字段。")}</p></div><em>${escapeHtml(report.design_space_appendix.availability)}</em></header>${renderDesignSpace(report.design_space_appendix)}</section>
   <section id="appendix" class="page-section"><header class="section-header"><span>RAW</span><div><small>PERFORMANCE EVIDENCE APPENDIX</small><h2>${translated("完整性能证据明细")}</h2><p>${translated("保留结构化视图聚合前的请求、phase、Fabric contribution 和域利用率记录。")}</p></div><em>reported fields</em></header><h3>${translated("Fabric 证据身份")}</h3>${renderKeyValues(report.performance_evidence_appendix.fabric_contract as unknown as Record<string, unknown>)}<details><summary>Workload requests <span>${translated("{count} 条", { count: report.performance_evidence_appendix.workload_requests.length })}</span></summary>${renderChecks(report.performance_evidence_appendix.workload_requests, "workload requests")}</details><details><summary>Request metrics <span>${translated("{count} 条", { count: report.performance_evidence_appendix.request_metrics.length })}</span></summary>${renderChecks(report.performance_evidence_appendix.request_metrics, "request metrics")}</details><details><summary>Phase fabric contributions <span>${translated("{count} 条", { count: report.performance_evidence_appendix.phase_fabric_contributions.length })}</span></summary>${renderChecks(report.performance_evidence_appendix.phase_fabric_contributions, "phase fabric contributions")}</details><details><summary>Request fabric contributions <span>${translated("{count} 条", { count: report.performance_evidence_appendix.request_fabric_contributions.length })}</span></summary>${renderChecks(report.performance_evidence_appendix.request_fabric_contributions, "request fabric contributions")}</details><details><summary>Fabric domain utilization <span>${translated("{count} 条", { count: report.performance_evidence_appendix.fabric_domain_utilization.length })}</span></summary>${renderChecks(report.performance_evidence_appendix.fabric_domain_utilization, "fabric domain utilization")}</details></section>
   <section id="agent" class="page-section agent-pending"><header class="section-header"><span>AI</span><div><small>FUTURE EVIDENCE-AWARE AGENT</small><h2>${translated("根因分析与优化建议")}</h2><p>${escapeHtml(report.agent_analysis.note)}</p></div><em>${escapeHtml(report.agent_analysis.status)}</em></header><div class="two-column"><article><h3>${translated("具体根因")}</h3><p class="empty">${translated("尚未生成")}</p></article><article><h3>${translated("优化建议")}</h3><p class="empty">${translated("尚未生成")}</p></article></div></section>

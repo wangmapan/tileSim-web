@@ -1,16 +1,5 @@
 <script setup lang="ts">
-import {
-  ArrowRight,
-  Braces,
-  ChevronDown,
-  Clock3,
-  FileJson,
-  Gauge,
-  Network,
-  Play,
-  ShieldCheck,
-  Workflow,
-} from "@lucide/vue";
+import { ArrowRight, Braces, ChevronDown, FileJson, Play, Workflow } from "@lucide/vue";
 import StatCard from "../components/StatCard.vue";
 import StatusPill from "../components/StatusPill.vue";
 import { computed } from "vue";
@@ -19,7 +8,7 @@ import { rawArtifactUrl } from "../features/inspect-artifact";
 import { useDashboard } from "../store/dashboard";
 import { useI18n } from "../i18n";
 
-const { state, dashboardView, evidence, setView, filteredRuns, openRun } = useDashboard();
+const { state, dashboardView, setView } = useDashboard();
 const { t } = useI18n();
 const artifactCopy: Record<string, [string, string]> = {
   "input-runtime-trace": ["Runtime trace", "输入"],
@@ -40,12 +29,6 @@ const artifacts = computed(() =>
     bytes: entry.bytes,
   })),
 );
-
-function tailAttributionLabel() {
-  const metric = dashboardView.value.overview.hasTailAttribution;
-  if (metric.availability !== "available") return t("不适用");
-  return metric.value ? t("已生成") : t("未生成");
-}
 </script>
 
 <template>
@@ -121,34 +104,7 @@ function tailAttributionLabel() {
       />
     </section>
 
-    <section class="two-column-layout">
-      <article class="panel">
-        <header class="panel-header">
-          <div>
-            <p class="section-kicker">RUN FACTS</p>
-            <h2>{{ t("本次运行") }}</h2>
-          </div>
-        </header>
-        <dl class="fact-list">
-          <div>
-            <dt><Gauge :size="16" />{{ t("执行边界") }}</dt>
-            <dd>{{ dashboardView.overview.rangeLabel.value || "—" }}</dd>
-          </div>
-          <div>
-            <dt><Network :size="16" />{{ t("统一宿主") }}</dt>
-            <dd>{{ dashboardView.overview.hostPath.value || "—" }}</dd>
-          </div>
-          <div>
-            <dt><ShieldCheck :size="16" />{{ t("证据通道") }}</dt>
-            <dd>{{ evidence.lane.replaceAll("_", " ") }}</dd>
-          </div>
-          <div>
-            <dt><Clock3 :size="16" />{{ t("尾归因") }}</dt>
-            <dd>{{ tailAttributionLabel() }}</dd>
-          </div>
-        </dl>
-      </article>
-
+    <section class="overview-primary-action">
       <article v-if="state.bundle.run?.bottleneck_report" class="panel finding-panel">
         <header class="panel-header">
           <div>
@@ -201,25 +157,5 @@ function tailAttributionLabel() {
         </a>
       </div>
     </details>
-
-    <article v-if="state.bridge.connected && filteredRuns.length" class="panel compact-recent">
-      <header class="panel-header panel-header--row">
-        <div>
-          <p class="section-kicker">RECENT RUNS</p>
-          <h2>{{ t("最近实验") }}</h2>
-        </div>
-        <button class="text-button" @click="setView('history')">{{ t("查看全部") }}<ArrowRight :size="15" /></button>
-      </header>
-      <div class="recent-list">
-        <button v-for="run in filteredRuns.slice(0, 3)" :key="run.run_id" @click="openRun(run.run_id)">
-          <span
-            ><strong>{{ run.run_name || t("未命名实验") }}</strong
-            ><small>{{ run.input_mode || "legacy" }} · {{ run.run_id }}</small></span
-          >
-          <span class="recent-metric">{{ formatNumber(run.digest?.end_to_end_latency_us) }} µs</span
-          ><ArrowRight :size="16" />
-        </button>
-      </div>
-    </article>
   </div>
 </template>

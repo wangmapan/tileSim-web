@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { Bot, Braces, CircleSlash2, FileCheck2, LockKeyhole, Send, ShieldCheck } from "@lucide/vue";
+import { Bot, CircleSlash2, Send, ShieldCheck } from "@lucide/vue";
 import { computed, ref } from "vue";
-import { RouterLink } from "vue-router";
+import { adaptEvidenceAgentDescriptor } from "../../../adapters/evidence-agent-descriptor";
 import type {
   ArtifactManifestResponse,
   ApiManifestResponse,
@@ -13,16 +13,18 @@ import type { ReportBundle, RunInputs } from "../../../contracts/report-model";
 import type {
   EvidenceAgentBinding,
   EvidenceAgentUiState,
-  PendingEvidenceAgentSubmission,
   PreparedEvidenceAgentRequest,
+  RetainedEvidenceAgentSubmission,
   ValidatedEvidenceAgentResult,
 } from "../../../entities/evidence-agent";
 import { useI18n, currentLocale } from "../../../i18n";
-import { artifactEvidenceRoute } from "../../inspect-artifact";
 import { buildRunBoundEvidenceChain } from "../../run-bound-evidence";
 import { buildStructuredPerformanceReport } from "../../structured-report";
 import { EvidenceAgentContractError } from "../errors";
+import { evidenceAgentStatusLabels, evidenceAgentTaskLabels } from "../presentation";
 import { buildEvidenceAgentRequest, evidenceAgentBackendIdentity } from "../request-builder";
+import EvidenceAgentContractPolicy from "./EvidenceAgentContractPolicy.vue";
+import EvidenceAgentResultPanel from "./EvidenceAgentResultPanel.vue";
 
 const props = defineProps<{
   descriptor: EvidenceAgentDescriptorResponse | null;
@@ -38,7 +40,7 @@ const props = defineProps<{
   inputs: RunInputs;
   agentState: EvidenceAgentUiState;
   agentResult: ValidatedEvidenceAgentResult | null;
-  pending: PendingEvidenceAgentSubmission | null;
+  pending: RetainedEvidenceAgentSubmission | null;
   submissionError: string;
 }>();
 const emit = defineEmits<{
@@ -52,6 +54,7 @@ const taskKind = ref<EvidenceAgentRequest["task_kind"]>("explain_p99");
 const localError = ref("");
 
 const backendIdentity = computed(() => evidenceAgentBackendIdentity(props.health));
+const descriptorPolicy = computed(() => (props.descriptor ? adaptEvidenceAgentDescriptor(props.descriptor) : null));
 const chain = computed(() =>
   buildRunBoundEvidenceChain({
     runId: props.runId,
@@ -87,32 +90,9 @@ const canSubmit = computed(
       props.selectedRequestId &&
       question.value.trim(),
     ) &&
-    props.agentState !== "submitting",
+    !["submitting", "terminal_result_not_retained", "idempotency_payload_mismatch"].includes(props.agentState) &&
+    !(props.pending && props.agentState === "stale"),
 );
-const visibleClaims = computed(() => (props.agentState === "stale" ? [] : props.agentResult?.response.claims || []));
-const statusLabels: Record<string, string> = {
-  idle: "等待提问",
-  submitting: "正在生成证据草稿",
-  available_draft: "待确认草稿",
-  refused: "已拒答",
-  partial: "部分结果",
-  truncated: "输出已截断",
-  timeout: "请求超时",
-  cancelled: "请求已取消",
-  stale: "结果已过期",
-  concurrency_limit: "并发槽已占用",
-  provider_unavailable: "Provider 未配置",
-  provider_disabled: "Provider 已禁用",
-  unsupported_schema: "不支持的 Schema",
-  contract_error: "Agent 契约不可用",
-};
-
-const taskLabels: Record<EvidenceAgentRequest["task_kind"], string> = {
-  explain_p99: "解释 P99",
-  explain_tail: "解释尾延迟",
-  summarize_validation: "总结验证边界",
-  draft_conditional_recommendations: "起草条件建议",
-};
 
 function currentClientRequestId() {
   const pending = props.pending;
@@ -169,15 +149,6 @@ async function submit() {
       error instanceof EvidenceAgentContractError ? error.code : error instanceof Error ? error.message : String(error);
   }
 }
-
-function citationRoute(citation: (typeof visibleClaims.value)[number]["citations"][number]) {
-  return artifactEvidenceRoute({
-    runId: citation.run_id,
-    artifactId: citation.artifact_id,
-    sha256: citation.sha256,
-    pointer: citation.json_pointer,
-  });
-}
 </script>
 
 <template>
@@ -186,12 +157,12 @@ function citationRoute(citation: (typeof visibleClaims.value)[number]["citations
       <header>
         <div class="evidence-agent-icon"><Bot :size="24" /></div>
         <div>
-          <p class="section-kicker">F9B · READ-ONLY EVIDENCE AGENT</p>
+          <p class="section-kicker">READ-ONLY EVIDENCE ANALYSIS</p>
           <h2 id="evidence-agent-title">{{ t("只读证据 Agent") }}</h2>
           <p>{{ t("只在已验证的 run、artifact、SHA-256、JSON Pointer 与 stable subject 上生成独立草稿。") }}</p>
         </div>
         <span class="evidence-agent-state" :data-state="displayState">{{
-          t(statusLabels[displayState] || displayState)
+          t(evidenceAgentStatusLabels[displayState] || displayState)
         }}</span>
       </header>
 
@@ -203,6 +174,10 @@ function citationRoute(citation: (typeof visibleClaims.value)[number]["citations
         <div>
           <small>{{ t("Schema revision") }}</small
           ><code>{{ descriptor.schema_set_revision }}</code>
+        </div>
+        <div>
+          <small>{{ t("Descriptor revision") }}</small
+          ><code>{{ descriptor.descriptor_revision }}</code>
         </div>
         <div>
           <small>{{ t("Provider / model") }}</small
@@ -224,61 +199,17 @@ function citationRoute(citation: (typeof visibleClaims.value)[number]["citations
       </div>
     </section>
 
-    <section v-if="descriptor" class="evidence-agent-contract-grid">
-      <article class="panel evidence-agent-contract-card">
-        <header>
-          <LockKeyhole :size="18" /><strong>{{ t("工具与安全边界") }}</strong>
-        </header>
-        <dl>
-          <div>
-            <dt>{{ t("允许") }}</dt>
-            <dd>
-              <code>{{ descriptor.tools.allowed.join(" · ") }}</code>
-            </dd>
-          </div>
-          <div>
-            <dt>{{ t("禁止") }}</dt>
-            <dd>
-              <code>{{ descriptor.tools.forbidden.join(" · ") }}</code>
-            </dd>
-          </div>
-          <div>
-            <dt>{{ t("扩张 allow-list") }}</dt>
-            <dd>
-              <code>{{ descriptor.tools.allow_list_expansion }}</code>
-            </dd>
-          </div>
-        </dl>
-      </article>
-      <article class="panel evidence-agent-contract-card">
-        <header>
-          <FileCheck2 :size="18" /><strong>{{ t("执行与留存") }}</strong>
-        </header>
-        <dl>
-          <div>
-            <dt>{{ t("执行模式") }}</dt>
-            <dd>
-              <code>{{ descriptor.execution.mode }}</code>
-            </dd>
-          </div>
-          <div>
-            <dt>{{ t("超时") }}</dt>
-            <dd>{{ descriptor.execution.timeout_ms }} ms</dd>
-          </div>
-          <div>
-            <dt>{{ t("留存") }}</dt>
-            <dd>
-              <code>{{ descriptor.persistence.mode }}</code>
-            </dd>
-          </div>
-        </dl>
-      </article>
-    </section>
+    <EvidenceAgentContractPolicy
+      v-if="descriptor && descriptorPolicy"
+      :descriptor="descriptor"
+      :policy="descriptorPolicy"
+      :api-manifest="apiManifest"
+    />
 
     <section class="panel evidence-agent-compose">
       <header class="panel-header">
         <div>
-          <p class="section-kicker">RUN-BOUND SNAPSHOT</p>
+          <p class="section-kicker">VERIFIED RUN SNAPSHOT</p>
           <h2>{{ t("准备证据问题") }}</h2>
           <p>{{ t("只有 supported artifact 和精确 stable-ID Pointer 会进入请求 allow-list。") }}</p>
         </div>
@@ -300,7 +231,7 @@ function citationRoute(citation: (typeof visibleClaims.value)[number]["citations
           <span>{{ t("任务类型") }}</span>
           <select v-model="taskKind" :disabled="!capabilityAvailable">
             <option v-for="kind in descriptor?.supported_task_kinds || []" :key="kind" :value="kind">
-              {{ t(taskLabels[kind]) }}
+              {{ t(evidenceAgentTaskLabels[kind]) }}
             </option>
           </select>
         </label>
@@ -323,8 +254,65 @@ function citationRoute(citation: (typeof visibleClaims.value)[number]["citations
         </div>
         <div v-if="pending" class="evidence-agent-pending" role="status">
           <code>{{ pending.idempotencyKey }}</code>
-          <span>{{ t("仅同一 canonical payload 可复用该 Idempotency-Key。") }}</span>
-          <button class="button button--secondary" @click="emit('discardPending')">{{ t("放弃待恢复请求") }}</button>
+          <span v-if="agentState === 'terminal_result_not_retained'">
+            {{
+              t(
+                "Bridge 重启后未保留先前 claims 终态；原 Idempotency-Key 已锁定，前端不会换 key、重调 Provider 或标记为已恢复。",
+              )
+            }}
+          </span>
+          <span v-else-if="agentState === 'idempotency_payload_mismatch'">
+            {{
+              t(
+                "Bridge 已拒绝同一 Idempotency-Key 下的不同 canonical payload；原 key 保持锁定，不会自动重试或调用 Provider。",
+              )
+            }}
+          </span>
+          <span v-else-if="agentState === 'stale'">
+            {{
+              t(
+                "当前 run、backend、schema revision 或 snapshot digest 已变化；旧 Idempotency-Key 保持锁定，需显式放弃后才能开始新分析。",
+              )
+            }}
+          </span>
+          <span v-else>{{ t("仅同一 canonical payload 可复用该 Idempotency-Key。") }}</span>
+          <button
+            class="button button--secondary"
+            :disabled="agentState === 'submitting'"
+            @click="emit('discardPending')"
+          >
+            {{
+              agentState === "terminal_result_not_retained"
+                ? t("明确放弃该终态并开始新分析")
+                : agentState === "idempotency_payload_mismatch"
+                  ? t("明确放弃旧分析并开始新分析")
+                  : t("明确放弃当前分析并开始新分析")
+            }}
+          </button>
+        </div>
+        <div v-if="agentState === 'idempotency_payload_mismatch'" class="evidence-agent-unavailable" role="alert">
+          <CircleSlash2 :size="20" />
+          <div>
+            <strong>{{ t("幂等键已绑定到不同载荷") }}</strong>
+            <p>
+              {{ t("当前请求不会以该 key 重试，也不会自动换 key 调用 Provider；只有显式放弃后才能创建新的分析请求。") }}
+            </p>
+            <code>idempotency_payload_mismatch</code>
+          </div>
+        </div>
+        <div v-if="agentState === 'terminal_result_not_retained'" class="evidence-agent-unavailable" role="alert">
+          <CircleSlash2 :size="20" />
+          <div>
+            <strong>{{ t("无法恢复先前的 claims 终态") }}</strong>
+            <p>
+              {{
+                t(
+                  "当前 metadata-only 留存无法跨 Bridge 进程重放完整模型结果。不会自动调用 Provider；只有显式放弃后才能创建新的分析请求。",
+                )
+              }}
+            </p>
+            <code>terminal_result_not_retained</code>
+          </div>
         </div>
         <p v-if="localError || submissionError" class="evidence-agent-error" role="alert">
           {{ localError || submissionError }}
@@ -332,58 +320,6 @@ function citationRoute(citation: (typeof visibleClaims.value)[number]["citations
       </div>
     </section>
 
-    <section v-if="agentResult" class="panel evidence-agent-result" :aria-label="t('Agent 独立草稿')">
-      <header class="panel-header">
-        <div>
-          <p class="section-kicker">ATOMIC CLAIMS · USER CONFIRMATION REQUIRED</p>
-          <h2>{{ t("Agent 独立草稿") }}</h2>
-          <p>{{ t("每条事实单独验证引用；结果不会覆盖 deterministic report。") }}</p>
-        </div>
-        <span class="evidence-agent-state" :data-state="agentState">{{
-          t(statusLabels[agentState] || agentState)
-        }}</span>
-      </header>
-      <div v-if="agentState === 'stale'" class="evidence-agent-unavailable" role="alert">
-        <CircleSlash2 :size="20" />
-        <div>
-          <strong>{{ t("结果与当前 run 不再匹配") }}</strong>
-          <p>{{ t("已隐藏旧 claims，不能挂接到当前证据。") }}</p>
-        </div>
-      </div>
-      <div v-else-if="agentResult.response.refusal" class="evidence-agent-unavailable" role="status">
-        <CircleSlash2 :size="20" />
-        <div>
-          <strong>{{ agentResult.response.refusal.reason_code }}</strong>
-          <p>{{ agentResult.response.refusal.detail }}</p>
-        </div>
-      </div>
-      <ol v-else class="evidence-agent-claims">
-        <li v-for="claim in visibleClaims" :key="claim.claim_id">
-          <header>
-            <code>{{ claim.claim_kind }}</code
-            ><span>{{ claim.claim_id }}</span>
-          </header>
-          <p>{{ claim.text }}</p>
-          <div class="evidence-agent-citations">
-            <RouterLink
-              v-for="citation in claim.citations"
-              :key="`${citation.artifact_id}:${citation.json_pointer}:${citation.subject.kind}:${citation.subject.id}`"
-              :to="citationRoute(citation)"
-            >
-              <Braces :size="14" /><span
-                ><code>{{ citation.artifact_id }}{{ citation.json_pointer }}</code
-                ><small
-                  >{{ citation.subject.kind }} · {{ citation.subject.id }} · {{ citation.availability
-                  }}<template v-if="citation.value">
-                    · {{ citation.value.decimal
-                    }}<template v-if="citation.unit"> {{ citation.unit }}</template></template
-                  ></small
-                ></span
-              >
-            </RouterLink>
-          </div>
-        </li>
-      </ol>
-    </section>
+    <EvidenceAgentResultPanel v-if="agentResult" :agent-state="agentState" :agent-result="agentResult" />
   </div>
 </template>

@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ArrowDown, ArrowUp, TimerReset } from "@lucide/vue";
-import { computed } from "vue";
 import EmptyState from "../components/EmptyState.vue";
 import StatCard from "../components/StatCard.vue";
 import StatusPill from "../components/StatusPill.vue";
@@ -9,14 +8,13 @@ import { useDashboard } from "../store/dashboard";
 import type { LosslessInteger, SourcedValue } from "../contracts/report-model";
 import { useI18n } from "../i18n";
 import ArtifactEvidenceLink from "../components/ArtifactEvidenceLink.vue";
-import { RequestEvidenceAction, RunBoundEvidencePanel } from "../features/run-bound-evidence";
+import { RequestEvidenceAction } from "../features/run-bound-evidence";
 import { requestMetricSource } from "../features/execution-inspector";
 import { useEvidenceSelectionStore } from "../stores/evidence-selection";
 
 const { state, dashboardView } = useDashboard();
 const { t } = useI18n();
 const evidenceSelection = useEvidenceSelectionStore();
-const selectedEvidenceRequestId = computed(() => evidenceSelection.requestForRun(state.runId));
 
 function selectEvidenceRequest(requestId: string) {
   if (state.runId) evidenceSelection.select(state.runId, requestId);
@@ -67,15 +65,6 @@ function metricValue(metric: SourcedValue<number | LosslessInteger>, unit: strin
       <ArtifactEvidenceLink :source-path="dashboardView.metrics.tpotP95Ps.sourcePaths[0]" label="TPOT P95 证据" />
       <ArtifactEvidenceLink :source-path="dashboardView.metrics.endToEndP95Ps.sourcePaths[0]" label="端到端 P95 证据" />
     </nav>
-
-    <RunBoundEvidencePanel
-      :run-id="state.runId"
-      :bundle="state.bundle"
-      :inputs="state.inputs"
-      :artifact-manifest="state.artifactManifest"
-      :selected-request-id="selectedEvidenceRequestId"
-      @request-selected="selectEvidenceRequest"
-    />
 
     <article class="panel">
       <header class="panel-header panel-header--row">

@@ -618,7 +618,6 @@ details > summary:hover {
 }
 @keyframes surface-enter {
   from {
-    opacity: 0;
     transform: translateY(5px);
   }
 }

@@ -137,12 +137,30 @@ appearance: light | dark
 | 阶段   | 状态   | 已完成结果                                                                       |
 | ------ | ------ | -------------------------------------------------------------------------------- |
 | 阶段一 | 已完成 | appearance 独立状态、持久化、双语切换控件、深色 token、ECharts 主题联动          |
-| 阶段二 | 已完成 | 1440px 桌面工作区、全局排版与间距、语义化表面层级、受控动效和 reduced motion     |
+| 阶段二 | 已完成 | 1320px 内容工作区、全局排版与间距、语义化表面层级、受控动效和 reduced motion     |
 | 阶段三 | 已完成 | Overview、Execution/F6B、证据页、Experiment、History 与 Design Space 视觉精修    |
 | 阶段四 | 已完成 | 契约/依赖/类型/lint/format/build、107 个前端测试和 20 个桌面 Playwright 全部通过 |
 
 人工检查覆盖了浅色主证据页、未知 Schema fail-closed 页和 Mint 深色证据页。更新视觉快照前均核对了
 canonical flow、S3/S4/S5 并列关系、S7-S9 输出面、原始 JSON 完整性和桌面 overflow。
+
+### 信息架构去重（2026-08-31）
+
+本轮在不改变报告事实、契约状态和稳定证据身份的前提下，将页面组织从“同一能力在多页完整重复”调整为
+“一个页面回答一个主问题”：
+
+- `请求证据` 是完整 F6B run-bound chain 的唯一主工作区；从 P99/request 展示 S1、并列 S3/S4/S5、S6 和
+  S7/S8/S9 输出面。
+- `分层结果` 只负责 S0-S6 canonical flow、当前 subsystem detail、S7 execution envelope 和资源汇合。
+- `性能指标` 保留指标、request 列表和轻量“查看证据链”入口，不再嵌入完整 F6B panel。
+- `验证边界` 只负责 provenance、fidelity、coverage 与 contract gap，不再复制 request chain。
+- `请求证据` 内用两个同级视图分离“跨子系统证据链”和“S9 尾延迟归因”，避免同时纵向展开两套证据。
+- `运行概览` 删除与顶部证据条重复的 Run Facts，以及已有独立页面承载的 Recent Runs。
+- 侧栏按“分析 / 实验 / 工具”重组；页头、证据条、panel 间距和工作区宽度统一压缩。
+
+F6B 不再作为跨页面重复出现的阶段 banner。原始 JSON、稳定 ID、SHA-256、JSON Pointer、contract status 和
+degradation 仍完整保留，只改变首屏层级、默认 disclosure 状态和页面归属。视觉回归覆盖浅色请求证据页、深色
+分层结果页、长中英文 ID、axe、键盘路径及桌面 overflow。
 
 ### 阶段一：外观基础设施
 

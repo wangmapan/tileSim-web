@@ -44,10 +44,21 @@ export const englishCatalog: Readonly<Record<string, string>> = {
   "Fabric 分析": "Fabric analysis",
   "域、利用率与背压": "Domains, utilization, and backpressure",
   尾延迟归因: "Tail-latency attribution",
+  请求证据: "Request evidence",
+  验证边界: "Validation boundary",
+  查看证据链: "View evidence chain",
+  跨子系统证据链: "Cross-subsystem evidence chain",
+  "S9 尾延迟归因": "S9 tail-latency attribution",
+  请求证据视图: "Request evidence views",
+  证据边界受限: "Evidence scope limited",
+  跨子系统关联链与尾归因: "Cross-subsystem evidence chain and tail attribution",
+  "来源、保真度与缺口": "Provenance, fidelity, and gaps",
+  "证据 Agent": "Evidence Agent",
+  校准与血缘: "Calibration and lineage",
+  "校准、血缘与固定工具": "Calibration, lineage, and fixed tools",
   跨子系统贡献: "Cross-subsystem contributions",
   证据与验证: "Evidence and validation",
   来源与保真度: "Provenance and fidelity",
-  "Week 7 证据链": "Week 7 evidence chain",
   "校准、血缘与 Agent": "Calibration, lineage, and Agent",
   "校准、证据血缘与确定性编排": "Calibration, evidence lineage, and deterministic orchestration",
   "直接读取最新本地 TileSim 的内置只读示例，展示后端实际报告；页面不重算指标，也不接受任意路径或 CLI 参数。":
@@ -57,7 +68,7 @@ export const englishCatalog: Readonly<Record<string, string>> = {
   当前证据边界: "Current evidence boundary",
   "校准结果仅证明离线 fixture 工作流一致性，不是 H100、CUDA、NCCL、DCGM 或 PAPI 的真实测量，不能据此生成保真度百分比或真实 held-out fidelity 声明。":
     "Calibration results prove only offline-fixture workflow consistency. They are not real H100, CUDA, NCCL, DCGM, or PAPI measurements and cannot support a fidelity percentage or real held-out fidelity claim.",
-  "Week 7 证据读取失败": "Failed to read Week 7 evidence",
+  校准证据读取失败: "Failed to read calibration evidence",
   重试: "Retry",
   "正在运行固定的只读证据工作流…": "Running the fixed read-only evidence workflows…",
   离线校准工作流: "Offline calibration workflow",
@@ -581,7 +592,7 @@ export const englishCatalog: Readonly<Record<string, string>> = {
   "候选包含后端内部运行实例 ID，不等同于可导航的 Bridge run":
     "Candidates contain backend-internal run-instance IDs; these are not navigable Bridge runs",
   "Fabric 与设计空间契约状态": "Fabric and design-space contract status",
-  "F7 契约能力": "F7 contract capabilities",
+  设计空间契约能力: "Design-space contract capabilities",
   "Fabric 证据身份": "Fabric evidence identity",
   "available 只表示可展示后端事实；contract_gap 项不会由前端排序、计算或文本解析补齐。":
     "Available means backend facts may be displayed; contract_gap items are never filled through frontend sorting, computation, or text parsing.",
@@ -700,7 +711,7 @@ export const englishCatalog: Readonly<Record<string, string>> = {
   执行依赖与边界: "Execution dependencies and boundaries",
   "选项来自后端能力发现；不可用能力不会静默降级。":
     "Options come from backend capability discovery; unavailable capabilities do not silently degrade.",
-  "F8 编排契约": "F8 orchestration contract",
+  实验编排契约: "Experiment orchestration contract",
   "顶层选项来自 create-run schema 与运行时 capabilities 的交集。":
     "Top-level options come from the intersection of the create-run schema and runtime capabilities.",
   仍需后端契约: "Backend contract still required",
@@ -791,7 +802,7 @@ export const englishCatalog: Readonly<Record<string, string>> = {
   "S7 执行宿主": "S7 execution host",
   "S8 验证": "S8 validation",
   "S9 指标与归因": "S9 metrics and attribution",
-  运行绑定证据链: "Run-bound evidence chain",
+  请求证据链: "Request evidence chain",
   "仅使用后端稳定 ID、manifest 身份和 JSON Pointer 连接当前 request 的 S1-S9 证据。":
     "Connect S1-S9 evidence for the current request using only backend stable IDs, manifest identity, and JSON Pointers.",
   "未选择 request；导出不会自动选择 P99": "No request selected; the export does not auto-select P99",
@@ -799,7 +810,7 @@ export const englishCatalog: Readonly<Record<string, string>> = {
   "未选择 request，因此没有生成 S1-S9 run-bound 节点":
     "No request was selected, so no S1-S9 run-bound nodes were generated",
   请求选择: "Request selection",
-  "Week 8 执行摘要": "Week 8 execution summary",
+  "S7 执行摘要": "S7 execution summary",
   "后端声明的 P99 subjects": "Backend-declared P99 subjects",
   "P99 subject": "P99 subject",
   并列资源语义: "Peer resource semantics",
@@ -913,8 +924,8 @@ export const englishCatalog: Readonly<Record<string, string>> = {
     "The backend does not yet provide a structured percentile → request identity, so the frontend does not infer a P99 request.",
   "Tail cause/ranking 尚无结构化 EvidenceRef，不能从具体 cause 精确跳到 S3/S4/S5/S6。":
     "Tail causes/rankings lack structured EvidenceRefs, so a specific cause cannot link exactly to S3/S4/S5/S6.",
-  "S7 stage 与 S8 check 尚无 request/cause subject_refs；Week 8 partition/checkpoint 也未作为 run artifact 暴露。":
-    "S7 stages and S8 checks lack request/cause subject_refs; Week 8 partition/checkpoint data is also not exposed as run artifacts.",
+  "S7 stage 与 S8 check 尚无 request/cause subject_refs；partition/checkpoint 数据也未作为 run artifact 暴露。":
+    "S7 stages and S8 checks lack request/cause subject_refs; partition/checkpoint data is also not exposed as run artifacts.",
   已绑定: "Bound",
   部分证据: "Partial evidence",
   "仅 run 级": "Run scope only",
@@ -950,7 +961,7 @@ export const englishCatalog: Readonly<Record<string, string>> = {
   "展开完整证据（{count} 项）": "Expand complete evidence ({count} items)",
   "unsupported schema · 失败关闭": "Unsupported schema · fail closed",
   关联契约与降级详情: "Link contract and degradation details",
-  "Run-bound DES 执行证据": "Run-bound DES execution evidence",
+  执行详情: "Execution details",
   "解析 fidelity": "Resolved fidelity",
   已使用: "Used",
   未使用: "Not used",
@@ -1000,13 +1011,13 @@ export const englishCatalog: Readonly<Record<string, string>> = {
   "S6 phase 缺少稳定 phase_id。": "The S6 phase lacks a stable phase_id.",
   "使用 request_id 唯一匹配，并以 phase_id 作为 S6 实体身份。":
     "Use an exact request_id match and phase_id as the S6 entity identity.",
-  "旧报告只能确认 run-level association，不能声称完整 F6B closure。":
-    "The legacy report confirms only a run-level association and cannot claim complete F6B closure.",
+  "旧报告只能确认 run-level association，不能声称完整跨子系统证据闭环。":
+    "The legacy report confirms only a run-level association and cannot claim a complete cross-subsystem evidence chain.",
   "没有匹配当前 request 的 subject_refs。": "No subject_refs match the current request.",
-  "本次运行明确不适用 DES-only Week 8 artifact。":
-    "The DES-only Week 8 artifact is explicitly not applicable to this run.",
-  "当前 run 未提供 Week 8 execution artifact。": "The current run provides no Week 8 execution artifact.",
-  "Week 8 artifact 的 run_id 与当前运行不一致。": "The Week 8 artifact run_id does not match the current run.",
+  "本次运行明确不适用 DES execution artifact。": "The DES execution artifact is explicitly not applicable to this run.",
+  "当前 run 未提供 S7 execution artifact。": "The current run provides no S7 execution artifact.",
+  "S7 execution artifact 的 run_id 与当前运行不一致。":
+    "The S7 execution artifact run_id does not match the current run.",
   "后端明确使用 single-process fallback；以 partial 展示，不升级为 partitioned DES。":
     "The backend explicitly used the single-process fallback; show it as partial without upgrading it to partitioned DES.",
   "后端报告 partitioned DES，并保留 differential、stream 与 checkpoint metadata。":
@@ -1088,7 +1099,7 @@ export const englishCatalog: Readonly<Record<string, string>> = {
   "resolved fidelity 仅从运行后的 execution envelope 与 validation 读取。":
     "Resolved fidelity is read only from the post-run execution envelope and validation report.",
   输入来源与允许声明: "Input provenance and allowed claims",
-  "F8 实验契约不可用：{detail}": "The F8 experiment contract is unavailable: {detail}",
+  "实验编排契约不可用：{detail}": "The experiment orchestration contract is unavailable: {detail}",
   当前查看的子系统: "Selected subsystem",
   对应详情已显示在下方: "Its details are shown directly below",
   "只读证据 Agent": "Read-only evidence Agent",
@@ -1097,6 +1108,7 @@ export const englishCatalog: Readonly<Record<string, string>> = {
     "Generate a separate draft only from a verified run, artifact, SHA-256, JSON Pointer, and stable subject.",
   Descriptor: "Descriptor",
   "Schema revision": "Schema revision",
+  "Descriptor revision": "Descriptor revision",
   "Provider / model": "Provider / model",
   "Model revision": "Model revision",
   正式能力当前不可用: "The formal capability is currently unavailable",
@@ -1104,10 +1116,48 @@ export const englishCatalog: Readonly<Record<string, string>> = {
   允许: "Allowed",
   禁止: "Forbidden",
   "扩张 allow-list": "Allow-list expansion",
+  执行宿主: "Execution host",
+  "非 causal ranking": "Excluded from causal ranking",
   执行与留存: "Execution and retention",
+  重放与终态恢复: "Replay and terminal recovery",
   执行模式: "Execution mode",
   超时: "Timeout",
   留存: "Retention",
+  留存记录: "Retention record",
+  载荷留存: "Payload retention",
+  进程内重放: "In-process replay",
+  "进程内精确 replay": "Exact in-process replay",
+  "同 key、同 canonical payload 精确返回同一终态，不再次调用 Provider。":
+    "The same key and canonical payload return the exact same terminal without calling the Provider again.",
+  "重启后 Bridge 终态": "Bridge terminal after restart",
+  "重启后 claims 终态": "Claims terminal after restart",
+  "claim-free Bridge terminal": "Claim-free Bridge terminal",
+  "metadata-only record 可在 Bridge 重启后精确恢复。":
+    "A metadata-only record can restore the exact terminal after a Bridge restart.",
+  "claims-bearing terminal": "Claims-bearing terminal",
+  "模型 claims 不留存；Bridge 重启后返回正式 409。":
+    "Model claims are not retained; a Bridge restart returns the formal 409 response.",
+  "claim-free Provider terminal": "Claim-free Provider terminal",
+  "Provider terminal payload 不留存；Bridge 重启后返回正式 409。":
+    "Provider terminal payloads are not retained; a Bridge restart returns the formal 409 response.",
+  "Provider 重新调用": "Provider reinvocation",
+  "不可恢复分支禁止重新调用 Provider。": "Unrecoverable branches forbid Provider reinvocation.",
+  "metadata-only retention": "Metadata-only retention",
+  记录类型: "Record type",
+  存储范围: "Storage scope",
+  "记录 Schema": "Record schema",
+  保留时间: "Retention period",
+  全部禁止留存项: "All prohibited retention classes",
+  用户问题: "User question",
+  "snapshot payload": "Snapshot payload",
+  "artifact payload": "Artifact payload",
+  "Provider raw response": "Provider raw response",
+  "validated model claims": "Validated model claims",
+  credential: "Credential",
+  "hidden reasoning": "Hidden reasoning",
+  允许留存: "Retention allowed",
+  禁止留存: "Retention prohibited",
+  "正式 HTTP 终态": "Formal HTTP terminals",
   准备证据问题: "Prepare an evidence question",
   "只有 supported artifact 和精确 stable-ID Pointer 会进入请求 allow-list。":
     "Only supported artifacts and exact stable-ID Pointers enter the request allow-list.",
@@ -1121,16 +1171,35 @@ export const englishCatalog: Readonly<Record<string, string>> = {
   "正在生成…": "Generating…",
   "仅同一 canonical payload 可复用该 Idempotency-Key。":
     "Only the same canonical payload may reuse this Idempotency-Key.",
+  "Bridge 重启后未保留先前 claims 终态；原 Idempotency-Key 已锁定，前端不会换 key、重调 Provider 或标记为已恢复。":
+    "The prior claims terminal was not retained across the Bridge restart. The original Idempotency-Key remains locked; the frontend will not rotate the key, call the Provider again, or mark the result as recovered.",
+  明确放弃该终态并开始新分析: "Explicitly discard this terminal and start a new analysis",
+  "无法恢复先前的 claims 终态": "The prior claims terminal cannot be recovered",
+  "当前 metadata-only 留存无法跨 Bridge 进程重放完整模型结果。不会自动调用 Provider；只有显式放弃后才能创建新的分析请求。":
+    "The current metadata-only retention cannot replay a complete model result across Bridge processes. The Provider is not called automatically; a new analysis can be created only after an explicit discard.",
+  "Bridge 已拒绝同一 Idempotency-Key 下的不同 canonical payload；原 key 保持锁定，不会自动重试或调用 Provider。":
+    "The Bridge rejected a different canonical payload under the same Idempotency-Key. The original key remains locked; the frontend will not retry automatically or call the Provider.",
+  "当前 run、backend、schema revision 或 snapshot digest 已变化；旧 Idempotency-Key 保持锁定，需显式放弃后才能开始新分析。":
+    "The current run, backend, schema revision, or snapshot digest changed. The old Idempotency-Key remains locked until the analysis is explicitly discarded.",
+  幂等键已绑定到不同载荷: "The idempotency key is bound to a different payload",
+  "当前请求不会以该 key 重试，也不会自动换 key 调用 Provider；只有显式放弃后才能创建新的分析请求。":
+    "The current request will not retry with this key or rotate the key to call the Provider automatically. A new analysis can be created only after an explicit discard.",
   放弃待恢复请求: "Discard recoverable request",
+  明确放弃旧分析并开始新分析: "Explicitly discard the old analysis and start a new analysis",
+  明确放弃当前分析并开始新分析: "Explicitly discard the current analysis and start a new analysis",
   "Agent 独立草稿": "Separate Agent draft",
   "每条事实单独验证引用；结果不会覆盖 deterministic report。":
     "Citations are verified for each fact independently; the result does not overwrite the deterministic report.",
   "结果与当前 run 不再匹配": "The result no longer matches the current run",
   "已隐藏旧 claims，不能挂接到当前证据。": "Stale claims are hidden and cannot attach to current evidence.",
+  结果与当前证据绑定不再匹配: "The result no longer matches the current evidence binding",
+  "run、backend、schema revision 或 snapshot digest 已变化；旧 claims 已隐藏。":
+    "The run, backend, schema revision, or snapshot digest changed; stale claims are hidden.",
   等待提问: "Waiting for a question",
   正在生成证据草稿: "Generating an evidence draft",
   待确认草稿: "Draft awaiting confirmation",
   已拒答: "Refused",
+  "Provider 响应失败": "Provider response failed",
   部分结果: "Partial result",
   输出已截断: "Output truncated",
   请求超时: "Request timed out",
@@ -1138,12 +1207,15 @@ export const englishCatalog: Readonly<Record<string, string>> = {
   结果已过期: "Result stale",
   并发槽已占用: "Concurrency slot occupied",
   "Provider 未配置": "Provider not configured",
+  "Provider 不可用": "Provider unavailable",
   "Provider 已禁用": "Provider disabled",
+  终态结果未留存: "Terminal result not retained",
+  幂等载荷不匹配: "Idempotency payload mismatch",
   "Agent 契约不可用": "Agent contract unavailable",
   "解释 P99": "Explain P99",
   解释尾延迟: "Explain tail latency",
   总结验证边界: "Summarize validation boundary",
   起草条件建议: "Draft conditional recommendations",
-  "F9 Agent 契约不可用：{detail}": "The F9 Agent contract is unavailable: {detail}",
-  "F9 Agent 请求失败。": "The F9 Agent request failed.",
+  "证据 Agent 契约不可用：{detail}": "The evidence Agent contract is unavailable: {detail}",
+  "证据 Agent 请求失败。": "The evidence Agent request failed.",
 };

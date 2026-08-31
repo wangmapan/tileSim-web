@@ -16,6 +16,7 @@ const schemaNames = [
   "evidence-agent-request.schema.json",
   "evidence-agent-response.schema.json",
   "evidence-agent-descriptor.schema.json",
+  "evidence-agent-terminal-record.schema.json",
   "api-manifest.schema.json",
 ];
 const schemas = schemaNames.map((name) => readJson(path.join(schemaRoot, name)));
@@ -49,9 +50,21 @@ const generated = JSON.parse(runtime.stdout);
 expectValid(validator("evidence-agent-descriptor.schema.json"), generated.descriptor);
 expectValid(validator("api-manifest.schema.json"), generated.manifest);
 assert.equal(generated.descriptor.availability, "unavailable");
+assert.equal(generated.descriptor.schema_version, "tilesim.bridge.evidence_agent_descriptor.v2");
 assert.equal(generated.descriptor.degradation.reason_code, "provider_unavailable");
 assert.equal(generated.descriptor.provider.configured, false);
 assert.equal(generated.descriptor.digest_contract.canonicalization, "tilesim.bridge.canonical_json.v1");
+const availableDescriptor = structuredClone(generated.descriptor);
+availableDescriptor.availability = "available";
+availableDescriptor.degradation = { state: "none", reason_code: "none", detail: "Authenticated probe passed." };
+availableDescriptor.availability_predicate.evaluated_available = true;
+availableDescriptor.provider = {
+  configured: true,
+  provider_id: "tilesim_json_https_v1",
+  model_id: "evidence-model",
+  model_revision: "evidence-model-revision",
+};
+expectValid(validator("evidence-agent-descriptor.schema.json"), availableDescriptor);
 assert.deepEqual(generated.descriptor.digest_contract.input_snapshot_material_fields, [
   "schema_version",
   "schema_set_revision",
@@ -60,6 +73,46 @@ assert.deepEqual(generated.descriptor.digest_contract.input_snapshot_material_fi
   "snapshot_reference",
   "artifact_allow_list",
 ]);
+assert.deepEqual(generated.descriptor.execution.retry, {
+  payload_identity: "tilesim.bridge.canonical_json.v1_sha256",
+  same_key_same_canonical_payload: {
+    in_process: "exact_terminal_replay",
+    after_restart_claim_free_bridge_terminal: "exact_terminal_replay_from_redacted_record",
+    after_restart_claims_bearing_terminal: "error_terminal_result_not_retained",
+    after_restart_claim_free_provider_terminal: "error_terminal_result_not_retained",
+    provider_reinvocation: "forbidden",
+  },
+  same_key_different_canonical_payload: {
+    outcome: "error",
+    http_status: 409,
+    code: "idempotency_payload_mismatch",
+    field_path: "/headers/Idempotency-Key",
+    retryable: false,
+  },
+});
+assert.deepEqual(generated.descriptor.execution.terminal_recovery.claims_bearing_terminal, {
+  outcome: "error",
+  http_status: 409,
+  code: "terminal_result_not_retained",
+  field_path: "/headers/Idempotency-Key",
+  retryable: false,
+});
+assert.deepEqual(generated.descriptor.persistence.mode, {
+  storage_scope: "run_local",
+  record_kind: "redacted_terminal_metadata_only",
+  record_schema_identity: "tilesim.bridge.evidence_agent_terminal_record.v2",
+});
+assert.equal(generated.descriptor.persistence.payload_retention.user_question_retained, false);
+assert.equal(generated.descriptor.persistence.payload_retention.snapshot_payload_retained, false);
+assert.equal(generated.descriptor.persistence.payload_retention.artifact_payload_retained, false);
+assert.equal(generated.descriptor.persistence.payload_retention.provider_raw_response_retained, false);
+assert.equal(generated.descriptor.persistence.payload_retention.validated_model_claims_retained, false);
+assert.equal(generated.descriptor.persistence.payload_retention.credentials_retained, false);
+assert.equal(generated.descriptor.persistence.payload_retention.hidden_reasoning_retained, false);
+assert.equal(
+  readJson(path.join(schemaRoot, "evidence-agent-terminal-record.schema.json"))["x-tilesim-schema-identity"],
+  generated.descriptor.persistence.mode.record_schema_identity,
+);
 
 const revision = `sha256:${"1".repeat(64)}`;
 const request = {
@@ -169,6 +222,57 @@ const response = {
   },
 };
 expectValid(validator("evidence-agent-response.schema.json"), response);
+for (const [completionState, reasonCode] of [
+  ["failed", "unsupported_schema"],
+  ["refused", "provider_unavailable"],
+  ["timeout", "timeout"],
+]) {
+  const formalTerminal = structuredClone(response);
+  formalTerminal.completion_state = completionState;
+  formalTerminal.refusal.reason_code = reasonCode;
+  formalTerminal.degradation = { state: completionState, reason_code: reasonCode };
+  expectValid(validator("evidence-agent-response.schema.json"), formalTerminal);
+}
+const terminalRecord = {
+  record_schema_version: "tilesim.bridge.evidence_agent_terminal_record.v2",
+  request_payload_sha256: `sha256:${"5".repeat(64)}`,
+  idempotency_key_sha256: "6".repeat(64),
+  run_id: response.run_id,
+  input_snapshot_digest: response.input_snapshot_digest,
+  schema_set_revision: response.schema_set_revision,
+  http_status: 503,
+  terminal_class: "claim_free_bridge_terminal",
+  terminal_metadata: {
+    request_id: response.request_id,
+    client_request_id: response.client_request_id,
+    completion_state: response.completion_state,
+    provider: response.provider,
+    revisions: response.revisions,
+    refusal: response.refusal,
+    partial: response.partial,
+    truncated: response.truncated,
+    degradation: response.degradation,
+    audit_summary: response.audit_summary,
+    generated_at: response.generated_at,
+    persistence: response.persistence,
+    staleness: response.staleness,
+    claim_count: 0,
+    response_canonical_sha256: `sha256:${"7".repeat(64)}`,
+  },
+  redaction: {
+    snapshot_payload_retained: false,
+    artifact_payload_retained: false,
+    user_question_retained: false,
+    provider_raw_response_retained: false,
+    validated_model_claims_retained: false,
+    hidden_reasoning_retained: false,
+    credentials_retained: false,
+  },
+};
+expectValid(validator("evidence-agent-terminal-record.schema.json"), terminalRecord);
+const unsafeTerminalRecord = structuredClone(terminalRecord);
+unsafeTerminalRecord.user_question = "must not be retained";
+expectInvalid(validator("evidence-agent-terminal-record.schema.json"), unsafeTerminalRecord);
 const answerLevelCitations = structuredClone(response);
 answerLevelCitations.citations = [];
 expectInvalid(validator("evidence-agent-response.schema.json"), answerLevelCitations);
@@ -176,7 +280,25 @@ expectInvalid(validator("evidence-agent-response.schema.json"), answerLevelCitat
 const openapi = readJson(path.join(bridgeRoot, "contracts", "openapi.json"));
 assert.equal(openapi.paths["/agent/evidence-capabilities"].get.operationId, "evidenceAgentCapabilities");
 assert.equal(openapi.paths["/runs/{run_id}/agent/evidence-analyses"].post.operationId, "createEvidenceAnalysis");
+for (const status of ["200", "502", "503", "504"])
+  assert.equal(
+    openapi.paths["/runs/{run_id}/agent/evidence-analyses"].post.responses[status].$ref,
+    "#/components/responses/EvidenceAgentResponse",
+  );
+assert.equal(
+  openapi.paths["/runs/{run_id}/agent/evidence-analyses"].post.responses["409"].$ref,
+  "#/components/responses/Error",
+);
 assert.equal(openapi["x-tilesim-contract"].evidence_agent.execution_mode, "synchronous_terminal");
+assert.equal(
+  openapi["x-tilesim-contract"].evidence_agent.descriptor_schema_identity,
+  generated.descriptor.schema_version,
+);
+assert.equal(
+  openapi["x-tilesim-contract"].evidence_agent.descriptor_revision,
+  generated.descriptor.descriptor_revision,
+);
+assert.equal(generated.manifest.evidence_agent.descriptor_revision, generated.descriptor.descriptor_revision);
 
 const catalog = readJson(path.join(webRoot, "tests", "fixtures", "f9-agent-evaluation-cases.json"));
 const expectedCaseIds = new Set([

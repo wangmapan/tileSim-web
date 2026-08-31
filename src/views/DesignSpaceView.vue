@@ -76,7 +76,7 @@ function displayedKnobValue(value: unknown, availability: string) {
     <section v-if="formalAnalysis.navigationScope" class="panel f7-formal-summary">
       <header>
         <div>
-          <p class="section-kicker">FORMAL F7 CONTRACT</p>
+          <p class="section-kicker">DESIGN-SPACE EVIDENCE</p>
           <h2>{{ t("Pareto 与 artifact-record 证据") }}</h2>
           <p>{{ t("候选仅导航到当前 run 的 design-space artifact 记录；backend instance 不是 Bridge run。") }}</p>
         </div>
@@ -101,7 +101,7 @@ function displayedKnobValue(value: unknown, availability: string) {
     <section class="panel f7-capability-panel">
       <header class="panel-header">
         <div>
-          <p class="section-kicker">F7 CONTRACT CAPABILITIES</p>
+          <p class="section-kicker">CONTRACT CAPABILITIES</p>
           <h2>{{ t("Fabric 与设计空间契约状态") }}</h2>
           <p>{{ t("available 只表示可展示后端事实；contract_gap 项不会由前端排序、计算或文本解析补齐。") }}</p>
         </div>

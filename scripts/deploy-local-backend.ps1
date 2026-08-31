@@ -42,9 +42,29 @@ function Get-SourceStateDigest {
     return $digest.Trim()
 }
 
+function Get-DirectoryDigest {
+    param([string]$Directory, [string]$ExcludedNames = "")
+    $arguments = @((Join-Path $PSScriptRoot "release-traceability.mjs"), $Directory)
+    if ($ExcludedNames) { $arguments += $ExcludedNames }
+    $digest = (& $node @arguments).Trim()
+    if ($LASTEXITCODE -ne 0 -or $digest -notmatch '^[0-9a-f]{64}$') {
+        throw "Could not calculate release traceability digest for $Directory."
+    }
+    return $digest
+}
+
+function Get-SchemaSetRevision {
+    $output = @(& wsl.exe -d $WslDistro --exec python3 "/mnt/d/tileSim-web/bridge/server.py" --print-schema-set-revision)
+    if ($LASTEXITCODE -ne 0) { throw "Could not calculate the Bridge schema-set revision." }
+    $revision = $output | Where-Object { $_ -match '^sha256:[0-9a-f]{64}$' } | Select-Object -Last 1
+    if (-not $revision) { throw "The Bridge schema-set revision was not returned." }
+    return $revision.Trim()
+}
+
 if (-not $mutex.WaitOne(0)) { throw "Another backend deployment is already running." }
 $previousManifestText = $null
 $manifestWritten = $false
+$restartAttempted = $false
 try {
     if (Test-Path -LiteralPath $manifestPath) {
         $previousManifestText = Get-Content -Raw -LiteralPath $manifestPath
@@ -57,6 +77,11 @@ try {
     if (-not $branch) { $branch = "detached" }
     $sourceWsl = Convert-ToWslPath $source
     $sourceDigest = Get-SourceStateDigest $sourceWsl
+    $webRevision = (& git -C $webRoot rev-parse HEAD).Trim()
+    if ($LASTEXITCODE -ne 0 -or $webRevision -notmatch '^[0-9a-f]{40}$') {
+        throw "TileSim Web source is not a valid Git worktree: $webRoot"
+    }
+    $webSourceDigest = Get-DirectoryDigest $webRoot
     if (-not $BuildDirWsl) {
         $previousManifest = if ($previousManifestText) {
             $previousManifestText | ConvertFrom-Json
@@ -100,6 +125,12 @@ try {
     if ($verifiedDigest -ne $sourceDigest) {
         throw "Local backend source changed during build or validation; deployment aborted."
     }
+    $verifiedWebSourceDigest = Get-DirectoryDigest $webRoot
+    if ($verifiedWebSourceDigest -ne $webSourceDigest) {
+        throw "TileSim Web source changed during build or validation; deployment aborted."
+    }
+    $webBuildDigest = Get-DirectoryDigest (Join-Path $webRoot "dist") ""
+    $schemaSetRevision = Get-SchemaSetRevision
 
     New-Item -ItemType Directory -Path $runtimeRoot -Force | Out-Null
     $manifest = [ordered]@{
@@ -109,6 +140,10 @@ try {
         build_revision = $revision
         source_state_digest = $sourceDigest
         build_state_digest = $sourceDigest
+        web_source_revision = $webRevision
+        web_source_state_digest = $webSourceDigest
+        web_build_digest = $webBuildDigest
+        schema_set_revision = $schemaSetRevision
         source_root_windows = $source
         tilesim_root_wsl = $sourceWsl
         build_dir_wsl = $BuildDirWsl
@@ -132,19 +167,34 @@ try {
     $manifestWritten = $true
 
     if (-not $NoRestart) {
+        $restartAttempted = $true
         & (Join-Path $PSScriptRoot "start-backend.ps1") -ManifestPath $manifestPath -WslDistro $WslDistro
         if ($LASTEXITCODE -ne 0) { throw "Local backend build passed, but bridge restart failed." }
     }
     Write-Output "TileSim local backend deployed: $branch @ $revision, state $sourceDigest"
 } catch {
+    $deploymentError = $_
+    $rollbackError = $null
     if ($manifestWritten -and $null -ne $previousManifestText) {
         [System.IO.File]::WriteAllText(
             $manifestPath,
             $previousManifestText,
             [System.Text.UTF8Encoding]::new($false)
         )
+        if ($restartAttempted) {
+            try {
+                & (Join-Path $PSScriptRoot "start-backend.ps1") -ManifestPath $manifestPath -WslDistro $WslDistro
+                if ($LASTEXITCODE -ne 0) { throw "Previous Bridge restart returned exit code $LASTEXITCODE." }
+                Write-Warning "Deployment failed; the previous deployment manifest and Bridge service were restored."
+            } catch {
+                $rollbackError = $_
+            }
+        }
     }
-    throw
+    if ($rollbackError) {
+        throw "Deployment failed: $($deploymentError.Exception.Message) Rollback also failed: $($rollbackError.Exception.Message)"
+    }
+    throw $deploymentError
 } finally {
     $mutex.ReleaseMutex()
     $mutex.Dispose()

@@ -1,23 +1,14 @@
 <script setup lang="ts">
 import { AlertTriangle, Check, CircleMinus, Layers3, ShieldCheck } from "@lucide/vue";
-import { computed } from "vue";
 import EmptyState from "../components/EmptyState.vue";
 import StatusPill from "../components/StatusPill.vue";
 import { formatPercent, statusLabel } from "../lib/format";
 import { useDashboard } from "../store/dashboard";
 import { useI18n } from "../i18n";
 import ArtifactEvidenceLink from "../components/ArtifactEvidenceLink.vue";
-import { RunBoundEvidencePanel } from "../features/run-bound-evidence";
 import { validationCheckSource } from "../features/execution-inspector";
-import { useEvidenceSelectionStore } from "../stores/evidence-selection";
 const { state, evidence } = useDashboard();
 const { t } = useI18n();
-const evidenceSelection = useEvidenceSelectionStore();
-const selectedEvidenceRequestId = computed(() => evidenceSelection.requestForRun(state.runId));
-
-function selectEvidenceRequest(requestId: string) {
-  if (state.runId) evidenceSelection.select(state.runId, requestId);
-}
 </script>
 
 <template>
@@ -41,15 +32,6 @@ function selectEvidenceRequest(requestId: string) {
         <p>{{ t("证据字段覆盖程度") }}</p>
       </article>
     </section>
-
-    <RunBoundEvidencePanel
-      :run-id="state.runId"
-      :bundle="state.bundle"
-      :inputs="state.inputs"
-      :artifact-manifest="state.artifactManifest"
-      :selected-request-id="selectedEvidenceRequestId"
-      @request-selected="selectEvidenceRequest"
-    />
 
     <article v-if="state.bundle.validation.resolution_entries?.length" class="panel">
       <header class="panel-header">

@@ -4,7 +4,6 @@ import {
   ArrowRight,
   Braces,
   ChevronDown,
-  CircleDot,
   Download,
   GitBranch,
   Layers3,
@@ -19,7 +18,6 @@ import StatusPill from "../components/StatusPill.vue";
 import {
   attributionSource,
   buildExecutionResult,
-  causeSource,
   executionStageSource,
   ExecutionVisualizationPanel,
   LayerRecordTable,
@@ -32,7 +30,6 @@ import { isLosslessInteger, losslessIntegerToBigInt } from "../contracts/lossles
 import type { LayerId } from "../features/execution-inspector";
 import { useI18n } from "../i18n";
 import ArtifactEvidenceLink from "../components/ArtifactEvidenceLink.vue";
-import { RunBoundEvidencePanel } from "../features/run-bound-evidence";
 import { useEvidenceSelectionStore } from "../stores/evidence-selection";
 
 type ExecutionResult = ReturnType<typeof buildExecutionResult>;
@@ -56,10 +53,6 @@ const evidenceLabels: Record<string, string> = {
   not_covered: "未覆盖",
   missing: "没有明细",
 };
-
-function selectEvidenceRequest(requestId: string) {
-  if (state.runId) evidenceSelection.select(state.runId, requestId);
-}
 
 function displayHeadline(layer: ExecutionLayer | undefined) {
   if (!layer?.headline) return "—";
@@ -100,7 +93,7 @@ async function exportStructuredReport() {
   exportingReport.value = true;
   try {
     const { downloadStructuredPerformanceReport } = await import("../features/structured-report");
-    const filename = downloadStructuredPerformanceReport({
+    const filename = await downloadStructuredPerformanceReport({
       bundle: state.bundle,
       inputs: state.inputs,
       runId: state.runId,
@@ -348,15 +341,6 @@ async function exportStructuredReport() {
       </article>
     </section>
 
-    <RunBoundEvidencePanel
-      :run-id="state.runId"
-      :bundle="state.bundle"
-      :inputs="state.inputs"
-      :artifact-manifest="state.artifactManifest"
-      :selected-request-id="selectedEvidenceRequestId"
-      @request-selected="selectEvidenceRequest"
-    />
-
     <section class="execution-support-grid">
       <article class="panel support-card">
         <header>
@@ -387,26 +371,6 @@ async function exportStructuredReport() {
           </dl>
         </template>
         <p v-else>{{ t("当前报告没有资源语义汇合摘要。") }}</p>
-      </article>
-
-      <article class="panel support-card">
-        <header>
-          <CircleDot :size="18" />
-          <div>
-            <small>S9 EXPLANATION</small><strong>{{ t("结果原因链") }}</strong>
-          </div>
-        </header>
-        <ol v-if="result.causeChain.length" class="compact-cause-list">
-          <li v-for="cause in result.causeChain.slice(0, 4)" :key="`${cause.subsystem}-${cause.cause_code}`">
-            <span>{{ cause.subsystem }}</span>
-            <div>
-              <strong>{{ cause.title || cause.cause_code }}</strong>
-              <p>{{ cause.evidence }}</p>
-            </div>
-            <ArtifactEvidenceLink :source-path="causeSource(state.bundle.tail?.cause_chain || [], cause.cause_id)" />
-          </li>
-        </ol>
-        <p v-else>{{ t("当前报告没有尾延迟原因链。") }}</p>
       </article>
     </section>
 

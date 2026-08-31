@@ -1,0 +1,47 @@
+{
+  "schema_version": "tilesim.bridge.canonical_digest_golden.v1",
+  "cases": [
+    {
+      "id": "unicode-code-point-order-and-uint64-max",
+      "value": {
+        "😀": "astral",
+        "": "bmp",
+        "a": [3, "汉字"],
+        "bytes": "18446744073709551615"
+      },
+      "integer_json_pointers": ["/bytes"],
+      "expected_canonical_json": "{\"a\":[3,\"汉字\"],\"bytes\":18446744073709551615,\"\":\"bmp\",\"😀\":\"astral\"}",
+      "expected_sha256": "sha256:d2572b15491b90bd42379bace3fca4e60cb7a74d95be27f637b1d8aadca20cb4"
+    },
+    {
+      "id": "run-bound-snapshot-array-order-and-large-bytes",
+      "value": {
+        "schema_version": "tilesim.bridge.evidence_agent_request.v1",
+        "run_id": "run-golden",
+        "artifact_allow_list": [
+          {
+            "bytes": "9007199254740993123",
+            "artifact_id": "metrics",
+            "allowed_records": [
+              {
+                "json_pointer": "/records/0",
+                "subject": { "kind": "request", "id": "请求-😀" }
+              }
+            ]
+          }
+        ],
+        "snapshot_reference": {
+          "p99": {
+            "selection_semantics": "tie_no_single_request",
+            "member_request_ids": ["request-b", "request-a"],
+            "selected_request_id": null
+          }
+        },
+        "zero": 0
+      },
+      "integer_json_pointers": ["/artifact_allow_list/0/bytes"],
+      "expected_canonical_json": "{\"artifact_allow_list\":[{\"allowed_records\":[{\"json_pointer\":\"/records/0\",\"subject\":{\"id\":\"请求-😀\",\"kind\":\"request\"}}],\"artifact_id\":\"metrics\",\"bytes\":9007199254740993123}],\"run_id\":\"run-golden\",\"schema_version\":\"tilesim.bridge.evidence_agent_request.v1\",\"snapshot_reference\":{\"p99\":{\"member_request_ids\":[\"request-b\",\"request-a\"],\"selected_request_id\":null,\"selection_semantics\":\"tie_no_single_request\"}},\"zero\":0}",
+      "expected_sha256": "sha256:d5301a256aae668351c1e418c457edfcfd571745fbb32e3dad9b2062e75908d2"
+    }
+  ]
+}

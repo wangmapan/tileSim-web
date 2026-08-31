@@ -72,7 +72,7 @@ onMounted(() => initialize(navigationSnapshot()));
             })
           }}</span>
         </section>
-        <EvidenceStrip v-if="!['experiment', 'evidence_lab'].includes(state.view)" />
+        <EvidenceStrip v-if="!['experiment', 'evidence_lab', 'history'].includes(state.view)" />
         <RouterView v-slot="{ Component, route }">
           <Transition name="view-fade" mode="out-in">
             <component :is="showUnsupported ? UnsupportedSchemaView : Component" :key="String(route.name)" />

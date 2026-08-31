@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AlertTriangle, ArrowRight, Braces, GitBranch, Link2, Network } from "@lucide/vue";
+import { AlertTriangle, ArrowRight, Braces, ChevronDown, GitBranch, Link2, Network } from "@lucide/vue";
 import { computed, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import ArtifactEvidenceLink from "../../../components/ArtifactEvidenceLink.vue";
@@ -36,9 +36,9 @@ const peerSubsystems: RunBoundEvidenceNode["subsystem"][] = ["S3", "S4", "S5"];
 const outputSubsystems: RunBoundEvidenceNode["subsystem"][] = ["S7", "S8", "S9"];
 const pageLinks = [
   { name: "metrics", label: "性能指标" },
-  { name: "attribution", label: "尾延迟归因" },
+  { name: "attribution", label: "请求证据" },
   { name: "execution", label: "分层结果" },
-  { name: "validation", label: "证据与验证" },
+  { name: "validation", label: "验证边界" },
 ] as const;
 const peerNodes = computed(
   () => peerSubsystems.map((id) => nodeMap.value.get(id)).filter(Boolean) as RunBoundEvidenceNode[],
@@ -125,7 +125,7 @@ function statusLabel(node: { availability: RunBoundAvailability }) {
   <section class="panel run-bound-evidence-panel" aria-labelledby="run-bound-evidence-title">
     <header class="panel-header panel-header--row">
       <div>
-        <p class="section-kicker">F6B · RUN-BOUND EVIDENCE</p>
+        <p class="section-kicker">REQUEST EVIDENCE CHAIN</p>
         <h2 id="run-bound-evidence-title">{{ t("请求级跨子系统证据链") }}</h2>
         <p>{{ t("只使用后端显式 ID；S3、S4、S5 保持并列，缺少契约的跳转会准确降级。") }}</p>
       </div>
@@ -331,100 +331,102 @@ function statusLabel(node: { availability: RunBoundAvailability }) {
       </details>
     </template>
 
-    <section v-if="runId" class="week8-execution-panel" :class="`availability--${chain.week8Execution.availability}`">
-      <header>
+    <details v-if="runId" class="week8-execution-panel" :class="`availability--${chain.week8Execution.availability}`">
+      <summary>
         <div>
-          <p class="section-kicker">WEEK 8 · S7 EXECUTION</p>
-          <h3>{{ t("Run-bound DES 执行证据") }}</h3>
+          <strong>{{ t("执行详情") }}</strong>
         </div>
         <span>{{ statusLabel({ availability: chain.week8Execution.availability }) }}</span>
-      </header>
-      <p>{{ t(chain.week8Execution.detail) }}</p>
-      <template v-if="chain.week8Execution.executionMode">
-        <dl class="week8-execution-grid">
-          <div>
-            <dt>{{ t("请求 fidelity") }}</dt>
-            <dd>{{ chain.week8Execution.requestedFidelity }}</dd>
-          </div>
-          <div>
-            <dt>{{ t("解析 fidelity") }}</dt>
-            <dd>{{ chain.week8Execution.resolvedFidelity }}</dd>
-          </div>
-          <div>
-            <dt>{{ t("执行模式") }}</dt>
-            <dd>{{ chain.week8Execution.executionMode }}</dd>
-          </div>
-          <div v-if="chain.week8Execution.provenance">
-            <dt>{{ t("来源模式") }}</dt>
-            <dd>{{ chain.week8Execution.provenance.sourceMode }}</dd>
-          </div>
-        </dl>
-        <section v-if="chain.week8Execution.fallback" class="week8-execution-block">
-          <strong>{{ t("Fallback") }}</strong>
-          <code>{{ chain.week8Execution.fallback.policy }}</code>
-          <span>{{ chain.week8Execution.fallback.used ? t("已使用") : t("未使用") }}</span>
-          <p v-if="chain.week8Execution.fallback.reason">{{ chain.week8Execution.fallback.reason }}</p>
-        </section>
-        <dl v-if="chain.week8Execution.stateSummary" class="week8-execution-grid">
-          <div>
-            <dt>logical_time_ps</dt>
-            <dd>{{ formatNumber(chain.week8Execution.stateSummary.logicalTimePs) }}</dd>
-          </div>
-          <div>
-            <dt>partition_count</dt>
-            <dd>{{ formatNumber(chain.week8Execution.stateSummary.partitionCount) }}</dd>
-          </div>
-          <div>
-            <dt>committed_event_count</dt>
-            <dd>{{ formatNumber(chain.week8Execution.stateSummary.committedEventCount) }}</dd>
-          </div>
-          <div>
-            <dt>pending_event_count</dt>
-            <dd>{{ formatNumber(chain.week8Execution.stateSummary.pendingEventCount) }}</dd>
-          </div>
-        </dl>
-        <div class="week8-execution-columns">
-          <section v-if="chain.week8Execution.differential" class="week8-execution-block">
-            <strong>{{ t("差分校验") }}</strong>
-            <span>{{ chain.week8Execution.differential.compared ? t("已比较") : t("未比较") }}</span>
-            <span>{{ chain.week8Execution.differential.matched ? t("一致") : t("不一致") }}</span>
-            <code>{{ chain.week8Execution.differential.partitionedDigest }}</code>
-            <code>{{ chain.week8Execution.differential.referenceDigest }}</code>
-            <p v-if="chain.week8Execution.differential.mismatchCode">
-              {{ chain.week8Execution.differential.mismatchCode }}
-            </p>
+        <ChevronDown :size="17" />
+      </summary>
+      <div class="week8-execution-body">
+        <p>{{ t(chain.week8Execution.detail) }}</p>
+        <template v-if="chain.week8Execution.executionMode">
+          <dl class="week8-execution-grid">
+            <div>
+              <dt>{{ t("请求 fidelity") }}</dt>
+              <dd>{{ chain.week8Execution.requestedFidelity }}</dd>
+            </div>
+            <div>
+              <dt>{{ t("解析 fidelity") }}</dt>
+              <dd>{{ chain.week8Execution.resolvedFidelity }}</dd>
+            </div>
+            <div>
+              <dt>{{ t("执行模式") }}</dt>
+              <dd>{{ chain.week8Execution.executionMode }}</dd>
+            </div>
+            <div v-if="chain.week8Execution.provenance">
+              <dt>{{ t("来源模式") }}</dt>
+              <dd>{{ chain.week8Execution.provenance.sourceMode }}</dd>
+            </div>
+          </dl>
+          <section v-if="chain.week8Execution.fallback" class="week8-execution-block">
+            <strong>{{ t("Fallback") }}</strong>
+            <code>{{ chain.week8Execution.fallback.policy }}</code>
+            <span>{{ chain.week8Execution.fallback.used ? t("已使用") : t("未使用") }}</span>
+            <p v-if="chain.week8Execution.fallback.reason">{{ chain.week8Execution.fallback.reason }}</p>
           </section>
-          <section v-if="chain.week8Execution.stream" class="week8-execution-block">
-            <strong>{{ t("事件流摘要") }}</strong>
-            <span>
-              {{ formatNumber(chain.week8Execution.stream.recordCount) }} /
-              {{ formatNumber(chain.week8Execution.stream.totalRecordCount) }}
-            </span>
-            <span>{{ chain.week8Execution.stream.truncated ? t("已截断") : t("未截断") }}</span>
-          </section>
-          <section v-if="chain.week8Execution.checkpoint" class="week8-execution-block">
-            <strong>{{ t("Checkpoint metadata") }}</strong>
-            <code>{{ chain.week8Execution.checkpoint.archiveSchemaIdentity }}</code>
-            <code>{{ chain.week8Execution.checkpoint.archiveDigest }}</code>
-            <span>
-              checkpoint_logical_time_ps ·
-              {{ formatNumber(chain.week8Execution.checkpoint.checkpointLogicalTimePs) }}
-            </span>
-            <span>
-              {{ t("计数") }} · {{ formatNumber(chain.week8Execution.checkpoint.committedEventCount) }} /
-              {{ formatNumber(chain.week8Execution.checkpoint.pendingEventCount) }} /
-              {{ formatNumber(chain.week8Execution.checkpoint.completedIdentityCount) }} /
-              {{ formatNumber(chain.week8Execution.checkpoint.subjectVersionCount) }}
-            </span>
-            <span>payload · {{ chain.week8Execution.checkpoint.payloadAvailability }}</span>
-          </section>
-        </div>
-        <ArtifactEvidenceLink
-          v-if="chain.week8Execution.reference"
-          :source-path="chain.week8Execution.reference.sourcePath"
-          :label="chain.week8Execution.reference.label"
-        />
-      </template>
-    </section>
+          <dl v-if="chain.week8Execution.stateSummary" class="week8-execution-grid">
+            <div>
+              <dt>logical_time_ps</dt>
+              <dd>{{ formatNumber(chain.week8Execution.stateSummary.logicalTimePs) }}</dd>
+            </div>
+            <div>
+              <dt>partition_count</dt>
+              <dd>{{ formatNumber(chain.week8Execution.stateSummary.partitionCount) }}</dd>
+            </div>
+            <div>
+              <dt>committed_event_count</dt>
+              <dd>{{ formatNumber(chain.week8Execution.stateSummary.committedEventCount) }}</dd>
+            </div>
+            <div>
+              <dt>pending_event_count</dt>
+              <dd>{{ formatNumber(chain.week8Execution.stateSummary.pendingEventCount) }}</dd>
+            </div>
+          </dl>
+          <div class="week8-execution-columns">
+            <section v-if="chain.week8Execution.differential" class="week8-execution-block">
+              <strong>{{ t("差分校验") }}</strong>
+              <span>{{ chain.week8Execution.differential.compared ? t("已比较") : t("未比较") }}</span>
+              <span>{{ chain.week8Execution.differential.matched ? t("一致") : t("不一致") }}</span>
+              <code>{{ chain.week8Execution.differential.partitionedDigest }}</code>
+              <code>{{ chain.week8Execution.differential.referenceDigest }}</code>
+              <p v-if="chain.week8Execution.differential.mismatchCode">
+                {{ chain.week8Execution.differential.mismatchCode }}
+              </p>
+            </section>
+            <section v-if="chain.week8Execution.stream" class="week8-execution-block">
+              <strong>{{ t("事件流摘要") }}</strong>
+              <span>
+                {{ formatNumber(chain.week8Execution.stream.recordCount) }} /
+                {{ formatNumber(chain.week8Execution.stream.totalRecordCount) }}
+              </span>
+              <span>{{ chain.week8Execution.stream.truncated ? t("已截断") : t("未截断") }}</span>
+            </section>
+            <section v-if="chain.week8Execution.checkpoint" class="week8-execution-block">
+              <strong>{{ t("Checkpoint metadata") }}</strong>
+              <code>{{ chain.week8Execution.checkpoint.archiveSchemaIdentity }}</code>
+              <code>{{ chain.week8Execution.checkpoint.archiveDigest }}</code>
+              <span>
+                checkpoint_logical_time_ps ·
+                {{ formatNumber(chain.week8Execution.checkpoint.checkpointLogicalTimePs) }}
+              </span>
+              <span>
+                {{ t("计数") }} · {{ formatNumber(chain.week8Execution.checkpoint.committedEventCount) }} /
+                {{ formatNumber(chain.week8Execution.checkpoint.pendingEventCount) }} /
+                {{ formatNumber(chain.week8Execution.checkpoint.completedIdentityCount) }} /
+                {{ formatNumber(chain.week8Execution.checkpoint.subjectVersionCount) }}
+              </span>
+              <span>payload · {{ chain.week8Execution.checkpoint.payloadAvailability }}</span>
+            </section>
+          </div>
+          <ArtifactEvidenceLink
+            v-if="chain.week8Execution.reference"
+            :source-path="chain.week8Execution.reference.sourcePath"
+            :label="chain.week8Execution.reference.label"
+          />
+        </template>
+      </div>
+    </details>
   </section>
 </template>

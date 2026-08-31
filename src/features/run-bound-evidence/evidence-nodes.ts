@@ -209,7 +209,7 @@ function outputNode(subsystem: "S7" | "S8" | "S9", title: string, context: Build
       title,
       legacy ? "legacy_compatibility" : "contract_gap",
       legacy
-        ? "旧报告只能确认 run-level association，不能声称完整 F6B closure。"
+        ? "旧报告只能确认 run-level association，不能声称完整跨子系统证据闭环。"
         : "没有匹配当前 request 的 subject_refs。",
     );
   }

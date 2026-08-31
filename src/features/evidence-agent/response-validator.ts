@@ -44,7 +44,13 @@ function matchingAllowedRecord(citation: EvidenceAgentCitation, prepared: Prepar
 }
 
 function validateLosslessValue(citation: EvidenceAgentCitation) {
-  if (!citation.value) return;
+  if (!citation.value) {
+    if (citation.unit) throw new EvidenceAgentContractError("citation_value_invalid");
+    return;
+  }
+  if (citation.availability !== "available") {
+    throw new EvidenceAgentContractError("citation_availability_value_mismatch");
+  }
   if (!citation.unit || citation.value.encoding !== "decimal_string") {
     throw new EvidenceAgentContractError("citation_value_invalid");
   }
@@ -120,11 +126,12 @@ function terminalState(response: EvidenceAgentResponse): EvidenceAgentUiState {
   if (response.staleness.state === "stale") return "stale";
   if (response.refusal?.reason_code === "provider_unavailable") return "provider_unavailable";
   if (response.refusal?.reason_code === "concurrency_limit") return "concurrency_limit";
-  if (response.completion_state === "refused" || response.completion_state === "failed") return "refused";
-  if (response.completion_state === "partial" || response.partial) return "partial";
-  if (response.completion_state === "truncated" || response.truncated) return "truncated";
   if (response.completion_state === "timeout") return "timeout";
   if (response.completion_state === "cancelled") return "cancelled";
+  if (response.completion_state === "failed") return "failed";
+  if (response.completion_state === "refused") return "refused";
+  if (response.completion_state === "truncated" || response.truncated) return "truncated";
+  if (response.completion_state === "partial" || response.partial) return "partial";
   return "available_draft";
 }
 
@@ -175,17 +182,20 @@ export function validateEvidenceAgentResult(
         prepared.request.snapshot_reference.backend_identity.source_state_digest,
         prepared.request.snapshot_reference.backend_identity.build_state_digest,
       ].join("|");
-  if (contextStale || response.staleness.state === "stale") {
-    return {
-      state: "stale",
-      response,
-      invalidClaimIds: response.claims.map((claim) => claim.claim_id),
-      detail: "stale",
-    };
-  }
   const hasRefusal = Boolean(response.refusal);
+  const refusalRequired = ["refused", "failed", "timeout", "cancelled"].includes(response.completion_state);
+  const reason = response.refusal?.reason_code;
+  const reasonCompletionMismatch =
+    (reason === "provider_unavailable" && response.completion_state !== "refused") ||
+    (reason === "timeout" && response.completion_state !== "timeout") ||
+    (reason === "cancelled" && response.completion_state !== "cancelled") ||
+    (reason === "concurrency_limit" && response.completion_state !== "refused") ||
+    (response.completion_state === "timeout" && reason !== "timeout") ||
+    (response.completion_state === "cancelled" && reason !== "cancelled");
   if (
-    (response.completion_state === "refused" && !hasRefusal) ||
+    (refusalRequired && !hasRefusal) ||
+    (!refusalRequired && hasRefusal) ||
+    reasonCompletionMismatch ||
     (response.completion_state === "completed" && hasRefusal) ||
     (hasRefusal && response.claims.length > 0) ||
     (response.completion_state === "partial" && !response.partial) ||
@@ -196,7 +206,22 @@ export function validateEvidenceAgentResult(
   if (response.completion_state === "completed" && (response.partial || response.truncated || hasRefusal)) {
     throw new EvidenceAgentContractError("completion_state_invalid");
   }
+  if (
+    response.claims.length > descriptor.limits.maximum_claims ||
+    response.claims.reduce((length, claim) => length + Array.from(claim.text).length, 0) >
+      descriptor.limits.maximum_output_characters
+  ) {
+    throw new EvidenceAgentContractError("output_limit_exceeded");
+  }
   validateClaims(response, prepared);
+  if (contextStale || response.staleness.state === "stale") {
+    return {
+      state: "stale",
+      response,
+      invalidClaimIds: response.claims.map((claim) => claim.claim_id),
+      detail: "stale",
+    };
+  }
   return {
     state: terminalState(response),
     response,

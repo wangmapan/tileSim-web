@@ -10,6 +10,7 @@ export type EvidenceAgentUiState =
   | "submitting"
   | "available_draft"
   | "refused"
+  | "failed"
   | "partial"
   | "truncated"
   | "timeout"
@@ -17,6 +18,8 @@ export type EvidenceAgentUiState =
   | "stale"
   | "concurrency_limit"
   | "provider_unavailable"
+  | "terminal_result_not_retained"
+  | "idempotency_payload_mismatch"
   | "unsupported_schema"
   | "contract_error";
 
@@ -52,7 +55,7 @@ export interface EvidenceAgentBinding {
   inputSnapshotDigest: string;
 }
 
-export interface PendingEvidenceAgentSubmission extends EvidenceAgentBinding {
+export interface RetainedEvidenceAgentSubmission extends EvidenceAgentBinding {
   payloadDigest: string;
   idempotencyKey: string;
   clientRequestId: string;

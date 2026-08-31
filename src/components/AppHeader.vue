@@ -1,12 +1,28 @@
 <script setup>
-import { FileUp, Languages, Menu, Plus } from "@lucide/vue";
-import { useDashboard } from "../store/dashboard";
+import { computed } from "vue";
+import { FileUp, Languages, Menu } from "@lucide/vue";
+import { navItems, useDashboard } from "../store/dashboard";
 import { useI18n } from "../i18n";
 import ThemeSwitcher from "./ThemeSwitcher.vue";
 import AppearanceToggle from "./AppearanceToggle.vue";
 
-const { state, currentTitle, setView, importFiles, notify } = useDashboard();
+const { state, currentTitle, importFiles, notify } = useDashboard();
 const { isEnglish, t, toggleLocale } = useI18n();
+const headerKickers = {
+  overview: "RUN OVERVIEW",
+  execution: "EXECUTION PATH",
+  metrics: "PERFORMANCE",
+  fabric: "FABRIC",
+  attribution: "REQUEST EVIDENCE",
+  validation: "VALIDATION",
+  design_space: "DESIGN SPACE",
+  history: "RUN HISTORY",
+  evidence_agent: "EVIDENCE AGENT",
+  evidence_lab: "CALIBRATION LAB",
+  experiment: "EXPERIMENT BUILDER",
+};
+const headerKicker = computed(() => headerKickers[state.view] || "TILESIM");
+const currentDescription = computed(() => navItems.find((item) => item.id === state.view)?.description || "");
 
 async function onImport(event) {
   const files = [...(event.target.files || [])];
@@ -26,12 +42,13 @@ async function onImport(event) {
     <button class="icon-button mobile-only" :aria-label="t('打开导航')" @click="state.mobileNavOpen = true">
       <Menu :size="21" />
     </button>
-    <Transition name="heading-swap" mode="out-in">
-      <div :key="`${state.view}:${isEnglish}`" class="page-heading">
-        <p>{{ state.view === "experiment" ? "EXPERIMENT BUILDER" : "EVIDENCE WORKSPACE" }}</p>
+    <div class="page-heading">
+      <p>{{ headerKicker }}</p>
+      <div>
         <h1>{{ state.view === "experiment" ? t("新建实验") : t(currentTitle) }}</h1>
+        <span v-if="currentDescription">{{ t(currentDescription) }}</span>
       </div>
-    </Transition>
+    </div>
     <div class="header-actions">
       <AppearanceToggle />
       <ThemeSwitcher />
@@ -50,9 +67,6 @@ async function onImport(event) {
         <span class="desktop-label">{{ t("导入报告") }}</span>
         <input type="file" accept="application/json,.json" multiple @change="onImport" />
       </label>
-      <button v-if="state.view !== 'experiment'" class="button button--primary" @click="setView('experiment')">
-        <Plus :size="16" />{{ t("新建实验") }}
-      </button>
     </div>
   </header>
 </template>

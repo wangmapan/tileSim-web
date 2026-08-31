@@ -33,6 +33,23 @@ candidate knob/link projection, and capability labels no longer live in the view
 No evidence rule changed: percentile selection remains backend-declared, S3/S4/S5 remain peers, exact stable IDs
 must precede array-derived Pointers, and S7-S9 stay outside causal ranking.
 
+## 2026-09-01 follow-up
+
+Two additional responsibility hotspots were separated without changing their feature-level public imports:
+
+- `run-experiment/model.ts` is now a 17-line compatibility facade. Internal ownership is split into `types.ts`,
+  `parameter-contract.ts`, `surface.ts`, `form.ts`, and `request.ts`, separating descriptor/capability adaptation from
+  mutable form reconciliation and request validation/serialization. The existing `run-experiment/index.ts` surface is
+  unchanged, including exact error-Pointer resolution.
+- `EvidenceAgentPanel.vue` now owns page-level Agent composition and submission preparation only. Descriptor v2
+  retry/recovery/retention presentation lives in `EvidenceAgentContractPolicy.vue`; validated terminal result and
+  citation rendering lives in `EvidenceAgentResultPanel.vue`; shared task/status labels live in `presentation.ts`.
+
+The experiment model was reduced from 827 lines to a facade plus cohesive modules (largest: 471 lines). The Evidence
+Agent panel was reduced from 614 to 325 lines, with extracted components of 224 and 80 lines. Descriptor identity,
+canonical digest, lossless uint64 handling, idempotency behavior, HTTP terminal mapping, S3/S4/S5 peer semantics, S7
+host semantics, and S8/S9 ranking boundaries are unchanged.
+
 ## Deferred hotspots
 
 - `JsonArtifactPanel.vue` still combines a connected component with Worker cancellation/search orchestration. A

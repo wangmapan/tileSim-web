@@ -23,7 +23,7 @@ test("deployed Week 8 Bridge closes the request-bound F6B chain", async ({ page 
   const browserFailures = observeBrowserFailures(page);
 
   await page.goto(
-    `${liveBaseUrl}/execution?run=${encodeURIComponent(liveRunId)}&evidence_request=${encodeURIComponent(liveRequestId)}`,
+    `${liveBaseUrl}/attribution?run=${encodeURIComponent(liveRunId)}&evidence_request=${encodeURIComponent(liveRequestId)}`,
     { waitUntil: "domcontentloaded" },
   );
   const panel = page.locator(".run-bound-evidence-panel");
@@ -31,13 +31,6 @@ test("deployed Week 8 Bridge closes the request-bound F6B chain", async ({ page 
   await expect(panel).toContainText("partitioned_des", { timeout: 30_000 });
   await expect(panel.locator(".run-bound-identity-strip")).toContainText("版本化 contract");
   await expect(panel.locator('.run-bound-percentile-grid article[aria-current="true"]')).not.toHaveCount(0);
-
-  await expect(page.locator(".execution-current-selection")).toContainText("S1");
-  const s4Node = page.locator(".flow-node").filter({ hasText: "S4" });
-  await s4Node.click();
-  await expect(s4Node).toHaveAttribute("aria-pressed", "true");
-  await expect(page.locator(".execution-current-selection")).toContainText("S4");
-  await expect(page.locator("#execution-layer-detail .layer-code")).toHaveText("S4");
 
   const states = await panel.locator(".run-bound-node, .run-bound-output-node").evaluateAll((nodes) =>
     nodes.map((node) => ({
@@ -59,6 +52,7 @@ test("deployed Week 8 Bridge closes the request-bound F6B chain", async ({ page 
   }
 
   const week8 = panel.locator(".week8-execution-panel");
+  await week8.locator("summary").click();
   await expect(week8).toContainText("partitioned_des");
   await expect(week8).toContainText("synthetic_trace");
   await expect(week8).toContainText("single_process_reference");

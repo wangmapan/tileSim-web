@@ -52,7 +52,8 @@ function isFeaturePublicEntry(path) {
   const feature = featureName(path);
   if (!feature) return false;
   return (
-    dirname(path) === resolve(root, "features", feature) && /^index\.(js|mjs|ts|vue)$/.test(path.split(sep).at(-1))
+    dirname(path) === resolve(root, "features", feature) &&
+    /^(index|model-api)\.(js|mjs|ts|vue)$/.test(path.split(sep).at(-1))
   );
 }
 

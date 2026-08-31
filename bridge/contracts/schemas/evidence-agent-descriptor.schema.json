@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://tilesim.local/contracts/evidence-agent-descriptor.schema.json",
-  "x-tilesim-schema-identity": "tilesim.bridge.evidence_agent_descriptor.v1",
+  "x-tilesim-schema-identity": "tilesim.bridge.evidence_agent_descriptor.v2",
   "title": "EvidenceAgentDescriptor",
   "type": "object",
   "additionalProperties": false,
@@ -25,7 +25,7 @@
     "execution"
   ],
   "properties": {
-    "schema_version": { "const": "tilesim.bridge.evidence_agent_descriptor.v1" },
+    "schema_version": { "const": "tilesim.bridge.evidence_agent_descriptor.v2" },
     "schema_set_revision": { "$ref": "#/$defs/revision" },
     "descriptor_revision": { "$ref": "#/$defs/revision" },
     "availability": { "enum": ["available", "degraded", "unavailable", "disabled"] },
@@ -166,10 +166,21 @@
     "redaction": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["user_question", "artifact_content", "credentials", "hidden_chain_of_thought"],
+      "required": [
+        "user_question",
+        "snapshot_payload",
+        "artifact_payload",
+        "provider_raw_response",
+        "validated_model_claims",
+        "credentials",
+        "hidden_chain_of_thought"
+      ],
       "properties": {
-        "user_question": { "const": "digest_only" },
-        "artifact_content": { "const": "not_retained" },
+        "user_question": { "const": "not_retained" },
+        "snapshot_payload": { "const": "not_retained" },
+        "artifact_payload": { "const": "not_retained" },
+        "provider_raw_response": { "const": "not_retained" },
+        "validated_model_claims": { "const": "memory_only_until_process_exit" },
         "credentials": { "const": "never_retained" },
         "hidden_chain_of_thought": { "const": "never_returned_or_retained" }
       }
@@ -183,8 +194,8 @@
         "timeout_ms": { "type": "integer", "minimum": 1 },
         "cancellation": { "const": "not_applicable_after_synchronous_terminal_response" },
         "maximum_concurrent_operations": { "const": 1 },
-        "retry": { "const": "same_idempotency_key_and_same_payload_replays_terminal_result" },
-        "terminal_recovery": { "const": "run_local_redacted_terminal_record" }
+        "retry": { "$ref": "#/$defs/retryPolicy" },
+        "terminal_recovery": { "$ref": "#/$defs/terminalRecoveryPolicy" }
       }
     }
   },
@@ -213,19 +224,169 @@
     "persistencePolicy": {
       "type": "object",
       "additionalProperties": false,
+      "required": ["mode", "retention_seconds", "terminal_classes", "payload_retention"],
+      "properties": {
+        "mode": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["storage_scope", "record_kind", "record_schema_identity"],
+          "properties": {
+            "storage_scope": { "const": "run_local" },
+            "record_kind": { "const": "redacted_terminal_metadata_only" },
+            "record_schema_identity": { "const": "tilesim.bridge.evidence_agent_terminal_record.v2" }
+          }
+        },
+        "retention_seconds": { "type": "integer", "minimum": 0 },
+        "terminal_classes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["claim_free_bridge_terminal", "claims_bearing_terminal", "claim_free_provider_terminal"],
+          "properties": {
+            "claim_free_bridge_terminal": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["terminal_metadata_retained", "exact_response_recoverable_after_restart"],
+              "properties": {
+                "terminal_metadata_retained": { "const": true },
+                "exact_response_recoverable_after_restart": { "const": true }
+              }
+            },
+            "claims_bearing_terminal": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "terminal_metadata_retained",
+                "validated_model_claims_retained",
+                "exact_response_recoverable_after_restart"
+              ],
+              "properties": {
+                "terminal_metadata_retained": { "const": true },
+                "validated_model_claims_retained": { "const": false },
+                "exact_response_recoverable_after_restart": { "const": false }
+              }
+            },
+            "claim_free_provider_terminal": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "terminal_metadata_retained",
+                "validated_provider_response_retained",
+                "exact_response_recoverable_after_restart"
+              ],
+              "properties": {
+                "terminal_metadata_retained": { "const": true },
+                "validated_provider_response_retained": { "const": false },
+                "exact_response_recoverable_after_restart": { "const": false }
+              }
+            }
+          }
+        },
+        "payload_retention": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "user_question_retained",
+            "snapshot_payload_retained",
+            "artifact_payload_retained",
+            "provider_raw_response_retained",
+            "validated_model_claims_retained",
+            "credentials_retained",
+            "hidden_reasoning_retained"
+          ],
+          "properties": {
+            "user_question_retained": { "const": false },
+            "snapshot_payload_retained": { "const": false },
+            "artifact_payload_retained": { "const": false },
+            "provider_raw_response_retained": { "const": false },
+            "validated_model_claims_retained": { "const": false },
+            "credentials_retained": { "const": false },
+            "hidden_reasoning_retained": { "const": false }
+          }
+        }
+      }
+    },
+    "errorOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outcome", "http_status", "code", "field_path", "retryable"],
+      "properties": {
+        "outcome": { "const": "error" },
+        "http_status": { "const": 409 },
+        "code": { "enum": ["idempotency_payload_mismatch", "terminal_result_not_retained"] },
+        "field_path": { "const": "/headers/Idempotency-Key" },
+        "retryable": { "const": false }
+      }
+    },
+    "retryPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["payload_identity", "same_key_same_canonical_payload", "same_key_different_canonical_payload"],
+      "properties": {
+        "payload_identity": { "const": "tilesim.bridge.canonical_json.v1_sha256" },
+        "same_key_same_canonical_payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "in_process",
+            "after_restart_claim_free_bridge_terminal",
+            "after_restart_claims_bearing_terminal",
+            "after_restart_claim_free_provider_terminal",
+            "provider_reinvocation"
+          ],
+          "properties": {
+            "in_process": { "const": "exact_terminal_replay" },
+            "after_restart_claim_free_bridge_terminal": {
+              "const": "exact_terminal_replay_from_redacted_record"
+            },
+            "after_restart_claims_bearing_terminal": { "const": "error_terminal_result_not_retained" },
+            "after_restart_claim_free_provider_terminal": { "const": "error_terminal_result_not_retained" },
+            "provider_reinvocation": { "const": "forbidden" }
+          }
+        },
+        "same_key_different_canonical_payload": {
+          "allOf": [
+            { "$ref": "#/$defs/errorOutcome" },
+            { "type": "object", "properties": { "code": { "const": "idempotency_payload_mismatch" } } }
+          ]
+        }
+      }
+    },
+    "terminalRecoveryPolicy": {
+      "type": "object",
+      "additionalProperties": false,
       "required": [
-        "mode",
-        "retention_seconds",
-        "snapshot_payload_retained",
-        "user_question_retained",
-        "hidden_reasoning_retained"
+        "record_scope",
+        "record_schema_identity",
+        "claim_free_bridge_terminal",
+        "claims_bearing_terminal",
+        "claim_free_provider_terminal",
+        "provider_reinvocation"
       ],
       "properties": {
-        "mode": { "const": "run_local_terminal_metadata_only" },
-        "retention_seconds": { "type": "integer", "minimum": 0 },
-        "snapshot_payload_retained": { "const": false },
-        "user_question_retained": { "const": false },
-        "hidden_reasoning_retained": { "const": false }
+        "record_scope": { "const": "run_local" },
+        "record_schema_identity": { "const": "tilesim.bridge.evidence_agent_terminal_record.v2" },
+        "claim_free_bridge_terminal": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["outcome", "source"],
+          "properties": {
+            "outcome": { "const": "exact_terminal_replay" },
+            "source": { "const": "redacted_terminal_metadata" }
+          }
+        },
+        "claims_bearing_terminal": {
+          "allOf": [
+            { "$ref": "#/$defs/errorOutcome" },
+            { "type": "object", "properties": { "code": { "const": "terminal_result_not_retained" } } }
+          ]
+        },
+        "claim_free_provider_terminal": {
+          "allOf": [
+            { "$ref": "#/$defs/errorOutcome" },
+            { "type": "object", "properties": { "code": { "const": "terminal_result_not_retained" } } }
+          ]
+        },
+        "provider_reinvocation": { "const": "forbidden" }
       }
     }
   }

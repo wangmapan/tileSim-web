@@ -22,14 +22,20 @@ const { t } = useI18n();
       <span>{{ runSummary.range_label || t("边界未知") }}</span
       ><ChevronRight :size="14" /><span>{{ runSummary.host_path || t("宿主未知") }}</span>
     </div>
-    <div class="evidence-tags">
-      <StatusPill :value="evidence.sourceMode" />
-      <StatusPill :value="evidence.calibration" />
-      <StatusPill :value="evidence.claimScope" />
+    <div class="evidence-context-actions">
+      <div class="evidence-tags">
+        <StatusPill :value="evidence.sourceMode" />
+        <StatusPill :value="evidence.calibration" />
+        <StatusPill :value="evidence.claimScope" />
+      </div>
+      <button v-if="evidence.sourceMode !== 'real_trace'" class="evidence-warning" @click="setView('validation')">
+        <AlertTriangle :size="15" />
+        <span class="evidence-warning-copy">
+          <strong>{{ t("证据边界受限") }}</strong>
+          <small>{{ t("当前结论不能替代真实留出验证") }}</small>
+        </span>
+        <ChevronRight :size="15" />
+      </button>
     </div>
-    <button v-if="evidence.sourceMode !== 'real_trace'" class="evidence-warning" @click="setView('validation')">
-      <AlertTriangle :size="15" /><span>{{ t("当前结论不能替代真实留出验证") }}</span
-      ><ChevronRight :size="15" />
-    </button>
   </section>
 </template>

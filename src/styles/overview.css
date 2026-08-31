@@ -412,3 +412,10 @@ td small {
   margin: 0;
   font-size: var(--text-md);
 }
+.overview-primary-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.overview-primary-action > .panel {
+  max-width: none;
+}
