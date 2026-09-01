@@ -3,6 +3,7 @@
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { createMemoryHistory, createRouter } from "vue-router";
+import { nextTick } from "vue";
 import { beforeEach, describe, expect, it } from "vitest";
 import EvidenceAgentPanel from "../../src/features/evidence-agent/components/EvidenceAgentPanel.vue";
 import {
@@ -230,13 +231,18 @@ describe("F9 evidence Agent presentation", () => {
     const wrapper = mount(EvidenceAgentPanel, {
       props: props(true),
       global: { plugins: [pinia, await routerPlugin()] },
+      attachTo: document.body,
     });
+
+    await nextTick();
 
     expect(wrapper.get(".evidence-agent-state").text()).toBe("部分结果");
     expect(wrapper.text()).toContain("部分问题缺少足够证据");
     expect(wrapper.text()).toContain("insufficient_evidence");
     expect(wrapper.findAll(".evidence-agent-claims > li")).toHaveLength(1);
     expect(wrapper.text()).toContain("42ps");
+    expect(document.activeElement).toBe(wrapper.get(".evidence-agent-result h2").element);
+    wrapper.unmount();
   });
 
   it("shows the cross-process recovery boundary without rotating the pending key", async () => {

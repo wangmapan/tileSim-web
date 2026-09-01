@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Braces, CircleSlash2 } from "@lucide/vue";
-import { computed } from "vue";
+import { computed, nextTick, onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 import type { EvidenceAgentUiState, ValidatedEvidenceAgentResult } from "../../../entities/evidence-agent";
 import { useI18n } from "../../../i18n";
@@ -12,6 +12,7 @@ const props = defineProps<{
   agentResult: ValidatedEvidenceAgentResult;
 }>();
 const { t } = useI18n();
+const resultHeading = ref<HTMLElement | null>(null);
 const visibleClaims = computed(() => (props.agentState === "stale" ? [] : props.agentResult.response.claims));
 const refusalTitle = computed(() => {
   const refusal = props.agentResult.response.refusal;
@@ -30,6 +31,12 @@ function citationRoute(citation: (typeof visibleClaims.value)[number]["citations
     pointer: citation.json_pointer,
   });
 }
+
+onMounted(async () => {
+  await nextTick();
+  resultHeading.value?.focus({ preventScroll: true });
+  resultHeading.value?.scrollIntoView?.({ behavior: "auto", block: "start" });
+});
 </script>
 
 <template>
@@ -37,7 +44,7 @@ function citationRoute(citation: (typeof visibleClaims.value)[number]["citations
     <header class="panel-header">
       <div>
         <p class="section-kicker">ATOMIC CLAIMS · USER CONFIRMATION REQUIRED</p>
-        <h2>{{ t("Agent 独立草稿") }}</h2>
+        <h2 ref="resultHeading" tabindex="-1">{{ t("Agent 独立草稿") }}</h2>
         <p>{{ t("每条事实单独验证引用；结果不会覆盖 deterministic report。") }}</p>
       </div>
       <span class="evidence-agent-state" :data-state="agentState">{{
