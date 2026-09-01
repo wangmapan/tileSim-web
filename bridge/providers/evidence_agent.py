@@ -15,6 +15,7 @@ import socket
 import threading
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Callable, Mapping
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit, urlunsplit
@@ -58,6 +59,26 @@ Security and evidence policy:
   not_applicable. Preserve partial, truncated, refused, timeout, and cancelled terminal states.
 - Every evidentiary atomic claim has its own citations. If the available records cannot support a valid claim,
   return a structured refusal instead of guessing.
+"""
+
+NEWAPI_DRAFT_PROMPT = """
+NewAPI adapter output contract:
+- Return exactly three top-level keys: completion_state, claims, refusal.
+- completion_state is completed, refused, partial, or truncated.
+- A completed draft has at least one atomic claim and refusal=null. A refused draft has claims=[] and a refusal.
+- Return at most four concise atomic claims; prefer the smallest directly entailed answer.
+- Every claim has exactly claim_id, claim_kind, text, citations, scope, and optional percentile_subject.
+- claim_kind must be one of: numeric_fact, comparative_fact, reported_attribution, validation_boundary,
+  provenance_boundary, fidelity_boundary, conditional_recommendation, architecture_correction, help_text.
+- Copy every citation identity exactly from one verified_records[].citation_identity. Add only citation_role,
+  availability, and an optional value/unit pair. Never synthesize or repair an identity.
+- Every factual clause in claim text must be directly stated by the cited verified_records[].record_value. Do not
+  infer absence from records that were not included. Snapshot scope constrains output but is not itself a citation;
+  do not turn provenance/fidelity scope metadata into a claim unless the cited record_value states the same fact.
+- Claim scope must copy the fixed scope fields supplied in newapi_response_draft_contract. causal_subsystems may
+  contain only S0-S6. attribution_semantics and recommendation_semantics must obey the TileSim policy.
+- A refusal has exactly reason_code, detail, retryable and uses one advertised refusal reason code.
+The Bridge, not the model, binds provider/revision/audit/persistence/staleness fields into the formal response.
 """
 
 
@@ -284,6 +305,78 @@ def _newapi_structured_content(config: ProviderConfig, response: dict) -> dict:
     return _parse_json_bytes(content.encode("utf-8"))
 
 
+def _normalize_newapi_analysis_response(config: ProviderConfig, payload: dict, draft: dict) -> dict:
+    if set(draft) != {"completion_state", "claims", "refusal"}:
+        raise ProviderStructuredOutputError("The NewAPI draft did not use the exact adapter output keys.")
+    completion_state = draft["completion_state"]
+    claims = draft["claims"]
+    refusal = draft["refusal"]
+    if (
+        completion_state not in {"completed", "refused", "partial", "truncated"}
+        or not isinstance(claims, list)
+        or len(claims) > 4
+    ):
+        raise ProviderStructuredOutputError("The NewAPI draft completion state or claims were invalid.")
+    if completion_state == "completed" and (not claims or refusal is not None):
+        raise ProviderStructuredOutputError("The NewAPI completed draft requires claims and no refusal.")
+    if completion_state == "refused" and (claims or not isinstance(refusal, dict)):
+        raise ProviderStructuredOutputError("The NewAPI refused draft requires one structured refusal.")
+
+    binding = payload.get("response_binding")
+    policy = payload.get("policy")
+    if not isinstance(binding, dict) or not isinstance(policy, dict):
+        raise ProviderStructuredOutputError("The NewAPI analysis binding was unavailable.")
+    if completion_state == "completed":
+        degradation = {"state": "none", "reason_code": "none"}
+    elif completion_state == "refused":
+        reason_code = refusal.get("reason_code") if isinstance(refusal, dict) else None
+        degradation = {"state": "refused", "reason_code": reason_code or "insufficient_evidence"}
+    elif completion_state == "partial":
+        degradation = {"state": "partial", "reason_code": "partial_output"}
+    else:
+        degradation = {"state": "truncated", "reason_code": "output_truncated"}
+    return {
+        "schema_version": "tilesim.bridge.evidence_agent_response.v1",
+        "schema_set_revision": binding.get("schema_set_revision"),
+        "request_id": binding.get("request_id"),
+        "client_request_id": binding.get("client_request_id"),
+        "run_id": binding.get("run_id"),
+        "input_snapshot_digest": binding.get("input_snapshot_digest"),
+        "completion_state": completion_state,
+        "provider": config.public_identity,
+        "revisions": {
+            "prompt_template_revision": policy.get("prompt_template_revision"),
+            "policy_revision": policy.get("policy_revision"),
+        },
+        "claims": copy.deepcopy(claims),
+        "refusal": copy.deepcopy(refusal),
+        "partial": completion_state == "partial",
+        "truncated": completion_state == "truncated",
+        "degradation": degradation,
+        "audit_summary": {
+            "operations": [],
+            "tool_invocation_count": 0,
+            "hidden_reasoning_returned": False,
+        },
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "persistence": {
+            "mode": "run_local_terminal_metadata_only",
+            "retained_until": None,
+            "snapshot_payload_retained": False,
+            "user_question_retained": False,
+        },
+        "staleness": {
+            "state": "current_at_generation",
+            "binding_fields": [
+                "run_id",
+                "input_snapshot_digest",
+                "schema_set_revision",
+                "backend_identity",
+            ],
+        },
+    }
+
+
 def post_newapi_openai_json(config: ProviderConfig, payload: dict) -> dict:
     endpoint = _newapi_chat_completions_endpoint(config.endpoint)
     if payload.get("operation") == "capability_probe":
@@ -301,9 +394,10 @@ def post_newapi_openai_json(config: ProviderConfig, payload: dict) -> dict:
         )
         user_content = json.dumps(expected, ensure_ascii=False, separators=(",", ":"))
     elif payload.get("operation") == "structured_evidence_analysis":
-        system_prompt = payload.get("policy", {}).get("system_prompt")
-        if not isinstance(system_prompt, str) or system_prompt != SYSTEM_POLICY_PROMPT:
+        fixed_policy_prompt = payload.get("policy", {}).get("system_prompt")
+        if not isinstance(fixed_policy_prompt, str) or fixed_policy_prompt != SYSTEM_POLICY_PROMPT:
             raise ProviderStructuredOutputError("The NewAPI analysis payload did not carry the fixed TileSim policy.")
+        system_prompt = fixed_policy_prompt + NEWAPI_DRAFT_PROMPT
         user_content = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         expected = None
     else:
@@ -329,7 +423,10 @@ def post_newapi_openai_json(config: ProviderConfig, payload: dict) -> dict:
                 "The NewAPI model did not pass the exact structured capability probe."
             )
         return content
-    return {"protocol": PROVIDER_PROTOCOL, "response": content}
+    return {
+        "protocol": PROVIDER_PROTOCOL,
+        "response": _normalize_newapi_analysis_response(config, payload, content),
+    }
 
 
 def provider_transport(config: ProviderConfig, payload: dict) -> dict:
@@ -406,6 +503,92 @@ def build_analysis_payload(
         ),
         "task": {"locale": request["locale"], "task_kind": request["task_kind"]},
         "untrusted_user_question": copy.deepcopy(request["user_question"]),
+        "newapi_response_draft_contract": {
+            "exact_top_level_keys": ["completion_state", "claims", "refusal"],
+            "completion_states": ["completed", "refused", "partial", "truncated"],
+            "claim_required_keys": ["claim_id", "claim_kind", "text", "citations", "scope"],
+            "claim_optional_keys": ["percentile_subject"],
+            "maximum_claims": 4,
+            "claim_kinds": [
+                "numeric_fact",
+                "comparative_fact",
+                "reported_attribution",
+                "validation_boundary",
+                "provenance_boundary",
+                "fidelity_boundary",
+                "conditional_recommendation",
+                "architecture_correction",
+                "help_text",
+            ],
+            "citation_identity_source": "verified_records[].citation_identity_exact_copy",
+            "citation_roles": [
+                "direct_fact",
+                "reported_attribution",
+                "validation_boundary",
+                "provenance_constraint",
+                "fidelity_constraint",
+                "conditional_recommendation_basis",
+            ],
+            "availability_states": [
+                "available",
+                "missing",
+                "expected_absence",
+                "not_covered",
+                "unsupported_schema",
+                "not_applicable",
+            ],
+            "citation_optional_numeric_value": {
+                "value": {
+                    "encoding": "decimal_string",
+                    "numeric_kind": ["uint64", "sint64", "decimal"],
+                    "decimal": "canonical decimal string",
+                },
+                "unit": "required non-empty string when value is present",
+            },
+            "entailment_rules": [
+                "every factual clause must be directly stated by the cited record_value",
+                "never infer absence from a record missing from the allow-list",
+                "snapshot scope constrains claims but does not serve as an artifact citation",
+                "reported attribution must preserve the cited rank, subsystem, component, and score exactly",
+            ],
+            "refusal_reason_codes": [
+                "insufficient_evidence",
+                "citation_not_allowed",
+                "citation_not_resolvable",
+                "unsupported_schema",
+                "stale_schema_revision",
+                "run_binding_mismatch",
+                "ambiguous_reference",
+                "provenance_scope_violation",
+                "fidelity_scope_violation",
+                "unsafe_tool_request",
+                "prompt_injection",
+                "input_too_large",
+                "output_truncated",
+                "provider_unavailable",
+                "timeout",
+                "cancelled",
+                "concurrency_limit",
+            ],
+            "fixed_claim_scope": {
+                field: copy.deepcopy(request["snapshot_reference"]["evidence_scope"][field])
+                for field in (
+                    "source_mode",
+                    "requested_fidelity",
+                    "resolved_fidelity",
+                    "execution_mode",
+                    "resource_semantics_relation",
+                )
+            },
+            "claim_scope_variable_fields": {
+                "causal_subsystems": "unique array containing only S0 through S6",
+                "attribution_semantics": ["not_applicable", "reported_attribution_only"],
+                "recommendation_semantics": ["not_applicable", "conditional_not_executed"],
+            },
+            "percentile_subject": copy.deepcopy(
+                request["snapshot_reference"]["evidence_scope"]["percentile_subject"]
+            ),
+        },
     }
 
 

@@ -12,7 +12,7 @@ import { buildStructuredPerformanceReport } from "../../src/features/structured-
 export const f9RunId = "run-f9-contract";
 export const f9RequestId = "req-f9-p99";
 export const f9SchemaRevision = "sha256:5c6653e0fd7c367300ce5eba3200575e81170911ec952557f948931c6cb545aa";
-export const f9DescriptorRevision = "sha256:d68d4d18046e99452e56ac442ac9e4382e3cbcb593cf2bf228fbbd06a7c6f851";
+export const f9DescriptorRevision = "sha256:5f78ed33e20c131f672af53368c5ca950f41d63fd2e8f5301757d1f42debe357";
 
 export function createEvidenceAgentDescriptor(configured = true): EvidenceAgentDescriptorResponse {
   return {

@@ -145,6 +145,7 @@ watch(
     :agent-state="agentStore.state"
     :agent-result="agentStore.result"
     :pending="agentStore.pending"
+    :prepared="agentStore.prepared"
     :submission-error="submissionError"
     @request-selected="selectRequest"
     @submit-prepared="submitPrepared"

@@ -279,6 +279,19 @@ class ProviderConfigurationTest(unittest.TestCase):
                     }
                 )
                 content = request_payload["messages"][1]["content"]
+                user_payload = json.loads(content)
+                if user_payload.get("operation") == "structured_evidence_analysis":
+                    content = json.dumps(
+                        {
+                            "completion_state": "refused",
+                            "claims": [],
+                            "refusal": {
+                                "reason_code": "insufficient_evidence",
+                                "detail": "The supplied records do not support the requested claim.",
+                                "retryable": False,
+                            },
+                        }
+                    )
                 body = json.dumps(
                     {
                         "id": "newapi-probe",
@@ -329,15 +342,31 @@ class ProviderConfigurationTest(unittest.TestCase):
                 config,
                 {
                     "operation": "structured_evidence_analysis",
-                    "policy": {"system_prompt": provider.SYSTEM_POLICY_PROMPT},
-                    "safe_test_value": True,
+                    "policy": {
+                        "system_prompt": provider.SYSTEM_POLICY_PROMPT,
+                        "prompt_template_revision": server.evidence_agent.PROMPT_TEMPLATE_REVISION,
+                        "policy_revision": server.evidence_agent.POLICY_REVISION,
+                    },
+                    "response_binding": {
+                        "request_id": "agent-newapi-test",
+                        "client_request_id": "agent-client:newapi-test",
+                        "run_id": "run-newapi-test",
+                        "schema_set_revision": server.SCHEMA_SET_REVISION,
+                        "input_snapshot_digest": "sha256:" + "1" * 64,
+                    },
                 },
             )
-            self.assertEqual(analysis, {"protocol": provider.PROVIDER_PROTOCOL, "response": {
-                "operation": "structured_evidence_analysis",
-                "policy": {"system_prompt": provider.SYSTEM_POLICY_PROMPT},
-                "safe_test_value": True,
-            }})
+            self.assertEqual(analysis["protocol"], provider.PROVIDER_PROTOCOL)
+            self.assertEqual(analysis["response"]["completion_state"], "refused")
+            self.assertEqual(analysis["response"]["claims"], [])
+            self.assertEqual(analysis["response"]["request_id"], "agent-newapi-test")
+            self.assertEqual(analysis["response"]["provider"], config.public_identity)
+            self.assertEqual(analysis["response"]["audit_summary"]["operations"], [])
+            self.assertFalse(analysis["response"]["persistence"]["snapshot_payload_retained"])
+            self.assertIn(
+                provider.NEWAPI_DRAFT_PROMPT,
+                captured[1]["payload"]["messages"][0]["content"],
+            )
             self.assertEqual(len(captured), 2)
         finally:
             httpd.shutdown()

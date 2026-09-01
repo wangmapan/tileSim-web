@@ -42,6 +42,7 @@ function props(configured: boolean) {
     agentState: store.state,
     agentResult: store.result,
     pending: store.pending,
+    prepared: store.prepared,
     submissionError: "",
   };
 }
@@ -233,5 +234,76 @@ describe("F9 evidence Agent presentation", () => {
     expect(wrapper.text()).toContain(pending.idempotencyKey);
     expect(wrapper.get("button.button:not(.button--secondary)").attributes("disabled")).toBeDefined();
     expect(wrapper.get("button.button--secondary").text()).toContain("明确放弃当前分析");
+  });
+
+  it("blocks a restored key when the complete canonical payload is no longer retained", async () => {
+    const store = useEvidenceAgentStore();
+    const pending = store.begin(
+      {
+        runId: f9RunId,
+        backendIdentity: evidenceAgentBackendIdentity(f9Health),
+        schemaSetRevision: f9SchemaRevision,
+        inputSnapshotDigest: `sha256:${"a".repeat(64)}`,
+      },
+      `sha256:${"b".repeat(64)}`,
+      "agent-client:component-restored",
+    );
+    store.fail("failed", "restored_without_payload");
+    const wrapper = mount(EvidenceAgentPanel, {
+      props: props(true),
+      global: { plugins: [pinia, await routerPlugin()] },
+      attachTo: document.body,
+    });
+
+    expect(wrapper.text()).toContain("刷新页面或编辑问题后");
+    expect(wrapper.text()).toContain(pending.idempotencyKey);
+    expect(wrapper.get("button.button:not(.button--secondary)").attributes("disabled")).toBeDefined();
+    expect(wrapper.get("button.button--secondary").text()).toContain("放弃旧分析并开始新问题");
+    await wrapper.get("button.button--secondary").trigger("click");
+    expect(wrapper.emitted("discardPending")).toHaveLength(1);
+    expect(document.activeElement).toBe(wrapper.get("textarea").element);
+    wrapper.unmount();
+  });
+
+  it("allows exact in-memory replay but blocks submission after the question changes", async () => {
+    const context = createF9RunContext();
+    const descriptor = createEvidenceAgentDescriptor(true);
+    const prepared = await buildEvidenceAgentRequest({
+      runId: f9RunId,
+      selectedRequestId: f9RequestId,
+      manifest: context.manifest,
+      descriptor,
+      health: f9Health,
+      structuredReport: context.structuredReport,
+      bundle: context.bundle,
+      inputs: context.inputs,
+      locale: "zh-CN",
+      taskKind: "explain_p99",
+      question: "请解释当前 request 的 P99 与尾延迟证据边界。",
+      clientRequestId: "agent-client:component-exact-replay",
+    });
+    const store = useEvidenceAgentStore();
+    store.begin(
+      {
+        runId: f9RunId,
+        backendIdentity: evidenceAgentBackendIdentity(f9Health),
+        schemaSetRevision: f9SchemaRevision,
+        inputSnapshotDigest: prepared.inputSnapshotDigest,
+      },
+      prepared.payloadDigest,
+      prepared.request.client_request_id,
+    );
+    store.attachPrepared(prepared);
+    store.fail("failed", "retryable_terminal");
+    const wrapper = mount(EvidenceAgentPanel, {
+      props: props(true),
+      global: { plugins: [pinia, await routerPlugin()] },
+    });
+    const submit = wrapper.get("button.button:not(.button--secondary)");
+
+    expect(submit.attributes("disabled")).toBeUndefined();
+    await wrapper.get("textarea").setValue("这是一个需要新幂等键的新问题。");
+    expect(submit.attributes("disabled")).toBeDefined();
+    expect(wrapper.text()).toContain("前端已阻止冲突提交");
   });
 });

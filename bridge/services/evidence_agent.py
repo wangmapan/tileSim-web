@@ -349,7 +349,11 @@ def terminal_analysis(
                 provider=provider_identity,
                 completion_state="failed",
                 reason_code=reason,
-                detail="Provider output failed the Bridge evidence-contract validation.",
+                detail=(
+                    "Provider output failed the Bridge evidence-contract validation at "
+                    f"{error.field_path or '/'}"
+                    "."
+                ),
                 retryable=False,
             )
             terminal_class = "claim_free_bridge_terminal"

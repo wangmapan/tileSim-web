@@ -115,6 +115,13 @@ export function recordCarriesEvidenceSubject(value: unknown, subject: Subject): 
   return value.kind === subject.kind && value.id === subject.id;
 }
 
+function subjectIsUniqueInContainingCollection(root: unknown, pointer: string, subject: Subject): boolean {
+  const separator = pointer.lastIndexOf("/");
+  const parentPointer = separator > 0 ? pointer.slice(0, separator) : "";
+  const parent = parentPointer ? resolveEvidencePointer(root, parentPointer) : root;
+  return !Array.isArray(parent) || parent.filter((entry) => recordCarriesEvidenceSubject(entry, subject)).length === 1;
+}
+
 function exactSubject(reference: StructuredRunBoundReference, target: unknown): Subject | null {
   if (subjectKinds.has(reference.subject.kind as Subject["kind"])) {
     return { kind: reference.subject.kind as Subject["kind"], id: reference.subject.id };
@@ -158,7 +165,12 @@ function collectAllowedRecords(
     }
     const target = resolveEvidencePointer(roots[reference.artifact_id], reference.json_pointer);
     const subject = exactSubject(reference, target);
-    if (!subject || !recordCarriesEvidenceSubject(target, subject)) continue;
+    if (
+      !subject ||
+      !recordCarriesEvidenceSubject(target, subject) ||
+      !subjectIsUniqueInContainingCollection(roots[reference.artifact_id], reference.json_pointer, subject)
+    )
+      continue;
     const key = `${reference.artifact_id}\u0000${reference.json_pointer}\u0000${subject.kind}\u0000${subject.id}`;
     if (seen.has(key)) continue;
     seen.add(key);

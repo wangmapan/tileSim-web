@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Bot, CircleSlash2, Send, ShieldCheck } from "@lucide/vue";
-import { computed, ref } from "vue";
+import { computed, nextTick, ref } from "vue";
 import { adaptEvidenceAgentDescriptor } from "../../../adapters/evidence-agent-descriptor";
 import type {
   ArtifactManifestResponse,
@@ -41,6 +41,7 @@ const props = defineProps<{
   agentState: EvidenceAgentUiState;
   agentResult: ValidatedEvidenceAgentResult | null;
   pending: RetainedEvidenceAgentSubmission | null;
+  prepared: PreparedEvidenceAgentRequest | null;
   submissionError: string;
 }>();
 const emit = defineEmits<{
@@ -50,6 +51,7 @@ const emit = defineEmits<{
 }>();
 const { t } = useI18n();
 const question = ref(t("请解释当前 request 的 P99 与尾延迟证据边界。"));
+const questionInput = ref<HTMLTextAreaElement | null>(null);
 const taskKind = ref<EvidenceAgentRequest["task_kind"]>("explain_p99");
 const localError = ref("");
 
@@ -79,6 +81,20 @@ const displayState = computed(() => {
   if (!capabilityAvailable.value) return props.descriptor?.degradation.reason_code || "provider_unavailable";
   return props.agentState;
 });
+const currentDraftMatchesPending = computed(() => {
+  if (!props.pending || !props.prepared) return false;
+  const request = props.prepared.request;
+  return (
+    props.prepared.payloadDigest === props.pending.payloadDigest &&
+    props.prepared.inputSnapshotDigest === props.pending.inputSnapshotDigest &&
+    request.run_id === props.pending.runId &&
+    request.client_request_id === props.pending.clientRequestId &&
+    request.locale === currentLocale() &&
+    request.task_kind === taskKind.value &&
+    request.user_question.content === question.value.trim()
+  );
+});
+const mustDiscardBeforeSubmit = computed(() => Boolean(props.pending && !currentDraftMatchesPending.value));
 const canSubmit = computed(
   () =>
     capabilityAvailable.value &&
@@ -90,6 +106,7 @@ const canSubmit = computed(
       props.selectedRequestId &&
       question.value.trim(),
     ) &&
+    !mustDiscardBeforeSubmit.value &&
     !["submitting", "terminal_result_not_retained", "idempotency_payload_mismatch"].includes(props.agentState) &&
     !(props.pending && props.agentState === "stale"),
 );
@@ -109,6 +126,13 @@ function currentClientRequestId() {
 
 function chooseRequest(event: Event) {
   emit("requestSelected", (event.target as HTMLSelectElement).value);
+}
+
+async function discardAndStartNew() {
+  localError.value = "";
+  emit("discardPending");
+  await nextTick();
+  questionInput.value?.focus();
 }
 
 async function submit() {
@@ -239,6 +263,7 @@ async function submit() {
         <label class="evidence-agent-question">
           <span>{{ t("问题（不受信任内容）") }}</span>
           <textarea
+            ref="questionInput"
             v-model="question"
             :maxlength="descriptor?.limits.maximum_question_characters || 4000"
             :disabled="!capabilityAvailable"
@@ -276,18 +301,25 @@ async function submit() {
               )
             }}
           </span>
+          <span v-else-if="mustDiscardBeforeSubmit">
+            {{
+              t(
+                "当前表单不是旧 Idempotency-Key 对应的完整 canonical payload；这通常发生在刷新页面或编辑问题后。前端已阻止冲突提交，请先显式放弃旧分析。",
+              )
+            }}
+          </span>
           <span v-else>{{ t("仅同一 canonical payload 可复用该 Idempotency-Key。") }}</span>
-          <button
-            class="button button--secondary"
-            :disabled="agentState === 'submitting'"
-            @click="emit('discardPending')"
-          >
+          <button class="button button--secondary" :disabled="agentState === 'submitting'" @click="discardAndStartNew">
             {{
               agentState === "terminal_result_not_retained"
                 ? t("明确放弃该终态并开始新分析")
                 : agentState === "idempotency_payload_mismatch"
                   ? t("明确放弃旧分析并开始新分析")
-                  : t("明确放弃当前分析并开始新分析")
+                  : agentState === "stale"
+                    ? t("明确放弃当前分析并开始新分析")
+                    : mustDiscardBeforeSubmit
+                      ? t("放弃旧分析并开始新问题")
+                      : t("明确放弃当前分析并开始新分析")
             }}
           </button>
         </div>

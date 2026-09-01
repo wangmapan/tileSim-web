@@ -188,6 +188,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-evidence-agent
   -Model exact-model-id
 ```
 
+需要本机自动重启时，可将同一组 `TILESIM_EVIDENCE_AGENT_*` 配置写入 Git 忽略的
+`runtime/evidence-agent.local.json`，并把 API key 保存为当前 Windows 用户绑定的 DPAPI 密文字段
+`TILESIM_EVIDENCE_AGENT_API_KEY_DPAPI`。该文件不得进入 release snapshot、deployment manifest 或 Git；
+只能由创建它的 Windows 用户在同一主机上解密。启动方式：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-evidence-agent.ps1 `
+  -ConfigPath runtime/evidence-agent.local.json
+```
+
 请求不携带浏览器文件路径或任意 URL。snapshot reference 绑定当前 run 的 verified
 `tilesim.bridge.artifact_manifest.v2` canonical SHA-256，并冻结 source/build revision、state digest
 及其匹配状态；任一 backend identity 变化都会拒绝旧 snapshot。allow-list 中每个 artifact 还必须精确

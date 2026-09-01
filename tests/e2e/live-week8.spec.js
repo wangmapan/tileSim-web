@@ -167,7 +167,7 @@ test("deployed Week 8 Bridge exposes the formal F8 schema-driven experiment surf
   await page.locator(".capability-disclosure > summary").click();
   const schemaPanel = page.locator(".experiment-schema-panel");
   await expect(schemaPanel).toBeVisible({ timeout: 30_000 });
-  await expect(schemaPanel).toContainText("sha256:be0c2274a37b765de93ced0c2720d36da9e8db10977b1e688da8fd7e91882f4d");
+  await expect(schemaPanel).toContainText("sha256:92acce87f4f611893fafb2bf81dd1fa4fac509316ea2b5215a60f1995688871e");
   await expect(schemaPanel).toContainText("sha256:fe6d389035f9ca5f15f68a2ec65292c49f1e6bdc79e35d95b1acd641f8bcee96");
   await expect(schemaPanel).toContainText("controls · json");
   await expect(schemaPanel).toContainText("built_in_synthetic · strict_s6_manifest");
@@ -191,7 +191,7 @@ test("deployed Week 8 Bridge exposes the formal F8 schema-driven experiment surf
   expect(browserFailures).toEqual([]);
 });
 
-test("deployed Bridge exposes the F9 descriptor v2 and fails closed without Provider configuration", async ({
+test("deployed Bridge exposes the F9 descriptor v2 and reports authenticated Provider availability truthfully", async ({
   page,
   request,
 }) => {
@@ -200,12 +200,12 @@ test("deployed Bridge exposes the F9 descriptor v2 and fails closed without Prov
   const manifestResponse = await request.get(`${liveBaseUrl}/api/manifest`);
   expect(manifestResponse.ok()).toBe(true);
   expect(manifestResponse.headers()["x-tilesim-schema-set-revision"]).toBe(
-    "sha256:be0c2274a37b765de93ced0c2720d36da9e8db10977b1e688da8fd7e91882f4d",
+    "sha256:92acce87f4f611893fafb2bf81dd1fa4fac509316ea2b5215a60f1995688871e",
   );
   const manifest = await manifestResponse.json();
   expect(manifest.evidence_agent).toMatchObject({
     descriptor_schema_identity: "tilesim.bridge.evidence_agent_descriptor.v2",
-    descriptor_revision: "sha256:d68d4d18046e99452e56ac442ac9e4382e3cbcb593cf2bf228fbbd06a7c6f851",
+    descriptor_revision: "sha256:5f78ed33e20c131f672af53368c5ca950f41d63fd2e8f5301757d1f42debe357",
     request_schema_identity: "tilesim.bridge.evidence_agent_request.v1",
     response_schema_identity: "tilesim.bridge.evidence_agent_response.v1",
   });
@@ -215,11 +215,22 @@ test("deployed Bridge exposes the F9 descriptor v2 and fails closed without Prov
   const descriptor = await descriptorResponse.json();
   expect(descriptor).toMatchObject({
     schema_version: "tilesim.bridge.evidence_agent_descriptor.v2",
-    schema_set_revision: "sha256:be0c2274a37b765de93ced0c2720d36da9e8db10977b1e688da8fd7e91882f4d",
-    availability: "unavailable",
-    degradation: { state: "not_configured", reason_code: "provider_unavailable" },
-    provider: { configured: false },
+    schema_set_revision: "sha256:92acce87f4f611893fafb2bf81dd1fa4fac509316ea2b5215a60f1995688871e",
   });
+  if (descriptor.availability === "available") {
+    expect(descriptor.provider).toMatchObject({
+      configured: true,
+      provider_id: "tilesim_newapi_openai_v1",
+      model_id: "gpt-5.6-sol",
+      model_revision: "gpt-5.6-sol",
+    });
+  } else {
+    expect(descriptor).toMatchObject({
+      availability: "unavailable",
+      degradation: { reason_code: "provider_unavailable" },
+      provider: { configured: false },
+    });
+  }
   expect(descriptor.execution.retry.same_key_same_canonical_payload.provider_reinvocation).toBe("forbidden");
   expect(descriptor.execution.terminal_recovery.claims_bearing_terminal).toMatchObject({
     outcome: "error",
@@ -243,8 +254,12 @@ test("deployed Bridge exposes the F9 descriptor v2 and fails closed without Prov
     waitUntil: "domcontentloaded",
   });
   await expect(page.getByRole("heading", { name: "只读证据 Agent" })).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator(".evidence-agent-unavailable")).toContainText("provider_unavailable");
-  await expect(page.getByRole("button", { name: "生成证据草稿" })).toBeDisabled();
+  if (descriptor.availability === "available") {
+    await expect(page.locator(".evidence-agent-unavailable")).toHaveCount(0);
+  } else {
+    await expect(page.locator(".evidence-agent-unavailable")).toContainText("provider_unavailable");
+    await expect(page.getByRole("button", { name: "生成证据草稿" })).toBeDisabled();
+  }
   await page.locator(".evidence-agent-policy-disclosure > summary").click();
   await expect(page.locator(".evidence-agent-contract-grid")).toContainText("terminal_result_not_retained");
   await expect(page.locator(".evidence-agent-retention-list li")).toHaveCount(7);

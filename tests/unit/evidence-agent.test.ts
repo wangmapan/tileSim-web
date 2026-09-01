@@ -180,6 +180,34 @@ describe("F9 canonical JSON and request binding", () => {
       }),
     ).rejects.toMatchObject({ code: "ambiguous_reference" });
   });
+
+  it("excludes a nested subject that is duplicated in its containing artifact collection", async () => {
+    const context = createF9RunContext();
+    const contributions = context.bundle.metrics?.system_summary?.phase_fabric_contributions;
+    if (!contributions?.[0]) throw new Error("Expected an F9 phase contribution fixture.");
+    contributions.push({ ...contributions[0], phase_id: "phase-f9-duplicate" });
+
+    const prepared = await buildEvidenceAgentRequest({
+      runId: f9RunId,
+      selectedRequestId: f9RequestId,
+      manifest: context.manifest,
+      descriptor: createEvidenceAgentDescriptor(true),
+      health: f9Health,
+      structuredReport: context.structuredReport,
+      bundle: context.bundle,
+      inputs: context.inputs,
+      locale: "zh-CN",
+      taskKind: "explain_p99",
+      question: "Explain without ambiguous nested identities.",
+      clientRequestId: "agent-client:ambiguous-nested",
+    });
+    const metrics = prepared.request.artifact_allow_list.find((entry) => entry.artifact_id === "metrics")!;
+
+    expect(metrics.allowed_records).not.toContainEqual({
+      json_pointer: "/system_summary/phase_fabric_contributions/0",
+      subject: { kind: "memory_event", id: "memory-f9" },
+    });
+  });
 });
 
 describe("F9 atomic claim and citation validation", () => {

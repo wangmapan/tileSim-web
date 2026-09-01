@@ -17,7 +17,7 @@ CITATION_SCHEMA_IDENTITY = "tilesim.bridge.evidence_agent_citation.v1"
 SNAPSHOT_REFERENCE_SCHEMA_IDENTITY = "tilesim.bridge.evidence_snapshot_reference.v1"
 STRUCTURED_REPORT_SCHEMA_IDENTITY = "tilesim.web.structured-performance-report.v2"
 TERMINAL_RECORD_SCHEMA_IDENTITY = "tilesim.bridge.evidence_agent_terminal_record.v2"
-PROMPT_TEMPLATE_REVISION = "tilesim.evidence_agent.prompt_template.v2"
+PROMPT_TEMPLATE_REVISION = "tilesim.evidence_agent.prompt_template.v3"
 POLICY_REVISION = "tilesim.evidence_agent.read_only_policy.v2"
 
 SUPPORTED_LOCALES = ("en-US", "zh-CN")

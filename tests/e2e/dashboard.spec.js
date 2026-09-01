@@ -990,16 +990,16 @@ test("Evidence Agent validates citations, terminal states, stale isolation, and 
   expect(submissions.at(-1).idempotencyKey).toBe(completedSubmission.idempotencyKey);
   const completedReplayCount = submissions.length;
   await question.fill("different canonical payload");
-  await submit.click();
-  await expect(page.getByText("幂等键已绑定到不同载荷")).toBeVisible();
   await expect(submit).toBeDisabled();
+  await expect(page.getByText(/前端已阻止冲突提交/)).toBeVisible();
   expect(submissions).toHaveLength(completedReplayCount);
   await expect
     .poll(() =>
       page.evaluate(() => JSON.parse(sessionStorage.getItem("tilesim-web.evidence-agent-submission.v1") || "null")),
     )
     .toMatchObject({ idempotencyKey: completedSubmission.idempotencyKey });
-  await page.getByRole("button", { name: "明确放弃旧分析并开始新分析" }).click();
+  await page.getByRole("button", { name: "放弃旧分析并开始新问题" }).click();
+  await expect(question).toBeFocused();
 
   await question.fill("stale");
   await submit.click();
