@@ -1,7 +1,7 @@
 # TileSim Web AI Handoff
 
 **事实日期**：2026-09-01
-**当前阶段**：F6B/F7/F8 validated；F9 descriptor v2 已部署，真实 Provider acceptance 被专用配置阻断；F10 临时进程与 5173 发布演练已通过
+**当前阶段**：F6B/F7/F8/F10 validated；F9 descriptor v2 已部署，真实 Provider acceptance 被专用配置阻断
 
 **下一阶段**：提供完整 TileSim 专用 Provider 配置后执行 authenticated probe、live success/refusal/timeout、重复模型评测
 与双人 citation entailment review；不得用 fake Provider 关闭
@@ -17,9 +17,9 @@
   `/api/agent/evidence-capabilities` 正式返回 descriptor v2。
 - 当前 5173 部署身份：`versions_match=true`、`state_digests_match=true`、`execution_ready=true`，并发布
   `tilesim.web.release_snapshot.v1` 的 Web source/build/release/Bridge/static identity。
-- 当前基线：61/61 TileSim CTest、233/233 frontend、76/76 Bridge、25/25 desktop fixture Playwright、4/4
+- 当前基线：58/58 TileSim CTest、233/233 frontend、76/76 Bridge、25/25 desktop fixture Playwright、5/5
   live Week 8/F7/F8/F9 deployment Playwright
-- 工作树包含多阶段连续未提交改动；不得 reset、clean、覆盖或擅自提交。
+- 发布分支已推送；正常交接时工作树应保持 clean。若后续出现用户改动，不得 reset、clean、覆盖或擅自提交。
 - `127.0.0.1:5173` 是用户服务；除非用户明确要求部署，不停止、不重启、不替换。
 - F7 TypeScript 生成物、正式页面与 5173 schema revision 已同步。live acceptance run
   `run-20260831-121324-bbba5cdd` 的 9 个 artifact 均通过原始 bytes、manifest byte count 与 SHA-256 复核，
@@ -67,12 +67,14 @@
 - 前端高耦合文件继续渐进拆分：F8 `run-experiment/model.ts` 保留稳定 facade，descriptor surface、表单状态、
   request 校验/序列化、类型与固定 Pointer 分域；`EvidenceAgentPanel.vue` 仅保留编排与提交准备，descriptor v2
   policy 和 validated result/citation 分别由独立组件展示。feature 公共入口、契约语义和 DOM 行为保持不变。
-- F10 发布演练已推进：结构化报告完整构建/HTML 渲染进入 Worker，ECharts 约 525 KB 单块拆为 runtime/renderer，
+- F10 发布机制已 validated：结构化报告完整构建/HTML 渲染进入 Worker，ECharts 约 525 KB 单块拆为 runtime/renderer，
   dashboard facade 移出 run/history/comparison/restore 协调；部署会固化并校验不可变 `bridge/ + dist/` release
   snapshot，运行状态留在 snapshot 外。启动后 health 绑定 Web source/build/release/Bridge/static/schema identity；失败时
   原子恢复上一 manifest 并从上一 snapshot 重启。非 5173 实进程演练已创建并恢复真实 run，post-manifest 不健康候选
   被拒绝后上一 process/health/schema/run 全部恢复；正式 5173 切换成功，9/9 artifact bytes/SHA 与 release identity
-  matrix 已复核。独立 disposable clone/frozen-install 门禁仍需执行，完成前 F10 不标记 validated。
+  matrix 已复核。远程分支的独立 disposable clone 以 frozen lockfile 安装并通过 contracts/deps/type/lint/format/build、
+  233/233 frontend、76/76 Bridge、25/25 fixture Playwright 与 clean worktree 门禁。该演练同时修复了 Windows checkout
+  行尾导致的生成物/Prettier 非可复现问题；P0/P1 发布问题为 0。
 - 电脑端信息架构已去重：完整 F6B chain 只由“请求证据”页面承载，Execution、Metrics、Validation 分别聚焦
   canonical execution path、性能指标和验证边界；Metrics 仅保留稳定 ID 驱动的轻量入口。S9 归因通过同页独立
   tab 与跨子系统 chain 分开，Overview 删除重复 Run Facts/Recent Runs，侧栏按分析/实验/工具重组。该变化只调整

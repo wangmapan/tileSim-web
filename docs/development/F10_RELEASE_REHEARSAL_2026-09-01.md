@@ -43,7 +43,7 @@ matched both the manifest byte count and SHA-256 digest, and `rejected_artifacts
 run and artifact identities. It omitted Provider/model/prompt/policy because no successful exact authenticated probe was
 available; omission is the required safe state.
 
-## Live browser result before final redeploy
+## Final live browser result
 
 The live suite used request `req_prefill_0` from the acceptance run:
 
@@ -51,18 +51,22 @@ The live suite used request `req_prefill_0` from the acceptance run:
 - F7 Fabric: passed;
 - F8 experiment descriptor: passed;
 - F9 descriptor v2 and unavailable UI: passed;
-- F7 Design Space: failed only on a 4.41–4.47 axe color-contrast finding in the deployed pre-fix static snapshot.
+- F7 Design Space: passed after the color-token correction.
 
-The color token was corrected in source. A final immutable redeploy and 5/5 live rerun are required before this record is
-closed.
+The immutable redeploy completed and the final suite passed 5/5, including axe and desktop overflow checks.
 
-## Remaining gates
+## Disposable-clone closure
 
-- run the complete source/Bridge/fixture suite after the final fixes;
-- commit and push the release candidate;
-- redeploy the pushed revision and obtain 5/5 live browser acceptance;
-- clone the remote branch into a disposable directory, install with the frozen lockfile and rerun the complete gates;
-- confirm a clean worktree and no open P0/P1 release issue.
+- cloned the GitHub branch into a new directory and verified the exact remote HEAD;
+- installed 285 packages with the frozen lockfile without reusing the prepared checkout's `node_modules`;
+- fixed clean-Windows-checkout CRLF/LF false drift found by contract generation and repo-wide Prettier;
+- repeated the audit in a final fresh clone after both checkout fixes;
+- passed contracts, dependency boundaries, typecheck, lint, format, build, 233 frontend tests, 76 Bridge tests, Python/Node
+  canonical digest, F7/F8/F9 Schema/OpenAPI inventory and 25 desktop fixture Playwright tests;
+- confirmed generated files and the disposable worktree remained clean;
+- confirmed no open P0/P1 release issue.
+
+F10 release mechanics are validated.
 
 F9 model success/refusal/timeout, repeated model evaluation and two-reviewer citation entailment remain external release
 blockers, not failures of the deployed descriptor/Bridge contract.

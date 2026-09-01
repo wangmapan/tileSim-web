@@ -1,7 +1,7 @@
 # F10 Release Hardening Gate
 
 **Date**: 2026-09-01
-**Status**: immutable release and rollback rehearsed; disposable frozen-install gate open
+**Status**: validated for immutable release, rollback, traceability and disposable-install mechanics
 
 ## 1. Release decision
 
@@ -42,16 +42,18 @@ Completed on 2026-09-01:
 - `tilesim.web.release_identity_matrix.v1` bound TileSim, Web, release, schema, run and artifact identities. Provider identity
   was correctly omitted because no authenticated probe had succeeded.
 
-The remaining release gate must run against a disposable clone rather than the prepared developer checkout:
+The final release gate ran against a disposable clone of the remote branch rather than the prepared developer checkout:
 
-1. install the documented Node, pnpm, Python and WSL prerequisites;
-2. clone the exact Web and TileSim revisions and run frozen-lockfile install;
-3. run the complete frontend, Bridge, Schema/OpenAPI, canonical digest, Python compile and desktop Playwright gates;
-4. build the same revision and confirm the generated contract and build outputs are reproducible;
-5. confirm that no P0/P1 issue remains open.
+1. the exact remote Web revision was cloned into a new directory and installed with `pnpm --frozen-lockfile`;
+2. frontend, Bridge, Schema/OpenAPI, canonical digest, Python compile and desktop Playwright gates passed;
+3. the clean checkout exposed CRLF/LF-only false drift in contract generation and repo-wide Prettier;
+4. repository text is now checked out as LF and contract drift checks normalize line endings without changing generated
+   contract semantics;
+5. a final fresh clone passed contract drift, formatting, build and the complete test suite with a clean worktree;
+6. the final P0/P1 sweep found no open release issue.
 
-The first authorized `127.0.0.1:5173` switch was completed before this final disposable-clone gate. Any subsequent switch
-must still use an explicitly authorized deployment window and the same immutable rollback rules.
+The authorized `127.0.0.1:5173` switch and the subsequent final release switch both used the immutable snapshot path. Any
+future switch must still use an explicitly authorized deployment window and the same rollback rules.
 
 ## 4. F9-specific release gate
 

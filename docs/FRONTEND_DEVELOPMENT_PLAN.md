@@ -8,25 +8,25 @@
 
 ## 1. 当前状态
 
-| 阶段  | 状态              | 结果                                                                                              |
-| ----- | ----------------- | ------------------------------------------------------------------------------------------------- |
-| F0    | validated         | 工作树、后端 identity、样本、视觉和性能基线                                                       |
-| F1    | validated         | fixture、字段审计、Playwright、axe、视觉和 overflow 回归                                          |
-| F2    | validated         | TypeScript、compatibility schema、adapter、无损整数和 unknown-schema fallback                     |
-| F3    | validated         | versioned Bridge contract、generated client、artifact integrity、SSE、幂等和恢复                  |
-| F4    | validated         | Router、Pinia、TanStack Query、feature 边界、模块拆分和依赖门禁                                   |
-| F5A-D | validated         | 大型工件 Worker、虚拟浏览和 SHA-256 绑定 evidence pointer                                         |
-| F6A   | validated         | Week 7 S8 校准、S9 字段血缘/归因审计和确定性 Agent 编排                                           |
-| F6B   | validated         | Week 8 run-bound S1-S9 联动、真实服务验收和完整仓库门禁均已闭合                                   |
-| F7    | validated         | 正式 Pareto、candidate artifact、executed S6 knobs 与 topology join 已闭合                        |
-| F8    | validated         | 正式 experiment descriptor、revision fail-closed、8 字段表单与 request Pointer 已闭合             |
-| F9A   | completed         | contract audit、评测规格与 36-case 机器可读 hard gate 已完成                                      |
-| F9B   | contract-closed   | descriptor v2、DTO/runtime validator、adapter、状态与 UI 的源码闭环已完成                         |
-| F9C   | live-blocked      | descriptor v2 已部署；缺专用 Provider 配置，live model repetitions 为 0                           |
-| F10   | release-rehearsed | immutable snapshot、临时进程回滚、5173 切换与 artifact identity 已通过；disposable install 待执行 |
+| 阶段  | 状态            | 结果                                                                                          |
+| ----- | --------------- | --------------------------------------------------------------------------------------------- |
+| F0    | validated       | 工作树、后端 identity、样本、视觉和性能基线                                                   |
+| F1    | validated       | fixture、字段审计、Playwright、axe、视觉和 overflow 回归                                      |
+| F2    | validated       | TypeScript、compatibility schema、adapter、无损整数和 unknown-schema fallback                 |
+| F3    | validated       | versioned Bridge contract、generated client、artifact integrity、SSE、幂等和恢复              |
+| F4    | validated       | Router、Pinia、TanStack Query、feature 边界、模块拆分和依赖门禁                               |
+| F5A-D | validated       | 大型工件 Worker、虚拟浏览和 SHA-256 绑定 evidence pointer                                     |
+| F6A   | validated       | Week 7 S8 校准、S9 字段血缘/归因审计和确定性 Agent 编排                                       |
+| F6B   | validated       | Week 8 run-bound S1-S9 联动、真实服务验收和完整仓库门禁均已闭合                               |
+| F7    | validated       | 正式 Pareto、candidate artifact、executed S6 knobs 与 topology join 已闭合                    |
+| F8    | validated       | 正式 experiment descriptor、revision fail-closed、8 字段表单与 request Pointer 已闭合         |
+| F9A   | completed       | contract audit、评测规格与 36-case 机器可读 hard gate 已完成                                  |
+| F9B   | contract-closed | descriptor v2、DTO/runtime validator、adapter、状态与 UI 的源码闭环已完成                     |
+| F9C   | live-blocked    | descriptor v2 已部署；缺专用 Provider 配置，live model repetitions 为 0                       |
+| F10   | validated       | immutable snapshot、实进程回滚、5173、artifact identity 与 disposable frozen install 全部通过 |
 
 F6B、F7 与 F8 已在 `D:\tileSim-week8` 的真实 Week 8 Bridge 上完成 live acceptance。当前源码基线为
-233/233 unit/component、76/76 Bridge、25/25 desktop fixture Playwright 和 4/4 live Week 8/F7/F8 Playwright。F8
+233/233 unit/component、76/76 Bridge、25/25 desktop fixture Playwright 和 5/5 live Week 8/F7/F8/F9 Playwright。F8
 已消费正式 `GET /api/experiment-schema`，以 `field_id` 为身份、`request_json_pointer` 为唯一序列化/错误映射，
 并完成 manifest/payload/header revision 三方失败关闭。F9B 已消费正式 evidence Agent runtime contract，完成
 revision/digest/idempotency/citation/stale/degradation 的失败关闭；当前 provider 正式返回 unavailable，因此只关闭前端
@@ -163,8 +163,8 @@ F5A 基线确认旧 JSON viewer 的主线程整体格式化和 `<pre>` 渲染会
   或 claim-free Provider terminal 跨重启返回正式非重试 `409 terminal_result_not_retained`；different payload 返回
   `409 idempotency_payload_mismatch`；所有不可恢复分支均禁止重新调用 Provider。request/response/citation/snapshot
   identity 保持 v1，DTO/runtime validator 已重新生成，前端 adapter/store/submission/UI 已闭合。
-- **F9 validated 唯一剩余门禁**：获得单独部署授权并提供完整专用 Provider 配置后，部署源码 revision；authenticated
-  probe 必须精确匹配 protocol/provider/model/revision；随后使用真实 endpoint 完成 success、refusal、timeout，安全/
+- **F9 validated 唯一剩余门禁**：提供完整专用 Provider 配置后，authenticated probe 必须精确匹配
+  protocol/provider/model/revision；随后使用真实 endpoint 完成 success、refusal、timeout，安全/
   拒答边界每个配置至少重复 5 次，并由两名 reviewer 独立完成 citation entailment、边界语言、架构和建议纪律审查。
   任一 hard-gate 失败、人工分歧未裁决、live repetitions 少于要求或缺失 build/schema/model/prompt/policy identity 时，
   F9 保持 `live-blocked`，不得标记 validated。
@@ -186,15 +186,18 @@ F5A 基线确认旧 JSON viewer 的主线程整体格式化和 `<pre>` 渲染会
   - release traceability 记录路径、文件数、byte count 与 digest；临时目录 post-manifest 故障测试已证明 previous
     manifest 与旧 Python/static bytes 可恢复，release identity matrix 工具可绑定 TileSim/Web/schema/run/artifact identity。
   - 部署 PowerShell 通过语法门禁；Provider/model/prompt/policy 只有显式 authenticated probe exact-match 记录可进入 matrix。
-- **仍需 release rehearsal**：
-  1. 在 disposable checkout 以 lockfile frozen install 复跑 Node/pnpm/Python/WSL 前置条件与完整仓库门禁。
-  2. 非 5173 实进程已经验证 snapshot 启动、真实 run、post-manifest 不健康候选和 previous process/health/schema/run
+- **release rehearsal 已完成**：
+  1. 远程分支的 disposable checkout 已以 frozen lockfile 安装，并通过 contracts/deps/type/lint/format/build、233/233
+     frontend、76/76 Bridge、25/25 fixture Playwright 和 clean worktree 门禁；同时修复 Windows CRLF checkout 导致的
+     生成物与 Prettier 假漂移，契约语义未改变。
+  2. 非 5173 实进程已验证 snapshot 启动、真实 run、post-manifest 不健康候选和 previous process/health/schema/run
      恢复；正式 5173 immutable snapshot 切换也已成功。
   3. release identity matrix 已绑定 TileSim source/build/state、Web source/build/release、schema set、run 及 9/9 artifact
      bytes/SHA-256；Provider/model/prompt/policy 因 probe 未成立而按规则不写入。
-  4. P0/P1 sweep 已修复 live disclosure 假设、Design Space 对比度和 identity CLI 两项发布问题；disposable 门禁后复核清零。
-- **状态规则**：disposable frozen-install 门禁未执行前，F10 保持 `release-rehearsed`，不能标记 validated。完整清单见
-  `docs/F10_RELEASE_HARDENING.md`。
+  4. P0/P1 sweep 已修复 live disclosure 假设、Design Space 对比度、identity CLI 与 Windows clean-checkout
+     reproducibility；复核后 P0/P1 为 0。
+- **状态规则**：F10 release mechanics 已 validated。F9 的真实模型 acceptance 仍是独立发布 blocker，不能因 F10
+  通过而升级。完整清单见 `docs/F10_RELEASE_HARDENING.md`。
 
 ### 长期前端技术债
 

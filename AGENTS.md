@@ -15,8 +15,8 @@
 
 ## 2. 当前状态
 
-- F0-F8 已验证；F9 descriptor v2 源码契约闭环完成，live Provider acceptance 仍被部署/配置阻断；F10 为 source-hardened。
-- 当前源码基线：61/61 TileSim CTest、233/233 frontend、76/76 Bridge、25/25 desktop fixture Playwright；F9 live repetitions 为 0。
+- F0-F8 与 F10 发布机制已验证；F9 descriptor v2 已部署，live Provider acceptance 仅被专用配置阻断。
+- 当前源码基线：58/58 TileSim CTest、233/233 frontend、76/76 Bridge、25/25 desktop fixture Playwright、5/5 live deployment Playwright；F9 live model repetitions 为 0。
 - 产品范围只包含电脑网页端；不要为移动端增加实现或验收工作。
 - 前端工作目录可能长期包含 F0-F4 未提交改动。保留用户改动，不 reset、不清理、不擅自提交。
 - `127.0.0.1:5173` 可能运行用户正在使用的 Bridge。除非用户明确要求部署，不停止、不重启、不替换它。
