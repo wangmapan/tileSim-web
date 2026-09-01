@@ -46,6 +46,10 @@ const nextValidators = await format(`${validatorBanner}${standaloneCode(ajv, val
   filepath: validatorOutputPath,
 });
 
+function hasGeneratedDrift(current, generated) {
+  return current.replaceAll("\r\n", "\n") !== generated.replaceAll("\r\n", "\n");
+}
+
 if (process.argv.includes("--check")) {
   let current = "";
   let currentValidators = "";
@@ -55,7 +59,7 @@ if (process.argv.includes("--check")) {
   } catch {
     // Missing output is reported as drift below.
   }
-  if (current !== next || currentValidators !== nextValidators) {
+  if (hasGeneratedDrift(current, next) || hasGeneratedDrift(currentValidators, nextValidators)) {
     process.stderr.write("Generated contract types are stale. Run pnpm contracts:generate.\n");
     process.exitCode = 1;
   }

@@ -239,6 +239,10 @@ const nextEvidenceAgentValidators = await format(`${evidenceAgentValidatorBanner
   filepath: evidenceAgentValidatorsOutputPath,
 });
 
+function hasGeneratedDrift(current, generated) {
+  return current.replaceAll("\r\n", "\n") !== generated.replaceAll("\r\n", "\n");
+}
+
 if (process.argv.includes("--check")) {
   let currentTypes = "";
   let currentClient = "";
@@ -255,11 +259,11 @@ if (process.argv.includes("--check")) {
     // Missing output is reported as drift below.
   }
   if (
-    currentTypes !== nextTypes ||
-    currentClient !== nextClient ||
-    currentCreateRunSchema !== nextCreateRunSchema ||
-    currentExperimentValidators !== nextExperimentValidators ||
-    currentEvidenceAgentValidators !== nextEvidenceAgentValidators
+    hasGeneratedDrift(currentTypes, nextTypes) ||
+    hasGeneratedDrift(currentClient, nextClient) ||
+    hasGeneratedDrift(currentCreateRunSchema, nextCreateRunSchema) ||
+    hasGeneratedDrift(currentExperimentValidators, nextExperimentValidators) ||
+    hasGeneratedDrift(currentEvidenceAgentValidators, nextEvidenceAgentValidators)
   ) {
     process.stderr.write("Generated Bridge client is stale. Run pnpm contracts:generate.\n");
     process.exitCode = 1;
