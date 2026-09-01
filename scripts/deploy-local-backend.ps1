@@ -10,6 +10,7 @@ $webRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $source = (Resolve-Path -LiteralPath $SourceRoot).Path
 $runtimeRoot = Join-Path $webRoot "runtime"
 $manifestPath = Join-Path $runtimeRoot "backend-current.json"
+$evidenceAgentConfigPath = Join-Path $runtimeRoot "evidence-agent.local.json"
 $node = "C:\Users\mapanwang\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe"
 $mutex = [System.Threading.Mutex]::new($false, "Local\TileSimBackendUpdate")
 
@@ -91,6 +92,19 @@ function New-WebReleaseSnapshot {
         --schema-set-revision $SchemaSetRevision
     if ($LASTEXITCODE -ne 0) { throw "Could not create the immutable TileSim Web release snapshot." }
     return ($output | Select-Object -Last 1) | ConvertFrom-Json
+}
+
+function Start-DeployedBridge {
+    if (Test-Path -LiteralPath $evidenceAgentConfigPath) {
+        & (Join-Path $PSScriptRoot "start-evidence-agent.ps1") `
+            -ConfigPath $evidenceAgentConfigPath `
+            -WslDistro $WslDistro
+    } else {
+        & (Join-Path $PSScriptRoot "start-backend.ps1") `
+            -ManifestPath $manifestPath `
+            -WslDistro $WslDistro
+    }
+    if ($LASTEXITCODE -ne 0) { throw "Bridge restart returned exit code $LASTEXITCODE." }
 }
 
 if (-not $mutex.WaitOne(0)) { throw "Another backend deployment is already running." }
@@ -204,8 +218,7 @@ try {
 
     if (-not $NoRestart) {
         $restartAttempted = $true
-        & (Join-Path $PSScriptRoot "start-backend.ps1") -ManifestPath $manifestPath -WslDistro $WslDistro
-        if ($LASTEXITCODE -ne 0) { throw "Local backend build passed, but bridge restart failed." }
+        Start-DeployedBridge
     }
     Write-Output "TileSim local backend deployed: $branch @ $revision, state $sourceDigest"
 } catch {
@@ -215,8 +228,7 @@ try {
         Write-AtomicTextFile $manifestPath $previousManifestText
         if ($restartAttempted) {
             try {
-                & (Join-Path $PSScriptRoot "start-backend.ps1") -ManifestPath $manifestPath -WslDistro $WslDistro
-                if ($LASTEXITCODE -ne 0) { throw "Previous Bridge restart returned exit code $LASTEXITCODE." }
+                Start-DeployedBridge
                 Write-Warning "Deployment failed; the previous deployment manifest and Bridge service were restored."
             } catch {
                 $rollbackError = $_
