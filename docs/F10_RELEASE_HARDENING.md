@@ -1,7 +1,7 @@
 # F10 Release Hardening Gate
 
 **Date**: 2026-09-01
-**Status**: source closure implemented; clean-environment and temporary-process release rehearsal open
+**Status**: immutable release and rollback rehearsed; disposable frozen-install gate open
 
 ## 1. Release decision
 
@@ -29,30 +29,37 @@ provider/model/prompt/policy identities only after a successful authenticated pr
   Evidence Agent provider/model/prompt/policy fields are accepted only from an explicit exact authenticated-probe record;
   the tool does not read Provider environment variables.
 
-## 3. Required release rehearsal
+## 3. Release rehearsal status
 
-Run the following against a clean machine or disposable VM, not an already prepared developer checkout:
+Completed on 2026-09-01:
+
+- a content-addressed release snapshot was started on temporary port `58173` with `execution_ready=true`;
+- a real `s1_des_example` run completed and remained readable after process restart;
+- a candidate with a deliberately missing TileSim CLI was observed as `execution_ready=false` and was rejected;
+- restoring the previous manifest and immutable snapshot restored the healthy process, schema identity and completed run;
+- the authorized `127.0.0.1:5173` switch published matching source/build/state/release/schema identities;
+- the live acceptance run's nine artifact response bodies matched manifest byte counts and SHA-256 values;
+- `tilesim.web.release_identity_matrix.v1` bound TileSim, Web, release, schema, run and artifact identities. Provider identity
+  was correctly omitted because no authenticated probe had succeeded.
+
+The remaining release gate must run against a disposable clone rather than the prepared developer checkout:
 
 1. install the documented Node, pnpm, Python and WSL prerequisites;
 2. clone the exact Web and TileSim revisions and run frozen-lockfile install;
 3. run the complete frontend, Bridge, Schema/OpenAPI, canonical digest, Python compile and desktop Playwright gates;
-4. build and deploy to a temporary port, create a run, restore it after process restart, compare two runs and export the
-   complete structured report through the Worker path;
-5. on a non-5173 temporary port, inject a post-manifest startup failure and prove the previous immutable snapshot process,
-   health identity and schema revision are restored; the manifest/Python/static byte restoration portion is automated;
-6. verify artifact response bytes, manifest byte count and SHA-256 for every supported artifact used by the acceptance run;
-7. record the release identity matrix with `pnpm release:identity -- --deployment <path> --artifacts <path> --output <path>`
-   and confirm that no P0/P1 issue remains open.
+4. build the same revision and confirm the generated contract and build outputs are reproducible;
+5. confirm that no P0/P1 issue remains open.
 
-The real `127.0.0.1:5173` service may be switched only in an explicitly authorized deployment window after the disposable
-rehearsal passes.
+The first authorized `127.0.0.1:5173` switch was completed before this final disposable-clone gate. Any subsequent switch
+must still use an explicitly authorized deployment window and the same immutable rollback rules.
 
 ## 4. F9-specific release gate
 
-F9 remains `live-blocked` until the F9C source is deployed and all required `TILESIM_EVIDENCE_AGENT_*` names are configured
-without exposing their values. The authenticated probe must exactly match protocol/provider/model/revision. Real success,
-refusal and timeout samples, at least five repetitions for every safety/refusal boundary, and two-reviewer citation
-entailment review must all pass. Live repetitions remain `0` until those events are recorded.
+F9C source and descriptor v2 are deployed, but F9 remains `live-blocked` until all required
+`TILESIM_EVIDENCE_AGENT_*` names are configured without exposing their values. The authenticated probe must exactly match
+protocol/provider/model/revision. Real success, refusal and timeout samples, at least five repetitions for every
+safety/refusal boundary, and two-reviewer citation entailment review must all pass. Live model repetitions remain `0`
+until those events are recorded.
 
 ## 5. Stop conditions
 

@@ -2,8 +2,8 @@
 
 **Audit date**: 2026-09-01
 **Scope**: read-only evidence Agent for the TileSim desktop web product  
-**Status**: Bridge descriptor v2 recovery/retention contract, generated DTO/runtime validators and frontend consumers closed;
-deployment, authenticated configuration and live model evaluation remain open
+**Status**: Bridge descriptor v2 recovery/retention contract, generated DTO/runtime validators, frontend consumers and
+source deployment closed; authenticated Provider configuration and live model evaluation remain open
 
 ## 1. Decision
 
@@ -15,10 +15,10 @@ The next safe split is:
 - **F9B, frontend descriptor v2 adaptation complete**: generated DTO/runtime validators, fixture, manifest-bound API validation,
   stable descriptor policy adapter, UI retry/recovery/persistence/payload-retention rendering and both structured 409 recovery
   states consume the v2 policy. The adapter performs no digest or integer conversion.
-- **F9C, backend ready**: the fixed-endpoint Provider adapter, authenticated capability probe, read-only record projection,
+- **F9C, source deployed**: the fixed-endpoint Provider adapter, authenticated capability probe, read-only record projection,
   strict output validation and safe terminal failures are implemented and covered by Bridge tests.
-- **F9C live acceptance, blocked**: no TileSim-specific Provider configuration is present, live repetitions are `0`, and the
-  current 5173 deployment predates the Agent endpoints. No fake success is used to close this boundary.
+- **F9C model acceptance, blocked**: 5173 now publishes the Agent endpoints and descriptor v2, but no TileSim-specific
+  Provider configuration is present and live repetitions are `0`. No fake success is used to close this boundary.
 
 The current source schema-set revision is
 `sha256:be0c2274a37b765de93ced0c2720d36da9e8db10977b1e688da8fd7e91882f4d`; descriptor revision is
@@ -26,9 +26,8 @@ The current source schema-set revision is
 `tilesim.evidence_agent.prompt_template.v2`, and policy revision is `tilesim.evidence_agent.read_only_policy.v2`.
 The frontend discovers `GET /api/agent/evidence-capabilities` and
 `POST /api/runs/{run_id}/agent/evidence-analyses` from `/api/manifest.evidence_agent`, then binds manifest, payload and
-response headers to that revision. The running 5173 service still publishes
-`sha256:b1136c7acf028d9bcf0e28ed9744f68bce6faa0b00c40342337c99abbe611159` and returns `unknown_endpoint` for the
-capability route, so this source contract has not received live deployment acceptance.
+response headers to that revision. The running 5173 service now publishes the same schema set and descriptor revision;
+the capability route returns formal `provider_unavailable` because its required dedicated configuration is absent.
 
 ## 2. Evidence inspected
 
@@ -268,7 +267,6 @@ F9 needs distinct presentation states; these are frontend view semantics, not pr
 
 ### Still blocked by provider availability
 
-- deployment of the F9C source revision to the user service after explicit authorization;
 - a complete TileSim-specific provider configuration and successful authenticated capability probe;
 - a real terminal success/refusal response from the live endpoint;
 - repeated live model evaluation, human entailment review and production latency/timeout observations;
@@ -320,6 +318,7 @@ F9 may be marked validated only when:
   `409 idempotency_payload_mismatch` recovery boundaries;
 - the generated Evidence Agent validator bundle now includes `tilesim.bridge.error.v1`; informal error objects, stale error
   headers, malformed fixed-409 fields, `502/503/504` error envelopes and HTTP/completion-state contradictions fail closed;
-- live model repetitions remain `0`, and the running 5173 service has not been upgraded to the F9C source revision;
+- live model repetitions remain `0`; the running 5173 service is upgraded but correctly reports `provider_unavailable`
+  because all required dedicated Provider variables are absent;
 - repo-wide Prettier and `git diff --check` pass; `bridge/test_f9_canonical_digest.mjs` was changed only by Prettier and both
   canonical digest implementations still pass the same two golden vectors.

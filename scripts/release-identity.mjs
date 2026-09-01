@@ -15,9 +15,15 @@ function artifactIdentity(entry, index) {
   }
   const sha256 = requiredString(entry.sha256, `${pointer}/sha256`);
   if (!/^[0-9a-f]{64}$/.test(sha256)) throw new Error(`invalid artifact SHA-256 at ${pointer}/sha256`);
+  const contractStatus = requiredString(entry.contract_status, `${pointer}/contract_status`);
+  const schemaIdentity = typeof entry.schema_identity === "string" ? entry.schema_identity : "";
+  if (contractStatus === "supported" && !schemaIdentity) {
+    throw new Error(`supported artifact is missing schema identity at ${pointer}/schema_identity`);
+  }
   return {
     artifact_id: requiredString(entry.artifact_id, `${pointer}/artifact_id`),
-    schema_identity: requiredString(entry.schema_identity, `${pointer}/schema_identity`),
+    schema_identity: schemaIdentity,
+    contract_status: contractStatus,
     bytes: typeof bytes === "number" ? String(bytes) : bytes,
     sha256,
   };
@@ -71,10 +77,11 @@ export function buildReleaseIdentityMatrix(deployment, artifactManifest, evidenc
 }
 
 function parseArguments(values) {
+  const normalizedValues = values[0] === "--" ? values.slice(1) : values;
   const parsed = {};
-  for (let index = 0; index < values.length; index += 2) {
-    const name = values[index];
-    const value = values[index + 1];
+  for (let index = 0; index < normalizedValues.length; index += 2) {
+    const name = normalizedValues[index];
+    const value = normalizedValues[index + 1];
     if (!name?.startsWith("--") || !value) throw new Error("release identity arguments must be --name value pairs");
     parsed[name.slice(2)] = value;
   }

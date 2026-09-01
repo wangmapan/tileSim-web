@@ -164,9 +164,10 @@ test("deployed Week 8 Bridge exposes the formal F8 schema-driven experiment surf
   const browserFailures = observeBrowserFailures(page);
   await page.goto(`${liveBaseUrl}/experiment`, { waitUntil: "domcontentloaded" });
 
+  await page.locator(".capability-disclosure > summary").click();
   const schemaPanel = page.locator(".experiment-schema-panel");
   await expect(schemaPanel).toBeVisible({ timeout: 30_000 });
-  await expect(schemaPanel).toContainText("sha256:b1136c7acf028d9bcf0e28ed9744f68bce6faa0b00c40342337c99abbe611159");
+  await expect(schemaPanel).toContainText("sha256:be0c2274a37b765de93ced0c2720d36da9e8db10977b1e688da8fd7e91882f4d");
   await expect(schemaPanel).toContainText("sha256:fe6d389035f9ca5f15f68a2ec65292c49f1e6bdc79e35d95b1acd641f8bcee96");
   await expect(schemaPanel).toContainText("controls · json");
   await expect(schemaPanel).toContainText("built_in_synthetic · strict_s6_manifest");
@@ -182,6 +183,71 @@ test("deployed Week 8 Bridge exposes the formal F8 schema-driven experiment surf
   await page.locator(".experiment-request-preview summary").click();
   await expect(page.locator(".request-preview-error code")).toHaveText("/overrides/fabric/scale_out_latency_us");
 
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations.filter((item) => ["serious", "critical"].includes(item.impact))).toEqual([]);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
+    await page.evaluate(() => document.documentElement.clientWidth),
+  );
+  expect(browserFailures).toEqual([]);
+});
+
+test("deployed Bridge exposes the F9 descriptor v2 and fails closed without Provider configuration", async ({
+  page,
+  request,
+}) => {
+  test.skip(!liveBaseUrl || !liveRunId, "Live F9 Bridge coordinates were not provided.");
+
+  const manifestResponse = await request.get(`${liveBaseUrl}/api/manifest`);
+  expect(manifestResponse.ok()).toBe(true);
+  expect(manifestResponse.headers()["x-tilesim-schema-set-revision"]).toBe(
+    "sha256:be0c2274a37b765de93ced0c2720d36da9e8db10977b1e688da8fd7e91882f4d",
+  );
+  const manifest = await manifestResponse.json();
+  expect(manifest.evidence_agent).toMatchObject({
+    descriptor_schema_identity: "tilesim.bridge.evidence_agent_descriptor.v2",
+    descriptor_revision: "sha256:d68d4d18046e99452e56ac442ac9e4382e3cbcb593cf2bf228fbbd06a7c6f851",
+    request_schema_identity: "tilesim.bridge.evidence_agent_request.v1",
+    response_schema_identity: "tilesim.bridge.evidence_agent_response.v1",
+  });
+
+  const descriptorResponse = await request.get(`${liveBaseUrl}/api/agent/evidence-capabilities`);
+  expect(descriptorResponse.ok()).toBe(true);
+  const descriptor = await descriptorResponse.json();
+  expect(descriptor).toMatchObject({
+    schema_version: "tilesim.bridge.evidence_agent_descriptor.v2",
+    schema_set_revision: "sha256:be0c2274a37b765de93ced0c2720d36da9e8db10977b1e688da8fd7e91882f4d",
+    availability: "unavailable",
+    degradation: { state: "not_configured", reason_code: "provider_unavailable" },
+    provider: { configured: false },
+  });
+  expect(descriptor.execution.retry.same_key_same_canonical_payload.provider_reinvocation).toBe("forbidden");
+  expect(descriptor.execution.terminal_recovery.claims_bearing_terminal).toMatchObject({
+    outcome: "error",
+    http_status: 409,
+    code: "terminal_result_not_retained",
+    field_path: "/headers/Idempotency-Key",
+    retryable: false,
+  });
+  expect(Object.values(descriptor.persistence.payload_retention)).toEqual([
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+  ]);
+
+  const browserFailures = observeBrowserFailures(page);
+  await page.goto(`${liveBaseUrl}/evidence-agent?run=${encodeURIComponent(liveRunId)}`, {
+    waitUntil: "domcontentloaded",
+  });
+  await expect(page.getByRole("heading", { name: "只读证据 Agent" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".evidence-agent-unavailable")).toContainText("provider_unavailable");
+  await expect(page.getByRole("button", { name: "生成证据草稿" })).toBeDisabled();
+  await page.locator(".evidence-agent-policy-disclosure > summary").click();
+  await expect(page.locator(".evidence-agent-contract-grid")).toContainText("terminal_result_not_retained");
+  await expect(page.locator(".evidence-agent-retention-list li")).toHaveCount(7);
   const results = await new AxeBuilder({ page }).analyze();
   expect(results.violations.filter((item) => ["serious", "critical"].includes(item.impact))).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(

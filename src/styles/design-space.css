@@ -619,7 +619,7 @@
   place-items: center;
   min-height: 31px;
   border-radius: 7px;
-  color: var(--accent);
+  color: var(--accent-hover);
   background: var(--accent-soft);
   font: 750 var(--text-sm) var(--font-mono);
 }

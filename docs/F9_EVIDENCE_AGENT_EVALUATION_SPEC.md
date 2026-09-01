@@ -3,8 +3,8 @@
 **Specification date**: 2026-09-01
 **Applies to**: published read-only F9 evidence Agent contract and frontend presentation  
 **Runtime status**: descriptor v2 recovery/retention contract, generated DTO/runtime validators, frontend consumers and F9C
-Provider adapter gates implemented; real live repetitions remain `0` because the source is not deployed to 5173 and no
-authenticated TileSim Provider configuration is available
+Provider adapter gates are deployed to 5173; real live repetitions remain `0` because no authenticated TileSim Provider
+configuration is available
 
 ## 1. Evaluation objective
 
@@ -266,9 +266,9 @@ Tests must not pass by truncating fixtures, deleting assertions, accepting mock-
 - Source contract revisions are schema set
   `sha256:be0c2274a37b765de93ced0c2720d36da9e8db10977b1e688da8fd7e91882f4d`, descriptor
   `sha256:d68d4d18046e99452e56ac442ac9e4382e3cbcb593cf2bf228fbbd06a7c6f851`, prompt v2 and policy v2.
-- Live model repetitions remain `0`. The current 5173 deployment publishes old schema revision `sha256:b1136c7a…` and has
-  no capability endpoint; after authorized deployment, a complete `TILESIM_EVIDENCE_AGENT_*` configuration and successful
-  authenticated probe are still required.
+- Live model repetitions remain `0`. The current 5173 deployment publishes schema revision `sha256:be0c2274…`, descriptor
+  v2 and the capability endpoint, which correctly returns `provider_unavailable`; a complete `TILESIM_EVIDENCE_AGENT_*`
+  configuration and successful authenticated probe are still required.
 - Cross-process claims-bearing replay is now an explicitly unsupported descriptor v2 branch, not a contradictory promise.
   The required result is the formal `409 terminal_result_not_retained` Bridge error envelope; the Idempotency-Key remains
   locked, Provider call count cannot increase, and only explicit user discard may start a new analysis. Claim-free Bridge

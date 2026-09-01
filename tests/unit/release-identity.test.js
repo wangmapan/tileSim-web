@@ -25,14 +25,23 @@ describe("release identity matrix", () => {
         {
           artifact_id: "metrics",
           schema_identity: "tilesim.metrics_report.v1",
+          contract_status: "supported",
           bytes: "9007199254740993",
           sha256: "4".repeat(64),
+        },
+        {
+          artifact_id: "input-runtime-trace",
+          schema_identity: "",
+          contract_status: "not_applicable",
+          bytes: 42,
+          sha256: "5".repeat(64),
         },
       ],
     });
     expect(value.identity).toBe("tilesim.web.release_identity_matrix.v1");
     expect(value.web.release_digest).toBe(deployment.web_release_digest);
     expect(value.run.artifacts[0].bytes).toBe("9007199254740993");
+    expect(value.run.artifacts[1]).toMatchObject({ schema_identity: "", contract_status: "not_applicable" });
   });
 
   it("does not record Provider identity without an exact authenticated probe match", () => {

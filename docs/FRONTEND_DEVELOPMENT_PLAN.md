@@ -8,22 +8,22 @@
 
 ## 1. 当前状态
 
-| 阶段  | 状态            | 结果                                                                                  |
-| ----- | --------------- | ------------------------------------------------------------------------------------- |
-| F0    | validated       | 工作树、后端 identity、样本、视觉和性能基线                                           |
-| F1    | validated       | fixture、字段审计、Playwright、axe、视觉和 overflow 回归                              |
-| F2    | validated       | TypeScript、compatibility schema、adapter、无损整数和 unknown-schema fallback         |
-| F3    | validated       | versioned Bridge contract、generated client、artifact integrity、SSE、幂等和恢复      |
-| F4    | validated       | Router、Pinia、TanStack Query、feature 边界、模块拆分和依赖门禁                       |
-| F5A-D | validated       | 大型工件 Worker、虚拟浏览和 SHA-256 绑定 evidence pointer                             |
-| F6A   | validated       | Week 7 S8 校准、S9 字段血缘/归因审计和确定性 Agent 编排                               |
-| F6B   | validated       | Week 8 run-bound S1-S9 联动、真实服务验收和完整仓库门禁均已闭合                       |
-| F7    | validated       | 正式 Pareto、candidate artifact、executed S6 knobs 与 topology join 已闭合            |
-| F8    | validated       | 正式 experiment descriptor、revision fail-closed、8 字段表单与 request Pointer 已闭合 |
-| F9A   | completed       | contract audit、评测规格与 36-case 机器可读 hard gate 已完成                          |
-| F9B   | contract-closed | descriptor v2、DTO/runtime validator、adapter、状态与 UI 的源码闭环已完成             |
-| F9C   | live-blocked    | Provider adapter 与安全终态已交付；旧 5173/缺专用配置，live repetitions 为 0          |
-| F10   | source-hardened | Worker 导出、chunk 拆分、发布摘要与失败回滚已实现；空环境/live rehearsal 尚未执行     |
+| 阶段  | 状态              | 结果                                                                                              |
+| ----- | ----------------- | ------------------------------------------------------------------------------------------------- |
+| F0    | validated         | 工作树、后端 identity、样本、视觉和性能基线                                                       |
+| F1    | validated         | fixture、字段审计、Playwright、axe、视觉和 overflow 回归                                          |
+| F2    | validated         | TypeScript、compatibility schema、adapter、无损整数和 unknown-schema fallback                     |
+| F3    | validated         | versioned Bridge contract、generated client、artifact integrity、SSE、幂等和恢复                  |
+| F4    | validated         | Router、Pinia、TanStack Query、feature 边界、模块拆分和依赖门禁                                   |
+| F5A-D | validated         | 大型工件 Worker、虚拟浏览和 SHA-256 绑定 evidence pointer                                         |
+| F6A   | validated         | Week 7 S8 校准、S9 字段血缘/归因审计和确定性 Agent 编排                                           |
+| F6B   | validated         | Week 8 run-bound S1-S9 联动、真实服务验收和完整仓库门禁均已闭合                                   |
+| F7    | validated         | 正式 Pareto、candidate artifact、executed S6 knobs 与 topology join 已闭合                        |
+| F8    | validated         | 正式 experiment descriptor、revision fail-closed、8 字段表单与 request Pointer 已闭合             |
+| F9A   | completed         | contract audit、评测规格与 36-case 机器可读 hard gate 已完成                                      |
+| F9B   | contract-closed   | descriptor v2、DTO/runtime validator、adapter、状态与 UI 的源码闭环已完成                         |
+| F9C   | live-blocked      | descriptor v2 已部署；缺专用 Provider 配置，live model repetitions 为 0                           |
+| F10   | release-rehearsed | immutable snapshot、临时进程回滚、5173 切换与 artifact identity 已通过；disposable install 待执行 |
 
 F6B、F7 与 F8 已在 `D:\tileSim-week8` 的真实 Week 8 Bridge 上完成 live acceptance。当前源码基线为
 233/233 unit/component、76/76 Bridge、25/25 desktop fixture Playwright 和 4/4 live Week 8/F7/F8 Playwright。F8
@@ -34,9 +34,9 @@ contract adaptation，不声称 live Agent closure，也不以 mock success 绕�
 authenticated probe、只读 allow-list 投影、严格 output/citation/identity 校验和跨语言 canonical digest；Bridge 基线更新为
 76/76。descriptor v2 frontend fixture/API/UI consumer、manifest descriptor revision 绑定、结构化 policy adapter 以及两种
 正式 409 锁定状态均已闭合；正式 error envelope、schema-set header 与 HTTP/terminal 状态映射也由生成 validator 和 API
-失败关闭，adapter 不改变 canonical digest 或 uint64 无损路径。当前 5173 仍是
-`sha256:b1136c7a…` 旧部署且没有 Agent endpoint，源码 schema-set revision 为
-`sha256:be0c2274…`、descriptor revision 为 `sha256:d68d4d18…`，因此尚未进行 live acceptance。
+失败关闭，adapter 不改变 canonical digest 或 uint64 无损路径。当前 5173 已发布 schema-set
+`sha256:be0c2274…`、descriptor revision `sha256:d68d4d18…` 与正式 Agent endpoint；无专用配置时 descriptor/UI
+按 `provider_unavailable` 失败关闭。source deployment acceptance 已完成，真实模型 acceptance 尚未进行。
 详见 `docs/F8_EXPERIMENT_ORCHESTRATION_AUDIT.md`、`docs/F9_EVIDENCE_AGENT_CONTRACT_AUDIT.md`、
 `docs/F9_EVIDENCE_AGENT_EVALUATION_SPEC.md` 和 `docs/development/F7_FORMAL_CONTRACT_CLOSURE_2026-08-31.md`。
 
@@ -151,11 +151,11 @@ F5A 基线确认旧 JSON viewer 的主线程整体格式化和 `<pre>` 渲染会
 - **F9B 正式源码闭环**：Bridge 已交付 versioned capability、request、response、atomic claim/citation、refusal、
   model/prompt/policy identity、audit、idempotency/timeout/cancel/persistence contract；前端从 manifest 发现 endpoint，
   使用 canonical digest、verified allow-list、逐 claim citation 复核和 stale 隔离。
-- **F9C source ready**：Bridge 仅从 `TILESIM_EVIDENCE_AGENT_*` 读取固定 Provider 配置，不使用通用 `OPENAI_*`；
+- **F9C source deployed**：Bridge 仅从 `TILESIM_EVIDENCE_AGENT_*` 读取固定 Provider 配置，不使用通用 `OPENAI_*`；
   authenticated probe 必须精确匹配 protocol/provider/model/revision。固定 system policy、无工具只读 record 投影、
   untrusted question 隔离、严格 Provider response/citation/identity 校验和 502/503/504 终态已完成自动测试。
-- **F9C live blocker**：当前 5173 尚未部署 F9C，且本机没有完整有效的专用 Provider 配置。页面继续保持 unavailable、
-  禁用提交且不显示模拟 claims；等待授权部署、成功 authenticated probe 后再做 live success/refusal、至少五次安全/
+- **F9C live blocker**：当前 5173 已部署 F9C，但本机没有完整有效的专用 Provider 配置。页面继续保持 unavailable、
+  禁用提交且不显示模拟 claims；成功 authenticated probe 后再做 live success/refusal/timeout、至少五次安全/
   拒答重复模型评测和人工 entailment review。
 - **恢复 contract 已关闭**：descriptor identity 已升级到 `tilesim.bridge.evidence_agent_descriptor.v2`，并以结构化
   `/execution/retry`、`/execution/terminal_recovery`、`/persistence/mode` 和 `payload_retention` 表达分支。进程内同
@@ -187,12 +187,13 @@ F5A 基线确认旧 JSON viewer 的主线程整体格式化和 `<pre>` 渲染会
     manifest 与旧 Python/static bytes 可恢复，release identity matrix 工具可绑定 TileSim/Web/schema/run/artifact identity。
   - 部署 PowerShell 通过语法门禁；Provider/model/prompt/policy 只有显式 authenticated probe exact-match 记录可进入 matrix。
 - **仍需 release rehearsal**：
-  1. 在干净 Windows + WSL 环境以 lockfile frozen install 验证 Node/pnpm/Python/WSL 前置条件、构建、Bridge 启动、run 创建、恢复、比较和 Worker 导出。
-  2. 在非 5173 临时进程环境注入启动失败，验证上一 snapshot 进程、health 与 API identity 均恢复；最后才允许在授权
-     窗口验证真实 5173 rollback。manifest/Python/static byte 恢复已有纯临时目录自动测试。
-  3. 对一个 release candidate 记录 TileSim source/build/state、Web source/build、schema set、run、artifact bytes/SHA-256、Provider/model/prompt/policy 全链路身份。
-  4. 完成 P0/P1 issue sweep；任何未关闭 P0/P1、rollback 失败或 identity 不一致均阻断发布。
-- **状态规则**：上述空环境与临时进程故障注入未执行前，F10 只能是 `source-hardened`，不能标记 validated。完整清单见
+  1. 在 disposable checkout 以 lockfile frozen install 复跑 Node/pnpm/Python/WSL 前置条件与完整仓库门禁。
+  2. 非 5173 实进程已经验证 snapshot 启动、真实 run、post-manifest 不健康候选和 previous process/health/schema/run
+     恢复；正式 5173 immutable snapshot 切换也已成功。
+  3. release identity matrix 已绑定 TileSim source/build/state、Web source/build/release、schema set、run 及 9/9 artifact
+     bytes/SHA-256；Provider/model/prompt/policy 因 probe 未成立而按规则不写入。
+  4. P0/P1 sweep 已修复 live disclosure 假设、Design Space 对比度和 identity CLI 两项发布问题；disposable 门禁后复核清零。
+- **状态规则**：disposable frozen-install 门禁未执行前，F10 保持 `release-rehearsed`，不能标记 validated。完整清单见
   `docs/F10_RELEASE_HARDENING.md`。
 
 ### 长期前端技术债
