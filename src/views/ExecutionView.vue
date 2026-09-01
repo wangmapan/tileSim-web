@@ -224,38 +224,45 @@ async function exportStructuredReport() {
           />
         </div>
 
-        <div class="layer-insight-grid">
-          <article>
-            <header>
-              <ShieldCheck :size="17" /><strong>{{ t("当前实现证据") }}</strong>
-            </header>
-            <p>{{ selected.implementation?.evidence || t("本次报告没有提供该层的实现说明。") }}</p>
-          </article>
-          <article class="layer-insight--gap">
-            <header>
-              <AlertTriangle :size="17" /><strong>{{ t("仍有限制") }}</strong>
-            </header>
-            <p>{{ selected.implementation?.gap || t("本次报告没有单独声明该层的实现限制。") }}</p>
-          </article>
-        </div>
+        <details class="layer-evidence-disclosure layer-context-disclosure">
+          <summary>
+            <span><ShieldCheck :size="16" />{{ t("实现证据与字段边界") }}</span>
+            <small>{{ t(evidenceLabels[selected.evidenceState] || selected.evidenceState) }}</small>
+            <ChevronDown :size="17" />
+          </summary>
+          <div class="layer-insight-grid">
+            <article>
+              <header>
+                <ShieldCheck :size="17" /><strong>{{ t("当前实现证据") }}</strong>
+              </header>
+              <p>{{ selected.implementation?.evidence || t("本次报告没有提供该层的实现说明。") }}</p>
+            </article>
+            <article class="layer-insight--gap">
+              <header>
+                <AlertTriangle :size="17" /><strong>{{ t("仍有限制") }}</strong>
+              </header>
+              <p>{{ selected.implementation?.gap || t("本次报告没有单独声明该层的实现限制。") }}</p>
+            </article>
+          </div>
 
-        <dl class="layer-source-list">
-          <div>
-            <dt>{{ t("证据状态") }}</dt>
-            <dd>{{ t(evidenceLabels[selected.evidenceState] || selected.evidenceState) }}</dd>
-          </div>
-          <div>
-            <dt>{{ t("报告字段") }}</dt>
-            <dd>
-              <code>{{ selected.source }}</code>
-              <ArtifactEvidenceLink :source-path="selected.source" />
-            </dd>
-          </div>
-          <div>
-            <dt>{{ t("独立 canonical trace") }}</dt>
-            <dd>{{ t("当前网页报告包未提供") }}</dd>
-          </div>
-        </dl>
+          <dl class="layer-source-list">
+            <div>
+              <dt>{{ t("证据状态") }}</dt>
+              <dd>{{ t(evidenceLabels[selected.evidenceState] || selected.evidenceState) }}</dd>
+            </div>
+            <div>
+              <dt>{{ t("报告字段") }}</dt>
+              <dd>
+                <code>{{ selected.source }}</code>
+                <ArtifactEvidenceLink :source-path="selected.source" />
+              </dd>
+            </div>
+            <div>
+              <dt>{{ t("独立 canonical trace") }}</dt>
+              <dd>{{ t("当前网页报告包未提供") }}</dd>
+            </div>
+          </dl>
+        </details>
 
         <details v-if="selected.checks.length" class="layer-evidence-disclosure">
           <summary>
@@ -314,64 +321,72 @@ async function exportStructuredReport() {
         </details>
       </article>
 
-      <article class="panel stage-panel">
-        <header class="panel-header">
+      <details class="panel stage-panel execution-secondary-disclosure">
+        <summary class="panel-header">
           <div>
             <p class="section-kicker">S7 EXECUTION ENVELOPE</p>
             <h2>{{ t("统一时间轴阶段") }}</h2>
             <p>{{ t("宿主记录的阶段摘要，不等同于 S0–S6 canonical trace。") }}</p>
           </div>
+          <span>{{ result.stages.length }} stages</span>
           <TimerReset :size="20" />
-        </header>
-        <ExecutionVisualizationPanel :visualization="result.timeline" compact />
-        <ol v-if="result.stages.length" class="stage-list">
-          <li v-for="stage in result.stages" :key="stage.stage_id">
-            <span>{{ stage.subsystem }}</span>
-            <div>
-              <strong>{{ stage.stage_kind?.replaceAll("_", " ") }}</strong>
-              <p>{{ stage.detail }}</p>
-            </div>
-            <small>{{ durationUs(stage) }} µs</small>
-            <ArtifactEvidenceLink
-              :source-path="executionStageSource(state.bundle.execution_envelope?.stages || [], stage.stage_id)"
-            />
-          </li>
-        </ol>
-        <p v-else class="panel-empty-copy">{{ t("当前报告包没有 execution envelope 阶段记录。") }}</p>
-      </article>
+          <ChevronDown :size="17" />
+        </summary>
+        <div class="stage-panel-body">
+          <ExecutionVisualizationPanel :visualization="result.timeline" compact />
+          <ol v-if="result.stages.length" class="stage-list">
+            <li v-for="stage in result.stages" :key="stage.stage_id">
+              <span>{{ stage.subsystem }}</span>
+              <div>
+                <strong>{{ stage.stage_kind?.replaceAll("_", " ") }}</strong>
+                <p>{{ stage.detail }}</p>
+              </div>
+              <small>{{ durationUs(stage) }} µs</small>
+              <ArtifactEvidenceLink
+                :source-path="executionStageSource(state.bundle.execution_envelope?.stages || [], stage.stage_id)"
+              />
+            </li>
+          </ol>
+          <p v-else class="panel-empty-copy">{{ t("当前报告包没有 execution envelope 阶段记录。") }}</p>
+        </div>
+      </details>
     </section>
 
     <section class="execution-support-grid">
-      <article class="panel support-card">
-        <header>
+      <details class="panel support-card execution-secondary-disclosure">
+        <summary>
           <Layers3 :size="18" />
           <div>
             <small>RESOURCE CONVERGENCE</small><strong>{{ t("资源语义汇合") }}</strong>
           </div>
-        </header>
-        <template v-if="result.resourceConvergence">
-          <p>{{ result.resourceConvergence.summary || t("报告提供了资源汇合统计。") }}</p>
-          <dl>
-            <div>
-              <dt>Collective phases</dt>
-              <dd>{{ formatNumber(result.resourceConvergence.collective_phase_count, 0) }}</dd>
-            </div>
-            <div>
-              <dt>{{ t("已汇合请求") }}</dt>
-              <dd>{{ formatNumber(result.resourceConvergence.converged_request_count, 0) }}</dd>
-            </div>
-            <div>
-              <dt>{{ t("缺失内存事件") }}</dt>
-              <dd>{{ formatNumber(result.resourceConvergence.missing_memory_event_count, 0) }}</dd>
-            </div>
-            <div>
-              <dt>{{ t("缺失设备任务") }}</dt>
-              <dd>{{ formatNumber(result.resourceConvergence.missing_device_task_count, 0) }}</dd>
-            </div>
-          </dl>
-        </template>
-        <p v-else>{{ t("当前报告没有资源语义汇合摘要。") }}</p>
-      </article>
+          <span>{{ result.resourceConvergence ? t("已报告") : t("未报告") }}</span>
+          <ChevronDown :size="17" />
+        </summary>
+        <div class="support-card-body">
+          <template v-if="result.resourceConvergence">
+            <p>{{ result.resourceConvergence.summary || t("报告提供了资源汇合统计。") }}</p>
+            <dl>
+              <div>
+                <dt>Collective phases</dt>
+                <dd>{{ formatNumber(result.resourceConvergence.collective_phase_count, 0) }}</dd>
+              </div>
+              <div>
+                <dt>{{ t("已汇合请求") }}</dt>
+                <dd>{{ formatNumber(result.resourceConvergence.converged_request_count, 0) }}</dd>
+              </div>
+              <div>
+                <dt>{{ t("缺失内存事件") }}</dt>
+                <dd>{{ formatNumber(result.resourceConvergence.missing_memory_event_count, 0) }}</dd>
+              </div>
+              <div>
+                <dt>{{ t("缺失设备任务") }}</dt>
+                <dd>{{ formatNumber(result.resourceConvergence.missing_device_task_count, 0) }}</dd>
+              </div>
+            </dl>
+          </template>
+          <p v-else>{{ t("当前报告没有资源语义汇合摘要。") }}</p>
+        </div>
+      </details>
     </section>
 
     <section class="execution-boundary-note">

@@ -437,6 +437,43 @@ def f9_completed_provider_response(payload: dict) -> dict:
     }
 
 
+class ReleaseIdentityTest(unittest.TestCase):
+    def test_backend_identity_exposes_manifest_bound_web_release_fields(self) -> None:
+        web_fields = {
+            "web_source_revision": "a" * 40,
+            "web_source_state_digest": "b" * 64,
+            "web_build_digest": "c" * 64,
+            "web_release_identity": "tilesim.web.release_snapshot.v1",
+            "web_release_digest": "d" * 64,
+            "web_bridge_digest": "e" * 64,
+            "web_static_digest": "f" * 64,
+            "schema_set_revision": f"sha256:{'1' * 64}",
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest_path = Path(temporary) / "backend-current.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "source_revision": "2" * 40,
+                        "build_revision": "2" * 40,
+                        "source_state_digest": "3" * 64,
+                        "build_state_digest": "3" * 64,
+                        **web_fields,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with (
+                mock.patch.object(server.identity, "git_value", return_value="2" * 40),
+                mock.patch.object(server.identity, "worktree_state_digest", return_value="3" * 64),
+            ):
+                value = server.identity.backend_identity(Path(temporary), Path("TileSimCLI"), manifest_path)
+
+        self.assertTrue(value["versions_match"])
+        for field, expected in web_fields.items():
+            self.assertEqual(value[field], expected)
+
+
 class DesignSpaceBridgeTest(unittest.TestCase):
     def test_worktree_digest_tracks_uncommitted_content(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

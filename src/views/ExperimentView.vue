@@ -239,12 +239,6 @@ async function loadBundle(event) {
       </div>
 
       <ExperimentIdentityPanel :form="form" :surface="surface" :field-path="displayFieldPath" />
-      <ExperimentCapabilityPanel
-        :capabilities="state.capabilities"
-        :bridge="state.bridge"
-        :surface="surface"
-        :manifest="state.bridge.manifest"
-      />
       <ExperimentInputPanel
         v-model:mode="mode"
         v-model:runtime-json="runtimeJson"
@@ -259,6 +253,12 @@ async function loadBundle(event) {
         @load-json-file="loadJsonFile"
       />
       <DesignSpaceInputPanel v-model="designSpaceJson" :field-path="displayFieldPath" @load-json-file="loadJsonFile" />
+      <ExperimentCapabilityPanel
+        :capabilities="state.capabilities"
+        :bridge="state.bridge"
+        :surface="surface"
+        :manifest="state.bridge.manifest"
+      />
     </section>
 
     <ExperimentSubmitCard

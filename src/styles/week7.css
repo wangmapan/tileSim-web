@@ -88,13 +88,33 @@
 .week7-section {
   min-width: 0;
   overflow: hidden;
+  padding: 0;
 }
 
 .week7-section-header {
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) auto;
+  grid-template-columns: 40px minmax(0, 1fr) auto 18px;
   gap: 13px;
-  align-items: start;
+  align-items: center;
+  cursor: pointer;
+  list-style: none;
+}
+
+.week7-section-header::-webkit-details-marker {
+  display: none;
+}
+
+.week7-section-header > svg:last-child {
+  color: var(--muted);
+  transition: transform var(--motion-fast) var(--ease-standard);
+}
+
+.week7-section[open] .week7-section-header > svg:last-child {
+  transform: rotate(180deg);
+}
+
+.week7-section[open] .week7-section-header {
+  border-bottom: 1px solid var(--line);
 }
 
 .week7-heading-icon {

@@ -62,12 +62,13 @@ from contracts.run_request import validate_run_request
 
 WEB_ROOT = Path(__file__).resolve().parents[1]
 STATIC_ROOT = WEB_ROOT / "dist" if (WEB_ROOT / "dist/index.html").is_file() else WEB_ROOT
+STATE_ROOT = Path(os.environ.get("TILESIM_WEB_STATE_ROOT", str(WEB_ROOT)))
 TILESIM_ROOT = Path(os.environ.get("TILESIM_ROOT", "/mnt/d/tileSim"))
 TILESIM_CLI = Path(os.environ.get("TILESIM_CLI", "/home/mapanwang/tilesim-build/TileSimCLI"))
 DEPLOYMENT_MANIFEST = Path(
     os.environ.get("TILESIM_DEPLOYMENT_MANIFEST", "/mnt/d/tileSim-web/runtime/backend-current.json")
 )
-RUNS_ROOT = WEB_ROOT / "runs"
+RUNS_ROOT = STATE_ROOT / "runs"
 CONTRACT_ROOT = WEB_ROOT / "bridge/contracts"
 
 

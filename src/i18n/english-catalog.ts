@@ -51,6 +51,8 @@ export const englishCatalog: Readonly<Record<string, string>> = {
   "S9 尾延迟归因": "S9 tail-latency attribution",
   请求证据视图: "Request evidence views",
   证据边界受限: "Evidence scope limited",
+  "查看 Schema、SHA-256 与精确链接边界": "View schema, SHA-256, and exact-link boundaries",
+  "域 Topology 与证据详情": "Domain topology and evidence details",
   跨子系统关联链与尾归因: "Cross-subsystem evidence chain and tail attribution",
   "来源、保真度与缺口": "Provenance, fidelity, and gaps",
   "证据 Agent": "Evidence Agent",
@@ -262,6 +264,8 @@ export const englishCatalog: Readonly<Record<string, string>> = {
   "请求的 fidelity 不等于每个子系统最终执行的 fidelity；以报告的实际解析结果为准。":
     "Requested fidelity may differ from what each subsystem actually executed; use the report's resolved result.",
   验证检查: "Validation checks",
+  "按需查看逐项状态、说明和精确证据链接。":
+    "Open when needed to inspect each status, explanation, and exact evidence link.",
   仍未关闭的证据缺口: "Open evidence gaps",
   "这些限制会直接缩小本次运行可支持的结论。": "These limitations directly narrow the claims this run can support.",
   没有尾延迟归因报告: "No tail-latency attribution report",
@@ -458,6 +462,7 @@ export const englishCatalog: Readonly<Record<string, string>> = {
   "独立 canonical trace": "Independent canonical trace",
   当前网页报告包未提供: "Not provided by the current web report bundle",
   本层验证检查: "Validation checks for this subsystem",
+  实现证据与字段边界: "Implementation evidence and field boundaries",
   本层尾延迟归因: "Tail-latency attribution for this subsystem",
   "{count} 项": "{count} items",
   查看结构化记录: "View structured records",
@@ -621,6 +626,8 @@ export const englishCatalog: Readonly<Record<string, string>> = {
   "未执行变量：{fields}。这些字段不会影响当前候选数值或仿真语义。":
     "Unexecuted variables: {fields}. These fields do not affect current candidate values or simulation semantics.",
   "候选排名与选择性 DES": "Candidate ranking and selective DES",
+  "按需查看后端能力与契约缺口；前端不会排序、计算或文本解析补齐。":
+    "Inspect backend capabilities and contract gaps on demand; the frontend does not fill them through ranking, computation, or text parsing.",
   "排名以报告中的确定性 final_rank 为准；promotion hint 仅作输入备注。":
     "Ranking follows the report's deterministic final_rank; promotion hints are input annotations only.",
   "排名 / 候选": "Rank / candidate",
@@ -632,6 +639,9 @@ export const englishCatalog: Readonly<Record<string, string>> = {
   候选来源: "Candidate source",
   来源方式: "Source method",
   "Analytical / DES 分歧": "Analytical / DES disagreement",
+  候选来源与分析分歧: "Candidate provenance and analysis disagreement",
+  "查看 provenance、manifest、fidelity 解析与 Analytical/DES 排名变化":
+    "Inspect provenance, manifest, fidelity resolution, and Analytical/DES ranking changes",
   "本次候选没有报告 Analytical/DES 排名变化。": "No Analytical/DES ranking changes were reported for these candidates.",
   候选完整证据: "Complete candidate evidence",
   完整性能指标: "Complete performance metrics",
@@ -695,6 +705,8 @@ export const englishCatalog: Readonly<Record<string, string>> = {
     "Quick controls suit comparative experiments; JSON suits exact reproduction.",
   快捷控制: "Quick controls",
   "JSON 输入": "JSON input",
+  显示字段契约: "Show field contracts",
+  隐藏字段契约: "Hide field contracts",
   "S1 · 调度、批处理与 KV 准入": "S1 · scheduling, batching, and KV admission",
   "调度、批处理与 KV 准入": "Scheduling, batching, and KV admission",
   通信负载输入: "Communication workload input",
@@ -709,6 +721,9 @@ export const englishCatalog: Readonly<Record<string, string>> = {
   "加载模板或粘贴 Fabric topology": "Load a template or paste a Fabric topology",
   能力: "Capabilities",
   执行依赖与边界: "Execution dependencies and boundaries",
+  "按需查看后端能力、正式契约和部署身份；不可用能力不会静默降级。":
+    "Inspect backend capabilities, the formal contract, and deployment identity on demand; unavailable capabilities do not silently degrade.",
+  "{count} 项扩展能力不可用": "{count} optional capabilities unavailable",
   "选项来自后端能力发现；不可用能力不会静默降级。":
     "Options come from backend capability discovery; unavailable capabilities do not silently degrade.",
   实验编排契约: "Experiment orchestration contract",
@@ -743,6 +758,8 @@ export const englishCatalog: Readonly<Record<string, string>> = {
   "，不是全栈 Cycle。当前网页尚未开放显式窗口请求，因此即使 Verilator 已构建也不会显示为可提交的 fidelity。":
     ", not full-stack Cycle. Explicit window requests are not exposed in the web UI, so even a built Verilator target is not shown as a submit-ready fidelity.",
   "S6 设计空间候选": "S6 design-space candidates",
+  "默认使用内置候选；仅在需要自定义 S6 manifest 时展开。":
+    "Built-in candidates are used by default; expand only when a custom S6 manifest is needed.",
   "可选。文件内容会经 bridge 严格校验后写入本次 run 目录，不接受任意本地路径。":
     "Optional. The bridge strictly validates the file before writing it to this run directory; arbitrary local paths are not accepted.",
   清除候选: "Clear candidates",
@@ -1052,6 +1069,7 @@ export const englishCatalog: Readonly<Record<string, string>> = {
   模块绑定: "Module binding",
   成员设备: "Member devices",
   未报告: "Not reported",
+  已报告: "Reported",
   "Topology 证据": "Topology evidence",
   "Topology → metrics domain：正式契约已验证": "Topology → metrics domain: formal contract verified",
   "Topology → metrics domain：不可用": "Topology → metrics domain: unavailable",
@@ -1111,6 +1129,8 @@ export const englishCatalog: Readonly<Record<string, string>> = {
   "Descriptor revision": "Descriptor revision",
   "Provider / model": "Provider / model",
   "Model revision": "Model revision",
+  契约身份详情: "Contract identity details",
+  "Descriptor、Schema、Provider 与模型 revision": "Descriptor, schema, Provider, and model revisions",
   正式能力当前不可用: "The formal capability is currently unavailable",
   工具与安全边界: "Tools and safety boundary",
   允许: "Allowed",
@@ -1120,6 +1140,9 @@ export const englishCatalog: Readonly<Record<string, string>> = {
   "非 causal ranking": "Excluded from causal ranking",
   执行与留存: "Execution and retention",
   重放与终态恢复: "Replay and terminal recovery",
+  契约策略与恢复详情: "Contract policy and recovery details",
+  "查看重放、跨重启恢复、留存边界和正式 HTTP 终态":
+    "Inspect replay, cross-restart recovery, retention boundaries, and formal HTTP terminals",
   执行模式: "Execution mode",
   超时: "Timeout",
   留存: "Retention",

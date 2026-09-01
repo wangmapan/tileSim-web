@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Activity, Network, ShieldCheck, Target, Waves } from "@lucide/vue";
+import { Activity, ChevronDown, Network, ShieldCheck, Target, Waves } from "@lucide/vue";
 import { computed } from "vue";
 import ArtifactEvidenceLink from "../components/ArtifactEvidenceLink.vue";
 import EmptyState from "../components/EmptyState.vue";
@@ -26,14 +26,16 @@ function utilizationWidth(value: number | undefined) {
 <template>
   <EmptyState v-if="!systemSummary" title="没有 Fabric 域数据" />
   <div v-else class="view-stack">
-    <section class="panel fabric-contract-strip">
-      <ShieldCheck :size="18" />
-      <div>
-        <strong>{{ t("Metrics-backed Fabric 证据") }}</strong>
-        <p>
-          {{ t("域、请求和 phase 只展示 metrics 报告值；精确链接来自稳定 ID 唯一匹配后的 JSON Pointer。") }}
-        </p>
-      </div>
+    <details class="panel fabric-contract-strip">
+      <summary>
+        <ShieldCheck :size="18" />
+        <div>
+          <strong>{{ t("Metrics-backed Fabric 证据") }}</strong>
+          <p>{{ t("查看 Schema、SHA-256 与精确链接边界") }}</p>
+        </div>
+        <span>{{ analysis.artifactAvailability }}</span>
+        <ChevronDown :size="17" />
+      </summary>
       <dl>
         <div>
           <dt>contract</dt>
@@ -48,7 +50,7 @@ function utilizationWidth(value: number | undefined) {
           <dd>{{ analysis.artifactEvidence.sha256 || t("缺失") }}</dd>
         </div>
       </dl>
-    </section>
+    </details>
 
     <section class="stat-grid stat-grid--three">
       <StatCard
@@ -94,72 +96,82 @@ function utilizationWidth(value: number | undefined) {
       </dl>
     </article>
 
-    <section v-if="domains.length" class="domain-grid">
-      <article
-        v-for="(domain, domainIndex) in domains"
-        :key="`${domain.domain_id}-${domainIndex}`"
-        class="panel domain-card"
-      >
-        <header>
-          <div class="domain-icon"><Network :size="19" /></div>
-          <div>
-            <small>FABRIC DOMAIN</small>
-            <h2>{{ domain.domain_id }}</h2>
-          </div>
-          <strong>{{ formatPercent(domain.utilization_ratio) }}</strong>
-        </header>
-        <div class="utilization-track">
-          <span
-            v-if="utilizationWidth(domain.utilization_ratio)"
-            :style="{ width: utilizationWidth(domain.utilization_ratio)! }"
-          ></span>
+    <details v-if="domains.length" class="panel fabric-domain-disclosure">
+      <summary>
+        <div>
+          <small>DOMAIN EVIDENCE</small>
+          <strong>{{ t("域 Topology 与证据详情") }}</strong>
         </div>
-        <dl>
-          <div>
-            <dt><Activity :size="14" />{{ t("执行记录") }}</dt>
-            <dd>{{ formatNumber(domain.record_count, 0) }}</dd>
-          </div>
-          <div>
-            <dt><Waves :size="14" />{{ t("队列延迟") }}</dt>
-            <dd>{{ formatNumber(domain.queue_delay_us) }} µs</dd>
-          </div>
-          <div>
-            <dt>{{ t("拥塞延迟") }}</dt>
-            <dd>{{ formatNumber(domain.congestion_delay_us) }} µs</dd>
-          </div>
-          <div>
-            <dt>{{ t("运行时间") }}</dt>
-            <dd>{{ formatNumber(domain.runtime_us) }} µs</dd>
-          </div>
-        </dl>
-        <div class="domain-evidence-row">
-          <ArtifactEvidenceLink v-if="domain.evidence.sourcePath" :source-path="domain.evidence.sourcePath" />
-          <small v-else>{{ domain.availability }}</small>
-        </div>
-        <section v-if="domain.topologyDomain" class="domain-topology-contract">
+        <span>{{ domains.length }} domains</span>
+        <ChevronDown :size="17" />
+      </summary>
+      <section class="domain-grid">
+        <article
+          v-for="(domain, domainIndex) in domains"
+          :key="`${domain.domain_id}-${domainIndex}`"
+          class="domain-card"
+        >
           <header>
-            <strong>{{ t("Topology domain") }}</strong>
-            <span>{{ domain.topologyDomain.domain_type }} / {{ domain.topologyDomain.domain_kind }}</span>
+            <div class="domain-icon"><Network :size="19" /></div>
+            <div>
+              <small>FABRIC DOMAIN</small>
+              <h2>{{ domain.domain_id }}</h2>
+            </div>
+            <strong>{{ formatPercent(domain.utilization_ratio) }}</strong>
           </header>
+          <div class="utilization-track">
+            <span
+              v-if="utilizationWidth(domain.utilization_ratio)"
+              :style="{ width: utilizationWidth(domain.utilization_ratio)! }"
+            ></span>
+          </div>
           <dl>
             <div>
-              <dt>{{ t("模块绑定") }}</dt>
-              <dd>{{ domain.topologyDomain.module_binding || t("不适用") }}</dd>
+              <dt><Activity :size="14" />{{ t("执行记录") }}</dt>
+              <dd>{{ formatNumber(domain.record_count, 0) }}</dd>
             </div>
             <div>
-              <dt>{{ t("成员设备") }}</dt>
-              <dd>{{ domain.topologyDomain.member_devices?.join(", ") || t("未报告") }}</dd>
+              <dt><Waves :size="14" />{{ t("队列延迟") }}</dt>
+              <dd>{{ formatNumber(domain.queue_delay_us) }} µs</dd>
+            </div>
+            <div>
+              <dt>{{ t("拥塞延迟") }}</dt>
+              <dd>{{ formatNumber(domain.congestion_delay_us) }} µs</dd>
+            </div>
+            <div>
+              <dt>{{ t("运行时间") }}</dt>
+              <dd>{{ formatNumber(domain.runtime_us) }} µs</dd>
             </div>
           </dl>
-          <ArtifactEvidenceLink
-            v-if="domain.topologyEvidence.sourcePath"
-            :source-path="domain.topologyEvidence.sourcePath"
-            label="Topology 证据"
-          />
-        </section>
-        <small v-else class="domain-topology-status">topology: {{ domain.topologyAvailability }}</small>
-      </article>
-    </section>
+          <div class="domain-evidence-row">
+            <ArtifactEvidenceLink v-if="domain.evidence.sourcePath" :source-path="domain.evidence.sourcePath" />
+            <small v-else>{{ domain.availability }}</small>
+          </div>
+          <section v-if="domain.topologyDomain" class="domain-topology-contract">
+            <header>
+              <strong>{{ t("Topology domain") }}</strong>
+              <span>{{ domain.topologyDomain.domain_type }} / {{ domain.topologyDomain.domain_kind }}</span>
+            </header>
+            <dl>
+              <div>
+                <dt>{{ t("模块绑定") }}</dt>
+                <dd>{{ domain.topologyDomain.module_binding || t("不适用") }}</dd>
+              </div>
+              <div>
+                <dt>{{ t("成员设备") }}</dt>
+                <dd>{{ domain.topologyDomain.member_devices?.join(", ") || t("未报告") }}</dd>
+              </div>
+            </dl>
+            <ArtifactEvidenceLink
+              v-if="domain.topologyEvidence.sourcePath"
+              :source-path="domain.topologyEvidence.sourcePath"
+              label="Topology 证据"
+            />
+          </section>
+          <small v-else class="domain-topology-status">topology: {{ domain.topologyAvailability }}</small>
+        </article>
+      </section>
+    </details>
 
     <article class="panel">
       <header class="panel-header">

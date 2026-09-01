@@ -162,6 +162,29 @@ F6B 不再作为跨页面重复出现的阶段 banner。原始 JSON、稳定 ID�
 degradation 仍完整保留，只改变首屏层级、默认 disclosure 状态和页面归属。视觉回归覆盖浅色请求证据页、深色
 分层结果页、长中英文 ID、axe、键盘路径及桌面 overflow。
 
+### 信息密度收尾（2026-09-01）
+
+在既有页面归属不变的前提下，完成了两批默认 disclosure 与重复操作收敛：
+
+- Evidence Agent 将提问置于契约详情之前；descriptor identity、retry/recovery/persistence 与 retention 细节按需展开，
+  摘要仍直接显示进程内 replay、metadata-only 和正式 409/502/503/504 状态。
+- 新建实验默认隐藏重复的 field ID、JSON Pointer 与能力清单；精确字段错误仍自动显示对应 Pointer，自定义 S6
+  manifest 存在时仍自动展开编辑器。
+- 设计空间把候选排名置于 provenance、manifest、fidelity 和候选完整记录之前；正式 capability 和候选证据按需展开。
+- Fabric 默认展示总体指标、后端显式热点、域比较和 request contribution；Schema/SHA 与逐域 Topology 证据改为
+  disclosure，避免域卡片和表格同时占据首屏。
+- 验证边界把 open gaps 提升到 fidelity/check 明细之前；逐子系统 resolution 与 validation checks 默认折叠。
+- 分层结果保留 S0-S6 flow、选中层指标和图表；实现证据、字段边界、S7 阶段、资源汇合与原始 JSON 按需展开。
+- 请求证据继续完整承载 F6B chain，并移除指向当前页面的重复上下文链接；S9 归因默认先显示 causal ranking，
+  attribution audit 和 cause chain 按需展开，S7/S8/S9 仍不进入 causal ranking。
+- 校准与血缘将 calibration、field lineage 和 deterministic orchestration 组织成三个键盘可操作的摘要；运行记录
+  移除重复选择控件，并只在用户开始选择后显示 comparison workspace。
+- 全局 EvidenceStrip 压缩为单行上下文；完整 held-out 限制保留在可访问名称和验证边界页面中。
+
+本轮没有删除证据、contract gap、SHA-256、JSON Pointer、原始记录或状态映射，也没有修改 canonical digest、无损
+uint64、requested/resolved fidelity、trace provenance 或 S0-S9 语义。回归继续覆盖中英文、键盘、axe、reduced-motion、
+长 ID、桌面 overflow 和浅色/深色模式。
+
 ### 阶段一：外观基础设施
 
 范围：

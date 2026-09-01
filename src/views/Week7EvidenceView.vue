@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Bot, DatabaseZap, RefreshCw, ShieldAlert } from "@lucide/vue";
+import { Bot, ChevronDown, DatabaseZap, RefreshCw, ShieldAlert } from "@lucide/vue";
 import { computed, onMounted, ref } from "vue";
 import type { Week7EvidenceBundle } from "../features/week7-evidence";
 import { fetchWeek7Evidence } from "../features/week7-evidence";
@@ -100,8 +100,8 @@ onMounted(() => void load());
     </section>
 
     <template v-if="data">
-      <article class="panel week7-section">
-        <header class="panel-header week7-section-header">
+      <details class="panel week7-section">
+        <summary class="panel-header week7-section-header">
           <div class="week7-heading-icon"><DatabaseZap :size="19" /></div>
           <div>
             <p class="section-kicker">S8 · CALIBRATION</p>
@@ -111,7 +111,8 @@ onMounted(() => void load());
           <span class="status-pill" :class="data.calibration.status === 'passed' ? 'status-pill--positive' : ''">
             {{ data.calibration.status }}
           </span>
-        </header>
+          <ChevronDown :size="17" />
+        </summary>
 
         <dl class="week7-summary-grid">
           <div>
@@ -186,10 +187,10 @@ onMounted(() => void load());
             </tbody>
           </table>
         </div>
-      </article>
+      </details>
 
-      <article class="panel week7-section">
-        <header class="panel-header week7-section-header">
+      <details class="panel week7-section">
+        <summary class="panel-header week7-section-header">
           <div class="week7-heading-icon"><DatabaseZap :size="19" /></div>
           <div>
             <p class="section-kicker">S9 · REPORT FIELD EVIDENCE MAP</p>
@@ -197,7 +198,8 @@ onMounted(() => void load());
             <p>{{ t("逐字段说明来源对象、计算规则、验证门禁和允许声明；这是一张关系表，不是性能数值图。") }}</p>
           </div>
           <span class="status-pill status-pill--positive">{{ data.evidenceMap.status }}</span>
-        </header>
+          <ChevronDown :size="17" />
+        </summary>
         <div class="table-wrap week7-table-wrap">
           <table class="week7-table week7-evidence-table">
             <thead>
@@ -225,10 +227,10 @@ onMounted(() => void load());
             </tbody>
           </table>
         </div>
-      </article>
+      </details>
 
-      <article class="panel week7-section">
-        <header class="panel-header week7-section-header">
+      <details class="panel week7-section">
+        <summary class="panel-header week7-section-header">
           <div class="week7-heading-icon"><Bot :size="19" /></div>
           <div>
             <p class="section-kicker">DETERMINISTIC AGENT ORCHESTRATION</p>
@@ -238,7 +240,8 @@ onMounted(() => void load());
           <span class="status-pill" :class="data.orchestration.status === 'completed' ? 'status-pill--positive' : ''">
             {{ data.orchestration.status }}
           </span>
-        </header>
+          <ChevronDown :size="17" />
+        </summary>
 
         <dl class="week7-summary-grid week7-agent-summary">
           <div>
@@ -282,7 +285,7 @@ onMounted(() => void load());
             <code>{{ artifact.payload_digest }}</code>
           </article>
         </div>
-      </article>
+      </details>
     </template>
   </div>
 </template>

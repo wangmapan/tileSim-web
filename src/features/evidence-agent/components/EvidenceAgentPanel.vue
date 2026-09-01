@@ -166,28 +166,36 @@ async function submit() {
         }}</span>
       </header>
 
-      <div v-if="descriptorStatus === 'supported' && descriptor" class="evidence-agent-identity-grid">
-        <div>
-          <small>{{ t("Descriptor") }}</small
-          ><code>{{ descriptor.schema_version }}</code>
+      <details v-if="descriptorStatus === 'supported' && descriptor" class="evidence-agent-identity-disclosure">
+        <summary>
+          <span>
+            <strong>{{ t("契约身份详情") }}</strong>
+            <small>{{ t("Descriptor、Schema、Provider 与模型 revision") }}</small>
+          </span>
+        </summary>
+        <div class="evidence-agent-identity-grid">
+          <div>
+            <small>{{ t("Descriptor") }}</small
+            ><code>{{ descriptor.schema_version }}</code>
+          </div>
+          <div>
+            <small>{{ t("Schema revision") }}</small
+            ><code>{{ descriptor.schema_set_revision }}</code>
+          </div>
+          <div>
+            <small>{{ t("Descriptor revision") }}</small
+            ><code>{{ descriptor.descriptor_revision }}</code>
+          </div>
+          <div>
+            <small>{{ t("Provider / model") }}</small
+            ><code>{{ descriptor.provider.provider_id }} / {{ descriptor.provider.model_id }}</code>
+          </div>
+          <div>
+            <small>{{ t("Model revision") }}</small
+            ><code>{{ descriptor.provider.model_revision }}</code>
+          </div>
         </div>
-        <div>
-          <small>{{ t("Schema revision") }}</small
-          ><code>{{ descriptor.schema_set_revision }}</code>
-        </div>
-        <div>
-          <small>{{ t("Descriptor revision") }}</small
-          ><code>{{ descriptor.descriptor_revision }}</code>
-        </div>
-        <div>
-          <small>{{ t("Provider / model") }}</small
-          ><code>{{ descriptor.provider.provider_id }} / {{ descriptor.provider.model_id }}</code>
-        </div>
-        <div>
-          <small>{{ t("Model revision") }}</small
-          ><code>{{ descriptor.provider.model_revision }}</code>
-        </div>
-      </div>
+      </details>
 
       <div v-if="!capabilityAvailable" class="evidence-agent-unavailable" role="status">
         <CircleSlash2 :size="20" />
@@ -198,13 +206,6 @@ async function submit() {
         </div>
       </div>
     </section>
-
-    <EvidenceAgentContractPolicy
-      v-if="descriptor && descriptorPolicy"
-      :descriptor="descriptor"
-      :policy="descriptorPolicy"
-      :api-manifest="apiManifest"
-    />
 
     <section class="panel evidence-agent-compose">
       <header class="panel-header">
@@ -319,6 +320,13 @@ async function submit() {
         </p>
       </div>
     </section>
+
+    <EvidenceAgentContractPolicy
+      v-if="descriptor && descriptorPolicy"
+      :descriptor="descriptor"
+      :policy="descriptorPolicy"
+      :api-manifest="apiManifest"
+    />
 
     <EvidenceAgentResultPanel v-if="agentResult" :agent-state="agentState" :agent-result="agentResult" />
   </div>

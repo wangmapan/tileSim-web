@@ -22,7 +22,7 @@ function lengthBytes(length) {
   return value;
 }
 
-export async function directoryDigest(root, excludedNames = defaultExcludedNames) {
+export async function directoryInventory(root, excludedNames = defaultExcludedNames) {
   const absoluteRoot = path.resolve(root);
   const files = [];
 
@@ -43,6 +43,7 @@ export async function directoryDigest(root, excludedNames = defaultExcludedNames
 
   await visit(absoluteRoot);
   const digest = createHash("sha256");
+  let totalBytes = 0;
   for (const file of files) {
     const payload = file.symbolicLink
       ? Buffer.from(await readlink(file.absolutePath), "utf8")
@@ -54,8 +55,17 @@ export async function directoryDigest(root, excludedNames = defaultExcludedNames
     digest.update(Buffer.from([0]));
     digest.update(lengthBytes(payload.byteLength));
     digest.update(payload);
+    totalBytes += payload.byteLength;
   }
-  return digest.digest("hex");
+  return {
+    digest: digest.digest("hex"),
+    fileCount: files.length,
+    totalBytes,
+  };
+}
+
+export async function directoryDigest(root, excludedNames = defaultExcludedNames) {
+  return (await directoryInventory(root, excludedNames)).digest;
 }
 
 const invokedPath = process.argv[1] ? path.resolve(process.argv[1]) : "";

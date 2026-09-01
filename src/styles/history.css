@@ -42,7 +42,7 @@
 }
 .run-row {
   display: grid;
-  grid-template-columns: 26px minmax(230px, 1fr) 105px 100px 100px 120px;
+  grid-template-columns: minmax(230px, 1fr) 105px 100px 100px 120px;
   gap: 13px;
   align-items: center;
   min-height: 75px;
@@ -77,25 +77,6 @@
   background: var(--accent-soft);
   box-shadow: inset 2px 0 var(--accent);
   transform: none;
-}
-.compare-check {
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: 1px solid var(--line-strong);
-  border-radius: 4px;
-  color: white;
-  background: var(--control-bg);
-  cursor: pointer;
-}
-.run-row.selected .compare-check {
-  border-color: var(--accent);
-  background: var(--accent);
-}
-.compare-check:disabled {
-  opacity: 0.3;
 }
 .run-main {
   display: grid;

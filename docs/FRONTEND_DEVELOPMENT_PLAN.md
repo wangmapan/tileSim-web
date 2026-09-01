@@ -26,13 +26,13 @@
 | F10   | source-hardened | Worker 导出、chunk 拆分、发布摘要与失败回滚已实现；空环境/live rehearsal 尚未执行     |
 
 F6B、F7 与 F8 已在 `D:\tileSim-week8` 的真实 Week 8 Bridge 上完成 live acceptance。当前源码基线为
-226/226 unit/component、75/75 Bridge、25/25 desktop fixture Playwright 和 4/4 live Week 8/F7/F8 Playwright。F8
+233/233 unit/component、76/76 Bridge、25/25 desktop fixture Playwright 和 4/4 live Week 8/F7/F8 Playwright。F8
 已消费正式 `GET /api/experiment-schema`，以 `field_id` 为身份、`request_json_pointer` 为唯一序列化/错误映射，
 并完成 manifest/payload/header revision 三方失败关闭。F9B 已消费正式 evidence Agent runtime contract，完成
 revision/digest/idempotency/citation/stale/degradation 的失败关闭；当前 provider 正式返回 unavailable，因此只关闭前端
 contract adaptation，不声称 live Agent closure，也不以 mock success 绕过。F9C 源码已完成固定 endpoint Provider、
 authenticated probe、只读 allow-list 投影、严格 output/citation/identity 校验和跨语言 canonical digest；Bridge 基线更新为
-75/75。descriptor v2 frontend fixture/API/UI consumer、manifest descriptor revision 绑定、结构化 policy adapter 以及两种
+76/76。descriptor v2 frontend fixture/API/UI consumer、manifest descriptor revision 绑定、结构化 policy adapter 以及两种
 正式 409 锁定状态均已闭合；正式 error envelope、schema-set header 与 HTTP/terminal 状态映射也由生成 validator 和 API
 失败关闭，adapter 不改变 canonical digest 或 uint64 无损路径。当前 5173 仍是
 `sha256:b1136c7a…` 旧部署且没有 Agent endpoint，源码 schema-set revision 为
@@ -181,16 +181,18 @@ F5A 基线确认旧 JSON viewer 的主线程整体格式化和 `<pre>` 渲染会
   - ECharts 按需 SVG runtime 从单一约 525 KB 异步 chunk 拆为约 339 KB runtime 与 182 KB renderer 缓存边界。
   - `src/store/dashboard.ts` 继续保留兼容 facade，run/history/comparison/restore 协调迁移到独立 coordinator。
   - 部署清单新增 Web source revision/state digest、Web build digest 与 schema-set revision；启动前校验摘要，启动后校验
-    health 与 API manifest。新版本启动失败时恢复 previous manifest 并尝试重新启动上一 Bridge，rollback 自身失败会显式报错。
-  - release traceability 摘要算法有确定性与排除目录自动测试；部署 PowerShell 通过语法门禁。
+    health 与 API manifest。每个候选的 `bridge/ + dist/` 固化为不可变 release snapshot，`runs/` 保持为独立状态；新版本
+    启动失败时原子恢复 previous manifest 并从上一 snapshot 重启，rollback 自身失败会显式报错。
+  - release traceability 记录路径、文件数、byte count 与 digest；临时目录 post-manifest 故障测试已证明 previous
+    manifest 与旧 Python/static bytes 可恢复，release identity matrix 工具可绑定 TileSim/Web/schema/run/artifact identity。
+  - 部署 PowerShell 通过语法门禁；Provider/model/prompt/policy 只有显式 authenticated probe exact-match 记录可进入 matrix。
 - **仍需 release rehearsal**：
   1. 在干净 Windows + WSL 环境以 lockfile frozen install 验证 Node/pnpm/Python/WSL 前置条件、构建、Bridge 启动、run 创建、恢复、比较和 Worker 导出。
-  2. 增加 immutable Web release snapshot 或等价 blue/green 切换；在此之前，仅恢复 manifest 不能证明旧 Bridge
-     Python/static bytes 可重建。随后在非 5173 临时环境注入启动失败，验证上一 manifest、进程和 API identity 均恢复，
-     最后才允许在授权窗口验证真实 5173 rollback。
+  2. 在非 5173 临时进程环境注入启动失败，验证上一 snapshot 进程、health 与 API identity 均恢复；最后才允许在授权
+     窗口验证真实 5173 rollback。manifest/Python/static byte 恢复已有纯临时目录自动测试。
   3. 对一个 release candidate 记录 TileSim source/build/state、Web source/build、schema set、run、artifact bytes/SHA-256、Provider/model/prompt/policy 全链路身份。
   4. 完成 P0/P1 issue sweep；任何未关闭 P0/P1、rollback 失败或 identity 不一致均阻断发布。
-- **状态规则**：上述空环境与故障注入未执行前，F10 只能是 `source-hardened`，不能标记 validated。完整清单见
+- **状态规则**：上述空环境与临时进程故障注入未执行前，F10 只能是 `source-hardened`，不能标记 validated。完整清单见
   `docs/F10_RELEASE_HARDENING.md`。
 
 ### 长期前端技术债

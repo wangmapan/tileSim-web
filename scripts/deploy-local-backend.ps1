@@ -24,6 +24,19 @@ function Invoke-Checked {
     }
 }
 
+function Write-AtomicTextFile {
+    param([string]$Path, [string]$Text)
+    $directory = Split-Path -Parent $Path
+    New-Item -ItemType Directory -Path $directory -Force | Out-Null
+    $temporary = Join-Path $directory "$([System.IO.Path]::GetFileName($Path)).$PID.tmp"
+    try {
+        [System.IO.File]::WriteAllText($temporary, $Text, [System.Text.UTF8Encoding]::new($false))
+        Move-Item -LiteralPath $temporary -Destination $Path -Force
+    } finally {
+        if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force }
+    }
+}
+
 function Convert-ToWslPath {
     param([string]$WindowsPath)
     $full = [System.IO.Path]::GetFullPath($WindowsPath)
@@ -59,6 +72,25 @@ function Get-SchemaSetRevision {
     $revision = $output | Where-Object { $_ -match '^sha256:[0-9a-f]{64}$' } | Select-Object -Last 1
     if (-not $revision) { throw "The Bridge schema-set revision was not returned." }
     return $revision.Trim()
+}
+
+function New-WebReleaseSnapshot {
+    param(
+        [string]$WebRevision,
+        [string]$WebSourceDigest,
+        [string]$WebBuildDigest,
+        [string]$SchemaSetRevision
+    )
+    $releaseRoot = Join-Path $runtimeRoot "releases"
+    $output = & $node (Join-Path $PSScriptRoot "release-snapshot.mjs") create `
+        --source-root $webRoot `
+        --releases-root $releaseRoot `
+        --web-source-revision $WebRevision `
+        --web-source-state-digest $WebSourceDigest `
+        --web-build-digest $WebBuildDigest `
+        --schema-set-revision $SchemaSetRevision
+    if ($LASTEXITCODE -ne 0) { throw "Could not create the immutable TileSim Web release snapshot." }
+    return ($output | Select-Object -Last 1) | ConvertFrom-Json
 }
 
 if (-not $mutex.WaitOne(0)) { throw "Another backend deployment is already running." }
@@ -131,6 +163,9 @@ try {
     }
     $webBuildDigest = Get-DirectoryDigest (Join-Path $webRoot "dist") ""
     $schemaSetRevision = Get-SchemaSetRevision
+    $webRelease = New-WebReleaseSnapshot $webRevision $webSourceDigest $webBuildDigest $schemaSetRevision
+    $webReleaseRootWsl = Convert-ToWslPath $webRelease.release_root_windows
+    $webStateRootWsl = Convert-ToWslPath $webRoot
 
     New-Item -ItemType Directory -Path $runtimeRoot -Force | Out-Null
     $manifest = [ordered]@{
@@ -143,12 +178,19 @@ try {
         web_source_revision = $webRevision
         web_source_state_digest = $webSourceDigest
         web_build_digest = $webBuildDigest
+        web_release_identity = $webRelease.identity
+        web_release_digest = $webRelease.release_digest
+        web_bridge_digest = $webRelease.bridge.digest
+        web_static_digest = $webRelease.static.digest
+        web_release_root_windows = $webRelease.release_root_windows
+        web_release_root_wsl = $webReleaseRootWsl
+        web_state_root_wsl = $webStateRootWsl
         schema_set_revision = $schemaSetRevision
         source_root_windows = $source
         tilesim_root_wsl = $sourceWsl
         build_dir_wsl = $BuildDirWsl
         tilesim_cli_wsl = "$BuildDirWsl/TileSimCLI"
-        manifest_path_wsl = "/mnt/d/tileSim-web/runtime/backend-current.json"
+        manifest_path_wsl = Convert-ToWslPath $manifestPath
         deployed_at = [DateTimeOffset]::Now.ToString("o")
         validation = [ordered]@{
             tilesim_ctest = "$testCount/$testCount"
@@ -157,13 +199,7 @@ try {
             web = "passed"
         }
     }
-    $temporaryManifest = Join-Path $runtimeRoot "backend-current.$PID.tmp"
-    [System.IO.File]::WriteAllText(
-        $temporaryManifest,
-        ($manifest | ConvertTo-Json -Depth 6),
-        [System.Text.UTF8Encoding]::new($false)
-    )
-    Move-Item -LiteralPath $temporaryManifest -Destination $manifestPath -Force
+    Write-AtomicTextFile $manifestPath ($manifest | ConvertTo-Json -Depth 6)
     $manifestWritten = $true
 
     if (-not $NoRestart) {
@@ -176,11 +212,7 @@ try {
     $deploymentError = $_
     $rollbackError = $null
     if ($manifestWritten -and $null -ne $previousManifestText) {
-        [System.IO.File]::WriteAllText(
-            $manifestPath,
-            $previousManifestText,
-            [System.Text.UTF8Encoding]::new($false)
-        )
+        Write-AtomicTextFile $manifestPath $previousManifestText
         if ($restartAttempted) {
             try {
                 & (Join-Path $PSScriptRoot "start-backend.ps1") -ManifestPath $manifestPath -WslDistro $WslDistro
@@ -190,6 +222,8 @@ try {
                 $rollbackError = $_
             }
         }
+    } elseif ($manifestWritten -and (Test-Path -LiteralPath $manifestPath)) {
+        Remove-Item -LiteralPath $manifestPath -Force
     }
     if ($rollbackError) {
         throw "Deployment failed: $($deploymentError.Exception.Message) Rollback also failed: $($rollbackError.Exception.Message)"

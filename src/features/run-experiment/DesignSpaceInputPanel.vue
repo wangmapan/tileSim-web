@@ -25,14 +25,18 @@ const manifestSummary = computed(() => {
 </script>
 
 <template>
-  <article class="panel form-section">
-    <header class="form-section-title">
+  <details class="panel form-section design-space-disclosure" :open="Boolean(designSpaceJson)">
+    <summary class="form-section-title">
       <span>03</span>
       <div>
         <h2>{{ t("S6 设计空间候选") }}</h2>
-        <p>{{ t("可选。文件内容会经 bridge 严格校验后写入本次 run 目录，不接受任意本地路径。") }}</p>
+        <p>{{ t("默认使用内置候选；仅在需要自定义 S6 manifest 时展开。") }}</p>
       </div>
-    </header>
+      <div class="design-space-disclosure-state">
+        <strong>{{ manifestSummary.mode === "built_in" ? t("内置合成候选集") : t("自定义候选 manifest") }}</strong>
+        <small>{{ manifestSummary.candidateCount }} / 256 {{ t("候选") }}</small>
+      </div>
+    </summary>
     <div class="json-editor-section design-space-input">
       <div class="json-toolbar">
         <button v-if="designSpaceJson" class="text-button" @click="designSpaceJson = ''">
@@ -84,5 +88,5 @@ const manifestSummary = computed(() => {
         {{ t("前端预算提示用于尽早发现问题；字段、范围、去重和最终执行预算仍由 Bridge 与 TileSimCLI 失败关闭校验。") }}
       </p>
     </div>
-  </article>
+  </details>
 </template>

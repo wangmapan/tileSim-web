@@ -28,12 +28,14 @@ const { t } = useI18n();
         <StatusPill :value="evidence.calibration" />
         <StatusPill :value="evidence.claimScope" />
       </div>
-      <button v-if="evidence.sourceMode !== 'real_trace'" class="evidence-warning" @click="setView('validation')">
+      <button
+        v-if="evidence.sourceMode !== 'real_trace'"
+        class="evidence-warning"
+        :aria-label="`${t('证据边界受限')}：${t('当前结论不能替代真实留出验证')}`"
+        @click="setView('validation')"
+      >
         <AlertTriangle :size="15" />
-        <span class="evidence-warning-copy">
-          <strong>{{ t("证据边界受限") }}</strong>
-          <small>{{ t("当前结论不能替代真实留出验证") }}</small>
-        </span>
+        <strong>{{ t("证据边界受限") }}</strong>
         <ChevronRight :size="15" />
       </button>
     </div>

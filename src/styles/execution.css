@@ -200,6 +200,36 @@
 .stage-panel {
   overflow: hidden;
 }
+.execution-secondary-disclosure {
+  padding: 0;
+}
+.execution-secondary-disclosure > summary {
+  cursor: pointer;
+  list-style: none;
+}
+.execution-secondary-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.stage-panel > summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 20px 18px;
+  gap: 10px;
+  align-items: center;
+}
+.stage-panel > summary > span {
+  color: var(--muted);
+  font: 650 var(--text-xs) var(--font-mono);
+}
+.execution-secondary-disclosure > summary > svg:last-child {
+  color: var(--muted);
+  transition: transform var(--motion-fast) var(--ease-standard);
+}
+.execution-secondary-disclosure[open] > summary > svg:last-child {
+  transform: rotate(180deg);
+}
+.execution-secondary-disclosure[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
 .layer-detail-header {
   display: grid;
   grid-template-columns: 46px minmax(0, 1fr) auto;
@@ -439,29 +469,37 @@
   gap: 18px;
 }
 .support-card {
-  padding: 19px 21px;
+  padding: 0;
 }
-.support-card > header {
-  display: flex;
+.support-card > summary {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto 18px;
   gap: 10px;
   align-items: center;
-  margin-bottom: 14px;
+  padding: 15px 21px;
   color: var(--accent);
 }
-.support-card > header div {
+.support-card > summary div {
   display: grid;
   gap: 2px;
 }
-.support-card > header small {
+.support-card > summary small {
   color: var(--muted);
   font: 700 var(--text-micro) var(--font-mono);
   letter-spacing: 0.08em;
 }
-.support-card > header strong {
+.support-card > summary strong {
   color: var(--ink);
   font-size: var(--text-base);
 }
-.support-card > p {
+.support-card > summary > span {
+  color: var(--muted);
+  font: 650 var(--text-xs) var(--font-mono);
+}
+.support-card-body {
+  padding: 15px 21px 19px;
+}
+.support-card-body > p {
   margin: 0 0 13px;
   color: var(--muted);
   font-size: var(--text-sm);
@@ -903,6 +941,9 @@
   grid-template-columns: 1fr 1fr;
   gap: 8px;
   margin: 0 23px 17px;
+}
+.layer-context-disclosure .layer-insight-grid {
+  margin-top: 16px;
 }
 .layer-insight-grid article {
   padding: 11px 12px;

@@ -16,6 +16,7 @@
     "deps:check": "node scripts/check-frontend-dependencies.mjs",
     "perf:artifact-baseline": "node --expose-gc scripts/measure-artifact-baseline.mjs",
     "perf:artifact-worker": "vite-node scripts/measure-artifact-worker-baseline.ts",
+    "release:identity": "node scripts/release-identity.mjs",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

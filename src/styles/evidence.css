@@ -1,10 +1,10 @@
 .evidence-strip {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) auto minmax(0, auto);
-  gap: 14px;
+  gap: 12px;
   align-items: center;
   margin-bottom: 16px;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border: 1px solid var(--line);
   border-radius: 9px;
   background: color-mix(in srgb, var(--panel) 90%, transparent);
@@ -83,20 +83,8 @@
   background: color-mix(in srgb, var(--warning-soft) 88%, var(--panel));
   transform: translateY(-1px);
 }
-.evidence-warning-copy {
-  display: grid;
-  gap: 1px;
-  min-width: 0;
-  max-width: 260px;
-}
-.evidence-warning-copy strong,
-.evidence-warning-copy small {
+.evidence-warning strong {
   overflow-wrap: anywhere;
-}
-.evidence-warning-copy small {
-  color: inherit;
-  font-size: inherit;
-  font-weight: 500;
 }
 .status-pill {
   display: inline-flex;

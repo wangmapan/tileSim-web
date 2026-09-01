@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref } from "vue";
-import { Check, GitCompareArrows, Pencil, RefreshCw, Search, X } from "@lucide/vue";
+import { GitCompareArrows, Pencil, RefreshCw, Search, X } from "@lucide/vue";
 import ComparisonPanel from "../components/ComparisonPanel.vue";
 import EmptyState from "../components/EmptyState.vue";
 import ModalDialog from "../components/ModalDialog.vue";
@@ -67,14 +67,6 @@ async function submitRename() {
           class="run-row"
           :class="{ selected: state.history.selected.includes(run.run_id) }"
         >
-          <button
-            class="compare-check"
-            :disabled="run.status !== 'completed'"
-            :aria-label="state.history.selected.includes(run.run_id) ? t('移出对比') : t('加入对比')"
-            @click="toggleComparison(run.run_id)"
-          >
-            <Check v-if="state.history.selected.includes(run.run_id)" :size="14" />
-          </button>
           <button class="run-main" :disabled="run.status !== 'completed'" @click="openRun(run.run_id)">
             <strong>{{ run.run_name || t("未命名实验") }}</strong
             ><small>{{ run.run_id }} · {{ formatDate(run.created_at) }}</small>
@@ -104,7 +96,7 @@ async function submitRename() {
       </div>
     </article>
 
-    <article class="panel compare-shell">
+    <article v-if="state.history.selected.length" class="panel compare-shell">
       <header class="panel-header panel-header--row">
         <div>
           <p class="section-kicker">RUN COMPARISON</p>

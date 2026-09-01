@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Braces, GitCommitHorizontal, ShieldCheck, Target, TriangleAlert } from "@lucide/vue";
+import { Braces, ChevronDown, GitCommitHorizontal, ShieldCheck, Target, TriangleAlert } from "@lucide/vue";
 import { computed, ref } from "vue";
 import EmptyState from "../components/EmptyState.vue";
 import { formatNumber, formatPercent } from "../lib/format";
@@ -60,7 +60,7 @@ function selectEvidenceRequest(requestId: string) {
     <template v-else>
       <EmptyState v-if="!state.bundle.tail?.attribution_ranking" title="没有尾延迟归因报告" />
       <template v-else>
-        <section class="attribution-intro">
+        <section class="attribution-intro attribution-primary-summary">
           <div>
             <p class="section-kicker">EXPLAINED ENTITY</p>
             <div class="entity-id">
@@ -80,8 +80,11 @@ function selectEvidenceRequest(requestId: string) {
           </dl>
         </section>
 
-        <article v-if="state.bundle.tail.attribution_audit" class="panel attribution-audit">
-          <header class="panel-header">
+        <details
+          v-if="state.bundle.tail.attribution_audit"
+          class="panel attribution-audit attribution-secondary-disclosure"
+        >
+          <summary class="panel-header">
             <div>
               <p class="section-kicker">ATTRIBUTION AUDIT</p>
               <h2>{{ t("归因守恒与传播审计") }}</h2>
@@ -96,7 +99,8 @@ function selectEvidenceRequest(requestId: string) {
               "
               >{{ state.bundle.tail.attribution_audit.status || t("未报告") }}</span
             >
-          </header>
+            <ChevronDown :size="17" />
+          </summary>
           <dl class="attribution-audit-grid">
             <div>
               <dt>{{ t("证据层级") }}</dt>
@@ -134,16 +138,21 @@ function selectEvidenceRequest(requestId: string) {
               <code v-for="issue in state.bundle.tail.attribution_audit.issues" :key="issue">{{ issue }}</code>
             </div>
           </div>
-        </article>
+        </details>
 
-        <article v-if="state.bundle.tail.cause_chain?.length" class="panel">
-          <header class="panel-header">
+        <details
+          v-if="state.bundle.tail.cause_chain?.length"
+          class="panel attribution-secondary-disclosure attribution-cause-disclosure"
+        >
+          <summary class="panel-header">
             <div>
               <p class="section-kicker">CAUSE CHAIN</p>
               <h2>{{ t("共享时间轴上的原因链") }}</h2>
               <p>{{ t("这是报告提供的有序解释，不应单独视为现实因果证明。") }}</p>
             </div>
-          </header>
+            <span>{{ state.bundle.tail.cause_chain.length }} causes</span>
+            <ChevronDown :size="17" />
+          </summary>
           <ol class="cause-chain">
             <li
               v-for="(cause, index) in state.bundle.tail.cause_chain"
@@ -159,9 +168,9 @@ function selectEvidenceRequest(requestId: string) {
               <ArtifactEvidenceLink :source-path="causeSource(state.bundle.tail.cause_chain || [], cause.cause_id)" />
             </li>
           </ol>
-        </article>
+        </details>
 
-        <article class="panel">
+        <article class="panel attribution-ranking-panel">
           <header class="panel-header">
             <div>
               <p class="section-kicker">ATTRIBUTION RANKING</p>
@@ -193,7 +202,7 @@ function selectEvidenceRequest(requestId: string) {
           </div>
         </article>
 
-        <section v-if="outputPlaneAttributions.length" class="scope-callout">
+        <section v-if="outputPlaneAttributions.length" class="scope-callout attribution-scope-note">
           <TriangleAlert :size="18" />
           <p>
             <strong>{{ t("输出面不是延迟因果来源") }}</strong
@@ -205,7 +214,7 @@ function selectEvidenceRequest(requestId: string) {
           </p>
         </section>
 
-        <div class="scope-callout">
+        <div class="scope-callout attribution-scope-note">
           <Braces :size="18" />
           <p>
             <strong>{{ t("解释边界") }}</strong

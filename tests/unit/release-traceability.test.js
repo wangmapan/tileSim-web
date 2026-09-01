@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { directoryDigest } from "../../scripts/release-traceability.mjs";
+import { directoryInventory } from "../../scripts/release-traceability.mjs";
 
 const temporaryDirectories = [];
 
@@ -35,5 +36,15 @@ describe("release traceability digest", () => {
     await mkdir(path.join(root, "dist"));
     await writeFile(path.join(root, "dist", "bundle.js"), "generated", "utf8");
     expect(await directoryDigest(root)).toBe(before);
+  });
+
+  it("reports the exact release file count and payload byte count", async () => {
+    const root = await fixtureDirectory();
+    const inventory = await directoryInventory(root, new Set());
+    expect(inventory).toEqual({
+      digest: await directoryDigest(root, new Set()),
+      fileCount: 2,
+      totalBytes: Buffer.byteLength("alpha") + Buffer.byteLength("beta"),
+    });
   });
 });

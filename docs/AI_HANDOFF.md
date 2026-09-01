@@ -17,7 +17,7 @@ success/refusal 和重复模型评测；不得用 fake Provider 关闭
   `/api/agent/evidence-capabilities` 返回 `unknown_endpoint`，F9C 尚未部署。
 - 当前 5173 部署身份：`versions_match=true`、`state_digests_match=true`、`execution_ready=true`；source/build digest
   均为 `b1711365831a47090bf3d6bec237e065b8bed4b1a09d8c055d6c61b8be7d67d0`。
-- 当前基线：61/61 TileSim CTest、226/226 frontend、75/75 Bridge、25/25 desktop fixture Playwright、4/4
+- 当前基线：61/61 TileSim CTest、233/233 frontend、76/76 Bridge、25/25 desktop fixture Playwright、4/4
   live Week 8/F7/F8 Playwright
 - 工作树包含多阶段连续未提交改动；不得 reset、clean、覆盖或擅自提交。
 - `127.0.0.1:5173` 是用户服务；除非用户明确要求部署，不停止、不重启、不替换。
@@ -52,7 +52,7 @@ success/refusal 和重复模型评测；不得用 fake Provider 关闭
   claim-free Bridge terminal 从 redacted metadata 精确恢复；claims-bearing 或 claim-free Provider terminal 返回正式
   `409 terminal_result_not_retained`；same key/different payload 返回 `409 idempotency_payload_mismatch`；所有不可恢复
   分支都禁止重调 Provider。request/response/citation/snapshot identity 保持 v1。前端 v2 DTO/runtime validator 已重生。
-- 当前源码验证：226/226 frontend、75/75 Bridge、36/36 Schema inventory、2/2 Python/Node canonical digest vectors、
+- 当前源码验证：233/233 frontend、76/76 Bridge、36/36 Schema inventory、2/2 Python/Node canonical digest vectors、
   25/25 desktop fixture Playwright、Python `py_compile`、`pnpm contracts:check`、`deps:check`、`typecheck`、lint、
   repo-wide `format:check`、build 和 `git diff --check` 通过。`bridge-contracts.ts` /
   `evidence-agent-validators.js` 已由 `pnpm contracts:generate` 重生；fixture/API/UI 已消费 descriptor v2，API 同时绑定
@@ -66,14 +66,19 @@ success/refusal 和重复模型评测；不得用 fake Provider 关闭
 - 前端高耦合文件继续渐进拆分：F8 `run-experiment/model.ts` 保留稳定 facade，descriptor surface、表单状态、
   request 校验/序列化、类型与固定 Pointer 分域；`EvidenceAgentPanel.vue` 仅保留编排与提交准备，descriptor v2
   policy 和 validated result/citation 分别由独立组件展示。feature 公共入口、契约语义和 DOM 行为保持不变。
-- F10 源码硬化已推进：结构化报告完整构建/HTML 渲染进入 Worker，ECharts 约 525 KB 单块拆为 runtime/renderer，
-  dashboard facade 移出 run/history/comparison/restore 协调；部署 manifest 新增 Web source/build 与 schema-set 摘要，
-  新版本启动失败会恢复 manifest 并尝试重启上一 Bridge。immutable Web release snapshot、干净环境与故障注入
-  rehearsal 尚未闭合，F10 不标记 validated。
+- F10 源码闭合已推进：结构化报告完整构建/HTML 渲染进入 Worker，ECharts 约 525 KB 单块拆为 runtime/renderer，
+  dashboard facade 移出 run/history/comparison/restore 协调；部署会固化并校验不可变 `bridge/ + dist/` release
+  snapshot，运行状态留在 snapshot 外。启动后 health 绑定 Web source/build/release/Bridge/static/schema identity；失败时
+  原子恢复上一 manifest 并从上一 snapshot 重启。临时目录 post-manifest 故障已验证旧 Python/static bytes 可恢复，
+  release identity matrix 工具也已闭合；干净环境与非 5173 临时进程 rehearsal 尚未执行，F10 不标记 validated。
 - 电脑端信息架构已去重：完整 F6B chain 只由“请求证据”页面承载，Execution、Metrics、Validation 分别聚焦
   canonical execution path、性能指标和验证边界；Metrics 仅保留稳定 ID 驱动的轻量入口。S9 归因通过同页独立
   tab 与跨子系统 chain 分开，Overview 删除重复 Run Facts/Recent Runs，侧栏按分析/实验/工具重组。该变化只调整
   页面归属和默认 disclosure，不改变任何证据、SHA、Pointer 或 contract 状态。
+- 电脑端信息密度收尾已覆盖 Agent、实验、设计空间、Fabric、Validation、Execution、请求证据、Week 7、History
+  和全局 EvidenceStrip：核心操作与结论前置，身份、策略、逐项检查、Topology、S7 envelope、血缘和原始记录按需
+  展开；运行记录只保留一个对比入口。正式证据、错误状态、S3/S4/S5 并列、S7 host、S8/S9 输出面和无损整数语义
+  均保持不变。
 
 TileSim Web 是本地实验与证据工作台。Python Bridge 调用指定 `TileSimCLI` 并托管 allow-listed artifacts；后端报告是模拟事实来源，前端不得运行第二套模拟、重算指标或补造跨子系统关系。
 
@@ -224,8 +229,8 @@ topology domain → metrics domain 导航；浏览器验收同时覆盖 SHA/Poin
 
 ## 7. 保留债务
 
-- 结构化报告仍在主线程同步生成完整 HTML；超大型导出的 Worker/流式生成属于性能硬化债务，不得靠截断记录规避。
-- ECharts 异步 chunk 约 527 kB / 179 kB gzip；新增图型前复查适用性和体积，不改成全量 import。
+- 结构化报告已由 Worker 完整生成 HTML；同步路径只作为 Worker 不可用时的完整降级，不得靠截断记录规避。
+- ECharts 已拆为约 339 kB runtime 与 182 kB renderer；新增图型前复查适用性和体积，不改成全量 import。
 - `src/store/dashboard.ts` 与 `bridge/server.py` 保留兼容 facade/wrapper；只做渐进迁移。
 - 后端正式 canonical report schema、真实 calibration assets 和 held-out validation 尚未由前端工作关闭。
 - F9 provider 当前正式 unavailable；在 provider 可用并通过 live success/refusal、重复模型 hard gate 与人工 entailment

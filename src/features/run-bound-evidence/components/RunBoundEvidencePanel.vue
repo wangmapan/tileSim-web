@@ -40,6 +40,7 @@ const pageLinks = [
   { name: "execution", label: "分层结果" },
   { name: "validation", label: "验证边界" },
 ] as const;
+const visiblePageLinks = computed(() => pageLinks.filter((page) => page.name !== route.name));
 const peerNodes = computed(
   () => peerSubsystems.map((id) => nodeMap.value.get(id)).filter(Boolean) as RunBoundEvidenceNode[],
 );
@@ -221,7 +222,7 @@ function statusLabel(node: { availability: RunBoundAvailability }) {
 
       <nav class="run-bound-page-links" :aria-label="t('请求证据页面导航')">
         <RouterLink
-          v-for="page in pageLinks"
+          v-for="page in visiblePageLinks"
           :key="page.name"
           :to="{ name: page.name, query: routeQuery(selectedRequestId) }"
         >

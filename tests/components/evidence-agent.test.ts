@@ -97,6 +97,12 @@ describe("F9 evidence Agent presentation", () => {
     expect(wrapper.find(".evidence-agent-terminal-list").text()).toContain("tilesim.bridge.error.v1");
     expect(wrapper.find(".evidence-agent-terminal-list").text()).toContain("tilesim.bridge.evidence_agent_response.v1");
     expect(wrapper.text()).not.toContain("[object Object]");
+    expect(wrapper.get(".evidence-agent-identity-disclosure").attributes("open")).toBeUndefined();
+    expect(wrapper.get(".evidence-agent-policy-disclosure").attributes("open")).toBeUndefined();
+    const stackClasses = [...wrapper.get(".evidence-agent-stack").element.children].map((element) => element.className);
+    expect(stackClasses.findIndex((value) => value.includes("evidence-agent-compose"))).toBeLessThan(
+      stackClasses.findIndex((value) => value.includes("evidence-agent-policy-disclosure")),
+    );
   });
 
   it("renders only validated atomic citations as exact artifact navigation", async () => {

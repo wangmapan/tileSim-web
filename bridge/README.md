@@ -249,7 +249,7 @@ Provider/Bridge 终态映射固定为：`502 -> completion_state=failed`、
 
 新端点只在 `server.py` 做路由；校验、持久化、执行或基础设施逻辑应进入对应模块。保留 `server` wrapper 是为了兼容部署脚本和现有故障注入测试，不应在 wrapper 中重新实现业务逻辑。
 
-当前 Bridge discovery 回归基线为 74 个 unittest，全部使用临时 HTTP 端口，不操作正在运行的 5173 服务。Week 7 操作不接受请求正文中的路径、命令或参数，并要求 source/build identity 一致；同一时刻最多执行一个 Week 7 操作。CLI 输出会按登记的响应 Schema 校验必需字段、类型、最小值和有限数，同 schema_version 的畸形报告也会失败关闭。
+当前 Python Bridge 回归基线为 76 个测试（64 个 server、9 个 Provider adapter、3 个 canonical digest），全部使用临时 HTTP 端口或纯函数路径，不操作正在运行的 5173 服务。Week 7 操作不接受请求正文中的路径、命令或参数，并要求 source/build identity 一致；同一时刻最多执行一个 Week 7 操作。CLI 输出会按登记的响应 Schema 校验必需字段、类型、最小值和有限数，同 schema_version 的畸形报告也会失败关闭。
 
 F7 另有 `bridge/test_f7_schemas.mjs`，使用 Ajv 8 的 Draft 2020-12 实现编译
 design-space、topology 和 metrics schema，并运行正反例；该测试不生成或修改前端代码。
@@ -263,3 +263,9 @@ F9 另有 `bridge/test_f9_schemas.mjs`，编译 descriptor/request/response/cita
 `tests/fixtures/f9-agent-evaluation-cases.json` 的全部 36 个 case 固定为不可删减 hard gate。
 
 受控运行要求 `source_revision == build_revision`。`local_worktree_snapshot` 模式还要求当前 `source_state_digest`、部署清单摘要与构建摘要三者一致。任一门禁不满足时 `/api/health` 返回 `execution_ready: false`，`POST /api/runs` 返回 503；提交版本使用 `scripts/update-backend.ps1`，未提交本地版本使用 `scripts/deploy-local-backend.ps1` 完成一致性部署后才会恢复执行。
+
+两个部署入口都会在切换 manifest 前，将候选运行时 `bridge/` 与 `dist/` 固化到
+`runtime/releases/<release-id>`。`start-backend.ps1` 校验 release 文件数、byte count、Bridge/static digest、Web
+source/build digest 和 schema-set revision 后才停止旧服务，并从不可变 snapshot 启动；`TILESIM_WEB_STATE_ROOT`
+使 `runs/` 保持在 snapshot 外。启动失败时 previous manifest 原子恢复，并尝试从 previous snapshot 重启。部署身份可用
+`pnpm release:identity` 与正式 artifact manifest 组合输出；该工具不会读取 Provider 环境变量值。
