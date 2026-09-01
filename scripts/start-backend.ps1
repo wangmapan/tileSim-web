@@ -73,7 +73,37 @@ $arguments = @(
     "TILESIM_WEB_STATE_ROOT=$webStateRootWsl",
     "python3", $bridgeScriptWsl
 )
-$launcher = Start-Process -FilePath "wsl.exe" -ArgumentList $arguments -WindowStyle Hidden -PassThru
+$evidenceAgentEnvironmentNames = @(
+    "TILESIM_EVIDENCE_AGENT_PROVIDER",
+    "TILESIM_EVIDENCE_AGENT_ENDPOINT",
+    "TILESIM_EVIDENCE_AGENT_API_KEY",
+    "TILESIM_EVIDENCE_AGENT_MODEL",
+    "TILESIM_EVIDENCE_AGENT_MODEL_REVISION",
+    "TILESIM_EVIDENCE_AGENT_TIMEOUT_MS",
+    "TILESIM_EVIDENCE_AGENT_PROBE_CACHE_SECONDS"
+)
+$forwardedEvidenceAgentEnvironmentNames = @(
+    $evidenceAgentEnvironmentNames | Where-Object {
+        -not [string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable($_, "Process"))
+    }
+)
+$previousWslEnvironment = [Environment]::GetEnvironmentVariable("WSLENV", "Process")
+try {
+    if ($forwardedEvidenceAgentEnvironmentNames.Count -gt 0) {
+        $existingWslEnvironmentNames = @(
+            $previousWslEnvironment -split ":" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+        )
+        $env:WSLENV = (@($existingWslEnvironmentNames + $forwardedEvidenceAgentEnvironmentNames) |
+            Select-Object -Unique) -join ":"
+    }
+    $launcher = Start-Process -FilePath "wsl.exe" -ArgumentList $arguments -WindowStyle Hidden -PassThru
+} finally {
+    if ($null -eq $previousWslEnvironment) {
+        Remove-Item Env:WSLENV -ErrorAction SilentlyContinue
+    } else {
+        $env:WSLENV = $previousWslEnvironment
+    }
+}
 
 for ($attempt = 0; $attempt -lt 8; $attempt += 1) {
     try {

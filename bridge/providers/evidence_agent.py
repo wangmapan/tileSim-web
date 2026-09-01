@@ -17,12 +17,15 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable, Mapping
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
 PROVIDER_PROTOCOL = "tilesim.evidence_agent_provider.v1"
-SUPPORTED_PROVIDER_ID = "tilesim_json_https_v1"
+NATIVE_PROVIDER_ID = "tilesim_json_https_v1"
+NEWAPI_OPENAI_PROVIDER_ID = "tilesim_newapi_openai_v1"
+SUPPORTED_PROVIDER_ID = NATIVE_PROVIDER_ID
+SUPPORTED_PROVIDER_IDS = frozenset({NATIVE_PROVIDER_ID, NEWAPI_OPENAI_PROVIDER_ID})
 CONFIG_ENVIRONMENT_VARIABLES = (
     "TILESIM_EVIDENCE_AGENT_PROVIDER",
     "TILESIM_EVIDENCE_AGENT_ENDPOINT",
@@ -153,7 +156,13 @@ def load_config(environ: Mapping[str, str] | None = None) -> ProviderConfig | No
         return None
     if any(not value for value in required.values()):
         return None
-    if required["TILESIM_EVIDENCE_AGENT_PROVIDER"] != SUPPORTED_PROVIDER_ID:
+    if required["TILESIM_EVIDENCE_AGENT_PROVIDER"] not in SUPPORTED_PROVIDER_IDS:
+        return None
+    if (
+        required["TILESIM_EVIDENCE_AGENT_PROVIDER"] == NEWAPI_OPENAI_PROVIDER_ID
+        and required["TILESIM_EVIDENCE_AGENT_MODEL"]
+        != required["TILESIM_EVIDENCE_AGENT_MODEL_REVISION"]
+    ):
         return None
     return ProviderConfig(
         provider_id=required["TILESIM_EVIDENCE_AGENT_PROVIDER"],
@@ -200,10 +209,10 @@ def _parse_json_bytes(body: bytes) -> dict:
     return value
 
 
-def post_json(config: ProviderConfig, payload: dict) -> dict:
+def _post_json_to_endpoint(config: ProviderConfig, endpoint: str, payload: dict) -> dict:
     body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     request = Request(
-        config.endpoint,
+        endpoint,
         data=body,
         method="POST",
         headers={
@@ -233,6 +242,102 @@ def post_json(config: ProviderConfig, payload: dict) -> dict:
         raise ProviderUnavailableError("The configured Provider could not be reached.") from error
     except OSError as error:
         raise ProviderUnavailableError("The configured Provider transport failed.") from error
+
+
+def post_json(config: ProviderConfig, payload: dict) -> dict:
+    return _post_json_to_endpoint(config, config.endpoint, payload)
+
+
+def _newapi_chat_completions_endpoint(endpoint: str) -> str:
+    parsed = urlsplit(endpoint)
+    normalized_path = parsed.path.rstrip("/")
+    if normalized_path in {"", "/v1"}:
+        normalized_path = "/v1/chat/completions"
+    elif normalized_path != "/v1/chat/completions":
+        raise ProviderUnavailableError(
+            "The NewAPI endpoint must be an origin, /v1, or the fixed /v1/chat/completions path."
+        )
+    return urlunsplit((parsed.scheme, parsed.netloc, normalized_path, "", ""))
+
+
+def _newapi_structured_content(config: ProviderConfig, response: dict) -> dict:
+    if response.get("model") != config.model_id or response.get("model") != config.model_revision:
+        raise ProviderStructuredOutputError(
+            "The NewAPI response model did not match the configured immutable model identity."
+        )
+    choices = response.get("choices")
+    if not isinstance(choices, list) or len(choices) != 1 or not isinstance(choices[0], dict):
+        raise ProviderStructuredOutputError("The NewAPI response did not contain one completion choice.")
+    choice = choices[0]
+    if choice.get("finish_reason") != "stop":
+        raise ProviderStructuredOutputError("The NewAPI response did not finish as one complete JSON object.")
+    message = choice.get("message")
+    if not isinstance(message, dict) or message.get("role") != "assistant":
+        raise ProviderStructuredOutputError("The NewAPI response did not contain one assistant message.")
+    if message.get("tool_calls") not in (None, []) or message.get("function_call") is not None:
+        raise ProviderStructuredOutputError("The NewAPI response attempted a forbidden tool call.")
+    if message.get("reasoning_content") not in (None, "") or message.get("reasoning") not in (None, ""):
+        raise ProviderStructuredOutputError("The NewAPI response returned forbidden hidden reasoning content.")
+    content = message.get("content")
+    if not isinstance(content, str):
+        raise ProviderStructuredOutputError("The NewAPI response did not contain textual JSON content.")
+    return _parse_json_bytes(content.encode("utf-8"))
+
+
+def post_newapi_openai_json(config: ProviderConfig, payload: dict) -> dict:
+    endpoint = _newapi_chat_completions_endpoint(config.endpoint)
+    if payload.get("operation") == "capability_probe":
+        expected = {
+            "protocol": PROVIDER_PROTOCOL,
+            "capability": "structured_evidence_analysis",
+            "available": True,
+            "provider_id": config.provider_id,
+            "model_id": config.model_id,
+            "model_revision": config.model_revision,
+        }
+        system_prompt = (
+            "Return only one JSON object with exactly the keys and values supplied by the user. "
+            "Do not add markdown, commentary, tool calls, or hidden reasoning."
+        )
+        user_content = json.dumps(expected, ensure_ascii=False, separators=(",", ":"))
+    elif payload.get("operation") == "structured_evidence_analysis":
+        system_prompt = payload.get("policy", {}).get("system_prompt")
+        if not isinstance(system_prompt, str) or system_prompt != SYSTEM_POLICY_PROMPT:
+            raise ProviderStructuredOutputError("The NewAPI analysis payload did not carry the fixed TileSim policy.")
+        user_content = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        expected = None
+    else:
+        raise ProviderStructuredOutputError("The NewAPI adapter received an unsupported Provider operation.")
+
+    completion = _post_json_to_endpoint(
+        config,
+        endpoint,
+        {
+            "model": config.model_id,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
+            ],
+            "response_format": {"type": "json_object"},
+            "stream": False,
+        },
+    )
+    content = _newapi_structured_content(config, completion)
+    if expected is not None:
+        if content != expected:
+            raise ProviderStructuredOutputError(
+                "The NewAPI model did not pass the exact structured capability probe."
+            )
+        return content
+    return {"protocol": PROVIDER_PROTOCOL, "response": content}
+
+
+def provider_transport(config: ProviderConfig, payload: dict) -> dict:
+    if config.provider_id == NATIVE_PROVIDER_ID:
+        return post_json(config, payload)
+    if config.provider_id == NEWAPI_OPENAI_PROVIDER_ID:
+        return post_newapi_openai_json(config, payload)
+    raise ProviderUnavailableError("The configured evidence Provider adapter is not supported.")
 
 
 def _copy_allowed_records(request: dict, artifact_documents: dict[str, dict], resolve_pointer) -> list[dict]:
@@ -307,9 +412,9 @@ def build_analysis_payload(
 class ProviderRuntime:
     """Configuration, authenticated capability probe, and fixed-endpoint analysis."""
 
-    def __init__(self, config: ProviderConfig | None, transport: Transport = post_json) -> None:
+    def __init__(self, config: ProviderConfig | None, transport: Transport | None = None) -> None:
         self._config = config
-        self._transport = transport
+        self._transport = provider_transport if transport is None else transport
         self._capability: ProviderCapability | None = None
         self._capability_at = 0.0
         self._lock = threading.Lock()

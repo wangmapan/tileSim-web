@@ -170,7 +170,8 @@ If asynchronous execution is used, OpenAPI must additionally define status polli
 The Bridge owns one versioned JSON/HTTPS protocol, `tilesim.evidence_agent_provider.v1`. Provider configuration is read only
 from the following process environment variables; browser requests cannot supply or override them:
 
-- `TILESIM_EVIDENCE_AGENT_PROVIDER=tilesim_json_https_v1`
+- `TILESIM_EVIDENCE_AGENT_PROVIDER=tilesim_json_https_v1` or the versioned
+  `tilesim_newapi_openai_v1` transport adapter
 - `TILESIM_EVIDENCE_AGENT_ENDPOINT`
 - `TILESIM_EVIDENCE_AGENT_API_KEY`
 - `TILESIM_EVIDENCE_AGENT_MODEL`
@@ -181,6 +182,13 @@ from the following process environment variables; browser requests cannot supply
 The adapter does not consume generic `OPENAI_*` variables. It rejects non-loopback HTTP, redirects, URL userinfo, query and
 fragment components. Availability becomes true only after an authenticated probe exactly matches protocol, capability,
 provider, model and model revision.
+
+The NewAPI adapter is a TileSim-owned translation boundary rather than an `OPENAI_*` fallback. It accepts only one fixed
+HTTPS origin, `/v1`, or `/v1/chat/completions` target, requests JSON-only output with no tools, and validates the
+authenticated outer response model before accepting either the capability object or analysis response. For this adapter,
+model and revision must be the same exact non-floating model ID. A different response model, tool/function call, reasoning
+content, incomplete completion or malformed JSON fails closed without exposing the raw answer. Credential forwarding uses
+process environment plus `WSLENV`; it is not written to the deployment manifest, immutable snapshot or command line.
 
 Analysis input contains a fixed system policy, an empty tool list, untrusted user-question isolation and only the allow-listed
 records resolved from already verified artifacts. The Bridge validates the returned request/run/digest, schema-set,

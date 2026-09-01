@@ -144,6 +144,28 @@ class ProviderConfigurationTest(unittest.TestCase):
         self.assertIsNotNone(config)
         self.assertNotIn("secret", repr(config))
 
+        newapi = provider.load_config(
+            {
+                **complete,
+                "TILESIM_EVIDENCE_AGENT_PROVIDER": provider.NEWAPI_OPENAI_PROVIDER_ID,
+                "TILESIM_EVIDENCE_AGENT_ENDPOINT": "https://newapi.example.invalid",
+                "TILESIM_EVIDENCE_AGENT_MODEL": "gpt-exact-snapshot",
+                "TILESIM_EVIDENCE_AGENT_MODEL_REVISION": "gpt-exact-snapshot",
+            }
+        )
+        self.assertIsNotNone(newapi)
+        self.assertEqual(newapi.provider_id, provider.NEWAPI_OPENAI_PROVIDER_ID)
+        self.assertIsNone(
+            provider.load_config(
+                {
+                    **complete,
+                    "TILESIM_EVIDENCE_AGENT_PROVIDER": provider.NEWAPI_OPENAI_PROVIDER_ID,
+                    "TILESIM_EVIDENCE_AGENT_MODEL": "floating-alias",
+                    "TILESIM_EVIDENCE_AGENT_MODEL_REVISION": "different-revision",
+                }
+            )
+        )
+
     def test_endpoint_is_https_or_loopback_and_has_no_redirectable_components(self) -> None:
         base = {
             "TILESIM_EVIDENCE_AGENT_PROVIDER": provider.SUPPORTED_PROVIDER_ID,
@@ -241,6 +263,106 @@ class ProviderConfigurationTest(unittest.TestCase):
             httpd.shutdown()
             httpd.server_close()
             thread.join(timeout=2)
+
+    def test_newapi_adapter_uses_fixed_chat_endpoint_and_exact_authenticated_model(self) -> None:
+        captured: list[dict] = []
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self) -> None:  # noqa: N802
+                length = int(self.headers.get("Content-Length", "0"))
+                request_payload = json.loads(self.rfile.read(length))
+                captured.append(
+                    {
+                        "path": self.path,
+                        "authorization": self.headers.get("Authorization"),
+                        "payload": request_payload,
+                    }
+                )
+                content = request_payload["messages"][1]["content"]
+                body = json.dumps(
+                    {
+                        "id": "newapi-probe",
+                        "object": "chat.completion",
+                        "created": 0,
+                        "model": "gpt-exact-snapshot",
+                        "choices": [
+                            {
+                                "index": 0,
+                                "message": {"role": "assistant", "content": content},
+                                "finish_reason": "stop",
+                            }
+                        ],
+                    }
+                ).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, _format: str, *_args) -> None:
+                return
+
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        try:
+            secret = "newapi-secret-never-return"
+            config = provider.ProviderConfig(
+                provider_id=provider.NEWAPI_OPENAI_PROVIDER_ID,
+                endpoint=f"http://127.0.0.1:{httpd.server_port}",
+                api_key=secret,
+                model_id="gpt-exact-snapshot",
+                model_revision="gpt-exact-snapshot",
+                timeout_ms=1_000,
+            )
+            capability = provider.ProviderRuntime(config).capability(force=True)
+            self.assertTrue(capability.available)
+            self.assertEqual(capability.provider, config.public_identity)
+            self.assertEqual(captured[0]["path"], "/v1/chat/completions")
+            self.assertEqual(captured[0]["authorization"], f"Bearer {secret}")
+            self.assertEqual(captured[0]["payload"]["model"], "gpt-exact-snapshot")
+            self.assertEqual(captured[0]["payload"]["response_format"], {"type": "json_object"})
+            self.assertNotIn(secret, repr(capability))
+
+            analysis = provider.post_newapi_openai_json(
+                config,
+                {
+                    "operation": "structured_evidence_analysis",
+                    "policy": {"system_prompt": provider.SYSTEM_POLICY_PROMPT},
+                    "safe_test_value": True,
+                },
+            )
+            self.assertEqual(analysis, {"protocol": provider.PROVIDER_PROTOCOL, "response": {
+                "operation": "structured_evidence_analysis",
+                "policy": {"system_prompt": provider.SYSTEM_POLICY_PROMPT},
+                "safe_test_value": True,
+            }})
+            self.assertEqual(len(captured), 2)
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=2)
+
+    def test_newapi_adapter_rejects_outer_model_identity_mismatch(self) -> None:
+        config = provider.ProviderConfig(
+            provider_id=provider.NEWAPI_OPENAI_PROVIDER_ID,
+            endpoint="https://newapi.example.invalid",
+            api_key="secret",
+            model_id="gpt-exact-snapshot",
+            model_revision="gpt-exact-snapshot",
+        )
+        response = {
+            "model": "different-model",
+            "choices": [
+                {
+                    "message": {"role": "assistant", "content": "{}"},
+                    "finish_reason": "stop",
+                }
+            ],
+        }
+        with self.assertRaises(provider.ProviderStructuredOutputError):
+            provider._newapi_structured_content(config, response)
 
 
 class ProviderExecutionTest(unittest.TestCase):

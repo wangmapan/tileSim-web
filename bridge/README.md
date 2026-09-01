@@ -158,7 +158,8 @@ F9C 在 `providers/evidence_agent.py` 增加 TileSim-owned 固定 JSON/HTTPS Pro
 `completion_state=refused` 和 `reason_code=provider_unavailable`；自动测试中的 fake Provider 只验证
 adapter/contract，不代表 live Agent closure。Bridge 只读取以下环境变量，不回退使用通用 SDK 变量：
 
-- `TILESIM_EVIDENCE_AGENT_PROVIDER`：当前固定为 `tilesim_json_https_v1`
+- `TILESIM_EVIDENCE_AGENT_PROVIDER`：`tilesim_json_https_v1` 或版本化
+  `tilesim_newapi_openai_v1`
 - `TILESIM_EVIDENCE_AGENT_ENDPOINT`：固定 HTTPS endpoint；明文 HTTP 仅允许 loopback
 - `TILESIM_EVIDENCE_AGENT_API_KEY`：Bearer secret，只从进程环境读取
 - `TILESIM_EVIDENCE_AGENT_MODEL`
@@ -170,6 +171,22 @@ adapter/contract，不代表 live Agent closure。Bridge 只读取以下环境�
 `tilesim.evidence_agent_provider.v1` capability probe，并精确核对 protocol、capability、provider、model
 和 model revision；认证失败、transport 失败、identity 不匹配、redirect 或错误响应都保持 unavailable。
 endpoint 不得包含 userinfo、query 或 fragment，run、artifact、用户问题和 Provider 输出均不能更改目标。
+
+`tilesim_newapi_openai_v1` 是 TileSim-owned OpenAI-compatible transport adapter，不是 `OPENAI_*` fallback。
+endpoint 只能是一个 HTTPS origin、`/v1` 或固定 `/v1/chat/completions`；Bridge 确定性解析为同一个 chat
+completion target。该 adapter 使用 JSON response format、固定 system policy、空工具边界，并要求 NewAPI 外层
+response 的 `model` 与 `TILESIM_EVIDENCE_AGENT_MODEL`、`TILESIM_EVIDENCE_AGENT_MODEL_REVISION` 三者完全相同。
+模型返回 tool call、function call、reasoning content、非完整 JSON 或不同 model 时均失败关闭。当前 adapter 要求
+model 与 revision 使用同一精确、非浮动模型 ID。
+
+`scripts/start-evidence-agent.ps1` 通过隐藏输入读取 key，仅在当前启动进程中设置上述专用变量，再由 `WSLENV`
+继承给 Bridge；key 不写入命令行、deployment manifest、release snapshot 或仓库。示例：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-evidence-agent.ps1 `
+  -Endpoint https://provider.example.invalid `
+  -Model exact-model-id
+```
 
 请求不携带浏览器文件路径或任意 URL。snapshot reference 绑定当前 run 的 verified
 `tilesim.bridge.artifact_manifest.v2` canonical SHA-256，并冻结 source/build revision、state digest
