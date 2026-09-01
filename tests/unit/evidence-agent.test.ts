@@ -350,6 +350,58 @@ describe("F9 atomic claim and citation validation", () => {
     ).toThrowError(expect.objectContaining({ code: "completion_state_invalid" }));
   });
 
+  it("accepts validated claims plus a refusal for the unfinished part of a partial response", async () => {
+    const { prepared, descriptor } = await preparedRequest();
+    const response = createCompletedAgentResponse(
+      prepared.inputSnapshotDigest,
+      prepared.request.client_request_id,
+      firstCitation(prepared),
+    );
+    response.completion_state = "partial";
+    response.partial = true;
+    response.refusal = {
+      reason_code: "insufficient_evidence",
+      detail: "The requested P99 subject is not present in the verified snapshot.",
+      retryable: false,
+    };
+
+    const result = validateEvidenceAgentResult(response, prepared, descriptor, {
+      runId: f9RunId,
+      backendIdentity: evidenceAgentBackendIdentity(f9Health),
+      schemaSetRevision: f9SchemaRevision,
+      inputSnapshotDigest: prepared.inputSnapshotDigest,
+    });
+
+    expect(result.state).toBe("partial");
+    expect(result.response.claims).toHaveLength(1);
+    expect(result.detail).toBe("insufficient_evidence");
+  });
+
+  it.each([
+    ["refused response carrying claims", "refused", false, "insufficient_evidence"],
+    ["completed response carrying a refusal", "completed", false, "insufficient_evidence"],
+    ["completed response without claims", "completed", true, null],
+  ] as const)("rejects a %s", async (_label, completion, removeClaims, refusal) => {
+    const { prepared, descriptor } = await preparedRequest();
+    const response = createCompletedAgentResponse(
+      prepared.inputSnapshotDigest,
+      prepared.request.client_request_id,
+      firstCitation(prepared),
+    );
+    response.completion_state = completion;
+    if (removeClaims) response.claims = [];
+    if (refusal) response.refusal = { reason_code: refusal, detail: refusal, retryable: false };
+
+    expect(() =>
+      validateEvidenceAgentResult(response, prepared, descriptor, {
+        runId: f9RunId,
+        backendIdentity: evidenceAgentBackendIdentity(f9Health),
+        schemaSetRevision: f9SchemaRevision,
+        inputSnapshotDigest: prepared.inputSnapshotDigest,
+      }),
+    ).toThrowError(expect.objectContaining({ code: "completion_state_invalid" }));
+  });
+
   it.each([
     ["partial", "partial", true, false, null],
     ["truncated", "truncated", false, true, null],

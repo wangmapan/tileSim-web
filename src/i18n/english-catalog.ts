@@ -1185,6 +1185,33 @@ export const englishCatalog: Readonly<Record<string, string>> = {
   "只有 supported artifact 和精确 stable-ID Pointer 会进入请求 allow-list。":
     "Only supported artifacts and exact stable-ID Pointers enter the request allow-list.",
   "{count} 个 supported artifacts": "{count} supported artifacts",
+  "{supported}/{total} 份正式证据可用": "{supported}/{total} formal evidence artifacts available",
+  使用步骤: "How to use",
+  "选择 request": "Choose a request",
+  "决定要解释哪一次请求。": "Choose which request to explain.",
+  输入问题: "Enter a question",
+  "可以直接使用默认问题。": "You can use the default question as-is.",
+  生成解释: "Generate explanation",
+  "通常需要约一分钟，请等待结果区出现。": "This usually takes about a minute; wait for the result section.",
+  先运行一次实验: "Run an experiment first",
+  "Agent 只能解释已经完成的实验结果。": "The Agent can only explain completed experiment results.",
+  正在读取实验结果: "Reading experiment results",
+  "请稍候，证据清单仍在加载。": "Please wait while the evidence inventory loads.",
+  当前实验不能用于提问: "This experiment cannot be queried",
+  "这次实验没有生成正式 metrics 证据。请重新运行实验，旧结果无法补齐。":
+    "This experiment did not produce formal metrics evidence. Run a new experiment; the old result cannot be upgraded.",
+  "请选择一个 request": "Choose a request",
+  "选择后才能把问题绑定到具体请求。": "The question must be bound to a specific request.",
+  可以开始提问: "Ready for questions",
+  "选择问题类型，确认问题内容，然后点击“生成证据草稿”。":
+    "Choose a task, confirm the question, then select Generate evidence draft.",
+  重新运行实验: "Run a new experiment",
+  "当前实验没有足够的正式证据，Agent 请求没有发送。请重新运行实验后再提问。":
+    "This experiment has insufficient formal evidence, so no Agent request was sent. Run a new experiment before asking.",
+  "请输入一个简短、明确的问题。": "Enter a short, specific question.",
+  部分问题缺少足够证据: "Some parts of the question lack sufficient evidence",
+  没有足够证据生成结论: "There is not enough evidence to generate a conclusion",
+  当前响应没有可展示的结论: "This response contains no displayable conclusions",
   任务类型: "Task type",
   "问题（不受信任内容）": "Question (untrusted content)",
   "请解释当前 request 的 P99 与尾延迟证据边界。":

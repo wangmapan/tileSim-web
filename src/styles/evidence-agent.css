@@ -330,6 +330,73 @@
   padding: 0 25px 24px;
 }
 
+.evidence-agent-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0 25px 14px;
+  list-style: none;
+}
+
+.evidence-agent-steps li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 9px;
+  align-items: center;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-subtle);
+}
+
+.evidence-agent-steps li > span {
+  grid-row: 1 / 3;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 800;
+}
+
+.evidence-agent-steps small {
+  color: var(--muted);
+}
+
+.evidence-agent-readiness {
+  display: flex;
+  gap: 11px;
+  align-items: center;
+  margin: 0 25px 16px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--positive) 35%, var(--line));
+  border-radius: 9px;
+  color: var(--positive-ink);
+  background: var(--positive-soft);
+}
+
+.evidence-agent-readiness[data-state="missing"],
+.evidence-agent-readiness[data-state="unavailable"] {
+  border-color: color-mix(in srgb, var(--warning) 35%, var(--line));
+  color: var(--warning-ink);
+  background: var(--warning-soft);
+}
+
+.evidence-agent-readiness > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  margin-right: auto;
+}
+
+.evidence-agent-readiness small {
+  color: inherit;
+}
+
 .evidence-agent-form label {
   display: grid;
   gap: 6px;
@@ -394,11 +461,17 @@
 
 .evidence-agent-error {
   grid-column: 1 / -1;
+  display: grid;
+  gap: 4px;
   margin: 0;
   padding: 10px 12px;
   border-radius: 8px;
   color: var(--danger-ink);
   background: var(--danger-soft);
+}
+
+.evidence-agent-error code {
+  color: inherit;
 }
 
 .evidence-agent-result > .panel-header {
@@ -481,6 +554,17 @@
   .evidence-agent-policy-summary {
     grid-column: 1 / -1;
     justify-content: flex-start;
+  }
+}
+
+@media (max-width: 760px) {
+  .evidence-agent-steps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .evidence-agent-readiness {
+    align-items: flex-start;
+    flex-wrap: wrap;
   }
 }
 

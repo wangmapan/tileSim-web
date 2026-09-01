@@ -53,6 +53,7 @@ async function routerPlugin() {
     routes: [
       { path: "/evidence-agent", name: "evidence_agent", component: { template: "<div />" } },
       { path: "/execution", name: "execution", component: { template: "<div />" } },
+      { path: "/experiment", name: "experiment", component: { template: "<div />" } },
     ],
   });
   await router.push("/evidence-agent");
@@ -106,6 +107,28 @@ describe("F9 evidence Agent presentation", () => {
     );
   });
 
+  it("explains an unqueryable legacy run before the user can submit", async () => {
+    const legacyProps = props(true);
+    legacyProps.manifest = {
+      ...legacyProps.manifest,
+      artifacts: legacyProps.manifest.artifacts.map((artifact) =>
+        artifact.artifact_id === "input-topology"
+          ? artifact
+          : { ...artifact, contract_status: "legacy_compatibility" as const },
+      ),
+    };
+    const wrapper = mount(EvidenceAgentPanel, {
+      props: legacyProps,
+      global: { plugins: [pinia, await routerPlugin()] },
+    });
+
+    expect(wrapper.text()).toContain("当前实验不能用于提问");
+    expect(wrapper.text()).toContain("这次实验没有生成正式 metrics 证据");
+    expect(wrapper.text()).toContain("0/6 份正式证据可用");
+    expect(wrapper.get("a.button--secondary").attributes("href")).toBe("/experiment");
+    expect(wrapper.get("button.button:not(.button--secondary)").attributes("disabled")).toBeDefined();
+  });
+
   it("renders only validated atomic citations as exact artifact navigation", async () => {
     const context = createF9RunContext();
     const descriptor = createEvidenceAgentDescriptor(true);
@@ -155,6 +178,65 @@ describe("F9 evidence Agent presentation", () => {
     expect(link.attributes("href")).toContain(`evidence_sha=${artifact.sha256}`);
     expect(link.attributes("href")).toContain("evidence_pointer=/request_metrics/0");
     expect(wrapper.text()).toContain("9007199254740993123");
+  });
+
+  it("shows valid claims and the unfinished boundary together for a partial response", async () => {
+    const context = createF9RunContext();
+    const descriptor = createEvidenceAgentDescriptor(true);
+    const prepared = await buildEvidenceAgentRequest({
+      runId: f9RunId,
+      selectedRequestId: f9RequestId,
+      manifest: context.manifest,
+      descriptor,
+      health: f9Health,
+      structuredReport: context.structuredReport,
+      bundle: context.bundle,
+      inputs: context.inputs,
+      locale: "zh-CN",
+      taskKind: "explain_p99",
+      question: "Explain the exact request.",
+      clientRequestId: "agent-client:component-partial",
+    });
+    const artifact = prepared.request.artifact_allow_list.find((entry) => entry.artifact_id === "metrics")!;
+    const record = artifact.allowed_records.find((entry) => entry.subject.kind === "request")!;
+    const response = createCompletedAgentResponse(prepared.inputSnapshotDigest, prepared.request.client_request_id, {
+      schema_version: "tilesim.bridge.evidence_agent_citation.v1",
+      run_id: f9RunId,
+      artifact_id: artifact.artifact_id,
+      schema_identity: artifact.schema_identity,
+      sha256: artifact.sha256,
+      json_pointer: record.json_pointer,
+      subject: record.subject,
+      citation_role: "direct_fact",
+      availability: "available",
+      value: { encoding: "decimal_string", numeric_kind: "uint64", decimal: "42" },
+      unit: "ps",
+    });
+    response.completion_state = "partial";
+    response.partial = true;
+    response.refusal = {
+      reason_code: "insufficient_evidence",
+      detail: "P99 is not defined for this request in the verified snapshot.",
+      retryable: false,
+    };
+    const binding = {
+      runId: f9RunId,
+      backendIdentity: evidenceAgentBackendIdentity(f9Health),
+      schemaSetRevision: f9SchemaRevision,
+      inputSnapshotDigest: prepared.inputSnapshotDigest,
+    };
+    useEvidenceAgentStore().complete(validateEvidenceAgentResult(response, prepared, descriptor, binding), binding);
+
+    const wrapper = mount(EvidenceAgentPanel, {
+      props: props(true),
+      global: { plugins: [pinia, await routerPlugin()] },
+    });
+
+    expect(wrapper.get(".evidence-agent-state").text()).toBe("部分结果");
+    expect(wrapper.text()).toContain("部分问题缺少足够证据");
+    expect(wrapper.text()).toContain("insufficient_evidence");
+    expect(wrapper.findAll(".evidence-agent-claims > li")).toHaveLength(1);
+    expect(wrapper.text()).toContain("42ps");
   });
 
   it("shows the cross-process recovery boundary without rotating the pending key", async () => {

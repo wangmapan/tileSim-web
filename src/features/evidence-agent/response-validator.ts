@@ -183,7 +183,7 @@ export function validateEvidenceAgentResult(
         prepared.request.snapshot_reference.backend_identity.build_state_digest,
       ].join("|");
   const hasRefusal = Boolean(response.refusal);
-  const refusalRequired = ["refused", "failed", "timeout", "cancelled"].includes(response.completion_state);
+  const refusalOnlyTerminal = ["refused", "failed", "timeout", "cancelled"].includes(response.completion_state);
   const reason = response.refusal?.reason_code;
   const reasonCompletionMismatch =
     (reason === "provider_unavailable" && response.completion_state !== "refused") ||
@@ -193,17 +193,12 @@ export function validateEvidenceAgentResult(
     (response.completion_state === "timeout" && reason !== "timeout") ||
     (response.completion_state === "cancelled" && reason !== "cancelled");
   if (
-    (refusalRequired && !hasRefusal) ||
-    (!refusalRequired && hasRefusal) ||
+    (response.completion_state === "completed" && (response.claims.length === 0 || hasRefusal)) ||
+    (refusalOnlyTerminal && (!hasRefusal || response.claims.length > 0)) ||
     reasonCompletionMismatch ||
-    (response.completion_state === "completed" && hasRefusal) ||
-    (hasRefusal && response.claims.length > 0) ||
-    (response.completion_state === "partial" && !response.partial) ||
-    (response.completion_state === "truncated" && !response.truncated)
+    response.partial !== (response.completion_state === "partial") ||
+    response.truncated !== (response.completion_state === "truncated")
   ) {
-    throw new EvidenceAgentContractError("completion_state_invalid");
-  }
-  if (response.completion_state === "completed" && (response.partial || response.truncated || hasRefusal)) {
     throw new EvidenceAgentContractError("completion_state_invalid");
   }
   if (

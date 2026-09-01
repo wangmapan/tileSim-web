@@ -13,6 +13,14 @@ const props = defineProps<{
 }>();
 const { t } = useI18n();
 const visibleClaims = computed(() => (props.agentState === "stale" ? [] : props.agentResult.response.claims));
+const refusalTitle = computed(() => {
+  const refusal = props.agentResult.response.refusal;
+  if (!refusal) return "";
+  if (refusal.reason_code === "insufficient_evidence") {
+    return visibleClaims.value.length ? t("部分问题缺少足够证据") : t("没有足够证据生成结论");
+  }
+  return refusal.reason_code;
+});
 
 function citationRoute(citation: (typeof visibleClaims.value)[number]["citations"][number]) {
   return artifactEvidenceRoute({
@@ -46,11 +54,12 @@ function citationRoute(citation: (typeof visibleClaims.value)[number]["citations
     <div v-else-if="agentResult.response.refusal" class="evidence-agent-unavailable" role="status">
       <CircleSlash2 :size="20" />
       <div>
-        <strong>{{ agentResult.response.refusal.reason_code }}</strong>
+        <strong>{{ refusalTitle }}</strong>
         <p>{{ agentResult.response.refusal.detail }}</p>
+        <code>{{ agentResult.response.refusal.reason_code }}</code>
       </div>
     </div>
-    <ol v-else class="evidence-agent-claims">
+    <ol v-if="agentState !== 'stale' && visibleClaims.length" class="evidence-agent-claims">
       <li v-for="claim in visibleClaims" :key="claim.claim_id">
         <header>
           <code>{{ claim.claim_kind }}</code
@@ -76,5 +85,13 @@ function citationRoute(citation: (typeof visibleClaims.value)[number]["citations
         </div>
       </li>
     </ol>
+    <div
+      v-else-if="agentState !== 'stale' && !agentResult.response.refusal"
+      class="evidence-agent-unavailable"
+      role="status"
+    >
+      <CircleSlash2 :size="20" />
+      <strong>{{ t("当前响应没有可展示的结论") }}</strong>
+    </div>
   </section>
 </template>

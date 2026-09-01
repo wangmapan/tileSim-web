@@ -69,6 +69,31 @@ const chain = computed(() =>
 const supportedArtifacts = computed(
   () => props.manifest?.artifacts.filter((entry) => entry.contract_status === "supported") || [],
 );
+const supportedArtifactIds = computed(() => new Set(supportedArtifacts.value.map((entry) => entry.artifact_id)));
+const snapshotReadiness = computed(() => {
+  if (!props.runId) {
+    return { state: "missing" as const, title: "先运行一次实验", detail: "Agent 只能解释已经完成的实验结果。" };
+  }
+  if (!props.manifest) {
+    return { state: "loading" as const, title: "正在读取实验结果", detail: "请稍候，证据清单仍在加载。" };
+  }
+  if (!supportedArtifactIds.value.has("metrics")) {
+    return {
+      state: "unavailable" as const,
+      title: "当前实验不能用于提问",
+      detail: "这次实验没有生成正式 metrics 证据。请重新运行实验，旧结果无法补齐。",
+    };
+  }
+  if (!props.selectedRequestId) {
+    return { state: "select" as const, title: "请选择一个 request", detail: "选择后才能把问题绑定到具体请求。" };
+  }
+  return {
+    state: "ready" as const,
+    title: "可以开始提问",
+    detail: "选择问题类型，确认问题内容，然后点击“生成证据草稿”。",
+  };
+});
+const snapshotReady = computed(() => snapshotReadiness.value.state === "ready");
 const capabilityAvailable = computed(
   () =>
     props.descriptorStatus === "supported" &&
@@ -106,10 +131,19 @@ const canSubmit = computed(
       props.selectedRequestId &&
       question.value.trim(),
     ) &&
+    snapshotReady.value &&
     !mustDiscardBeforeSubmit.value &&
     !["submitting", "terminal_result_not_retained", "idempotency_payload_mismatch"].includes(props.agentState) &&
     !(props.pending && props.agentState === "stale"),
 );
+const errorCode = computed(() => localError.value || props.submissionError);
+const errorMessage = computed(() => {
+  if (errorCode.value === "insufficient_evidence") {
+    return t("当前实验没有足够的正式证据，Agent 请求没有发送。请重新运行实验后再提问。");
+  }
+  if (errorCode.value === "question_length_invalid") return t("请输入一个简短、明确的问题。");
+  return errorCode.value;
+});
 
 function currentClientRequestId() {
   const pending = props.pending;
@@ -239,9 +273,43 @@ async function submit() {
           <p>{{ t("只有 supported artifact 和精确 stable-ID Pointer 会进入请求 allow-list。") }}</p>
         </div>
         <div class="panel-count">
-          <ShieldCheck :size="16" />{{ t("{count} 个 supported artifacts", { count: supportedArtifacts.length }) }}
+          <ShieldCheck :size="16" />{{
+            t("{supported}/{total} 份正式证据可用", {
+              supported: supportedArtifacts.length,
+              total: manifest?.artifacts.length || 0,
+            })
+          }}
         </div>
       </header>
+      <ol class="evidence-agent-steps" :aria-label="t('使用步骤')">
+        <li>
+          <span>1</span><strong>{{ t("选择 request") }}</strong
+          ><small>{{ t("决定要解释哪一次请求。") }}</small>
+        </li>
+        <li>
+          <span>2</span><strong>{{ t("输入问题") }}</strong
+          ><small>{{ t("可以直接使用默认问题。") }}</small>
+        </li>
+        <li>
+          <span>3</span><strong>{{ t("生成解释") }}</strong
+          ><small>{{ t("通常需要约一分钟，请等待结果区出现。") }}</small>
+        </li>
+      </ol>
+      <div class="evidence-agent-readiness" :data-state="snapshotReadiness.state" role="status">
+        <ShieldCheck v-if="snapshotReady" :size="20" />
+        <CircleSlash2 v-else :size="20" />
+        <span>
+          <strong>{{ t(snapshotReadiness.title) }}</strong>
+          <small>{{ t(snapshotReadiness.detail) }}</small>
+        </span>
+        <RouterLink
+          v-if="snapshotReadiness.state === 'missing' || snapshotReadiness.state === 'unavailable'"
+          :to="{ name: 'experiment' }"
+          class="button button--secondary"
+        >
+          {{ t("重新运行实验") }}
+        </RouterLink>
+      </div>
       <div class="evidence-agent-form">
         <label>
           <span>{{ t("当前 request") }}</span>
@@ -347,9 +415,10 @@ async function submit() {
             <code>terminal_result_not_retained</code>
           </div>
         </div>
-        <p v-if="localError || submissionError" class="evidence-agent-error" role="alert">
-          {{ localError || submissionError }}
-        </p>
+        <div v-if="errorCode" class="evidence-agent-error" role="alert">
+          <strong>{{ errorMessage }}</strong>
+          <code>{{ errorCode }}</code>
+        </div>
       </div>
     </section>
 
