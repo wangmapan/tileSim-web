@@ -285,8 +285,8 @@ describe("Week 5 and Week 6 frontend integration", () => {
     const fixture = fixtureCase("synthetic-s1-s6-complete");
     applyBundle(fixture.reports, { runName: fixture.id, inputs: fixture.inputs });
     const wrapper = mount(FabricView);
-    expect(wrapper.text()).toContain("Metrics-backed Fabric 证据");
-    expect(wrapper.text()).toContain("后端报告的主导 Fabric 热点");
+    expect(wrapper.text()).toContain("专业证据与契约信息");
+    expect(wrapper.text()).toContain("当前主要通信瓶颈");
     expect(wrapper.text()).toContain("请求级 Fabric contribution");
     expect(wrapper.text()).toContain("req-0");
     expect(wrapper.text()).toContain("phase-0");

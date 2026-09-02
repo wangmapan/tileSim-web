@@ -100,7 +100,7 @@ onMounted(() => void load());
     </section>
 
     <template v-if="data">
-      <details class="panel week7-section">
+      <details class="panel week7-section" data-help-anchor="evidence_lab-calibration">
         <summary class="panel-header week7-section-header">
           <div class="week7-heading-icon"><DatabaseZap :size="19" /></div>
           <div>
@@ -133,7 +133,7 @@ onMounted(() => void load());
           </div>
         </dl>
 
-        <div class="table-wrap week7-table-wrap">
+        <div class="table-wrap week7-table-wrap" data-help-anchor="evidence_lab-lineage">
           <table class="week7-table week7-calibration-table">
             <thead>
               <tr>
@@ -189,7 +189,7 @@ onMounted(() => void load());
         </div>
       </details>
 
-      <details class="panel week7-section">
+      <details class="panel week7-section" data-help-anchor="evidence_lab-map">
         <summary class="panel-header week7-section-header">
           <div class="week7-heading-icon"><DatabaseZap :size="19" /></div>
           <div>
@@ -229,7 +229,7 @@ onMounted(() => void load());
         </div>
       </details>
 
-      <details class="panel week7-section">
+      <details class="panel week7-section" data-help-anchor="evidence_lab-orchestration">
         <summary class="panel-header week7-section-header">
           <div class="week7-heading-icon"><Bot :size="19" /></div>
           <div>

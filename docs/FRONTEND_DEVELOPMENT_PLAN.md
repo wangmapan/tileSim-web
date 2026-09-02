@@ -2,7 +2,7 @@
 
 **面向对象**：AI coding agent  
 **范围**：`D:\tileSim-web` 电脑网页端、local Bridge、契约和部署脚本  
-**当前日期**：2026-09-01
+**当前日期**：2026-09-02
 
 开始工作前先读仓库 `AGENTS.md` 和 `docs/AI_HANDOFF.md`。本文件只定义阶段目标和验收，不重复架构细节。
 
@@ -26,19 +26,29 @@
 | F10   | validated       | immutable snapshot、实进程回滚、5173、artifact identity 与 disposable frozen install 全部通过 |
 
 F6B、F7 与 F8 已在 `D:\tileSim-week8` 的真实 Week 8 Bridge 上完成 live acceptance。当前源码基线为
-233/233 unit/component、76/76 Bridge、25/25 desktop fixture Playwright 和 5/5 live Week 8/F7/F8/F9 Playwright。F8
+263/263 unit/component、78/78 Bridge、29/29 desktop fixture Playwright；上一部署版本保留 5/5 live Week 8/F7/F8/F9
+Playwright 证据。F8
 已消费正式 `GET /api/experiment-schema`，以 `field_id` 为身份、`request_json_pointer` 为唯一序列化/错误映射，
 并完成 manifest/payload/header revision 三方失败关闭。F9B 已消费正式 evidence Agent runtime contract，完成
 revision/digest/idempotency/citation/stale/degradation 的失败关闭；当前 provider 正式返回 unavailable，因此只关闭前端
 contract adaptation，不声称 live Agent closure，也不以 mock success 绕过。F9C 源码已完成固定 endpoint Provider、
 authenticated probe、只读 allow-list 投影、严格 output/citation/identity 校验和跨语言 canonical digest；Bridge 基线更新为
-76/76。descriptor v2 frontend fixture/API/UI consumer、manifest descriptor revision 绑定、结构化 policy adapter 以及两种
+78/78。descriptor v2 frontend fixture/API/UI consumer、manifest descriptor revision 绑定、结构化 policy adapter 以及两种
 正式 409 锁定状态均已闭合；正式 error envelope、schema-set header 与 HTTP/terminal 状态映射也由生成 validator 和 API
 失败关闭，adapter 不改变 canonical digest 或 uint64 无损路径。当前 5173 已发布 schema-set
 `sha256:be0c2274…`、descriptor revision `sha256:d68d4d18…` 与正式 Agent endpoint；无专用配置时 descriptor/UI
 按 `provider_unavailable` 失败关闭。source deployment acceptance 已完成，真实模型 acceptance 尚未进行。
 详见 `docs/F8_EXPERIMENT_ORCHESTRATION_AUDIT.md`、`docs/F9_EVIDENCE_AGENT_CONTRACT_AUDIT.md`、
 `docs/F9_EVIDENCE_AGENT_EVALUATION_SPEC.md` 和 `docs/development/F7_FORMAL_CONTRACT_CLOSURE_2026-08-31.md`。
+
+2026-09-02 可视化深化在不改 Bridge/Schema/指标事实的前提下，为 Execution、Metrics、Fabric、Design Space 和
+Attribution 建立统一阅读协议、等价字段表和图点选 evidence identity。新增请求延迟比较、Fabric 域/请求构成、正式
+objective 候选图与 S0-S6 attribution 图；Design Space 不重算 Pareto，S7/S8/S9 与 latency causal ranking 分区。
+图型、来源、derivation、降级和包体记录见 `docs/EXECUTION_VISUALIZATION_DESIGN.md`。
+
+发布机制闭合后的产品深化分为三个可并行工作流：Evidence Agent、可视化、页面帮助与逐步指引。三路任务的文件
+所有权、共享冲突规则和集成顺序见 `docs/PARALLEL_FRONTEND_WORKSTREAMS.md`；各自的阶段计划和可直接使用的提示词见
+三份 `docs/NEXT_*_DEVELOPMENT_PLAN.md`。它们是后续产品开发，不改变 F9 `live-blocked` 或 F10 `validated` 状态。
 
 ## 2. 全阶段约束
 
@@ -205,12 +215,22 @@ F5A 基线确认旧 JSON viewer 的主线程整体格式化和 `<pre>` 渲染会
   不可用降级；Worker contract、同步等价性、build 与 desktop export 均进入回归。
 - **ECharts chunk：closed for current scope**。继续使用 `echarts/core`、Bar/Scatter、必要组件和 SVG renderer，不增加
   全量 import；构建将原 524.56 KB 单块拆为 339.15 KB + 181.86 KB，gzip 合计约 175.71 KB，图表语义不变。
-- **主应用共享 chunk：open, non-blocking**。当前生产构建仍有约 736.95 KB（gzip 153.11 KB）的共享入口 chunk，
+- **主应用共享 chunk：open, non-blocking**。当前生产构建仍有约 843.69 KB（gzip 190.07 KB）的共享入口 chunk，
   需要先用 bundle analyzer 确认 Vue、公共 feature 与 icon 的真实归属再拆分；不得为消除 warning 重复打包或破坏路由缓存。
 - **dashboard compatibility controller：incrementally closed**。facade 从 run/history/comparison/restore 逻辑中解耦；
   后续只在新 feature 进入时继续迁移，不做一次性删除 facade。
 - **外部证据依赖：blocked upstream**。后端正式 canonical report Schema、真实 calibration asset 和 held-out validation
   未交付前，前端继续展示明确 unavailable/compatibility/synthetic 边界；不得用 fixture 或前端推断关闭。
+
+### 下一轮并行产品深化
+
+- **Evidence Agent**：继续按纯展示组件、状态转换测试、普通语言任务卡和 atomic claim 阅读路径深化；多轮、跨 run、
+  持久历史或自动执行建议必须先发布新 Bridge contract。
+- **可视化**：建立“回答什么 / 先看哪里 / 解释边界 / 数据与证据”协议，逐页深化 Metrics、Execution、Fabric、
+  Design Space 和 Attribution；不得前端重算指标、Pareto 或因果。
+- **页面帮助**：在现有 typed guide/catalog/纯展示组件脚手架上闭合 host、稳定 anchor、3-5 步流程、术语、空状态 CTA
+  与双语可访问性；帮助状态只留内存。
+- 三路在独立 worktree/分支并行；新英文文案分别进入 `src/i18n/workstreams/`，Playwright PNG 由最终集成任务统一更新。
 
 ## 5. 质量门
 

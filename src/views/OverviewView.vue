@@ -29,6 +29,19 @@ const artifacts = computed(() =>
     bytes: entry.bytes,
   })),
 );
+const primarySubsystemName = computed(() => {
+  const subsystem = state.bundle.run?.bottleneck_report?.primary_subsystem;
+  const labels: Record<string, string> = {
+    S0: "输入与负载（S0）",
+    S1: "调度与运行时（S1）",
+    S2: "执行计划（S2）",
+    S3: "内存与 KV（S3）",
+    S4: "设备计算（S4）",
+    S5: "集合通信（S5）",
+    S6: "网络与通信（S6）",
+  };
+  return labels[subsystem || ""] ? t(labels[subsystem || ""]) : subsystem || t("未报告");
+});
 </script>
 
 <template>
@@ -43,9 +56,9 @@ const artifacts = computed(() =>
       <button class="text-button" @click="setView('history')">{{ t("打开已有运行") }}<ArrowRight :size="15" /></button>
     </section>
 
-    <section class="overview-hero">
+    <section class="overview-hero" data-help-anchor="overview-status">
       <div class="hero-copy">
-        <p class="section-kicker">RUN SUMMARY</p>
+        <p class="section-kicker">{{ t("结果摘要") }}</p>
         <div class="hero-status">
           <h2>
             {{
@@ -55,27 +68,33 @@ const artifacts = computed(() =>
           <StatusPill :value="dashboardView.overview.status.value || 'unknown'" />
         </div>
         <p>
-          {{ dashboardView.overview.claimSummary.value || t("打开验证报告以确认本次运行可支持的结论。") }}
+          {{
+            dashboardView.overview.status.value === "partial"
+              ? t("实验已经完成，可以查看趋势和关键指标；由于证据范围有限，不要把它当作真实硬件结论。")
+              : t("实验已经完成，可以从关键数字开始查看结果。")
+          }}
         </p>
-        <div class="hero-actions">
+        <div class="hero-actions" data-help-anchor="overview-actions">
           <button class="button button--primary" @click="setView('execution')">
-            {{ t("查看分层结果") }}<Workflow :size="16" />
+            {{ t("查看执行过程") }}<Workflow :size="16" />
           </button>
           <button class="button button--secondary" @click="setView('metrics')">
             {{ t("查看性能指标") }}<ArrowRight :size="16" />
           </button>
         </div>
+        <details v-if="dashboardView.overview.claimSummary.value" class="hero-technical-summary">
+          <summary>{{ t("查看专业证据范围说明") }}<ChevronDown :size="14" /></summary>
+          <p>{{ dashboardView.overview.claimSummary.value }}</p>
+        </details>
       </div>
       <div class="hero-measure">
-        <span>{{ t("端到端模拟窗口") }}</span>
+        <span>{{ t("本次模拟总时长") }}</span>
         <strong>{{ formatNumber(dashboardView.overview.endToEndLatencyUs.value) }}</strong>
-        <small>{{
-          t("微秒 · {path} execution", { path: dashboardView.overview.executionPath.value || "hosted" })
-        }}</small>
+        <small>{{ t("微秒 · 从开始到结束") }}</small>
       </div>
     </section>
 
-    <section class="stat-grid">
+    <section class="stat-grid" data-help-anchor="overview-metrics">
       <StatCard
         :label="t('吞吐')"
         :value="`${formatNumber(dashboardView.overview.throughputRequestsPerSecond.value)} req/s`"
@@ -88,14 +107,14 @@ const artifacts = computed(() =>
         accent
       />
       <StatCard
-        :label="t('运行时事件')"
+        :label="t('调度事件')"
         :value="formatNumber(dashboardView.overview.runtimeEventCount.value, 0)"
-        hint="S1 runtime evidence"
+        :hint="t('记录调度、批处理和请求推进')"
       />
       <StatCard
-        :label="t('Fabric 记录')"
+        :label="t('网络通信记录')"
         :value="formatNumber(dashboardView.overview.fabricRecordCount.value, 0)"
-        hint="S6 realization records"
+        :hint="t('记录网络传输与等待')"
       />
       <StatCard
         :label="t('验证完整度')"
@@ -104,27 +123,32 @@ const artifacts = computed(() =>
       />
     </section>
 
-    <section class="overview-primary-action">
+    <section class="overview-primary-action" data-help-anchor="overview-finding">
       <article v-if="state.bundle.run?.bottleneck_report" class="panel finding-panel">
         <header class="panel-header">
           <div>
-            <p class="section-kicker">PRIMARY FINDING · {{ state.bundle.run.bottleneck_report.primary_subsystem }}</p>
-            <h2>{{ state.bundle.run.bottleneck_report.title }}</h2>
+            <p class="section-kicker">{{ t("本次重点") }}</p>
+            <h2>{{ t("当前优先检查：{area}", { area: primarySubsystemName }) }}</h2>
           </div>
         </header>
-        <p>{{ state.bundle.run.bottleneck_report.detail }}</p>
+        <p>{{ t("后端报告把这个环节标记为当前主要瓶颈。先查看归因证据，再决定是否调整实验配置。") }}</p>
         <button class="button button--secondary button--wide" @click="setView('attribution')">
           {{ t("查看归因证据") }}<ArrowRight :size="16" />
         </button>
+        <details class="finding-raw-disclosure">
+          <summary>{{ t("查看后端原始说明") }}<ChevronDown :size="15" /></summary>
+          <strong>{{ state.bundle.run.bottleneck_report.title }}</strong>
+          <p>{{ state.bundle.run.bottleneck_report.detail }}</p>
+        </details>
       </article>
       <article v-else class="panel next-action-panel">
         <header class="panel-header">
           <div>
-            <p class="section-kicker">NEXT ACTION</p>
+            <p class="section-kicker">{{ t("下一步") }}</p>
             <h2>{{ t("继续实验") }}</h2>
           </div>
         </header>
-        <p>{{ t("调整调度、batch、KV 或 Fabric 参数，生成一份独立的可对比运行。") }}</p>
+        <p>{{ t("调整实验配置，生成一份独立结果，再与当前实验进行比较。") }}</p>
         <button class="button button--primary button--wide" @click="setView('experiment')">
           <Play :size="16" />{{ t("配置新实验") }}
         </button>

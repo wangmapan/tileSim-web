@@ -7,7 +7,12 @@ import { useDashboard } from "../store/dashboard";
 import { useI18n } from "../i18n";
 import ArtifactEvidenceLink from "../components/ArtifactEvidenceLink.vue";
 import { partitionCausalAttributions, RunBoundEvidencePanel } from "../features/run-bound-evidence";
-import { attributionSource, causeSource } from "../features/execution-inspector";
+import {
+  attributionSource,
+  buildAttributionVisualization,
+  causeSource,
+  ExecutionVisualizationPanel,
+} from "../features/execution-inspector";
 import { useEvidenceSelectionStore } from "../stores/evidence-selection";
 const { state } = useDashboard();
 const { t } = useI18n();
@@ -19,6 +24,12 @@ const partitionedAttributions = computed(() =>
 );
 const causalAttributionRanking = computed(() => partitionedAttributions.value.causal);
 const outputPlaneAttributions = computed(() => partitionedAttributions.value.outputPlane);
+const attributionVisualization = computed(() =>
+  buildAttributionVisualization(
+    causalAttributionRanking.value.map(({ item }) => item),
+    (item) => attributionSource(state.bundle.tail?.attribution_ranking || [], item.attribution_id),
+  ),
+);
 
 function selectEvidenceRequest(requestId: string) {
   if (state.runId) evidenceSelection.select(state.runId, requestId);
@@ -38,6 +49,7 @@ function selectEvidenceRequest(requestId: string) {
       </button>
       <button
         type="button"
+        data-help-anchor="attribution-ranking"
         :class="{ active: activeSection === 'attribution' }"
         :aria-pressed="activeSection === 'attribution'"
         :disabled="!state.bundle.tail?.attribution_ranking"
@@ -58,7 +70,13 @@ function selectEvidenceRequest(requestId: string) {
     />
 
     <template v-else>
-      <EmptyState v-if="!state.bundle.tail?.attribution_ranking" title="没有尾延迟归因报告" />
+      <EmptyState
+        v-if="!state.bundle.tail?.attribution_ranking"
+        title="还没有慢请求原因可看"
+        description="请先打开一次包含请求归因结果的实验，或运行一个新实验。"
+        action-label="新建实验"
+        action-to="/experiment"
+      />
       <template v-else>
         <section class="attribution-intro attribution-primary-summary">
           <div>
@@ -83,6 +101,7 @@ function selectEvidenceRequest(requestId: string) {
         <details
           v-if="state.bundle.tail.attribution_audit"
           class="panel attribution-audit attribution-secondary-disclosure"
+          data-help-anchor="attribution-audit"
         >
           <summary class="panel-header">
             <div>
@@ -170,6 +189,8 @@ function selectEvidenceRequest(requestId: string) {
           </ol>
         </details>
 
+        <ExecutionVisualizationPanel :visualization="attributionVisualization" />
+
         <article class="panel attribution-ranking-panel">
           <header class="panel-header">
             <div>
@@ -213,6 +234,55 @@ function selectEvidenceRequest(requestId: string) {
             }}
           </p>
         </section>
+
+        <article v-if="outputPlaneAttributions.length" class="panel attribution-output-plane">
+          <header class="panel-header">
+            <div>
+              <p class="section-kicker">S7 / S8 / S9 OUTPUT RECORDS</p>
+              <h2>{{ t("执行宿主、验证与输出记录") }}</h2>
+              <p>{{ t("这些记录原样保留供审计，但与上方 S0–S6 latency causal ranking 明确分区。") }}</p>
+            </div>
+          </header>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>rank</th>
+                  <th>subsystem</th>
+                  <th>component</th>
+                  <th class="numeric">share</th>
+                  <th class="numeric">score_ps</th>
+                  <th>{{ t("报告说明") }}</th>
+                  <th>{{ t("证据") }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="{ item } in outputPlaneAttributions"
+                  :key="item.attribution_id || `${item.rank}-${item.subsystem}`"
+                >
+                  <td>{{ item.rank ?? t("缺失") }}</td>
+                  <td>
+                    <code>{{ item.subsystem || t("缺失") }}</code>
+                  </td>
+                  <td>{{ item.component_code || t("缺失") }}</td>
+                  <td class="numeric">{{ formatPercent(item.share) }}</td>
+                  <td class="numeric">
+                    <code>{{ formatNumber(item.score_ps) }}</code>
+                  </td>
+                  <td>{{ item.detail || t("未报告") }}</td>
+                  <td>
+                    <ArtifactEvidenceLink
+                      :source-path="
+                        attributionSource(state.bundle.tail?.attribution_ranking || [], item.attribution_id)
+                      "
+                    />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
 
         <div class="scope-callout attribution-scope-note">
           <Braces :size="18" />

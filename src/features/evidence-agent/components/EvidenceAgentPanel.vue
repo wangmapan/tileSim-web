@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Bot, CircleSlash2, Send, ShieldCheck } from "@lucide/vue";
-import { computed, nextTick, ref } from "vue";
+import { CircleSlash2, Send, ShieldCheck } from "@lucide/vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { adaptEvidenceAgentDescriptor } from "../../../adapters/evidence-agent-descriptor";
 import type {
   ArtifactManifestResponse,
@@ -21,10 +21,13 @@ import { useI18n, currentLocale } from "../../../i18n";
 import { buildRunBoundEvidenceChain } from "../../run-bound-evidence";
 import { buildStructuredPerformanceReport } from "../../structured-report";
 import { EvidenceAgentContractError } from "../errors";
-import { evidenceAgentStatusLabels, evidenceAgentTaskLabels } from "../presentation";
 import { buildEvidenceAgentRequest, evidenceAgentBackendIdentity } from "../request-builder";
 import EvidenceAgentContractPolicy from "./EvidenceAgentContractPolicy.vue";
 import EvidenceAgentResultPanel from "./EvidenceAgentResultPanel.vue";
+import EvidenceAgentServiceDetails from "./EvidenceAgentServiceDetails.vue";
+import EvidenceAgentSubmissionLeaseNotice from "./EvidenceAgentSubmissionLeaseNotice.vue";
+import EvidenceAgentSubmissionPreview from "./EvidenceAgentSubmissionPreview.vue";
+import EvidenceAgentTaskCards from "./EvidenceAgentTaskCards.vue";
 
 const props = defineProps<{
   descriptor: EvidenceAgentDescriptorResponse | null;
@@ -70,9 +73,41 @@ const supportedArtifacts = computed(
   () => props.manifest?.artifacts.filter((entry) => entry.contract_status === "supported") || [],
 );
 const supportedArtifactIds = computed(() => new Set(supportedArtifacts.value.map((entry) => entry.artifact_id)));
+const citableReferences = computed(() => {
+  const references = [
+    ...chain.value.percentileSubjects.flatMap((subject) => (subject.reference ? [subject.reference] : [])),
+    ...chain.value.nodes.flatMap((node) => node.references),
+    ...(chain.value.week8Execution.reference ? [chain.value.week8Execution.reference] : []),
+  ];
+  const unique = new Map<string, (typeof references)[number]>();
+  for (const reference of references) {
+    const artifact = props.manifest?.artifacts.find((entry) => entry.artifact_id === reference.artifactId);
+    if (
+      artifact?.contract_status !== "supported" ||
+      artifact.schema_identity !== reference.schemaIdentity ||
+      artifact.sha256 !== reference.sha256
+    ) {
+      continue;
+    }
+    unique.set(
+      `${reference.artifactId}\u0000${reference.jsonPointer}\u0000${reference.entityKind}\u0000${reference.entityId}`,
+      reference,
+    );
+  }
+  return [...unique.values()];
+});
+const citableArtifactCount = computed(() => new Set(citableReferences.value.map((entry) => entry.artifactId)).size);
+const previewProvenance = computed(
+  () =>
+    chain.value.week8Execution.provenance || {
+      sourceMode: "not_covered",
+      calibrationLevel: "not_covered",
+      allowedClaimScope: "not_covered",
+    },
+);
 const snapshotReadiness = computed(() => {
   if (!props.runId) {
-    return { state: "missing" as const, title: "先运行一次实验", detail: "Agent 只能解释已经完成的实验结果。" };
+    return { state: "missing" as const, title: "先运行一次实验", detail: "AI 只能解释已经完成的实验结果。" };
   }
   if (!props.manifest) {
     return { state: "loading" as const, title: "正在读取实验结果", detail: "请稍候，证据清单仍在加载。" };
@@ -101,11 +136,6 @@ const capabilityAvailable = computed(
     props.descriptor.provider.configured &&
     props.descriptor.availability_predicate.evaluated_available,
 );
-const displayState = computed(() => {
-  if (props.descriptorStatus !== "supported") return "contract_error";
-  if (!capabilityAvailable.value) return props.descriptor?.degradation.reason_code || "provider_unavailable";
-  return props.agentState;
-});
 const currentDraftMatchesPending = computed(() => {
   if (!props.pending || !props.prepared) return false;
   const request = props.prepared.request;
@@ -144,6 +174,14 @@ const errorMessage = computed(() => {
   if (errorCode.value === "question_length_invalid") return t("请输入一个简短、明确的问题。");
   return errorCode.value;
 });
+
+watch(
+  () => props.descriptor?.supported_task_kinds,
+  (supported) => {
+    if (supported?.length && !supported.includes(taskKind.value)) taskKind.value = supported[0];
+  },
+  { immediate: true },
+);
 
 function currentClientRequestId() {
   const pending = props.pending;
@@ -210,71 +248,34 @@ async function submit() {
 </script>
 
 <template>
-  <div class="evidence-agent-stack">
-    <section class="panel evidence-agent-hero" aria-labelledby="evidence-agent-title">
-      <header>
-        <div class="evidence-agent-icon"><Bot :size="24" /></div>
-        <div>
-          <p class="section-kicker">READ-ONLY EVIDENCE ANALYSIS</p>
-          <h2 id="evidence-agent-title">{{ t("只读证据 Agent") }}</h2>
-          <p>{{ t("只在已验证的 run、artifact、SHA-256、JSON Pointer 与 stable subject 上生成独立草稿。") }}</p>
-        </div>
-        <span class="evidence-agent-state" :data-state="displayState">{{
-          t(evidenceAgentStatusLabels[displayState] || displayState)
-        }}</span>
-      </header>
-
-      <details v-if="descriptorStatus === 'supported' && descriptor" class="evidence-agent-identity-disclosure">
-        <summary>
-          <span>
-            <strong>{{ t("契约身份详情") }}</strong>
-            <small>{{ t("Descriptor、Schema、Provider 与模型 revision") }}</small>
-          </span>
-        </summary>
-        <div class="evidence-agent-identity-grid">
-          <div>
-            <small>{{ t("Descriptor") }}</small
-            ><code>{{ descriptor.schema_version }}</code>
-          </div>
-          <div>
-            <small>{{ t("Schema revision") }}</small
-            ><code>{{ descriptor.schema_set_revision }}</code>
-          </div>
-          <div>
-            <small>{{ t("Descriptor revision") }}</small
-            ><code>{{ descriptor.descriptor_revision }}</code>
-          </div>
-          <div>
-            <small>{{ t("Provider / model") }}</small
-            ><code>{{ descriptor.provider.provider_id }} / {{ descriptor.provider.model_id }}</code>
-          </div>
-          <div>
-            <small>{{ t("Model revision") }}</small
-            ><code>{{ descriptor.provider.model_revision }}</code>
-          </div>
-        </div>
-      </details>
-
-      <div v-if="!capabilityAvailable" class="evidence-agent-unavailable" role="status">
-        <CircleSlash2 :size="20" />
-        <div>
-          <strong>{{ t("正式能力当前不可用") }}</strong>
+  <div class="evidence-agent-stack" data-help-anchor="evidence_agent-availability">
+    <div
+      v-if="!capabilityAvailable"
+      class="panel evidence-agent-unavailable evidence-agent-unavailable--standalone"
+      role="status"
+    >
+      <CircleSlash2 :size="20" />
+      <div>
+        <strong>{{ t("AI 解释当前不可用") }}</strong>
+        <p>{{ t("当前后端没有提供可用的 AI 解释能力。你仍可查看实验结果，稍后再试或检查服务配置。") }}</p>
+        <details class="evidence-agent-error-detail">
+          <summary>{{ t("查看技术原因") }}</summary>
           <p>{{ descriptor?.degradation.detail || descriptorError }}</p>
           <code>{{ descriptor?.degradation.reason_code || descriptorError }}</code>
-        </div>
+        </details>
       </div>
-    </section>
+    </div>
 
     <section class="panel evidence-agent-compose">
       <header class="panel-header">
         <div>
-          <p class="section-kicker">VERIFIED RUN SNAPSHOT</p>
-          <h2>{{ t("准备证据问题") }}</h2>
-          <p>{{ t("只有 supported artifact 和精确 stable-ID Pointer 会进入请求 allow-list。") }}</p>
+          <p class="section-kicker">{{ t("开始提问") }}</p>
+          <h2>{{ t("选择要解释的请求和问题") }}</h2>
+          <p>{{ t("页面只会把当前实验中可引用的结果发送给 AI。") }}</p>
         </div>
         <div class="panel-count">
           <ShieldCheck :size="16" />{{
-            t("{supported}/{total} 份正式证据可用", {
+            t("{supported}/{total} 份引用依据可用", {
               supported: supportedArtifacts.length,
               total: manifest?.artifacts.length || 0,
             })
@@ -283,7 +284,7 @@ async function submit() {
       </header>
       <ol class="evidence-agent-steps" :aria-label="t('使用步骤')">
         <li>
-          <span>1</span><strong>{{ t("选择 request") }}</strong
+          <span>1</span><strong>{{ t("选择请求") }}</strong
           ><small>{{ t("决定要解释哪一次请求。") }}</small>
         </li>
         <li>
@@ -311,8 +312,8 @@ async function submit() {
         </RouterLink>
       </div>
       <div class="evidence-agent-form">
-        <label>
-          <span>{{ t("当前 request") }}</span>
+        <label data-help-anchor="evidence_agent-request">
+          <span>{{ t("当前请求") }}</span>
           <select :value="selectedRequestId || ''" :disabled="!runId" @change="chooseRequest">
             <option value="" disabled>{{ t("请选择请求") }}</option>
             <option v-for="option in chain.requestOptions" :key="option.requestId" :value="option.requestId">
@@ -320,16 +321,13 @@ async function submit() {
             </option>
           </select>
         </label>
-        <label>
-          <span>{{ t("任务类型") }}</span>
-          <select v-model="taskKind" :disabled="!capabilityAvailable">
-            <option v-for="kind in descriptor?.supported_task_kinds || []" :key="kind" :value="kind">
-              {{ t(evidenceAgentTaskLabels[kind]) }}
-            </option>
-          </select>
-        </label>
-        <label class="evidence-agent-question">
-          <span>{{ t("问题（不受信任内容）") }}</span>
+        <EvidenceAgentTaskCards
+          v-model="taskKind"
+          :supported-task-kinds="descriptor?.supported_task_kinds || []"
+          :disabled="!capabilityAvailable"
+        />
+        <label class="evidence-agent-question" data-help-anchor="evidence_agent-question">
+          <span>{{ t("你想了解什么？") }}</span>
           <textarea
             ref="questionInput"
             v-model="question"
@@ -337,90 +335,41 @@ async function submit() {
             :disabled="!capabilityAvailable"
           ></textarea>
         </label>
+        <EvidenceAgentSubmissionPreview
+          :request-id="selectedRequestId"
+          :citation-location-count="citableReferences.length"
+          :citation-artifact-count="citableArtifactCount"
+          :source-mode="previewProvenance.sourceMode"
+          :calibration-level="previewProvenance.calibrationLevel"
+          :allowed-claim-scope="previewProvenance.allowedClaimScope"
+          :requested-fidelity="chain.week8Execution.requestedFidelity || 'not_covered'"
+          :resolved-fidelity="chain.week8Execution.resolvedFidelity || 'not_covered'"
+          :execution-mode="chain.week8Execution.executionMode || 'not_covered'"
+          :timeout-ms="descriptor?.execution.timeout_ms || 0"
+        />
         <div class="evidence-agent-submit-row">
           <p>
-            <code>{{ runId || "run_missing" }}</code
-            ><br />{{ t("草稿不会写回确定性报告事实区。") }}
+            {{ t("生成的解释不会改动原始实验结果。") }}
           </p>
           <button class="button" :disabled="!canSubmit" @click="submit">
-            <Send :size="16" />{{ agentState === "submitting" ? t("正在生成…") : t("生成证据草稿") }}
+            <Send :size="16" />{{ agentState === "submitting" ? t("正在生成…") : t("生成解释") }}
           </button>
         </div>
-        <div v-if="pending" class="evidence-agent-pending" role="status">
-          <code>{{ pending.idempotencyKey }}</code>
-          <span v-if="agentState === 'terminal_result_not_retained'">
-            {{
-              t(
-                "Bridge 重启后未保留先前 claims 终态；原 Idempotency-Key 已锁定，前端不会换 key、重调 Provider 或标记为已恢复。",
-              )
-            }}
-          </span>
-          <span v-else-if="agentState === 'idempotency_payload_mismatch'">
-            {{
-              t(
-                "Bridge 已拒绝同一 Idempotency-Key 下的不同 canonical payload；原 key 保持锁定，不会自动重试或调用 Provider。",
-              )
-            }}
-          </span>
-          <span v-else-if="agentState === 'stale'">
-            {{
-              t(
-                "当前 run、backend、schema revision 或 snapshot digest 已变化；旧 Idempotency-Key 保持锁定，需显式放弃后才能开始新分析。",
-              )
-            }}
-          </span>
-          <span v-else-if="mustDiscardBeforeSubmit">
-            {{
-              t(
-                "当前表单不是旧 Idempotency-Key 对应的完整 canonical payload；这通常发生在刷新页面或编辑问题后。前端已阻止冲突提交，请先显式放弃旧分析。",
-              )
-            }}
-          </span>
-          <span v-else>{{ t("仅同一 canonical payload 可复用该 Idempotency-Key。") }}</span>
-          <button class="button button--secondary" :disabled="agentState === 'submitting'" @click="discardAndStartNew">
-            {{
-              agentState === "terminal_result_not_retained"
-                ? t("明确放弃该终态并开始新分析")
-                : agentState === "idempotency_payload_mismatch"
-                  ? t("明确放弃旧分析并开始新分析")
-                  : agentState === "stale"
-                    ? t("明确放弃当前分析并开始新分析")
-                    : mustDiscardBeforeSubmit
-                      ? t("放弃旧分析并开始新问题")
-                      : t("明确放弃当前分析并开始新分析")
-            }}
-          </button>
-        </div>
-        <div v-if="agentState === 'idempotency_payload_mismatch'" class="evidence-agent-unavailable" role="alert">
-          <CircleSlash2 :size="20" />
-          <div>
-            <strong>{{ t("幂等键已绑定到不同载荷") }}</strong>
-            <p>
-              {{ t("当前请求不会以该 key 重试，也不会自动换 key 调用 Provider；只有显式放弃后才能创建新的分析请求。") }}
-            </p>
-            <code>idempotency_payload_mismatch</code>
-          </div>
-        </div>
-        <div v-if="agentState === 'terminal_result_not_retained'" class="evidence-agent-unavailable" role="alert">
-          <CircleSlash2 :size="20" />
-          <div>
-            <strong>{{ t("无法恢复先前的 claims 终态") }}</strong>
-            <p>
-              {{
-                t(
-                  "当前 metadata-only 留存无法跨 Bridge 进程重放完整模型结果。不会自动调用 Provider；只有显式放弃后才能创建新的分析请求。",
-                )
-              }}
-            </p>
-            <code>terminal_result_not_retained</code>
-          </div>
-        </div>
+        <EvidenceAgentSubmissionLeaseNotice
+          v-if="pending"
+          :pending="pending"
+          :agent-state="agentState"
+          :must-discard-before-submit="mustDiscardBeforeSubmit"
+          @discard="discardAndStartNew"
+        />
         <div v-if="errorCode" class="evidence-agent-error" role="alert">
           <strong>{{ errorMessage }}</strong>
           <code>{{ errorCode }}</code>
         </div>
       </div>
     </section>
+
+    <EvidenceAgentServiceDetails v-if="descriptorStatus === 'supported' && descriptor" :descriptor="descriptor" />
 
     <EvidenceAgentContractPolicy
       v-if="descriptor && descriptorPolicy"
@@ -429,6 +378,11 @@ async function submit() {
       :api-manifest="apiManifest"
     />
 
-    <EvidenceAgentResultPanel v-if="agentResult" :agent-state="agentState" :agent-result="agentResult" />
+    <EvidenceAgentResultPanel
+      v-if="agentResult"
+      :agent-state="agentState"
+      :agent-result="agentResult"
+      data-help-anchor="evidence_agent-result"
+    />
   </div>
 </template>

@@ -215,6 +215,29 @@ Desktop Playwright/component coverage must include:
 
 Production acceptance must use the real versioned endpoint. Fixtures may validate presentation states but cannot close live F9.
 
+### 9.1 2026-09-02 presentation regression scope
+
+The current frontend regression additionally verifies:
+
+- descriptor-supported task kinds are the complete source of task cards; keyboard selection changes only the declared
+  `task_kind` sent in the existing v1 request;
+- the pre-submit review shows current request, exact validated citation-location/artifact counts, source-mode claim boundary,
+  separate requested/resolved fidelity, execution mode and the descriptor-declared synchronous timeout;
+- grouping is a display index over original atomic claim object references. Every input claim appears exactly once with its
+  original text, ID, kind, scope, citation list and original response index; no frontend synthesis is permitted;
+- ordinary disclosure order is findings with evidence, limitations and next steps. Result/provider/model identity,
+  SHA-256, JSON Pointer, stable subject and raw scope fields remain available under technical disclosures;
+- partial, refused, truncated, stale, `409 terminal_result_not_retained`, `409 idempotency_payload_mismatch`, formal 502,
+  formal 503 and formal 504 each have distinct labels and boundaries;
+- both 409 lease actions are native keyboard-operable buttons, retain the original key until activation, emit an explicit
+  discard and return focus to the question input before a new key may be created;
+- session storage contains only the seven redacted submission-binding fields. The prepared question/canonical request,
+  artifact roots/payload, Provider identity/raw response, validated claims, credentials and hidden reasoning are absent;
+  no Evidence Agent submission record is added to local storage.
+
+These are fixture/contract presentation gates. They do not increase the live-model repetition count or satisfy human
+citation-entailment review.
+
 ## 10. Observability and retained evidence
 
 Each evaluation run records:
@@ -273,3 +296,8 @@ Tests must not pass by truncating fixtures, deleting assertions, accepting mock-
   The required result is the formal `409 terminal_result_not_retained` Bridge error envelope; the Idempotency-Key remains
   locked, Provider call count cannot increase, and only explicit user discard may start a new analysis. Claim-free Bridge
   terminals must recover exactly from `tilesim.bridge.evidence_agent_terminal_record.v2` metadata after restart.
+- The 2026-09-02 focused frontend gate passes 77 Evidence Agent unit/component cases plus the desktop fixture scenario for
+  descriptor task keyboard selection, pre-submit scope, atomic-claim grouping, exact citation disclosure, all required
+  terminal distinctions, stale isolation, both formal 409 locks and explicit discard focus recovery.
+- Live Provider acceptance was intentionally not executed. Live model repetitions remain `0`, and the required two-person
+  citation entailment review has not started; F9 therefore remains contract-adapted rather than live-model validated.

@@ -839,7 +839,17 @@ details > summary:hover {
     padding: 22px 22px 50px;
   }
   .evidence-strip {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .evidence-friendly-summary {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .page-primer {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .page-primer__emphasis {
+    grid-column: 1 / -1;
   }
   .evidence-path {
     display: none;
@@ -903,6 +913,24 @@ details > summary:hover {
     grid-template-columns: 1fr;
     gap: 10px;
     padding: 12px;
+  }
+  .evidence-friendly-summary {
+    grid-column: auto;
+    grid-row: auto;
+  }
+  .evidence-technical-disclosure {
+    justify-self: start;
+  }
+  .evidence-technical-content {
+    right: auto;
+    left: 0;
+    width: min(520px, calc(100vw - 40px));
+  }
+  .page-primer {
+    grid-template-columns: 1fr;
+  }
+  .page-primer__emphasis {
+    grid-column: auto;
   }
   .evidence-tags {
     flex-wrap: wrap;

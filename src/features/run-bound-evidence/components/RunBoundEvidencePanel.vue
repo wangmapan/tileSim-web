@@ -36,9 +36,9 @@ const peerSubsystems: RunBoundEvidenceNode["subsystem"][] = ["S3", "S4", "S5"];
 const outputSubsystems: RunBoundEvidenceNode["subsystem"][] = ["S7", "S8", "S9"];
 const pageLinks = [
   { name: "metrics", label: "性能指标" },
-  { name: "attribution", label: "请求证据" },
-  { name: "execution", label: "分层结果" },
-  { name: "validation", label: "验证边界" },
+  { name: "attribution", label: "慢请求原因" },
+  { name: "execution", label: "执行过程" },
+  { name: "validation", label: "结果可信度" },
 ] as const;
 const visiblePageLinks = computed(() => pageLinks.filter((page) => page.name !== route.name));
 const peerNodes = computed(
@@ -123,14 +123,18 @@ function statusLabel(node: { availability: RunBoundAvailability }) {
 </script>
 
 <template>
-  <section class="panel run-bound-evidence-panel" aria-labelledby="run-bound-evidence-title">
+  <section
+    class="panel run-bound-evidence-panel"
+    aria-labelledby="run-bound-evidence-title"
+    data-help-anchor="attribution-chain"
+  >
     <header class="panel-header panel-header--row">
       <div>
         <p class="section-kicker">REQUEST EVIDENCE CHAIN</p>
         <h2 id="run-bound-evidence-title">{{ t("请求级跨子系统证据链") }}</h2>
         <p>{{ t("只使用后端显式 ID；S3、S4、S5 保持并列，缺少契约的跳转会准确降级。") }}</p>
       </div>
-      <label class="run-bound-request-picker">
+      <label class="run-bound-request-picker" data-help-anchor="attribution-request">
         <span>{{ t("选择 request_id") }}</span>
         <select
           :value="selectedRequestId || ''"

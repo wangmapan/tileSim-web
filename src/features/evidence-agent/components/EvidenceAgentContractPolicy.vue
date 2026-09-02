@@ -67,14 +67,12 @@ const formalTerminalStatuses = computed(() => {
       <span class="evidence-agent-policy-heading">
         <FileCheck2 :size="18" />
         <span>
-          <strong>{{ t("契约策略与恢复详情") }}</strong>
-          <small>{{ t("查看重放、跨重启恢复、留存边界和正式 HTTP 终态") }}</small>
+          <strong>{{ t("隐私、重试与错误详情") }}</strong>
+          <small>{{ t("仅在审计或排查问题时展开这些专业设置。") }}</small>
         </span>
       </span>
       <span class="evidence-agent-policy-summary">
-        <code>{{ t("进程内精确 replay") }}</code>
-        <code>{{ t("metadata-only retention") }}</code>
-        <code>409 / 502 / 503 / 504</code>
+        <code>{{ t("专业设置") }}</code>
       </span>
     </summary>
     <section class="evidence-agent-contract-grid">

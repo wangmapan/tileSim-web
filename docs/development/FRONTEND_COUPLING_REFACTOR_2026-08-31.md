@@ -62,6 +62,37 @@ host semantics, and S8/S9 ranking boundaries are unchanged.
   responsibility boundaries addressed here.
 - Generated validators and generated contract types are excluded from manual size-based refactoring.
 
+## 2026-09-02 conservative parallelization split
+
+A repo-wide follow-up again found no frontend dependency cycle or view-to-Bridge boundary violation. The remaining
+risk is responsibility coupling and shared-file contention. A conservative split was made before three independent
+product workstreams begin:
+
+- guided-help definitions moved out of `entities/navigation/model.ts` into a dedicated feature. Its routed and
+  embedded guides use a typed catalog; `catalog.ts` deliberately avoids the Windows module-resolution collision that
+  would occur between a `guides.ts` file and the `guides/` directory. Typed 3-5 step definitions, terms, memory state,
+  a non-modal host, pure presentation components, stable page anchors, empty-state actions, keyboard/focus behavior,
+  bilingual coverage, and interaction/E2E closure are in place.
+- Evidence Agent provider/descriptor/model/revision details moved to `EvidenceAgentServiceDetails.vue`. Task cards,
+  submission preview, lease/409 messaging, and result grouping also moved to pure presentation components. Request
+  construction, store ownership, response validation, canonical digest, and terminal state semantics remain in their
+  existing owners.
+- Execution plain-language subsystem names, headline, explanations, and metric labels moved to
+  `execution-inspector/presentation.ts`. Metrics, Fabric, Design Space, and Attribution analysis charts moved to the
+  separate `analysis-visualizations.ts` presentation model. Report facts, export, and page state did not move.
+- three i18n workstream fragments were added so Agent, visualization, and help work can append English text without
+  concurrently editing the large legacy catalog.
+
+Current hotspots remain `EvidenceAgentPanel.vue`, `ExecutionView.vue`, `DesignSpaceView.vue`,
+`execution-inspector/model/visualizations.ts`, and broad CSS domains. `src/store/dashboard.ts` remains a compatibility
+facade and is not a size-driven refactor target. The next safe extractions are a pure Agent lease/stale/late-response
+transition boundary, versioned evidence-reference and snapshot-builder helpers, and a stateless Design Space
+candidate-detail component. Deeper store, request-builder, F7 model, CSS cascade, and chart runtime work must be
+isolated and regression-tested separately.
+
+Three workstreams must use separate worktrees and the ownership map in `docs/PARALLEL_FRONTEND_WORKSTREAMS.md`.
+Global snapshots and shared-file integration belong to a final integration task, not to concurrent agents.
+
 ## Verification expectation
 
 Run dependency boundaries, contract drift, typecheck, unit/component tests, lint, repo-wide formatting, production

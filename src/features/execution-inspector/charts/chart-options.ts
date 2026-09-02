@@ -58,6 +58,7 @@ export function chartOption(visualization: LayerVisualization): EChartsCoreOptio
   };
 
   if (visualization.kind === "scatter") {
+    const yIsRatio = visualization.columns[1]?.toLowerCase().includes("occupancy") || visualization.unit === "%";
     const occupancies = rows
       .map((row) => row.values[1])
       .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
@@ -66,7 +67,7 @@ export function chartOption(visualization: LayerVisualization): EChartsCoreOptio
       grid: { top: 22, right: 24, bottom: 48, left: 66, containLabel: false },
       xAxis: {
         type: "value",
-        name: t("设备延迟 (µs)"),
+        name: visualization.columns[0] || t("数值"),
         nameLocation: "middle",
         nameGap: 32,
         axisLabel: { ...axisLabel, hideOverlap: true, formatter: compactAxisValue },
@@ -75,10 +76,12 @@ export function chartOption(visualization: LayerVisualization): EChartsCoreOptio
       },
       yAxis: {
         type: "value",
-        name: "Occupancy",
-        min: Math.min(0, ...occupancies),
-        max: Math.max(1, ...occupancies),
-        axisLabel: { ...axisLabel, formatter: (value: number) => `${Math.round(value * 100)}%` },
+        name: visualization.columns[1] || t("数值"),
+        min: yIsRatio ? Math.min(0, ...occupancies) : undefined,
+        max: yIsRatio ? Math.max(1, ...occupancies) : undefined,
+        axisLabel: yIsRatio
+          ? { ...axisLabel, formatter: (value: number) => `${Math.round(value * 100)}%` }
+          : { ...axisLabel, hideOverlap: true, formatter: compactAxisValue },
         axisLine,
         splitLine,
       },
@@ -86,8 +89,13 @@ export function chartOption(visualization: LayerVisualization): EChartsCoreOptio
         {
           name: visualization.series[0]?.name || t("样本"),
           type: "scatter",
-          symbolSize: 13,
-          data: rows.map((row) => ({ name: row.label, value: row.values })),
+          symbolSize: (value: unknown, params: { dataIndex: number }) =>
+            rows[params.dataIndex]?.status === "pareto_member" ? 17 : 13,
+          data: rows.map((row) => ({
+            name: row.label,
+            value: row.values,
+            itemStyle: row.status === "pareto_member" ? { borderColor: ink, borderWidth: 2 } : undefined,
+          })),
         },
       ],
     };

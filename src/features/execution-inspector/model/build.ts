@@ -12,9 +12,13 @@ function localizedVisualization(visualization: LayerVisualization): LayerVisuali
     ...visualization,
     title: t(visualization.title),
     description: t(visualization.description),
+    question: t(visualization.question),
+    firstLook: t(visualization.firstLook),
+    boundary: t(visualization.boundary),
     rationale: t(visualization.rationale),
     emptyReason: visualization.emptyReason ? t(visualization.emptyReason) : undefined,
     columns: visualization.columns.map((column) => t(column)),
+    rawColumns: visualization.rawColumns?.map((column) => t(column)),
     series: visualization.series.map((series) => ({ ...series, name: t(series.name) })),
   };
 }

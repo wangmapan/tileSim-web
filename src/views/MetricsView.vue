@@ -1,20 +1,26 @@
 <script setup lang="ts">
 import { ArrowDown, ArrowUp, TimerReset } from "@lucide/vue";
+import { computed } from "vue";
 import EmptyState from "../components/EmptyState.vue";
 import StatCard from "../components/StatCard.vue";
 import StatusPill from "../components/StatusPill.vue";
-import { formatNumber } from "../lib/format";
+import { formatNumber, formatPicoseconds } from "../lib/format";
 import { useDashboard } from "../store/dashboard";
 import type { LosslessInteger, SourcedValue } from "../contracts/report-model";
 import { useI18n } from "../i18n";
 import ArtifactEvidenceLink from "../components/ArtifactEvidenceLink.vue";
 import { RequestEvidenceAction } from "../features/run-bound-evidence";
-import { requestMetricSource } from "../features/execution-inspector";
+import {
+  buildRequestLatencyVisualization,
+  ExecutionVisualizationPanel,
+  requestMetricSource,
+} from "../features/execution-inspector";
 import { useEvidenceSelectionStore } from "../stores/evidence-selection";
 
 const { state, dashboardView } = useDashboard();
 const { t } = useI18n();
 const evidenceSelection = useEvidenceSelectionStore();
+const requestLatencyVisualization = computed(() => buildRequestLatencyVisualization(state.bundle.metrics));
 
 function selectEvidenceRequest(requestId: string) {
   if (state.runId) evidenceSelection.select(state.runId, requestId);
@@ -23,12 +29,22 @@ function selectEvidenceRequest(requestId: string) {
 function metricValue(metric: SourcedValue<number | LosslessInteger>, unit: string) {
   return metric.availability === "available" ? `${formatNumber(metric.value)} ${unit}` : t("不适用");
 }
+
+function readablePicoseconds(metric: SourcedValue<number | LosslessInteger>) {
+  return metric.availability === "available" ? formatPicoseconds(metric.value) : t("不适用");
+}
 </script>
 
 <template>
-  <EmptyState v-if="!state.bundle.metrics" title="没有性能指标报告" />
+  <EmptyState
+    v-if="!state.bundle.metrics"
+    title="还没有性能结果"
+    description="请先打开一次已完成的实验，或运行一个新实验。"
+    action-label="新建实验"
+    action-to="/experiment"
+  />
   <div v-else class="view-stack">
-    <section class="stat-grid">
+    <section class="stat-grid" data-help-anchor="metrics-summary">
       <StatCard
         :label="t('吞吐')"
         :value="metricValue(dashboardView.metrics.throughputRequestsPerSecond, 'req/s')"
@@ -41,40 +57,44 @@ function metricValue(metric: SourcedValue<number | LosslessInteger>, unit: strin
         accent
       />
       <StatCard
-        label="TTFT P95"
-        :value="metricValue(dashboardView.metrics.ttftP95Ps, 'ps')"
-        :hint="`P99 ${metricValue(dashboardView.metrics.ttftP99Ps, 'ps')}`"
+        :label="t('首 Token 延迟（TTFT）P95')"
+        :value="readablePicoseconds(dashboardView.metrics.ttftP95Ps)"
+        :hint="`P99 ${readablePicoseconds(dashboardView.metrics.ttftP99Ps)}`"
       />
       <StatCard
-        label="TPOT P95"
-        :value="metricValue(dashboardView.metrics.tpotP95Ps, 'ps')"
-        :hint="`P99 ${metricValue(dashboardView.metrics.tpotP99Ps, 'ps')}`"
+        :label="t('每 Token 延迟（TPOT）P95')"
+        :value="readablePicoseconds(dashboardView.metrics.tpotP95Ps)"
+        :hint="`P99 ${readablePicoseconds(dashboardView.metrics.tpotP99Ps)}`"
       />
       <StatCard
         :label="`${t('端到端')} P95`"
-        :value="metricValue(dashboardView.metrics.endToEndP95Ps, 'ps')"
-        :hint="`P99 ${metricValue(dashboardView.metrics.endToEndP99Ps, 'ps')}`"
+        :value="readablePicoseconds(dashboardView.metrics.endToEndP95Ps)"
+        :hint="`P99 ${readablePicoseconds(dashboardView.metrics.endToEndP99Ps)}`"
       />
     </section>
-    <nav class="metric-evidence-links" :aria-label="t('汇总指标证据')">
+    <nav class="metric-evidence-links" :aria-label="t('汇总指标证据')" data-help-anchor="metrics-evidence">
       <ArtifactEvidenceLink
         :source-path="dashboardView.metrics.throughputRequestsPerSecond.sourcePaths[0]"
         label="吞吐证据"
       />
-      <ArtifactEvidenceLink :source-path="dashboardView.metrics.ttftP95Ps.sourcePaths[0]" label="TTFT P95 证据" />
-      <ArtifactEvidenceLink :source-path="dashboardView.metrics.tpotP95Ps.sourcePaths[0]" label="TPOT P95 证据" />
+      <ArtifactEvidenceLink :source-path="dashboardView.metrics.ttftP95Ps.sourcePaths[0]" label="首 Token 延迟证据" />
+      <ArtifactEvidenceLink :source-path="dashboardView.metrics.tpotP95Ps.sourcePaths[0]" label="每 Token 延迟证据" />
       <ArtifactEvidenceLink :source-path="dashboardView.metrics.endToEndP95Ps.sourcePaths[0]" label="端到端 P95 证据" />
     </nav>
 
-    <article class="panel">
+    <ExecutionVisualizationPanel :visualization="requestLatencyVisualization" />
+
+    <article class="panel" data-help-anchor="metrics-requests">
       <header class="panel-header panel-header--row">
         <div>
-          <p class="section-kicker">REQUEST METRICS</p>
+          <p class="section-kicker">{{ t("逐个请求") }}</p>
           <h2>{{ t("请求级结果") }}</h2>
-          <p>{{ t("每个请求在统一时间轴上的首 token、逐 token 与完成时延。") }}</p>
+          <p>{{ t("比较每个请求第一次开始响应、连续生成和全部完成所需的时间。") }}</p>
         </div>
         <div class="panel-count">
-          <TimerReset :size="16" />{{ state.bundle.metrics.request_metrics?.length || 0 }} requests
+          <TimerReset :size="16" />{{
+            t("{count} 个请求", { count: state.bundle.metrics.request_metrics?.length || 0 })
+          }}
         </div>
       </header>
       <div class="table-wrap">
@@ -83,10 +103,10 @@ function metricValue(metric: SourcedValue<number | LosslessInteger>, unit: strin
             <tr>
               <th>{{ t("请求") }}</th>
               <th>{{ t("状态") }}</th>
-              <th class="numeric">TTFT</th>
-              <th class="numeric">TPOT</th>
+              <th class="numeric">{{ t("首 Token 延迟（TTFT）") }}</th>
+              <th class="numeric">{{ t("每 Token 延迟（TPOT）") }}</th>
               <th class="numeric">{{ t("端到端") }}</th>
-              <th class="numeric">Decode steps</th>
+              <th class="numeric">{{ t("生成步数") }}</th>
               <th>{{ t("证据") }}</th>
             </tr>
           </thead>
@@ -96,10 +116,19 @@ function metricValue(metric: SourcedValue<number | LosslessInteger>, unit: strin
                 <strong>{{ request.request_id }}</strong>
               </td>
               <td><StatusPill :value="request.status" /></td>
-              <td class="numeric">{{ formatNumber(request.ttft_ps) }} <small>ps</small></td>
-              <td class="numeric">{{ formatNumber(request.tpot_ps) }} <small>ps</small></td>
+              <td class="numeric metric-duration">
+                <strong>{{ formatPicoseconds(request.ttft_ps) }}</strong
+                ><small>{{ formatNumber(request.ttft_ps) }} ps</small>
+              </td>
+              <td class="numeric metric-duration">
+                <strong>{{ formatPicoseconds(request.tpot_ps) }}</strong
+                ><small>{{ formatNumber(request.tpot_ps) }} ps</small>
+              </td>
               <td class="numeric">
-                <strong>{{ formatNumber(request.end_to_end_latency_ps) }}</strong> <small>ps</small>
+                <span class="metric-duration"
+                  ><strong>{{ formatPicoseconds(request.end_to_end_latency_ps) }}</strong
+                  ><small>{{ formatNumber(request.end_to_end_latency_ps) }} ps</small></span
+                >
               </td>
               <td class="numeric">{{ formatNumber(request.decode_step_count, 0) }}</td>
               <td>
@@ -120,7 +149,7 @@ function metricValue(metric: SourcedValue<number | LosslessInteger>, unit: strin
       </div>
     </article>
 
-    <section class="metric-footnote">
+    <section class="metric-footnote" data-help-anchor="metrics-interpretation">
       <ArrowDown :size="17" />
       <p>
         <strong>{{ t("如何理解这些数字") }}</strong

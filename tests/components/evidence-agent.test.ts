@@ -6,6 +6,7 @@ import { createMemoryHistory, createRouter } from "vue-router";
 import { nextTick } from "vue";
 import { beforeEach, describe, expect, it } from "vitest";
 import EvidenceAgentPanel from "../../src/features/evidence-agent/components/EvidenceAgentPanel.vue";
+import EvidenceAgentSubmissionLeaseNotice from "../../src/features/evidence-agent/components/EvidenceAgentSubmissionLeaseNotice.vue";
 import {
   buildEvidenceAgentRequest,
   evidenceAgentBackendIdentity,
@@ -68,14 +69,97 @@ beforeEach(() => {
   setActivePinia(pinia);
 });
 
+describe("Evidence Agent submission lease notice", () => {
+  const pending = {
+    runId: f9RunId,
+    backendIdentity: evidenceAgentBackendIdentity(f9Health),
+    schemaSetRevision: f9SchemaRevision,
+    inputSnapshotDigest: `sha256:${"a".repeat(64)}`,
+    payloadDigest: `sha256:${"b".repeat(64)}`,
+    idempotencyKey: "agent-idempotency:component-lease",
+    clientRequestId: "agent-client:component-lease",
+  };
+
+  it.each([
+    ["terminal_result_not_retained", "无法恢复先前的 claims 终态", "明确放弃该终态并开始新分析"],
+    ["idempotency_payload_mismatch", "幂等键已绑定到不同载荷", "明确放弃旧分析并开始新分析"],
+  ] as const)("renders and explicitly discards the formal %s lease", async (agentState, heading, action) => {
+    const wrapper = mount(EvidenceAgentSubmissionLeaseNotice, {
+      props: { pending, agentState, mustDiscardBeforeSubmit: false },
+      attachTo: document.body,
+    });
+
+    expect(wrapper.get('[role="status"]').text()).toContain(pending.idempotencyKey);
+    expect(wrapper.get('[role="alert"]').text()).toContain(heading);
+    expect(wrapper.get('[role="alert"] code').text()).toBe(agentState);
+    const button = wrapper.get("button");
+    expect(button.element.tagName).toBe("BUTTON");
+    expect(button.attributes("disabled")).toBeUndefined();
+    expect(button.text()).toContain(action);
+    (button.element as HTMLButtonElement).focus();
+    expect(document.activeElement).toBe(button.element);
+    await button.trigger("click");
+    expect(wrapper.emitted("discard")).toHaveLength(1);
+    expect(pending.idempotencyKey).toBe("agent-idempotency:component-lease");
+    wrapper.unmount();
+  });
+
+  it("keeps stale and restored-payload leases distinct without adding an alert", () => {
+    const stale = mount(EvidenceAgentSubmissionLeaseNotice, {
+      props: { pending, agentState: "stale", mustDiscardBeforeSubmit: false },
+    });
+    const restored = mount(EvidenceAgentSubmissionLeaseNotice, {
+      props: { pending, agentState: "failed", mustDiscardBeforeSubmit: true },
+    });
+
+    expect(stale.text()).toContain("snapshot digest 已变化");
+    expect(stale.get("button").text()).toContain("明确放弃当前分析");
+    expect(stale.find('[role="alert"]').exists()).toBe(false);
+    expect(restored.text()).toContain("刷新页面或编辑问题后");
+    expect(restored.get("button").text()).toContain("放弃旧分析并开始新问题");
+    expect(restored.find('[role="alert"]').exists()).toBe(false);
+  });
+});
+
 describe("F9 evidence Agent presentation", () => {
+  it("turns only descriptor-supported task kinds into plain-language cards and previews the frozen scope", async () => {
+    const panelProps = props(true);
+    panelProps.descriptor = {
+      ...panelProps.descriptor,
+      supported_task_kinds: ["explain_tail", "summarize_validation"],
+    };
+    const wrapper = mount(EvidenceAgentPanel, {
+      props: panelProps,
+      global: { plugins: [pinia, await routerPlugin()] },
+    });
+
+    const taskCards = wrapper.findAll('.evidence-agent-task-cards input[type="radio"]');
+    expect(taskCards).toHaveLength(2);
+    expect(taskCards.map((input) => input.attributes("value"))).toEqual(["explain_tail", "summarize_validation"]);
+    expect(wrapper.get(".evidence-agent-task-cards").text()).toContain("解释尾延迟");
+    expect(wrapper.get(".evidence-agent-task-cards").text()).toContain("总结验证边界");
+    expect(wrapper.get(".evidence-agent-task-cards").text()).not.toContain("起草条件建议");
+    expect(taskCards[0].attributes("checked")).toBeDefined();
+
+    const preview = wrapper.get(".evidence-agent-submission-preview");
+    expect(preview.text()).toContain(f9RequestId);
+    expect(preview.text()).toMatch(/\d+ 个精确引用位置，来自 \d+ 份 artifact/);
+    expect(preview.text()).toContain("仅为合成证据");
+    expect(preview.text()).toContain("服务上限 30 秒");
+    await preview.get(":scope > details > summary").trigger("click");
+    expect(preview.text()).toContain("synthetic_trace");
+    expect(preview.text()).toContain("requested_fidelity");
+    expect(preview.text()).toContain("resolved_fidelity");
+    expect(preview.text()).toContain("partitioned_des");
+  });
+
   it("shows the formal provider_unavailable state without a mock answer", async () => {
     const wrapper = mount(EvidenceAgentPanel, {
       props: props(false),
       global: { plugins: [pinia, await routerPlugin()] },
     });
 
-    expect(wrapper.text()).toContain("Provider 未配置");
+    expect(wrapper.text()).toContain("AI 解释当前不可用");
     expect(wrapper.text()).toContain("provider_unavailable");
     expect(wrapper.find("button").attributes("disabled")).toBeDefined();
     expect(wrapper.findAll(".evidence-agent-claims > li")).toHaveLength(0);
@@ -125,7 +209,7 @@ describe("F9 evidence Agent presentation", () => {
 
     expect(wrapper.text()).toContain("当前实验不能用于提问");
     expect(wrapper.text()).toContain("这次实验没有生成正式 metrics 证据");
-    expect(wrapper.text()).toContain("0/6 份正式证据可用");
+    expect(wrapper.text()).toContain("0/6 份引用依据可用");
     expect(wrapper.get("a.button--secondary").attributes("href")).toBe("/experiment");
     expect(wrapper.get("button.button:not(.button--secondary)").attributes("disabled")).toBeDefined();
   });
@@ -179,6 +263,89 @@ describe("F9 evidence Agent presentation", () => {
     expect(link.attributes("href")).toContain(`evidence_sha=${artifact.sha256}`);
     expect(link.attributes("href")).toContain("evidence_pointer=/request_metrics/0");
     expect(wrapper.text()).toContain("9007199254740993123");
+  });
+
+  it("presents untouched atomic claims as findings, limitations, and next steps with technical identity on demand", async () => {
+    const context = createF9RunContext();
+    const descriptor = createEvidenceAgentDescriptor(true);
+    const prepared = await buildEvidenceAgentRequest({
+      runId: f9RunId,
+      selectedRequestId: f9RequestId,
+      manifest: context.manifest,
+      descriptor,
+      health: f9Health,
+      structuredReport: context.structuredReport,
+      bundle: context.bundle,
+      inputs: context.inputs,
+      locale: "zh-CN",
+      taskKind: "explain_tail",
+      question: "Keep every atomic claim unchanged.",
+      clientRequestId: "agent-client:component-groups",
+    });
+    const artifact = prepared.request.artifact_allow_list.find((entry) => entry.artifact_id === "metrics")!;
+    const record = artifact.allowed_records.find((entry) => entry.subject.kind === "request")!;
+    const response = createCompletedAgentResponse(prepared.inputSnapshotDigest, prepared.request.client_request_id, {
+      schema_version: "tilesim.bridge.evidence_agent_citation.v1",
+      run_id: f9RunId,
+      artifact_id: artifact.artifact_id,
+      schema_identity: artifact.schema_identity,
+      sha256: artifact.sha256,
+      json_pointer: record.json_pointer,
+      subject: record.subject,
+      citation_role: "direct_fact",
+      availability: "available",
+    });
+    const numeric = structuredClone(response.claims[0]);
+    numeric.claim_id = "claim-original-finding";
+    numeric.text = "Exact finding text from the validated response.";
+    const limitation = structuredClone(numeric);
+    limitation.claim_id = "claim-original-limitation";
+    limitation.claim_kind = "validation_boundary";
+    limitation.text = "Exact limitation text from the validated response.";
+    const recommendation = structuredClone(numeric);
+    recommendation.claim_id = "claim-original-next-step";
+    recommendation.claim_kind = "conditional_recommendation";
+    recommendation.text = "Exact conditional next-step text from the validated response.";
+    recommendation.scope.recommendation_semantics = "conditional_not_executed";
+    response.claims = [recommendation, numeric, limitation];
+    const responseBeforePresentation = JSON.stringify(response);
+    const binding = {
+      runId: f9RunId,
+      backendIdentity: evidenceAgentBackendIdentity(f9Health),
+      schemaSetRevision: f9SchemaRevision,
+      inputSnapshotDigest: prepared.inputSnapshotDigest,
+    };
+    useEvidenceAgentStore().complete(validateEvidenceAgentResult(response, prepared, descriptor, binding), binding);
+    const wrapper = mount(EvidenceAgentPanel, {
+      props: props(true),
+      global: { plugins: [pinia, await routerPlugin()] },
+    });
+
+    expect(wrapper.get('[data-group="conclusion"] h3').text()).toBe("结论");
+    expect(wrapper.get('[data-group="limitations"] h3').text()).toBe("限制");
+    expect(wrapper.get('[data-group="next_steps"] h3').text()).toBe("下一步");
+    expect(wrapper.get('[data-claim-kind="numeric_fact"]').attributes("data-original-index")).toBe("1");
+    expect(wrapper.get('[data-claim-kind="validation_boundary"]').attributes("data-original-index")).toBe("2");
+    expect(wrapper.get('[data-claim-kind="conditional_recommendation"]').attributes("data-original-index")).toBe("0");
+    expect(wrapper.findAll(".evidence-agent-claim-text").map((entry) => entry.text())).toEqual([
+      numeric.text,
+      limitation.text,
+      recommendation.text,
+    ]);
+    expect(JSON.stringify(response)).toBe(responseBeforePresentation);
+
+    const evidence = wrapper.get('[data-claim-kind="numeric_fact"] .evidence-agent-claim-evidence');
+    expect(evidence.attributes("open")).toBeUndefined();
+    await evidence.get(":scope > summary").trigger("click");
+    const link = evidence.get("a");
+    expect(link.text()).toContain("打开原始证据 1");
+    expect(link.attributes("href")).toContain("evidence_pointer=/request_metrics/0");
+    const citationIdentity = evidence.get(".evidence-agent-citation-identity");
+    expect(citationIdentity.attributes("open")).toBeUndefined();
+    await citationIdentity.get(":scope > summary").trigger("click");
+    expect(citationIdentity.text()).toContain(artifact.sha256);
+    expect(citationIdentity.text()).toContain(record.json_pointer);
+    expect(citationIdentity.text()).toContain(`${record.subject.kind} · ${record.subject.id}`);
   });
 
   it("shows valid claims and the unfinished boundary together for a partial response", async () => {
@@ -237,6 +404,9 @@ describe("F9 evidence Agent presentation", () => {
     await nextTick();
 
     expect(wrapper.get(".evidence-agent-state").text()).toBe("部分结果");
+    expect(wrapper.get('.evidence-agent-result-boundary[data-state="partial"]').text()).toContain(
+      "未完成部分不会由前端补写",
+    );
     expect(wrapper.text()).toContain("部分问题缺少足够证据");
     expect(wrapper.text()).toContain("insufficient_evidence");
     expect(wrapper.findAll(".evidence-agent-claims > li")).toHaveLength(1);

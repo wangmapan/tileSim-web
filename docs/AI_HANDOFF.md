@@ -1,10 +1,11 @@
 # TileSim Web AI Handoff
 
-**事实日期**：2026-09-01
+**事实日期**：2026-09-02
 **当前阶段**：F6B/F7/F8/F10 validated；F9 descriptor v2 已部署，真实 Provider acceptance 被专用配置阻断
 
-**下一阶段**：提供完整 TileSim 专用 Provider 配置后执行 authenticated probe、live success/refusal/timeout、重复模型评测
-与双人 citation entailment review；不得用 fake Provider 关闭
+**下一阶段**：产品深化分为 Evidence Agent、可视化、页面帮助与逐步指引三个独立 worktree 并行任务；F9 live closure
+仍需完整 TileSim 专用 Provider 配置、authenticated probe、live success/refusal/timeout、重复模型评测与双人 citation
+entailment review，不得用 fake Provider 关闭
 **产品范围**：只维护电脑网页端
 
 ## 1. 当前事实卡
@@ -17,8 +18,8 @@
   `/api/agent/evidence-capabilities` 正式返回 descriptor v2。
 - 当前 5173 部署身份：`versions_match=true`、`state_digests_match=true`、`execution_ready=true`，并发布
   `tilesim.web.release_snapshot.v1` 的 Web source/build/release/Bridge/static identity。
-- 当前基线：58/58 TileSim CTest、233/233 frontend、76/76 Bridge、25/25 desktop fixture Playwright、5/5
-  live Week 8/F7/F8/F9 deployment Playwright
+- 当前源码基线：58/58 TileSim CTest、263/263 frontend、78/78 Bridge、29/29 desktop fixture Playwright；上一部署版本
+  保留 5/5 live Week 8/F7/F8/F9 deployment Playwright 证据
 - 发布分支已推送；正常交接时工作树应保持 clean。若后续出现用户改动，不得 reset、clean、覆盖或擅自提交。
 - `127.0.0.1:5173` 是用户服务；除非用户明确要求部署，不停止、不重启、不替换。
 - F7 TypeScript 生成物、正式页面与 5173 schema revision 已同步。live acceptance run
@@ -53,8 +54,8 @@
   claim-free Bridge terminal 从 redacted metadata 精确恢复；claims-bearing 或 claim-free Provider terminal 返回正式
   `409 terminal_result_not_retained`；same key/different payload 返回 `409 idempotency_payload_mismatch`；所有不可恢复
   分支都禁止重调 Provider。request/response/citation/snapshot identity 保持 v1。前端 v2 DTO/runtime validator 已重生。
-- 当前源码验证：233/233 frontend、76/76 Bridge、36/36 Schema inventory、2/2 Python/Node canonical digest vectors、
-  25/25 desktop fixture Playwright、Python `py_compile`、`pnpm contracts:check`、`deps:check`、`typecheck`、lint、
+- 当前源码验证：263/263 frontend、78/78 Bridge、36/36 Schema inventory、2/2 Python/Node canonical digest vectors、
+  29/29 desktop fixture Playwright、Python `py_compile`、`pnpm contracts:check`、`deps:check`、`typecheck`、lint、
   repo-wide `format:check`、build 和 `git diff --check` 通过。`bridge-contracts.ts` /
   `evidence-agent-validators.js` 已由 `pnpm contracts:generate` 重生；fixture/API/UI 已消费 descriptor v2，API 同时绑定
   manifest 宣告的 descriptor revision。`src/adapters/evidence-agent-descriptor.ts` 将结构化 retry/recovery/persistence
@@ -83,6 +84,16 @@
   和全局 EvidenceStrip：核心操作与结论前置，身份、策略、逐项检查、Topology、S7 envelope、血缘和原始记录按需
   展开；运行记录只保留一个对比入口。正式证据、错误状态、S3/S4/S5 并列、S7 host、S8/S9 输出面和无损整数语义
   均保持不变。
+- 2026-09-02 完成三路前端基础深化与保守拆分：页面 guide 从 navigation model 迁入 `src/features/guided-help/`，
+  typed catalog、3-5 步定义、术语、非模态 host、稳定 anchor、空状态入口和双语/键盘/axe/reduced-motion E2E 已闭合；
+  Evidence Agent 服务 identity、task cards、提交预览、lease notice 与 atomic claim 分组成为纯展示组件，未迁移
+  store/API/request builder/validator；Execution 普通语言映射与分析可视化 presentation 独立，Metrics/Fabric/Design
+  Space/Attribution 使用同一阅读协议、等价字段表与 evidence identity。新 `src/i18n/workstreams/` 隔离三路英文文案。
+  canonical digest、uint64、Bridge contract、F7 formal ranking/Pareto 与 Provider 行为均未改变。
+- 三份并行计划和可直接复用的任务提示词见 `docs/NEXT_AGENT_MODULE_DEVELOPMENT_PLAN.md`、
+  `docs/NEXT_VISUALIZATION_DEVELOPMENT_PLAN.md`、`docs/NEXT_GUIDED_HELP_DEVELOPMENT_PLAN.md`；文件所有权、共享文件
+  规则和最终集成顺序见 `docs/PARALLEL_FRONTEND_WORKSTREAMS.md`。三个执行任务必须使用独立 worktree，视觉快照由最终
+  集成任务统一更新。
 
 TileSim Web 是本地实验与证据工作台。Python Bridge 调用指定 `TileSimCLI` 并托管 allow-listed artifacts；后端报告是模拟事实来源，前端不得运行第二套模拟、重算指标或补造跨子系统关系。
 
@@ -127,6 +138,7 @@ src/app/                    Router、应用装配
 src/contracts/              Bridge/report 类型、无损 JSON、generated client
 src/adapters/               versioned report -> stable view model
 src/features/               独立业务能力；跨 feature 只走公共 index.ts
+src/features/guided-help/   页面 guide schema/catalog、纯展示帮助组件与内存态；不得拥有页面业务状态
 src/views/                  路由页面编排，不直接调用 bridgeApi
 src/components/ui/          无 store/feature/API/report schema 的通用 primitive
 src/stores/                 Pinia workspace/session/bridge/history state
@@ -155,6 +167,7 @@ bridge/infra/               Git、部署与 runtime identity
   `src/stores/evidence-agent.ts`、`src/views/EvidenceAgentView.vue`
 - F9 contract/evaluation：`docs/F9_EVIDENCE_AGENT_CONTRACT_AUDIT.md`、
   `docs/F9_EVIDENCE_AGENT_EVALUATION_SPEC.md`、`tests/fixtures/f9-agent-evaluation-cases.json`
+- 三路前端深化：`docs/PARALLEL_FRONTEND_WORKSTREAMS.md` 与三份 `docs/NEXT_*_DEVELOPMENT_PLAN.md`
 - 结构化导出：`src/features/structured-report/`
 - Week 7：`src/features/week7-evidence/`、`src/views/Week7EvidenceView.vue`、`bridge/services/week7.py`
 - run-bound S9 audit：`src/views/AttributionView.vue`、`src/features/structured-report/model.ts`
@@ -236,6 +249,9 @@ topology domain → metrics domain 导航；浏览器验收同时覆盖 SHA/Poin
 - 结构化报告已由 Worker 完整生成 HTML；同步路径只作为 Worker 不可用时的完整降级，不得靠截断记录规避。
 - ECharts 已拆为约 339 kB runtime 与 182 kB renderer；新增图型前复查适用性和体积，不改成全量 import。
 - `src/store/dashboard.ts` 与 `bridge/server.py` 保留兼容 facade/wrapper；只做渐进迁移。
+- 当前不存在前端依赖环；剩余耦合主要集中在 `EvidenceAgentPanel.vue`、`ExecutionView.vue`、
+  `DesignSpaceView.vue`、execution visualization model 与分域过宽的 CSS。只按纯展示/纯配置边界小批次拆分，不以行数
+  驱动重写 store、contract validation 或 dashboard facade。
 - 后端正式 canonical report schema、真实 calibration assets 和 held-out validation 尚未由前端工作关闭。
 - F9 provider 当前正式 unavailable；在 provider 可用并通过 live success/refusal、重复模型 hard gate 与人工 entailment
   review 前，不得把 fixture available-draft 或 contract adaptation 描述为 live validated。

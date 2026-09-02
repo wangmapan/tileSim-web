@@ -185,6 +185,17 @@ degradation 仍完整保留，只改变首屏层级、默认 disclosure 状态�
 uint64、requested/resolved fidelity、trace provenance 或 S0-S9 语义。回归继续覆盖中英文、键盘、axe、reduced-motion、
 长 ID、桌面 overflow 和浅色/深色模式。
 
+### 可视化深入拓展（2026-09-02）
+
+- Execution、Metrics、Fabric、Design Space、Attribution 共用“回答的问题 / 先看哪里 / 解释边界 / 查看数据与证据”协议。
+- Metrics 增加请求 TTFT/TPOT/端到端比较，ps→µs 只作显示换算，完整表保留精确 ps；真实 0 与 missing 分开。
+- Fabric 增加通信域和请求两个 runtime/queue/congestion 构成图，只读取后端字段，不反推未报告贡献。
+- Design Space 只使用正式 objectives 与报告的 Pareto membership；双 objective 数据不足时明确降级，不重算 Pareto、
+  dominance、rank 或 promotion reason，继续固定 `execution_scope=S6_only`。
+- Attribution 的图形 ranking 只包含 S0-S6；S7/S8/S9 原始输出记录进入独立表，不参与 latency causal ranking。
+- 图点选与字段表共用当前 run/artifact/SHA-256/Pointer 解析；12 项图形上限显式说明，完整字段表不截断。
+- 继续复用 `echarts/core`、按需 Bar/Scatter 与 SVG renderer；图表运行时仍通过异步组件加载。
+
 ### 阶段一：外观基础设施
 
 范围：

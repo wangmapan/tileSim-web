@@ -8,6 +8,7 @@ import {
   canonicalJson,
   evidenceAgentBackendIdentity,
   evidenceAgentFailure,
+  groupEvidenceAgentClaims,
   validateEvidenceAgentResult,
 } from "../../src/features/evidence-agent";
 import { BridgeApiError } from "../../src/lib/api";
@@ -211,6 +212,48 @@ describe("F9 canonical JSON and request binding", () => {
 });
 
 describe("F9 atomic claim and citation validation", () => {
+  it("classifies every original atomic claim exactly once without rewriting or merging it", async () => {
+    const { prepared } = await preparedRequest();
+    const response = createCompletedAgentResponse(
+      prepared.inputSnapshotDigest,
+      prepared.request.client_request_id,
+      firstCitation(prepared),
+    );
+    const base = response.claims[0];
+    const kinds = [
+      "conditional_recommendation",
+      "numeric_fact",
+      "validation_boundary",
+      "help_text",
+      "reported_attribution",
+      "provenance_boundary",
+      "comparative_fact",
+      "fidelity_boundary",
+      "architecture_correction",
+    ] as const;
+    const claims = kinds.map((claimKind, index) => ({
+      ...structuredClone(base),
+      claim_id: `claim-group-${index}`,
+      claim_kind: claimKind,
+      text: `original atomic claim ${index}`,
+    }));
+    const before = canonicalJson(claims);
+
+    const groups = groupEvidenceAgentClaims(claims);
+    const presented = groups.flatMap((group) => group.claims);
+
+    expect(groups.map((group) => [group.id, group.claims.map((entry) => entry.originalIndex)])).toEqual([
+      ["conclusion", [1, 4, 6]],
+      ["limitations", [2, 5, 7, 8]],
+      ["next_steps", [0]],
+      ["help", [3]],
+    ]);
+    expect(presented).toHaveLength(claims.length);
+    expect(new Set(presented.map((entry) => entry.claim.claim_id)).size).toBe(claims.length);
+    for (const entry of presented) expect(entry.claim).toBe(claims[entry.originalIndex]);
+    expect(canonicalJson(claims)).toBe(before);
+  });
+
   it("accepts an exact citation while retaining uint64 decimal text", async () => {
     const { prepared, descriptor } = await preparedRequest();
     const response = createCompletedAgentResponse(
@@ -486,6 +529,52 @@ describe("F9 atomic claim and citation validation", () => {
 });
 
 describe("F9 idempotency recovery store", () => {
+  it("persists only redacted submission metadata and never the question, payloads, response, claims, or secrets", async () => {
+    const { prepared, descriptor } = await preparedRequest();
+    const binding = {
+      runId: f9RunId,
+      backendIdentity: evidenceAgentBackendIdentity(f9Health),
+      schemaSetRevision: f9SchemaRevision,
+      inputSnapshotDigest: prepared.inputSnapshotDigest,
+    };
+    const store = useEvidenceAgentStore();
+    store.begin(binding, prepared.payloadDigest, prepared.request.client_request_id);
+    store.attachPrepared(prepared);
+    const response = createCompletedAgentResponse(
+      prepared.inputSnapshotDigest,
+      prepared.request.client_request_id,
+      firstCitation(prepared),
+    );
+    store.complete(validateEvidenceAgentResult(response, prepared, descriptor, binding), binding);
+
+    const serialized = window.sessionStorage.getItem("tilesim-web.evidence-agent-submission.v1") || "";
+    const retained = JSON.parse(serialized);
+    expect(Object.keys(retained).sort()).toEqual(
+      [
+        "runId",
+        "backendIdentity",
+        "schemaSetRevision",
+        "inputSnapshotDigest",
+        "payloadDigest",
+        "idempotencyKey",
+        "clientRequestId",
+      ].sort(),
+    );
+    for (const protectedContent of [
+      prepared.request.user_question.content,
+      prepared.canonicalText,
+      "artifactRoots",
+      response.claims[0].text,
+      response.provider.provider_id,
+      "provider_raw_response",
+      "credential",
+      "hidden_reasoning",
+    ]) {
+      expect(serialized).not.toContain(protectedContent);
+    }
+    expect(window.localStorage.getItem("tilesim-web.evidence-agent-submission.v1")).toBeNull();
+  });
+
   it("reuses only the same payload and rejects a different payload without rotating the key", () => {
     const store = useEvidenceAgentStore();
     const binding = {

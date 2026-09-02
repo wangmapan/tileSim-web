@@ -76,7 +76,7 @@ test("deployed Week 8 Bridge serves metrics-backed F7 Fabric evidence", async ({
   const browserFailures = observeBrowserFailures(page);
 
   await page.goto(`${liveBaseUrl}/fabric?run=${encodeURIComponent(liveRunId)}`, { waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("heading", { name: "后端报告的主导 Fabric 热点" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "当前主要通信瓶颈" })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("heading", { name: "请求级 Fabric contribution" })).toBeVisible();
   await expect(page.locator(".fabric-request-table tbody tr")).not.toHaveCount(0);
   const targets = await page.locator(".fabric-request-table a.artifact-evidence-link").evaluateAll((links) =>
@@ -253,12 +253,12 @@ test("deployed Bridge exposes the F9 descriptor v2 and reports authenticated Pro
   await page.goto(`${liveBaseUrl}/evidence-agent?run=${encodeURIComponent(liveRunId)}`, {
     waitUntil: "domcontentloaded",
   });
-  await expect(page.getByRole("heading", { name: "只读证据 Agent" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "AI 解释" })).toBeVisible({ timeout: 30_000 });
   if (descriptor.availability === "available") {
     await expect(page.locator(".evidence-agent-unavailable")).toHaveCount(0);
   } else {
     await expect(page.locator(".evidence-agent-unavailable")).toContainText("provider_unavailable");
-    await expect(page.getByRole("button", { name: "生成证据草稿" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "生成解释" })).toBeDisabled();
   }
   await page.locator(".evidence-agent-policy-disclosure > summary").click();
   await expect(page.locator(".evidence-agent-contract-grid")).toContainText("terminal_result_not_retained");

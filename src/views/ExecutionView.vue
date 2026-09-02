@@ -18,6 +18,10 @@ import StatusPill from "../components/StatusPill.vue";
 import {
   attributionSource,
   buildExecutionResult,
+  executionLayerDetail,
+  executionLayerHeadline,
+  executionLayerName,
+  executionMetricLabel,
   executionStageSource,
   ExecutionVisualizationPanel,
   LayerRecordTable,
@@ -45,6 +49,13 @@ const result = computed(() => buildExecutionResult(state.bundle, state.inputs));
 const layerById = computed(() => new Map(result.value.layers.map((layer) => [layer.id, layer])));
 const selected = computed(() => layerById.value.get(selectedId.value) || result.value.layers[0]);
 const hasResult = computed(() => Boolean(state.bundle.run || state.bundle.metrics || state.bundle.validation));
+const flowSteps: LayerId[][] = [["S0"], ["S1"], ["S2"], ["S3", "S4", "S5"], ["S6"]];
+const currentFlowStep = computed(() => flowSteps.findIndex((step) => step.includes(selectedId.value)));
+
+function moveFlowStep(offset: -1 | 1) {
+  const target = flowSteps[currentFlowStep.value + offset];
+  if (target) selectedId.value = target[0];
+}
 
 const evidenceLabels: Record<string, string> = {
   reported: "有报告记录",
@@ -56,7 +67,13 @@ const evidenceLabels: Record<string, string> = {
 
 function displayHeadline(layer: ExecutionLayer | undefined) {
   if (!layer?.headline) return "—";
-  return typeof layer.headline.value === "number" ? formatNumber(layer.headline.value, 0) : layer.headline.value;
+  return typeof layer.headline.value === "number"
+    ? formatNumber(layer.headline.value, 0)
+    : String(layer.headline.value);
+}
+
+function friendlyHeadline(layer: ExecutionLayer | undefined) {
+  return executionLayerHeadline(layer, displayHeadline(layer));
 }
 
 function durationUs(stage: ExecutionStage | undefined) {
@@ -114,26 +131,32 @@ async function exportStructuredReport() {
 </script>
 
 <template>
-  <EmptyState v-if="!hasResult" title="没有可解析的分层运行结果" />
+  <EmptyState
+    v-if="!hasResult"
+    title="还没有执行过程可看"
+    description="请先打开一次已完成的实验，或运行一个新实验。"
+    action-label="新建实验"
+    action-to="/experiment"
+  />
   <div v-else class="view-stack execution-view">
     <section class="panel execution-map-panel">
       <header class="panel-header panel-header--row">
         <div>
-          <p class="section-kicker">CURRENT BACKEND EXECUTION PATH</p>
-          <h2>{{ t("S0–S6 分层结果") }}</h2>
-          <p>{{ t("点击子系统查看真实报告中的摘要和记录；S3、S4、S5 是并列资源语义，不是线性流水线。") }}</p>
+          <p class="section-kicker">{{ t("从左到右看请求") }}</p>
+          <h2>{{ t("请求执行路线") }}</h2>
+          <p>{{ t("点击任一环节，查看它在本次实验中做了什么。内存、设备计算和多设备协同是并列关系。") }}</p>
         </div>
         <div class="execution-map-actions">
           <div class="panel-count">
             <GitBranch :size="16" />{{ state.bundle.run?.summary?.range_label || t("边界未知") }}
           </div>
           <button class="button button--secondary" :disabled="exportingReport" @click="exportStructuredReport">
-            <Download :size="16" />{{ exportingReport ? t("生成中…") : t("导出结构化报告") }}
+            <Download :size="16" />{{ exportingReport ? t("生成中…") : t("导出完整技术报告") }}
           </button>
         </div>
       </header>
 
-      <div class="execution-flow" :aria-label="t('TileSim 分层执行链路')">
+      <div class="execution-flow" :aria-label="t('TileSim 分层执行链路')" data-help-anchor="execution-flow">
         <button
           v-for="id in ['S0', 'S1', 'S2']"
           :key="id"
@@ -144,15 +167,15 @@ async function exportStructuredReport() {
           @click="selectedId = id"
         >
           <span>{{ id }}</span>
-          <strong>{{ layerById.get(id)?.name }}</strong>
-          <small>{{ displayHeadline(layerById.get(id)) }} · {{ layerById.get(id)?.headline.label }}</small>
+          <strong>{{ executionLayerName(id) }}</strong>
+          <small>{{ friendlyHeadline(layerById.get(id)) }}</small>
         </button>
         <ArrowRight class="flow-arrow flow-arrow--one" :size="18" />
         <ArrowRight class="flow-arrow flow-arrow--two" :size="18" />
         <ArrowRight class="flow-arrow flow-arrow--three" :size="18" />
 
         <div class="resource-peer-group">
-          <small>RESOURCE SEMANTICS · PEERS</small>
+          <small>{{ t("三个并列资源环节") }}</small>
           <button
             v-for="id in ['S3', 'S4', 'S5']"
             :key="id"
@@ -163,8 +186,8 @@ async function exportStructuredReport() {
             @click="selectedId = id"
           >
             <span>{{ id }}</span>
-            <strong>{{ layerById.get(id)?.name }}</strong>
-            <small>{{ displayHeadline(layerById.get(id)) }} · {{ layerById.get(id)?.headline.label }}</small>
+            <strong>{{ executionLayerName(id) }}</strong>
+            <small>{{ friendlyHeadline(layerById.get(id)) }}</small>
           </button>
         </div>
 
@@ -176,27 +199,45 @@ async function exportStructuredReport() {
           @click="selectedId = 'S6'"
         >
           <span>S6</span>
-          <strong>{{ layerById.get("S6")?.name }}</strong>
-          <small>{{ displayHeadline(layerById.get("S6")) }} · {{ layerById.get("S6")?.headline.label }}</small>
+          <strong>{{ executionLayerName("S6") }}</strong>
+          <small>{{ friendlyHeadline(layerById.get("S6")) }}</small>
         </button>
       </div>
-      <div class="execution-current-selection" aria-live="polite">
+      <div class="execution-current-selection" aria-live="polite" data-help-anchor="execution-selection">
         <span>{{ selected.id }}</span>
         <div>
-          <small>{{ t("当前查看的子系统") }}</small>
-          <strong>{{ selected.name }} · {{ selected.title }}</strong>
+          <small>{{ t("当前查看的环节") }}</small>
+          <strong>{{ executionLayerName(selected.id) }} · {{ selected.id }}</strong>
         </div>
-        <small>{{ t("对应详情已显示在下方") }}</small>
+        <div class="execution-step-actions" :aria-label="t('逐步查看执行路线')">
+          <button
+            type="button"
+            class="button button--secondary"
+            :disabled="currentFlowStep <= 0"
+            @click="moveFlowStep(-1)"
+          >
+            {{ t("上一步") }}
+          </button>
+          <span>{{ t("第 {current} / {total} 步", { current: currentFlowStep + 1, total: flowSteps.length }) }}</span>
+          <button
+            type="button"
+            class="button button--secondary"
+            :disabled="currentFlowStep >= flowSteps.length - 1"
+            @click="moveFlowStep(1)"
+          >
+            {{ t("下一步") }}
+          </button>
+        </div>
       </div>
     </section>
 
     <section class="execution-detail-layout">
-      <article id="execution-layer-detail" class="panel layer-detail-panel">
+      <article id="execution-layer-detail" class="panel layer-detail-panel" data-help-anchor="execution-detail">
         <header class="layer-detail-header">
           <div class="layer-code">{{ selected.id }}</div>
           <div>
-            <small>{{ selected.name }}</small>
-            <h2>{{ selected.title }}</h2>
+            <small>{{ selected.id }} · {{ t(selected.title) }}</small>
+            <h2>{{ executionLayerName(selected.id) }}</h2>
             <p>{{ selected.role }}</p>
           </div>
           <div class="layer-detail-status">
@@ -205,11 +246,11 @@ async function exportStructuredReport() {
           </div>
         </header>
 
-        <p class="layer-detail-copy">{{ selected.detail }}</p>
+        <p class="layer-detail-copy">{{ executionLayerDetail(selected.id) }}</p>
 
         <div class="layer-metric-grid" :aria-label="t('本层关键指标')">
           <div v-for="metric in selected.stats" :key="metric.label" class="layer-metric">
-            <small>{{ metric.label }}</small>
+            <small>{{ executionMetricLabel(metric.label) }}</small>
             <strong :title="String(metric.value ?? '')">{{ displayValue(metric.value, metric.unit) }}</strong>
             <span v-if="metric.hint">{{ metric.hint }}</span>
             <ArtifactEvidenceLink v-if="metric.sourcePath" :source-path="metric.sourcePath" />
@@ -231,6 +272,12 @@ async function exportStructuredReport() {
             <ChevronDown :size="17" />
           </summary>
           <div class="layer-insight-grid">
+            <article>
+              <header>
+                <Braces :size="17" /><strong>{{ t("后端原始说明") }}</strong>
+              </header>
+              <p>{{ selected.detail }}</p>
+            </article>
             <article>
               <header>
                 <ShieldCheck :size="17" /><strong>{{ t("当前实现证据") }}</strong>
@@ -321,14 +368,14 @@ async function exportStructuredReport() {
         </details>
       </article>
 
-      <details class="panel stage-panel execution-secondary-disclosure">
+      <details class="panel stage-panel execution-secondary-disclosure" data-help-anchor="execution-host">
         <summary class="panel-header">
           <div>
-            <p class="section-kicker">S7 EXECUTION ENVELOPE</p>
-            <h2>{{ t("统一时间轴阶段") }}</h2>
-            <p>{{ t("宿主记录的阶段摘要，不等同于 S0–S6 canonical trace。") }}</p>
+            <p class="section-kicker">{{ t("执行宿主（S7）") }}</p>
+            <h2>{{ t("统一时间轴记录") }}</h2>
+            <p>{{ t("这里记录各环节在同一模拟时间线上的开始和结束。") }}</p>
           </div>
-          <span>{{ result.stages.length }} stages</span>
+          <span>{{ t("{count} 个阶段", { count: result.stages.length }) }}</span>
           <TimerReset :size="20" />
           <ChevronDown :size="17" />
         </summary>

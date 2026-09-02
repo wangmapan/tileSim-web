@@ -16,7 +16,7 @@
 ## 2. 当前状态
 
 - F0-F8 与 F10 发布机制已验证；F9 descriptor v2 已部署，live Provider acceptance 仅被专用配置阻断。
-- 当前源码基线：58/58 TileSim CTest、233/233 frontend、76/76 Bridge、25/25 desktop fixture Playwright、5/5 live deployment Playwright；F9 live model repetitions 为 0。
+- 当前源码基线：58/58 TileSim CTest、263/263 frontend、78/78 Bridge、29/29 desktop fixture Playwright；上一部署的 5/5 live deployment Playwright 保持历史证据。F9 live model repetitions 为 0。
 - 产品范围只包含电脑网页端；不要为移动端增加实现或验收工作。
 - 前端工作目录可能长期包含 F0-F4 未提交改动。保留用户改动，不 reset、不清理、不擅自提交。
 - `127.0.0.1:5173` 可能运行用户正在使用的 Bridge。除非用户明确要求部署，不停止、不重启、不替换它。
@@ -43,6 +43,7 @@
 - Week 7 backend-global query 必须保留 backend identity 与 schema-set revision；三个固定 CLI 操作共享 Bridge 单槽，前端按 evidence map -> calibration -> orchestration 顺序请求。
 - 进入 backend-global 页面不得清除当前 run；run-bound 和 backend-global state 分开维护。
 - `src/store/dashboard.ts` 是兼容 controller，不要把状态重新集中进去。
+- 页面引导定义归 `src/features/guided-help/` 所有，不要写回 navigation model；并行开发的新英文文案分别写入 `src/i18n/workstreams/`，避免扩大共享 legacy catalog。
 - Bridge 依次使用 `api`、`contracts`、`services`、`repositories`、`infra`；`server.py` 只保留配置、兼容 wrapper 和端点协调。
 - 保留 `server` wrapper 的测试 patch 接口，尤其是 execution/subprocess 故障注入。
 
@@ -71,4 +72,4 @@ git diff --check
 pnpm test:e2e
 ```
 
-当前基线：233 个 frontend tests、76 个 Bridge tests、25 个 desktop fixture Playwright tests。
+当前源码基线：263 个 frontend tests、78 个 Bridge tests、29 个 desktop fixture Playwright tests。live deployment 仍以已部署版本的独立门禁为准。

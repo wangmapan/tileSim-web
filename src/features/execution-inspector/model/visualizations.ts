@@ -21,12 +21,21 @@ const colors = {
   occupancy: "#567fb0",
 };
 
+function reading(question: string, firstLook: string, boundary: string) {
+  return { question, firstLook, boundary };
+}
+
 function none(id: string, title: string, rationale: string, emptyReason: string): LayerVisualization {
   return {
     id,
     kind: "none",
     title,
     description: "保留字段表，不为缺少或不适合的数据生成图形。",
+    ...reading(
+      "当前报告是否提供了足够且适合绘图的数据？",
+      "先看缺失或降级原因，再决定是否查看原始记录。",
+      "没有数据时不补零、不插值，也不生成仅用于占位的图形。",
+    ),
     rationale,
     unit: "",
     sourcePaths: [],
@@ -44,6 +53,11 @@ function matrix(id: string, title: string, description: string, rows: Visualizat
     kind: "matrix",
     title,
     description,
+    ...reading(
+      "这些分类声明和状态字段分别是什么？",
+      "先看报告值，再沿字段来源核对 provenance、fidelity 或实现状态。",
+      "分类状态没有连续数值含义，不能据此计算距离、趋势或等级分数。",
+    ),
     rationale: "这些字段是分类、声明或状态，不存在可比较的连续数量关系，因此使用字段矩阵。",
     unit: "",
     sourcePaths: [...new Set(rows.map((row) => row.sourcePath).filter((path): path is string => Boolean(path)))],
@@ -141,6 +155,11 @@ export function buildLayerVisualizations(id: LayerId, bundle: ReportBundle, inpu
         kind: "bar",
         title: "请求 Token 构成",
         description: "逐请求比较 prompt、decode 与 KV token；横向条形图适合长请求 ID 和离散比较。",
+        ...reading(
+          "不同请求带来了多少 prompt、decode 与 KV token？",
+          "先找总量较大的请求，再回到完整字段表核对三类 token。",
+          "这里只比较后端输入数量，不推断调度、延迟或因果关系。",
+        ),
         rationale: "请求是离散类别，不使用暗示连续趋势的折线图。",
         unit: "tokens",
         sourcePaths: ["input-runtime-trace:/requests/*/{prompt_tokens,decode_tokens,kv_tokens}"],
@@ -218,6 +237,11 @@ export function buildLayerVisualizations(id: LayerId, bundle: ReportBundle, inpu
         kind: "bar",
         title: "Memory event 延迟",
         description: "按 memory_event_id 去重后比较估算延迟。",
+        ...reading(
+          "哪些 memory event 的报告延迟更高？",
+          "先看最长条，再按 memory_event_id 回到完整记录。",
+          "按稳定事件 ID 做展示级去重；不重算内存延迟，也不把 S3 与 S4/S5 串联。",
+        ),
         rationale: "事件是离散类别，水平条形图能保留长 ID 并直接比较大小。",
         unit: "µs",
         sourcePaths: [
@@ -241,6 +265,11 @@ export function buildLayerVisualizations(id: LayerId, bundle: ReportBundle, inpu
           kind: "scatter",
           title: "设备延迟与 Occupancy",
           description: "每个点代表一个 device_task_id；观察两个定量变量的分布关系，不推断因果。",
+          ...reading(
+            "设备任务的延迟与 occupancy 如何共同分布？",
+            "先看远离主要点群的任务，再核对它的精确字段和证据。",
+            "散点只显示报告变量的关系，不证明 occupancy 导致延迟。",
+          ),
           rationale: "仅在至少 3 个完整样本时使用散点图；样本更少会退回延迟条形图。",
           unit: "µs / %",
           sourcePaths: [
@@ -279,6 +308,11 @@ export function buildLayerVisualizations(id: LayerId, bundle: ReportBundle, inpu
         kind: "bar",
         title: "Device task 延迟",
         description: "完整 latency–occupancy 样本少于 3 个，自动降级为延迟比较。",
+        ...reading(
+          "现有设备任务中哪些报告延迟更高？",
+          "先看最长条，再核对字段表中的完整任务记录。",
+          "完整双变量样本少于 3 个，因此不展示也不推断 latency–occupancy 分布。",
+        ),
         rationale: "少量样本不适合散点分布分析，水平条形图更诚实。",
         unit: "µs",
         sourcePaths: ["metrics:/system_summary/phase_fabric_contributions/*/{device_task_id,device_latency_us}"],
@@ -312,6 +346,11 @@ export function buildLayerVisualizations(id: LayerId, bundle: ReportBundle, inpu
         kind: "stacked-bar",
         title: "Collective 时间构成",
         description: "按 collective 汇总 phase 的 runtime、queue 与 congestion 字段。",
+        ...reading(
+          "每个 collective 的 runtime、queue 与 congestion 报告构成是什么？",
+          "先看 queue 和 congestion 占比较显眼的条目，再核对完整 phase 记录。",
+          "只对同一 collective、同单位后端字段做显示级合计；不生成新的模拟指标。",
+        ),
         rationale: "字段同为 µs 且按 collective 聚合；堆叠用于观察相对构成，不代表新的模拟指标。",
         unit: "µs",
         sourcePaths: [
@@ -341,6 +380,11 @@ export function buildLayerVisualizations(id: LayerId, bundle: ReportBundle, inpu
       kind: "stacked-bar",
       title: "请求级 Fabric 时间构成",
       description: "逐请求对比 runtime、queue 和 congestion 字段。",
+      ...reading(
+        "每个请求的 Fabric runtime、queue 与 congestion 报告构成是什么？",
+        "先看 queue 或 congestion 较高的请求，再进入它的正式 evidence pointer。",
+        "三项均直接来自请求记录；前端不补造未报告贡献，也不推断主导原因。",
+      ),
       rationale: "三个字段同为 µs；堆叠用于组成比较，原始值仍在下方表格中。",
       unit: "µs",
       sourcePaths: [
@@ -369,6 +413,11 @@ export function buildLayerVisualizations(id: LayerId, bundle: ReportBundle, inpu
       kind: "bar",
       title: "Fabric 域利用率",
       description: "比较各 fabric domain 的报告利用率。",
+      ...reading(
+        "哪些 Fabric domain 的报告利用率更高？",
+        "先看利用率较高的域，再与 queue/congestion 字段和 topology 证据一起判断。",
+        "利用率是模拟报告值，不等同于真实集群链路计数器，也不单独证明拥塞。",
+      ),
       rationale: "域是离散类别，水平条形图比饼图更容易比较相近比例。",
       unit: "%",
       sourcePaths: ["metrics:/system_summary/fabric_domain_utilization/*/{domain_id,utilization_ratio}"],
@@ -437,11 +486,18 @@ export function buildStageTimeline(stages: ExecutionStage[]): LayerVisualization
     kind: "timeline",
     title: "S7 统一时间轴",
     description: "以最早阶段为零点展示相对开始位置和持续时间；表格保留原始 ps。",
+    ...reading(
+      "S0–S6 的已报告阶段如何落在 S7 的同一全局时间轴上？",
+      "先看阶段顺序、重叠和持续时间，再查看精确 start/end ps。",
+      "S7 是统一执行宿主，不是 latency causal ranking；非法或超安全范围的区间失败关闭。",
+    ),
     rationale: "start/end 是真实时间区间，range bar 能同时显示顺序、重叠和持续时间。",
     unit: "ns",
     sourcePaths: ["execution-envelope:/stages/*/{start_time_ps,end_time_ps}"],
     derivation: "unit_conversion",
     columns: ["相对开始 (ns)", "持续时间 (ns)"],
+    rawColumns: ["start_time_ps", "end_time_ps"],
+    rawUnit: "ps",
     series: [{ name: "相对开始" }, { name: "持续时间", color: colors.runtime }],
     rows,
   };

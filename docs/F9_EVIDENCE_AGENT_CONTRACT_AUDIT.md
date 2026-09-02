@@ -295,6 +295,43 @@ object with `storage_scope=run_local`, `record_kind=redacted_terminal_metadata_o
 snapshot/artifact payloads, Provider raw responses, validated model claims, credentials and hidden reasoning. Request,
 response, citation and snapshot-reference fields did not change and remain v1.
 
+### 2026-09-02 frontend presentation extension
+
+The desktop frontend now keeps the following responsibility split without moving request construction, response validation,
+store, transport or descriptor adaptation logic:
+
+| Surface                                  | Responsibility                                                                                                                                                                  | Explicitly forbidden responsibility                                             |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `EvidenceAgentPanel.vue`                 | Orchestrates current run/request selection, prepares the existing v1 request and emits submission/discard events                                                                | Direct Provider access, result persistence or citation repair                   |
+| `EvidenceAgentServiceDetails.vue`        | Displays declared descriptor/provider/model revisions on demand                                                                                                                 | Capability inference or request construction                                    |
+| `EvidenceAgentSubmissionLeaseNotice.vue` | Receives the retained lease and UI state as props, renders pending/stale/two formal 409 branches and emits only `discard`                                                       | Key creation/rotation, store access, Provider calls or payload reconstruction   |
+| `EvidenceAgentTaskCards.vue`             | Projects only `supported_task_kinds` from descriptor v2 into plain-language radio cards                                                                                         | Adding an undeclared task kind or changing the request enum                     |
+| `EvidenceAgentSubmissionPreview.vue`     | Displays current request, verified citation-location count, source/provenance scope, separate requested/resolved fidelity, execution mode and descriptor timeout                | Freezing a payload, generating a key or promoting provenance/fidelity           |
+| `EvidenceAgentResultPanel.vue`           | Groups references to the original validated atomic claim objects for findings, limitations, next steps and help; keeps exact citations and exposes technical identity on demand | Rewriting, merging, splitting, inventing, recalculating or inferring claim text |
+
+The claim grouping index stores the original response index and the original claim object reference. It changes presentation
+order by declared `claim_kind` only; claim text, IDs, kinds, scope and citations remain unchanged. Citation navigation still
+uses the validated run/artifact/schema/SHA-256/JSON Pointer/stable-subject tuple. Partial, refused, truncated, stale, formal
+HTTP 502/503/504 terminals and both formal 409 outcomes have separate display boundaries.
+
+Descriptor identity remains `tilesim.bridge.evidence_agent_descriptor.v2`. Request, response, citation and snapshot-reference
+identities remain v1. No Bridge Schema, generated DTO, canonical digest, idempotency, retention or Provider behavior changed.
+
+### Contract gaps intentionally not simulated
+
+The current descriptor declares `synchronous_terminal` and one immutable run-bound request. The following capabilities remain
+contract gaps; the frontend must not emulate them with local state or undocumented requests.
+
+| Capability                  | Missing formal surface                                                                                       | Required versioned design before implementation                                                                                                     |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Multi-turn conversation     | Conversation/session identity, prior-turn evidence binding, turn ordering and prompt-isolation rules         | A Bridge-published descriptor revision plus closed turn/session request and response Schemas; every turn must freeze its own snapshot and citations |
+| Persistent analysis history | User consent, retention class, redaction, deletion, recovery and claims-bearing persistence semantics        | A closed history/result-record Schema and endpoints with explicit metadata/payload retention; browser storage is not a substitute                   |
+| Cross-run Agent comparison  | Multi-run allow-list, backend/schema compatibility predicate and citation ownership per run                  | A closed comparison request/response family with exact per-run snapshot digests and citations; current v1 remains single-run                        |
+| SSE and cancellation        | Operation identity, event ordering/resume, cancellation endpoint, late-terminal and lease recovery semantics | A descriptor execution-mode revision plus closed event/cancellation contracts; current synchronous terminal must not be wrapped in a fake stream    |
+
+These names describe design requirements, not accepted contract identities. Implementation must wait for an actual Bridge
+release and generated client/runtime validators.
+
 ## 10. Closure checklist
 
 F9 may be marked validated only when:
@@ -330,3 +367,6 @@ F9 may be marked validated only when:
   because all required dedicated Provider variables are absent;
 - repo-wide Prettier and `git diff --check` pass; `bridge/test_f9_canonical_digest.mjs` was changed only by Prettier and both
   canonical digest implementations still pass the same two golden vectors.
+- the 2026-09-02 frontend extension passes 77 focused Evidence Agent unit/component cases, both dedicated desktop fixture
+  scenarios, the complete 257/257 frontend suite and 27/27 configured fixture Playwright scenarios; 5 deployment/live
+  scenarios remain skipped because live acceptance was intentionally not enabled.

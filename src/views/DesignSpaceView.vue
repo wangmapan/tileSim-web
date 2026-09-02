@@ -5,7 +5,7 @@ import ArtifactEvidenceLink from "../components/ArtifactEvidenceLink.vue";
 import EmptyState from "../components/EmptyState.vue";
 import StatCard from "../components/StatCard.vue";
 import StatusPill from "../components/StatusPill.vue";
-import { formatNumber, statusLabel } from "../lib/format";
+import { formatNumber } from "../lib/format";
 import { useDashboard } from "../store/dashboard";
 import {
   buildDesignSpaceAnalysis,
@@ -13,6 +13,7 @@ import {
   createDesignSpacePresentation,
   unresolvedCandidateKnobs,
 } from "../features/f7-analysis";
+import { buildDesignSpaceVisualization, ExecutionVisualizationPanel } from "../features/execution-inspector";
 import { useI18n } from "../i18n";
 
 const { state } = useDashboard();
@@ -24,6 +25,14 @@ const f7Capabilities = computed(() =>
   buildF7Capabilities(report.value, state.artifactManifest, state.bundle.metrics, state.inputs.topology),
 );
 const unresolvedKnobs = computed(() => unresolvedCandidateKnobs(candidates.value));
+const candidateVisualization = computed(() =>
+  buildDesignSpaceVisualization(
+    report.value,
+    (candidateIndex, objectiveIndex) =>
+      formalAnalysis.value.candidates[candidateIndex]?.objectiveReferences[objectiveIndex]?.sourcePath || null,
+    (candidateIndex) => formalAnalysis.value.candidates[candidateIndex]?.evidence.sourcePath || null,
+  ),
+);
 const { rankDelta, metricValue, boundRange, candidateKnobEntries, candidateLinks, capabilityTitle, capabilityDetail } =
   createDesignSpacePresentation(t);
 
@@ -38,32 +47,38 @@ function displayedKnobValue(value: unknown, availability: string) {
 </script>
 
 <template>
-  <EmptyState v-if="!report" title="没有设计空间报告" />
+  <EmptyState
+    v-if="!report"
+    title="还没有可比较的方案"
+    description="请打开包含方案比较结果的实验，或运行一次新的方案比较。"
+    action-label="新建实验"
+    action-to="/experiment"
+  />
   <div v-else class="view-stack design-space-view">
-    <section class="stat-grid stat-grid--three">
+    <section class="stat-grid stat-grid--three" data-help-anchor="design_space-summary">
       <StatCard
-        :label="t('候选数量')"
+        :label="t('候选方案')"
         :value="formatNumber(report.candidate_count, 0)"
-        :hint="t('候选包含后端内部运行实例 ID，不等同于可导航的 Bridge run')"
+        :hint="t('本轮参与比较的配置数量')"
         accent
       />
       <StatCard
-        :label="t('DES 晋升')"
+        :label="t('进一步精细模拟')"
         :value="formatNumber(report.promoted_candidate_count, 0)"
-        hint="Top-K / SLO / uncertainty / tail risk"
+        :hint="t('选择少量方案进行更细的离散事件模拟')"
       />
       <StatCard
-        :label="t('执行范围')"
-        :value="report.execution_scope || 'unknown'"
-        :hint="t('当前只执行 S6 候选变量')"
+        :label="t('实际比较范围')"
+        :value="report.execution_scope === 'S6_only' ? t('仅网络与通信（S6）') : report.execution_scope || t('未知')"
+        :hint="t('其他环节的候选变量尚未执行')"
       />
     </section>
 
-    <section class="design-scope-banner">
+    <section class="design-scope-banner" data-help-anchor="design_space-scope">
       <AlertTriangle :size="19" />
       <div>
-        <strong>{{ t("候选证据边界：{lane}", { lane: statusLabel(report.validation_lane) }) }}</strong>
-        <p>{{ report.claim_scope_summary }}</p>
+        <strong>{{ t("本轮只比较了网络与通信参数") }}</strong>
+        <p>{{ t("其他环节的配置没有在本轮执行，不能用这张表判断完整系统的最优方案。") }}</p>
         <small v-if="unresolvedKnobs.length">
           {{
             t("未执行变量：{fields}。这些字段不会影响当前候选数值或仿真语义。", { fields: unresolvedKnobs.join(", ") })
@@ -73,14 +88,16 @@ function displayedKnobValue(value: unknown, availability: string) {
       <StatusPill :value="report.evidence_tier" />
     </section>
 
-    <article class="panel">
+    <ExecutionVisualizationPanel :visualization="candidateVisualization" />
+
+    <article class="panel" data-help-anchor="design_space-ranking">
       <header class="panel-header panel-header--row">
         <div>
           <p class="section-kicker">FIDELITY FUNNEL</p>
-          <h2>{{ t("候选排名与选择性 DES") }}</h2>
-          <p>{{ t("排名以报告中的确定性 final_rank 为准；promotion hint 仅作输入备注。") }}</p>
+          <h2>{{ t("方案排名") }}</h2>
+          <p>{{ t("排名直接来自后端报告；先比较 P95、P99，再按需查看进一步模拟和专业证据。") }}</p>
         </div>
-        <div class="panel-count"><Layers3 :size="16" />{{ candidates.length }} candidates</div>
+        <div class="panel-count"><Layers3 :size="16" />{{ t("{count} 个方案", { count: candidates.length }) }}</div>
       </header>
       <div class="table-wrap">
         <table class="design-space-table">
@@ -473,7 +490,7 @@ function displayedKnobValue(value: unknown, availability: string) {
       </details>
     </section>
 
-    <details class="panel design-evidence-disclosure">
+    <details class="panel design-evidence-disclosure" data-help-anchor="design_space-evidence">
       <summary>
         <span>
           <Route :size="18" />

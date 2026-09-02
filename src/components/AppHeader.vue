@@ -9,17 +9,17 @@ import AppearanceToggle from "./AppearanceToggle.vue";
 const { state, currentTitle, importFiles, notify } = useDashboard();
 const { isEnglish, t, toggleLocale } = useI18n();
 const headerKickers = {
-  overview: "RUN OVERVIEW",
-  execution: "EXECUTION PATH",
-  metrics: "PERFORMANCE",
-  fabric: "FABRIC",
-  attribution: "REQUEST EVIDENCE",
-  validation: "VALIDATION",
-  design_space: "DESIGN SPACE",
-  history: "RUN HISTORY",
-  evidence_agent: "EVIDENCE AGENT",
-  evidence_lab: "CALIBRATION LAB",
-  experiment: "EXPERIMENT BUILDER",
+  overview: "实验结果",
+  execution: "实验结果",
+  metrics: "实验结果",
+  fabric: "实验结果",
+  attribution: "实验结果",
+  validation: "实验结果",
+  design_space: "方案探索",
+  history: "实验管理",
+  evidence_agent: "辅助解释",
+  evidence_lab: "证据工具",
+  experiment: "实验配置",
 };
 const headerKicker = computed(() => headerKickers[state.view] || "TILESIM");
 const currentDescription = computed(() => navItems.find((item) => item.id === state.view)?.description || "");
@@ -43,7 +43,7 @@ async function onImport(event) {
       <Menu :size="21" />
     </button>
     <div class="page-heading">
-      <p>{{ headerKicker }}</p>
+      <p>{{ t(headerKicker) }}</p>
       <div>
         <h1>{{ state.view === "experiment" ? t("新建实验") : t(currentTitle) }}</h1>
         <span v-if="currentDescription">{{ t(currentDescription) }}</span>

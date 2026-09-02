@@ -63,6 +63,23 @@
   border-color: color-mix(in srgb, var(--hero-text) 32%, transparent);
   background: transparent;
 }
+.hero-technical-summary {
+  margin-top: 16px;
+  color: var(--hero-text-soft);
+}
+.hero-technical-summary summary {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  cursor: pointer;
+  font-size: var(--text-xs);
+  font-weight: 650;
+}
+.hero-technical-summary p {
+  margin: 10px 0 0;
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}
 .hero-measure {
   display: flex;
   flex-direction: column;
@@ -93,6 +110,27 @@
 }
 .stat-grid--three {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.finding-raw-disclosure {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.finding-raw-disclosure summary {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 650;
+}
+.finding-raw-disclosure > strong {
+  display: block;
+  margin-top: 12px;
+}
+.finding-raw-disclosure > p {
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 .stat-card {
   position: relative;

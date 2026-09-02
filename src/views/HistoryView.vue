@@ -15,6 +15,11 @@ const { t } = useI18n();
 const renameTarget = ref(null);
 const renameValue = ref("");
 const completeCount = computed(() => state.history.runs.filter((run) => run.status === "completed").length);
+const inputModeLabels = { json: "JSON 输入", controls: "表单配置", legacy: "旧版输入" };
+
+function inputModeLabel(value) {
+  return t(inputModeLabels[value] || value || "旧版输入");
+}
 
 function beginRename(run) {
   renameTarget.value = run;
@@ -34,7 +39,7 @@ async function submitRename() {
 
 <template>
   <div class="view-stack">
-    <section class="history-toolbar">
+    <section class="history-toolbar" data-help-anchor="history-runs">
       <div class="search-field">
         <Search :size="17" /><input
           v-model="state.history.query"
@@ -54,11 +59,13 @@ async function submitRename() {
       </button>
     </section>
 
-    <article class="panel history-panel">
+    <article class="panel history-panel" data-help-anchor="history-open">
       <EmptyState
         v-if="!filteredRuns.length && !state.history.loading"
         title="没有匹配的运行"
         description="调整搜索条件，或先创建一次新实验。"
+        action-label="新建实验"
+        action-to="/experiment"
       />
       <div v-else class="run-list">
         <div
@@ -72,7 +79,7 @@ async function submitRename() {
             ><small>{{ run.run_id }} · {{ formatDate(run.created_at) }}</small>
           </button>
           <div class="run-kind">
-            <StatusPill :value="run.status || 'unknown'" /><small>{{ run.input_mode || "legacy" }}</small>
+            <StatusPill :value="run.status || 'unknown'" /><small>{{ inputModeLabel(run.input_mode) }}</small>
           </div>
           <div class="run-metric">
             <small>{{ t("端到端") }}</small
@@ -82,7 +89,7 @@ async function submitRename() {
             <small>{{ t("吞吐") }}</small
             ><strong>{{ formatNumber(run.digest?.throughput_requests_per_second) }} <span>req/s</span></strong>
           </div>
-          <div class="run-actions">
+          <div class="run-actions" data-help-anchor="history-compare">
             <button class="icon-button" :title="t('重命名')" @click="beginRename(run)"><Pencil :size="16" /></button
             ><button
               class="button button--small"
@@ -96,7 +103,7 @@ async function submitRename() {
       </div>
     </article>
 
-    <article v-if="state.history.selected.length" class="panel compare-shell">
+    <article v-if="state.history.selected.length" class="panel compare-shell" data-help-anchor="history-results">
       <header class="panel-header panel-header--row">
         <div>
           <p class="section-kicker">RUN COMPARISON</p>

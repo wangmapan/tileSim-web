@@ -11,6 +11,7 @@ export {
   type BuildEvidenceAgentSnapshotOptions,
 } from "./request-builder";
 export { validateEvidenceAgentResult } from "./response-validator";
+export { groupEvidenceAgentClaims } from "./presentation";
 export { evidenceAgentErrorState, evidenceAgentFailure, submitEvidenceAgentAnalysis } from "./submission";
 export type {
   EvidenceAgentBinding,
