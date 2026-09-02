@@ -748,6 +748,15 @@ class BridgeApiContractTest(unittest.TestCase):
         self.previous_bridge_instance_id = server.BRIDGE_INSTANCE_ID
         self.start_execution_patcher = mock.patch.object(server, "start_run_execution")
         self.start_execution_mock = self.start_execution_patcher.start()
+        self.runtime_capabilities_patcher = mock.patch.object(
+            server,
+            "runtime_capabilities",
+            return_value={
+                "schema_version": "tilesim.runtime_capabilities.v1",
+                "run_surface": server.identity.controlled_run_surface(),
+            },
+        )
+        self.runtime_capabilities_patcher.start()
         self.httpd = server.ThreadingHTTPServer(("127.0.0.1", 0), server.BridgeHandler)
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
         self.thread.start()
@@ -760,6 +769,7 @@ class BridgeApiContractTest(unittest.TestCase):
         server.RUNS_ROOT = self.previous_runs_root
         server.BRIDGE_INSTANCE_ID = self.previous_bridge_instance_id
         server.runs.clear()
+        self.runtime_capabilities_patcher.stop()
         self.start_execution_patcher.stop()
         self.temporary_directory.cleanup()
 
