@@ -1,7 +1,7 @@
 # F10 Release Hardening Gate
 
 **Date**: 2026-09-01
-**Status**: validated for immutable release, rollback, traceability and disposable-install mechanics
+**Status**: validated for immutable release, rollback, traceability and disposable-install mechanics; stable-candidate rehearsal repeated 2026-09-02
 
 ## 1. Release decision
 
@@ -55,13 +55,23 @@ The final release gate ran against a disposable clone of the remote branch rathe
 The authorized `127.0.0.1:5173` switch and the subsequent final release switch both used the immutable snapshot path. Any
 future switch must still use an explicitly authorized deployment window and the same rollback rules.
 
+### Stable-candidate rehearsal · 2026-09-02
+
+The post-integration stable candidate was rehearsed again on isolated port `58173` without touching `5173`:
+
+- release digest `13c87c6846debfa84ce7c03d3ce6eed97dc7b36c6811d3929c73b27e14ce9405` started with
+  `execution_ready=true` and schema set `sha256:92acce87f4f611893fafb2bf81dd1fa4fac509316ea2b5215a60f1995688871e`;
+- real run `run-20260902-141146-20233a97` completed;
+- a deliberately missing CLI changed the candidate to `execution_ready=false`;
+- restoring the manifest returned `execution_ready=true`, retained the completed run, and verified immutable bytes;
+- the deployed `5173` service remained healthy and retained its existing completed run throughout the rehearsal.
+
 ## 4. F9-specific release gate
 
-F9C source and descriptor v2 are deployed, but F9 remains `live-blocked` until all required
-`TILESIM_EVIDENCE_AGENT_*` names are configured without exposing their values. The authenticated probe must exactly match
-protocol/provider/model/revision. Real success, refusal and timeout samples, at least five repetitions for every
-safety/refusal boundary, and two-reviewer citation entailment review must all pass. Live model repetitions remain `0`
-until those events are recorded.
+F9C source and descriptor v2 are deployed, and the authenticated Provider probe now exactly matches the required
+protocol/provider/model/revision and reports available. F9 remains `acceptance-pending`: real success, refusal and timeout
+samples, at least five repetitions for every safety/refusal boundary, and two-reviewer citation entailment review must all
+pass. Live model repetitions remain `0` until those events are recorded.
 
 ## 5. Stop conditions
 

@@ -52,11 +52,39 @@ const emit = defineEmits<{
   submitPrepared: [prepared: PreparedEvidenceAgentRequest, binding: EvidenceAgentBinding];
   discardPending: [];
 }>();
-const { t } = useI18n();
-const question = ref(t("请解释当前 request 的 P99 与尾延迟证据边界。"));
+const { isEnglish, t } = useI18n();
 const questionInput = ref<HTMLTextAreaElement | null>(null);
 const taskKind = ref<EvidenceAgentRequest["task_kind"]>("explain_p99");
+const suggestedQuestions: Record<EvidenceAgentRequest["task_kind"], { zh: string; en: string }> = {
+  explain_p99: {
+    zh: "请用通俗语言解释这个请求的 P99 表现，以及报告中有哪些直接依据。",
+    en: "Explain this request's P99 behavior in plain language and show the direct evidence in the report.",
+  },
+  explain_tail: {
+    zh: "请用通俗语言解释这个请求的尾延迟表现，并指出报告中已有的依据。",
+    en: "Explain this request's tail-latency behavior in plain language and point to the evidence in the report.",
+  },
+  summarize_validation: {
+    zh: "这份结果有多可信？请说明数据来源、验证情况和使用限制。",
+    en: "How trustworthy is this result? Explain its data source, validation status, and limitations.",
+  },
+  draft_conditional_recommendations: {
+    zh: "基于当前证据，下一步最值得验证哪些优化方向？",
+    en: "Based on the current evidence, which optimization directions are most worth testing next?",
+  },
+};
+function suggestedQuestion(kind: EvidenceAgentRequest["task_kind"], english = isEnglish.value) {
+  return suggestedQuestions[kind][english ? "en" : "zh"];
+}
+const question = ref(suggestedQuestion(taskKind.value));
 const localError = ref("");
+
+watch([taskKind, isEnglish], ([nextKind, nextEnglish], [previousKind, previousEnglish]) => {
+  const previousSuggestion = suggestedQuestion(previousKind, previousEnglish);
+  if (!question.value.trim() || question.value === previousSuggestion) {
+    question.value = suggestedQuestion(nextKind, nextEnglish);
+  }
+});
 
 const backendIdentity = computed(() => evidenceAgentBackendIdentity(props.health));
 const descriptorPolicy = computed(() => (props.descriptor ? adaptEvidenceAgentDescriptor(props.descriptor) : null));
@@ -107,7 +135,11 @@ const previewProvenance = computed(
 );
 const snapshotReadiness = computed(() => {
   if (!props.runId) {
-    return { state: "missing" as const, title: "先运行一次实验", detail: "AI 只能解释已经完成的实验结果。" };
+    return {
+      state: "missing" as const,
+      title: "先运行一次实验",
+      detail: "这个页面负责解释已有结果，不会替你运行实验。",
+    };
   }
   if (!props.manifest) {
     return { state: "loading" as const, title: "正在读取实验结果", detail: "请稍候，证据清单仍在加载。" };
@@ -269,9 +301,15 @@ async function submit() {
     <section class="panel evidence-agent-compose">
       <header class="panel-header">
         <div>
-          <p class="section-kicker">{{ t("开始提问") }}</p>
-          <h2>{{ t("选择要解释的请求和问题") }}</h2>
-          <p>{{ t("页面只会把当前实验中可引用的结果发送给 AI。") }}</p>
+          <p class="section-kicker">{{ isEnglish ? "HOW TO USE" : "怎么使用" }}</p>
+          <h2>{{ isEnglish ? "Use AI to understand a completed request" : "让 AI 帮你看懂一次已完成的请求" }}</h2>
+          <p>
+            {{
+              isEnglish
+                ? "Choose a request and what you want to learn, review the suggested question, then generate the explanation."
+                : "选择一个请求和你想了解的内容，确认推荐问题后生成解释。"
+            }}
+          </p>
         </div>
         <div class="panel-count">
           <ShieldCheck :size="16" />{{
@@ -282,20 +320,6 @@ async function submit() {
           }}
         </div>
       </header>
-      <ol class="evidence-agent-steps" :aria-label="t('使用步骤')">
-        <li>
-          <span>1</span><strong>{{ t("选择请求") }}</strong
-          ><small>{{ t("决定要解释哪一次请求。") }}</small>
-        </li>
-        <li>
-          <span>2</span><strong>{{ t("输入问题") }}</strong
-          ><small>{{ t("可以直接使用默认问题。") }}</small>
-        </li>
-        <li>
-          <span>3</span><strong>{{ t("生成解释") }}</strong
-          ><small>{{ t("通常需要约一分钟，请等待结果区出现。") }}</small>
-        </li>
-      </ol>
       <div class="evidence-agent-readiness" :data-state="snapshotReadiness.state" role="status">
         <ShieldCheck v-if="snapshotReady" :size="20" />
         <CircleSlash2 v-else :size="20" />
@@ -313,7 +337,7 @@ async function submit() {
       </div>
       <div class="evidence-agent-form">
         <label data-help-anchor="evidence_agent-request">
-          <span>{{ t("当前请求") }}</span>
+          <span>{{ isEnglish ? "1. Choose the request to explain" : "1. 选择要解释的请求" }}</span>
           <select :value="selectedRequestId || ''" :disabled="!runId" @change="chooseRequest">
             <option value="" disabled>{{ t("请选择请求") }}</option>
             <option v-for="option in chain.requestOptions" :key="option.requestId" :value="option.requestId">
@@ -327,13 +351,18 @@ async function submit() {
           :disabled="!capabilityAvailable"
         />
         <label class="evidence-agent-question" data-help-anchor="evidence_agent-question">
-          <span>{{ t("你想了解什么？") }}</span>
+          <span>{{ isEnglish ? "3. Review or refine the question" : "3. 确认或补充问题" }}</span>
           <textarea
             ref="questionInput"
             v-model="question"
             :maxlength="descriptor?.limits.maximum_question_characters || 4000"
             :disabled="!capabilityAvailable"
           ></textarea>
+          <small class="evidence-agent-question-hint">{{
+            isEnglish
+              ? "Keep the suggested question if it already matches what you need."
+              : "推荐问题可以直接使用；有特别关注的内容再修改。"
+          }}</small>
         </label>
         <EvidenceAgentSubmissionPreview
           :request-id="selectedRequestId"

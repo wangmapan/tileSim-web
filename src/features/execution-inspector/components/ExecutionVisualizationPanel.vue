@@ -74,24 +74,8 @@ function display(value: string | number | null, column: string) {
           <h3>{{ t(visualization.title) }}</h3>
           <span>{{ t(kindLabels[visualization.kind]) }}</span>
         </div>
-        <p>{{ t(visualization.description) }}</p>
       </div>
     </header>
-
-    <div class="visualization-reading-protocol">
-      <article>
-        <small>{{ t("回答的问题") }}</small>
-        <strong>{{ t(visualization.question) }}</strong>
-      </article>
-      <article>
-        <small>{{ t("先看哪里") }}</small>
-        <strong>{{ t(visualization.firstLook) }}</strong>
-      </article>
-      <article>
-        <small>{{ t("解释边界") }}</small>
-        <strong>{{ t(visualization.boundary) }}</strong>
-      </article>
-    </div>
 
     <template v-if="chartable && visualization.rows.length">
       <ExecutionChart :visualization="visualization" @row-selected="selectedRowIndex = $event" />
@@ -127,12 +111,7 @@ function display(value: string | number | null, column: string) {
       <Info :size="17" /><span>{{ visualization.emptyReason }}</span>
     </div>
 
-    <div class="visualization-rationale">
-      <Info :size="15" /><span
-        ><strong>{{ t("类型依据：") }}</strong
-        >{{ t(visualization.rationale) }}</span
-      >
-    </div>
+    <p class="visualization-caption">{{ t(visualization.description) }}</p>
 
     <div v-if="dataIssues.length" class="visualization-issues" role="status">
       <AlertTriangle :size="16" />

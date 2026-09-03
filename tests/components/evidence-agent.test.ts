@@ -136,9 +136,11 @@ describe("F9 evidence Agent presentation", () => {
     const taskCards = wrapper.findAll('.evidence-agent-task-cards input[type="radio"]');
     expect(taskCards).toHaveLength(2);
     expect(taskCards.map((input) => input.attributes("value"))).toEqual(["explain_tail", "summarize_validation"]);
-    expect(wrapper.get(".evidence-agent-task-cards").text()).toContain("解释尾延迟");
-    expect(wrapper.get(".evidence-agent-task-cards").text()).toContain("总结验证边界");
-    expect(wrapper.get(".evidence-agent-task-cards").text()).not.toContain("起草条件建议");
+    expect(wrapper.get(".evidence-agent-task-cards").text()).toContain("看懂尾延迟");
+    expect(wrapper.get(".evidence-agent-task-cards").text()).toContain("判断结果可信度");
+    expect(wrapper.get(".evidence-agent-task-cards").text()).not.toContain("寻找下一步优化方向");
+    expect(wrapper.get(".evidence-agent-task-cards").text()).not.toContain("不创建新的因果排序");
+    expect(wrapper.get(".evidence-agent-task-cards").text()).not.toContain("explain_tail");
     expect(taskCards[0].attributes("checked")).toBeDefined();
 
     const preview = wrapper.get(".evidence-agent-submission-preview");
@@ -151,6 +153,26 @@ describe("F9 evidence Agent presentation", () => {
     expect(preview.text()).toContain("requested_fidelity");
     expect(preview.text()).toContain("resolved_fidelity");
     expect(preview.text()).toContain("partitioned_des");
+  });
+
+  it("keeps the three-step form obvious and updates only an untouched suggested question", async () => {
+    const wrapper = mount(EvidenceAgentPanel, {
+      props: props(true),
+      global: { plugins: [pinia, await routerPlugin()] },
+    });
+
+    expect(wrapper.get('[data-help-anchor="evidence_agent-request"] > span').text()).toBe("1. 选择要解释的请求");
+    expect(wrapper.get(".evidence-agent-task-picker > legend").text()).toBe("2. 选择你想了解的内容");
+    expect(wrapper.get('[data-help-anchor="evidence_agent-question"] > span').text()).toBe("3. 确认或补充问题");
+    const textarea = wrapper.get("textarea");
+    expect(textarea.element.value).toContain("P99 表现");
+
+    await wrapper.get('input[value="explain_tail"]').setValue(true);
+    expect(textarea.element.value).toContain("尾延迟表现");
+
+    await textarea.setValue("我只关心这个自定义问题。");
+    await wrapper.get('input[value="summarize_validation"]').setValue(true);
+    expect(textarea.element.value).toBe("我只关心这个自定义问题。");
   });
 
   it("shows the formal provider_unavailable state without a mock answer", async () => {
@@ -537,7 +559,7 @@ describe("F9 evidence Agent presentation", () => {
       inputs: context.inputs,
       locale: "zh-CN",
       taskKind: "explain_p99",
-      question: "请解释当前 request 的 P99 与尾延迟证据边界。",
+      question: "请用通俗语言解释这个请求的 P99 表现，以及报告中有哪些直接依据。",
       clientRequestId: "agent-client:component-exact-replay",
     });
     const store = useEvidenceAgentStore();

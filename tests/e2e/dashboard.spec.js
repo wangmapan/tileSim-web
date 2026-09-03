@@ -725,8 +725,8 @@ test("synthetic evidence view is stable, accessible, and field-complete", async 
   await expect(page.locator("#execution-layer-detail .layer-code")).toHaveText("S5");
   await expect(page.locator('.visualization-panel[data-chart-kind="stacked-bar"] .execution-chart svg')).toBeVisible();
   await expect(
-    page.locator('.visualization-panel[data-chart-kind="stacked-bar"] .visualization-rationale'),
-  ).toContainText("堆叠");
+    page.locator('.visualization-panel[data-chart-kind="stacked-bar"] .visualization-caption'),
+  ).toBeVisible();
   await page.locator(".flow-node--fabric").click();
   await expect(page.locator(".layer-visualizations .visualization-panel")).toHaveCount(2);
   await expect(page.locator(".layer-visualizations .visualization-empty")).toHaveCount(0);
@@ -1201,7 +1201,8 @@ test("analysis charts keep complete tables and bind selected points to the curre
   const fixture = fixtureCase("synthetic-s1-s6-complete");
   const browserFailures = await openFixture(page, fixture, "metrics");
   const panel = page.locator(".visualization-panel").filter({ hasText: "请求延迟比较" }).first();
-  await expect(panel.locator(".visualization-reading-protocol article")).toHaveCount(3);
+  await expect(panel.locator(".visualization-reading-protocol")).toHaveCount(0);
+  await expect(panel.locator(".visualization-caption")).toContainText("TTFT");
   await expect(panel.locator(".execution-chart svg")).toBeVisible();
   await panel.locator(".visualization-data > summary").click();
   await expect(panel.locator(".visualization-table-scroll tbody tr")).toHaveCount(
@@ -1308,7 +1309,8 @@ test("F7 formal contract exposes Pareto, artifact-record, knob, and topology evi
   await expect(page.locator(".candidate-detail").first()).toContainText("9,007,199,254,740,993 ps");
   const objectiveChart = page.locator(".visualization-panel").filter({ hasText: "正式 Objective 候选图" });
   await expect(objectiveChart).toHaveAttribute("data-chart-kind", "bar");
-  await expect(objectiveChart).toContainText("不计算 Pareto");
+  await expect(objectiveChart.locator(".visualization-reading-protocol")).toHaveCount(0);
+  await expect(objectiveChart.locator(".visualization-caption")).toContainText("可配对的正式 objective 不足");
   await objectiveChart.locator(".visualization-data > summary").click();
   await expect(objectiveChart.locator(".visualization-table-scroll tbody")).toContainText("pareto_member");
   await expect(objectiveChart.locator(".visualization-contract")).toContainText("identity");
@@ -1347,7 +1349,8 @@ test("F7 Fabric view preserves backend order and exact metrics evidence", async 
   await expect(page.getByRole("heading", { name: "请求级 Fabric contribution" })).toBeVisible();
   await expect(page.locator(".analysis-visualization-stack .visualization-panel")).toHaveCount(2);
   await expect(page.locator(".analysis-visualization-stack .execution-chart svg")).toHaveCount(2);
-  await expect(page.locator(".analysis-visualization-stack .visualization-reading-protocol")).toHaveCount(2);
+  await expect(page.locator(".analysis-visualization-stack .visualization-reading-protocol")).toHaveCount(0);
+  await expect(page.locator(".analysis-visualization-stack .visualization-caption")).toHaveCount(2);
   await expect(page.locator(".fabric-contract-strip")).not.toHaveAttribute("open", "");
   await expect(page.locator(".fabric-domain-disclosure")).not.toHaveAttribute("open", "");
   await page.locator(".fabric-domain-disclosure summary").focus();
@@ -1393,7 +1396,8 @@ test("language switch updates the desktop workspace and survives reload", async 
   await page.getByRole("button", { name: /Performance metrics/ }).click();
   await expect(page.getByRole("heading", { name: "Per-request results" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Request latency comparison" })).toBeVisible();
-  await expect(page.locator(".visualization-reading-protocol").first()).toContainText("Question answered");
+  await expect(page.locator(".visualization-reading-protocol")).toHaveCount(0);
+  await expect(page.locator(".visualization-caption").first()).toContainText("TTFT");
   await page.getByRole("button", { name: /Result confidence/ }).click();
   await expect(page.getByRole("heading", { name: "Simulation detail actually used by each stage" })).toBeVisible();
   await page.locator(".new-run-button").click();

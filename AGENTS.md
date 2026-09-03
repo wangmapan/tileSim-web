@@ -8,15 +8,16 @@
 
 1. `AGENTS.md`
 2. `docs/AI_HANDOFF.md`
-3. 当前任务涉及的代码和测试
-4. 仅在需要追溯时读取 `docs/development/`
+3. 稳定版维护或交接任务读取 `docs/NEXT_STABLE_MAINTENANCE_PROMPT.md`
+4. 当前任务涉及的代码和测试
+5. 仅在需要追溯时读取 `docs/development/`
 
 `docs/AI_HANDOFF.md` 是当前事实来源；阶段文档是历史证据，不能用旧状态覆盖当前状态。
 
 ## 2. 当前状态
 
-- F0-F8 与 F10 发布机制已验证；F9 descriptor v2 已部署，live Provider acceptance 仅被专用配置阻断。
-- 当前源码基线：58/58 TileSim CTest、263/263 frontend、78/78 Bridge、29/29 desktop fixture Playwright；上一部署的 5/5 live deployment Playwright 保持历史证据。F9 live model repetitions 为 0。
+- F0-F8 与 F10 发布机制已验证；F9 descriptor v2 已部署且 authenticated capability probe 返回 available，live Provider acceptance 与人工 citation entailment review 尚未执行。
+- 当前稳定版候选基线：61/61 TileSim CTest、265/265 frontend、78/78 Bridge、29/29 desktop fixture Playwright；上一部署的 5/5 live deployment Playwright 保持历史证据。F9 live model repetitions 仍为 0。
 - 产品范围只包含电脑网页端；不要为移动端增加实现或验收工作。
 - 前端工作目录可能长期包含 F0-F4 未提交改动。保留用户改动，不 reset、不清理、不擅自提交。
 - `127.0.0.1:5173` 可能运行用户正在使用的 Bridge。除非用户明确要求部署，不停止、不重启、不替换它。
@@ -72,4 +73,4 @@ git diff --check
 pnpm test:e2e
 ```
 
-当前源码基线：263 个 frontend tests、78 个 Bridge tests、29 个 desktop fixture Playwright tests。live deployment 仍以已部署版本的独立门禁为准。
+当前稳定版候选基线：265 个 frontend tests、78 个 Bridge tests、29 个 desktop fixture Playwright tests。live deployment 仍以已部署版本的独立门禁为准。

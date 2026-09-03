@@ -187,7 +187,7 @@ uint64、requested/resolved fidelity、trace provenance 或 S0-S9 语义。回�
 
 ### 可视化深入拓展（2026-09-02）
 
-- Execution、Metrics、Fabric、Design Space、Attribution 共用“回答的问题 / 先看哪里 / 解释边界 / 查看数据与证据”协议。
+- Execution、Metrics、Fabric、Design Space、Attribution 的模型与设计记录共用“回答的问题 / 先看哪里 / 解释边界 / 查看数据与证据”协议；页面不显示并排解释卡，只在图下保留一句简要说明，专业数据与证据按需展开。
 - Metrics 增加请求 TTFT/TPOT/端到端比较，ps→µs 只作显示换算，完整表保留精确 ps；真实 0 与 missing 分开。
 - Fabric 增加通信域和请求两个 runtime/queue/congestion 构成图，只读取后端字段，不反推未报告贡献。
 - Design Space 只使用正式 objectives 与报告的 Pareto membership；双 objective 数据不足时明确降级，不重算 Pareto、

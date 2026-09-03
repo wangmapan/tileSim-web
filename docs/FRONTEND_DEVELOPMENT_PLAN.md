@@ -5,39 +5,40 @@
 **当前日期**：2026-09-02
 
 开始工作前先读仓库 `AGENTS.md` 和 `docs/AI_HANDOFF.md`。本文件只定义阶段目标和验收，不重复架构细节。
+稳定版候选的后续维护、复核和发布交接统一使用 `docs/NEXT_STABLE_MAINTENANCE_PROMPT.md`。
 
 ## 1. 当前状态
 
-| 阶段  | 状态            | 结果                                                                                          |
-| ----- | --------------- | --------------------------------------------------------------------------------------------- |
-| F0    | validated       | 工作树、后端 identity、样本、视觉和性能基线                                                   |
-| F1    | validated       | fixture、字段审计、Playwright、axe、视觉和 overflow 回归                                      |
-| F2    | validated       | TypeScript、compatibility schema、adapter、无损整数和 unknown-schema fallback                 |
-| F3    | validated       | versioned Bridge contract、generated client、artifact integrity、SSE、幂等和恢复              |
-| F4    | validated       | Router、Pinia、TanStack Query、feature 边界、模块拆分和依赖门禁                               |
-| F5A-D | validated       | 大型工件 Worker、虚拟浏览和 SHA-256 绑定 evidence pointer                                     |
-| F6A   | validated       | Week 7 S8 校准、S9 字段血缘/归因审计和确定性 Agent 编排                                       |
-| F6B   | validated       | Week 8 run-bound S1-S9 联动、真实服务验收和完整仓库门禁均已闭合                               |
-| F7    | validated       | 正式 Pareto、candidate artifact、executed S6 knobs 与 topology join 已闭合                    |
-| F8    | validated       | 正式 experiment descriptor、revision fail-closed、8 字段表单与 request Pointer 已闭合         |
-| F9A   | completed       | contract audit、评测规格与 36-case 机器可读 hard gate 已完成                                  |
-| F9B   | contract-closed | descriptor v2、DTO/runtime validator、adapter、状态与 UI 的源码闭环已完成                     |
-| F9C   | live-blocked    | descriptor v2 已部署；缺专用 Provider 配置，live model repetitions 为 0                       |
-| F10   | validated       | immutable snapshot、实进程回滚、5173、artifact identity 与 disposable frozen install 全部通过 |
+| 阶段  | 状态               | 结果                                                                                          |
+| ----- | ------------------ | --------------------------------------------------------------------------------------------- |
+| F0    | validated          | 工作树、后端 identity、样本、视觉和性能基线                                                   |
+| F1    | validated          | fixture、字段审计、Playwright、axe、视觉和 overflow 回归                                      |
+| F2    | validated          | TypeScript、compatibility schema、adapter、无损整数和 unknown-schema fallback                 |
+| F3    | validated          | versioned Bridge contract、generated client、artifact integrity、SSE、幂等和恢复              |
+| F4    | validated          | Router、Pinia、TanStack Query、feature 边界、模块拆分和依赖门禁                               |
+| F5A-D | validated          | 大型工件 Worker、虚拟浏览和 SHA-256 绑定 evidence pointer                                     |
+| F6A   | validated          | Week 7 S8 校准、S9 字段血缘/归因审计和确定性 Agent 编排                                       |
+| F6B   | validated          | Week 8 run-bound S1-S9 联动、真实服务验收和完整仓库门禁均已闭合                               |
+| F7    | validated          | 正式 Pareto、candidate artifact、executed S6 knobs 与 topology join 已闭合                    |
+| F8    | validated          | 正式 experiment descriptor、revision fail-closed、8 字段表单与 request Pointer 已闭合         |
+| F9A   | completed          | contract audit、评测规格与 36-case 机器可读 hard gate 已完成                                  |
+| F9B   | contract-closed    | descriptor v2、DTO/runtime validator、adapter、状态与 UI 的源码闭环已完成                     |
+| F9C   | acceptance-pending | descriptor v2 与专用 Provider probe 已就绪；live model repetitions 为 0                       |
+| F10   | validated          | immutable snapshot、实进程回滚、5173、artifact identity 与 disposable frozen install 全部通过 |
 
-F6B、F7 与 F8 已在 `D:\tileSim-week8` 的真实 Week 8 Bridge 上完成 live acceptance。当前源码基线为
-263/263 unit/component、78/78 Bridge、29/29 desktop fixture Playwright；上一部署版本保留 5/5 live Week 8/F7/F8/F9
+F6B、F7 与 F8 已在 `D:\tileSim-week8` 的真实 Week 8 Bridge 上完成 live acceptance。当前稳定版候选基线为
+265/265 unit/component、78/78 Bridge、29/29 desktop fixture Playwright；上一部署版本保留 5/5 live Week 8/F7/F8/F9
 Playwright 证据。F8
 已消费正式 `GET /api/experiment-schema`，以 `field_id` 为身份、`request_json_pointer` 为唯一序列化/错误映射，
 并完成 manifest/payload/header revision 三方失败关闭。F9B 已消费正式 evidence Agent runtime contract，完成
-revision/digest/idempotency/citation/stale/degradation 的失败关闭；当前 provider 正式返回 unavailable，因此只关闭前端
-contract adaptation，不声称 live Agent closure，也不以 mock success 绕过。F9C 源码已完成固定 endpoint Provider、
+revision/digest/idempotency/citation/stale/degradation 的失败关闭；当前 provider authenticated probe 正式返回 available，
+但尚未执行 live Agent acceptance，因此不声称 live closure，也不以 mock success 绕过。F9C 源码已完成固定 endpoint Provider、
 authenticated probe、只读 allow-list 投影、严格 output/citation/identity 校验和跨语言 canonical digest；Bridge 基线更新为
 78/78。descriptor v2 frontend fixture/API/UI consumer、manifest descriptor revision 绑定、结构化 policy adapter 以及两种
 正式 409 锁定状态均已闭合；正式 error envelope、schema-set header 与 HTTP/terminal 状态映射也由生成 validator 和 API
 失败关闭，adapter 不改变 canonical digest 或 uint64 无损路径。当前 5173 已发布 schema-set
-`sha256:be0c2274…`、descriptor revision `sha256:d68d4d18…` 与正式 Agent endpoint；无专用配置时 descriptor/UI
-按 `provider_unavailable` 失败关闭。source deployment acceptance 已完成，真实模型 acceptance 尚未进行。
+`sha256:92acce87…`、descriptor revision `sha256:5f78ed33…` 与正式 Agent endpoint；descriptor/UI 按 authenticated
+probe 结果报告 available。source deployment acceptance 已完成，真实模型 acceptance 尚未进行。
 详见 `docs/F8_EXPERIMENT_ORCHESTRATION_AUDIT.md`、`docs/F9_EVIDENCE_AGENT_CONTRACT_AUDIT.md`、
 `docs/F9_EVIDENCE_AGENT_EVALUATION_SPEC.md` 和 `docs/development/F7_FORMAL_CONTRACT_CLOSURE_2026-08-31.md`。
 
@@ -48,7 +49,7 @@ objective 候选图与 S0-S6 attribution 图；Design Space 不重算 Pareto，S
 
 发布机制闭合后的产品深化分为三个可并行工作流：Evidence Agent、可视化、页面帮助与逐步指引。三路任务的文件
 所有权、共享冲突规则和集成顺序见 `docs/PARALLEL_FRONTEND_WORKSTREAMS.md`；各自的阶段计划和可直接使用的提示词见
-三份 `docs/NEXT_*_DEVELOPMENT_PLAN.md`。它们是后续产品开发，不改变 F9 `live-blocked` 或 F10 `validated` 状态。
+三份 `docs/NEXT_*_DEVELOPMENT_PLAN.md`。它们是后续产品开发，不改变 F9 `acceptance-pending` 或 F10 `validated` 状态。
 
 ## 2. 全阶段约束
 
@@ -152,7 +153,7 @@ F5A 基线确认旧 JSON viewer 的主线程整体格式化和 `<pre>` 渲染会
   Pointer 显示 contract error，不按名称、数组下标或文本猜测。
 - **部署状态**：正式 F8 revision 已部署到 5173，并通过 live Week 8/F7/F8 Playwright。
 
-### F9：只读证据 Agent（descriptor v2 正式源码闭环；live acceptance blocked）
+### F9：只读证据 Agent（descriptor v2 正式源码闭环；live acceptance pending）
 
 - **目标**：只在稳定 evidence link 上解释报告并生成待确认草稿。
 - **已完成 F9A**：盘点结构化报告、run-bound evidence、manifest 和 Week 7 deterministic orchestration；定义
@@ -164,9 +165,9 @@ F5A 基线确认旧 JSON viewer 的主线程整体格式化和 `<pre>` 渲染会
 - **F9C source deployed**：Bridge 仅从 `TILESIM_EVIDENCE_AGENT_*` 读取固定 Provider 配置，不使用通用 `OPENAI_*`；
   authenticated probe 必须精确匹配 protocol/provider/model/revision。固定 system policy、无工具只读 record 投影、
   untrusted question 隔离、严格 Provider response/citation/identity 校验和 502/503/504 终态已完成自动测试。
-- **F9C live blocker**：当前 5173 已部署 F9C，但本机没有完整有效的专用 Provider 配置。页面继续保持 unavailable、
-  禁用提交且不显示模拟 claims；成功 authenticated probe 后再做 live success/refusal/timeout、至少五次安全/
-  拒答重复模型评测和人工 entailment review。
+- **F9C live pending**：当前 5173 已部署 F9C，专用 Provider 的 authenticated probe 已精确匹配并返回 available；
+  尚未执行 live success/refusal/timeout、至少五次安全/拒答重复模型评测和人工 entailment review。完成这些门禁前
+  live model repetitions 保持 0，F9 不得标记 validated。
 - **恢复 contract 已关闭**：descriptor identity 已升级到 `tilesim.bridge.evidence_agent_descriptor.v2`，并以结构化
   `/execution/retry`、`/execution/terminal_recovery`、`/persistence/mode` 和 `payload_retention` 表达分支。进程内同
   key/同 canonical payload 精确 replay；claim-free Bridge terminal 可从 redacted metadata 跨重启恢复；claims-bearing
@@ -177,7 +178,7 @@ F5A 基线确认旧 JSON viewer 的主线程整体格式化和 `<pre>` 渲染会
   protocol/provider/model/revision；随后使用真实 endpoint 完成 success、refusal、timeout，安全/
   拒答边界每个配置至少重复 5 次，并由两名 reviewer 独立完成 citation entailment、边界语言、架构和建议纪律审查。
   任一 hard-gate 失败、人工分歧未裁决、live repetitions 少于要求或缺失 build/schema/model/prompt/policy identity 时，
-  F9 保持 `live-blocked`，不得标记 validated。
+  F9 保持未验证，状态应为 `acceptance-pending` 或具体失败门禁对应的 blocked，不得标记 validated。
 - **验收**：所有数值结论包含 run、artifact、pointer 和 provenance；缺失信息不补值；无 shell、任意文件或任意 HTTP。
 - **导出接入**：读取结构化报告内嵌 JSON；以独立结果填充根因和建议，不修改确定性事实区。
 - **禁止绕过**：不调用 provider/未登记 endpoint，不解析 HTML 或 opaque link，不按时间、数组位置、数值、名称或文本
@@ -214,8 +215,8 @@ F5A 基线确认旧 JSON viewer 的主线程整体格式化和 `<pre>` 渲染会
 - **结构化报告导出：closed**。浏览器路径使用专用 Worker 构建报告并渲染 HTML，兼容同步 API仅供测试和 Worker
   不可用降级；Worker contract、同步等价性、build 与 desktop export 均进入回归。
 - **ECharts chunk：closed for current scope**。继续使用 `echarts/core`、Bar/Scatter、必要组件和 SVG renderer，不增加
-  全量 import；构建将原 524.56 KB 单块拆为 339.15 KB + 181.86 KB，gzip 合计约 175.71 KB，图表语义不变。
-- **主应用共享 chunk：open, non-blocking**。当前生产构建仍有约 843.69 KB（gzip 190.07 KB）的共享入口 chunk，
+  全量 import；ECharts 6.1.0 安全升级后的构建为 346.65 KB + 182.65 KB，gzip 合计约 180.64 KB，图表语义不变。
+- **主应用共享 chunk：open, non-blocking**。当前生产构建仍有约 841.80 KB（gzip 189.74 KB）的共享入口 chunk，
   需要先用 bundle analyzer 确认 Vue、公共 feature 与 icon 的真实归属再拆分；不得为消除 warning 重复打包或破坏路由缓存。
 - **dashboard compatibility controller：incrementally closed**。facade 从 run/history/comparison/restore 逻辑中解耦；
   后续只在新 feature 进入时继续迁移，不做一次性删除 facade。
@@ -226,8 +227,8 @@ F5A 基线确认旧 JSON viewer 的主线程整体格式化和 `<pre>` 渲染会
 
 - **Evidence Agent**：继续按纯展示组件、状态转换测试、普通语言任务卡和 atomic claim 阅读路径深化；多轮、跨 run、
   持久历史或自动执行建议必须先发布新 Bridge contract。
-- **可视化**：建立“回答什么 / 先看哪里 / 解释边界 / 数据与证据”协议，逐页深化 Metrics、Execution、Fabric、
-  Design Space 和 Attribution；不得前端重算指标、Pareto 或因果。
+- **可视化**：模型与设计记录保持“回答什么 / 先看哪里 / 解释边界 / 数据与证据”协议；页面只在图下显示一句简要说明，
+  专业字段与证据按需展开。逐页深化 Metrics、Execution、Fabric、Design Space 和 Attribution；不得前端重算指标、Pareto 或因果。
 - **页面帮助**：在现有 typed guide/catalog/纯展示组件脚手架上闭合 host、稳定 anchor、3-5 步流程、术语、空状态 CTA
   与双语可访问性；帮助状态只留内存。
 - 三路在独立 worktree/分支并行；新英文文案分别进入 `src/i18n/workstreams/`，Playwright PNG 由最终集成任务统一更新。

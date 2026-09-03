@@ -5,12 +5,14 @@
 
 ## 1. 统一阅读协议
 
-每张图先回答四件事，并在同一 panel 内闭环：
+每张图仍需在模型与设计记录中回答四件事：
 
 1. **回答的问题**：限定图表能回答的一个问题。
 2. **先看哪里**：告诉普通用户先定位哪个条目或关系。
 3. **解释边界**：明确不能从图中推出的结论、子系统和证据等级。
 4. **查看数据与证据**：展示完整等价字段表、字段模式、`derivation`、单位和精确 EvidenceRef 入口。
+
+页面不再把前三项渲染成并排解释卡。图表下方只显示一句简要说明，专业边界、字段来源和证据按需在“查看数据与证据”中展开，避免说明层抢占图形阅读空间。
 
 图点选只选择已有字段行，不生成新 identity。入口继续由 `ArtifactEvidenceLink` 使用当前 workspace 的
 `{runId, artifactId, sha256, pointer}` 解析；run、Schema、artifact manifest 或 SHA 不匹配时失败关闭。图中限制为前 12 项时
@@ -74,11 +76,12 @@ execution-inspector/components/             图表说明、字段表、记录表
 Execution/Fabric/Metrics/DesignSpace/Attribution views  页面编排
 ```
 
-ECharts 采用 core tree-shaking、SVG renderer 和异步组件。2026-09-02 深化前后，`chart-runtime` 均为
-`339.15 kB / 114.22 kB gzip`，`chart-renderer` 均为 `181.86 kB / 61.49 kB gzip`；`ExecutionChart` 包装 chunk 从
-`4.13 kB / 1.94 kB gzip` 变为 `4.50 kB / 2.08 kB gzip`。新增跨页纯展示模型为 `9.29 kB / 4.09 kB gzip`，共享
-panel 为 `8.11 kB / 3.13 kB gzip`。核心图表运行时没有增加图型或进入同步入口，不能改为全量
-`import * as echarts`。
+ECharts 采用 core tree-shaking、SVG renderer 和异步组件。2026-09-02 深化完成时，`chart-runtime` 为
+`339.15 kB / 114.22 kB gzip`，`chart-renderer` 为 `181.86 kB / 61.49 kB gzip`。稳定版体检将 ECharts 6.0.0
+升级到修复 `GHSA-fgmj-fm8m-jvvx` 的 6.1.0 后，二者分别为 `346.65 kB / 118.84 kB gzip` 与
+`182.65 kB / 61.80 kB gzip`；`ExecutionChart` 包装 chunk 保持约 `4.50 kB / 2.07 kB gzip`。新增跨页纯展示模型为
+`9.29 kB / 4.09 kB gzip`，共享 panel 为 `8.11 kB / 3.14 kB gzip`。核心图表运行时没有增加图型或进入同步入口，
+不能改为全量 `import * as echarts`。
 
 ECharts 自动 aria 已关闭，避免其内部对无损 uint64 生成 `NaN` 描述；外层本地化 `role=img` 与相邻字段表提供等价的可访问名称和完整数据。`prefers-reduced-motion` 同时关闭图表和 CSS 动效。
 

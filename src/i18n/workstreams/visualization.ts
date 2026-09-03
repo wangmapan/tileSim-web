@@ -99,10 +99,8 @@ export const visualizationEnglishCatalog: Readonly<Record<string, string>> = {
   报告状态: "Reported status",
   报告值: "Reported value",
   数值: "Value",
-  上一步: "Previous step",
   下一步: "Next step",
   逐步查看执行路线: "Step through the execution path",
-  "第 {current} / {total} 步": "Step {current} of {total}",
   通信时间构成图: "Communication-time composition charts",
   请求延迟比较: "Request latency comparison",
   "并列比较每个请求的 TTFT、TPOT 与端到端延迟；图中换算为 µs，字段表保留精确 ps。":

@@ -28,6 +28,8 @@ describe("execution visualization panel", () => {
       },
     });
     expect(wrapper.find(".execution-chart").exists()).toBe(false);
+    expect(wrapper.find(".visualization-reading-protocol").exists()).toBe(false);
+    expect(wrapper.get(".visualization-caption").text()).toBe("保留字段表。");
     expect(wrapper.text()).toContain("JSON 中没有对应字段");
   });
 
@@ -116,6 +118,8 @@ describe("execution visualization panel", () => {
     });
     await flushPromises();
 
+    expect(wrapper.find(".visualization-reading-protocol").exists()).toBe(false);
+    expect(wrapper.get(".visualization-caption").text()).toBe("直接显示报告值。");
     expect(wrapper.findAll(".visualization-table-scroll tbody tr")).toHaveLength(2);
     expect(wrapper.text()).toContain("end_to_end_latency_ps: 0 ps");
     wrapper.findComponent({ name: "AsyncComponentWrapper" }).vm.$emit("rowSelected", 0);

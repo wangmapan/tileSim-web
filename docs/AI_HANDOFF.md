@@ -1,25 +1,27 @@
 # TileSim Web AI Handoff
 
 **事实日期**：2026-09-02
-**当前阶段**：F6B/F7/F8/F10 validated；F9 descriptor v2 已部署，真实 Provider acceptance 被专用配置阻断
+**当前阶段**：F6B/F7/F8/F10 validated；前端稳定版候选体检完成；F9 descriptor v2 与 authenticated Provider probe 已就绪，真实 Provider acceptance 尚未执行
 
-**下一阶段**：产品深化分为 Evidence Agent、可视化、页面帮助与逐步指引三个独立 worktree 并行任务；F9 live closure
-仍需完整 TileSim 专用 Provider 配置、authenticated probe、live success/refusal/timeout、重复模型评测与双人 citation
-entailment review，不得用 fake Provider 关闭
+**下一阶段**：稳定版候选提交/部署交接；后续维护 Agent 使用 `docs/NEXT_STABLE_MAINTENANCE_PROMPT.md` 接手。
+Evidence Agent、可视化、页面帮助与逐步指引可继续使用独立 worktree 深化。
+F9 live closure 仍需 live success/refusal/timeout、重复模型评测与双人 citation entailment review，不得用 fake Provider 关闭
 **产品范围**：只维护电脑网页端
 
 ## 1. 当前事实卡
 
 - 前端仓库：`D:\tileSim-web`
 - 后端架构只读仓库：`D:\tileSim`
-- 当前 5173 来源：`D:\tileSim` + TileSim Web immutable release snapshot；TileSim branch `main`，revision `4a536cc081abb20567c19ab9e94e6139f5008333`
-- 当前源码 schema-set revision：`sha256:be0c2274a37b765de93ced0c2720d36da9e8db10977b1e688da8fd7e91882f4d`
-- 当前 5173 schema-set revision 为 `sha256:be0c2274a37b765de93ced0c2720d36da9e8db10977b1e688da8fd7e91882f4d`；
+- 当前 5173 来源：`D:\tileSim-week8` + TileSim Web immutable release snapshot；TileSim branch `codex/week8-scale-system-acceptance`，revision `4a536cc081abb20567c19ab9e94e6139f5008333`
+- 当前源码 schema-set revision：`sha256:92acce87f4f611893fafb2bf81dd1fa4fac509316ea2b5215a60f1995688871e`
+- 当前 5173 schema-set revision 为 `sha256:92acce87f4f611893fafb2bf81dd1fa4fac509316ea2b5215a60f1995688871e`；
   `/api/agent/evidence-capabilities` 正式返回 descriptor v2。
 - 当前 5173 部署身份：`versions_match=true`、`state_digests_match=true`、`execution_ready=true`，并发布
   `tilesim.web.release_snapshot.v1` 的 Web source/build/release/Bridge/static identity。
-- 当前源码基线：58/58 TileSim CTest、263/263 frontend、78/78 Bridge、29/29 desktop fixture Playwright；上一部署版本
+- 当前稳定版候选基线：61/61 TileSim CTest、265/265 frontend、78/78 Bridge、29/29 desktop fixture Playwright；上一部署版本
   保留 5/5 live Week 8/F7/F8/F9 deployment Playwright 证据
+- 2026-09-02 稳定版候选在隔离端口 58173 重跑 F10 release rehearsal：真实 run 完成、坏 CLI 失败关闭、manifest/immutable
+  snapshot/同一 completed run 成功恢复；当前 5173 全程保持 healthy，未被替换。
 - 发布分支已推送；正常交接时工作树应保持 clean。若后续出现用户改动，不得 reset、clean、覆盖或擅自提交。
 - `127.0.0.1:5173` 是用户服务；除非用户明确要求部署，不停止、不重启、不替换。
 - F7 TypeScript 生成物、正式页面与 5173 schema revision 已同步。live acceptance run
@@ -36,7 +38,8 @@ entailment review，不得用 fake Provider 关闭
   run/artifact/schema/SHA/Pointer/stable subject，并保持 provenance/fidelity/架构边界。正式 `502/503/504` 终态按
   `failed/provider_unavailable/timeout` 显示；`409 terminal_result_not_retained` 与 `409 idempotency_payload_mismatch`
   都保留原 key、禁止提交，只有用户显式放弃后才能开始新分析。正式 provider 当前未配置，UI 显示
-  `provider_unavailable`、禁用提交、无 mock claims；结构化报告仍保持 `agent_analysis=not_generated`。
+  `provider_unavailable`、禁用提交、无 mock claims；authenticated probe available 时才启用提交。结构化报告仍保持
+  `agent_analysis=not_generated`，直到真实响应通过完整校验。
 - F9 submission lease 现在跨完成态保留：同 canonical payload 继续使用原 Idempotency-Key，run、backend、schema
   revision 或 input snapshot digest 任一变化均立即隐藏 claims 并标记 stale；响应返回前等待最新四维 binding，只有
   显式放弃当前分析才清除 lease 并允许生成新 key。完成 key 创建后的普通 contract/transport failure 也不自动释放
@@ -47,14 +50,15 @@ entailment review，不得用 fake Provider 关闭
   才返回 `available/configured=true`。Bridge 对 allow-list record 做只读投影，用固定 prompt/policy v2 隔离 untrusted
   question，并对 Provider response 的 request/run/digest/provider/revision/claim/citation/provenance/fidelity/subsystem scope
   再校验；timeout/invalid output/invalid citation/identity mismatch 均失败关闭。源码 descriptor identity/revision 为
-  `tilesim.bridge.evidence_agent_descriptor.v2` / `sha256:d68d4d18046e99452e56ac442ac9e4382e3cbcb593cf2bf228fbbd06a7c6f851`。
-- F9C source deployment 已通过：5173 的 manifest/header/payload 一致发布 descriptor v2、schema set `sha256:be0c2274…`
-  和正式 Agent endpoint，UI 在真实服务上按 `provider_unavailable` 失败关闭。live model repetitions 仍为 0，因为 Windows
-  与 WSL 均缺少全部必需 `TILESIM_EVIDENCE_AGENT_*` 配置；fake Provider 测试只证明 adapter/contract。descriptor v2 已版本化关闭 retry/recovery/persistence 矛盾：进程内精确 replay；重启后
+  `tilesim.bridge.evidence_agent_descriptor.v2` / `sha256:5f78ed33e20c131f672af53368c5ca950f41d63fd2e8f5301757d1f42debe357`。
+- F9C source deployment 已通过：5173 的 manifest/header/payload 一致发布 descriptor v2、schema set `sha256:92acce87…`
+  和正式 Agent endpoint；authenticated probe 已精确匹配并返回 available。live model repetitions 仍为 0，因为尚未执行
+  live success/refusal/timeout、重复模型 hard gate 与人工 entailment review；fake Provider 测试只证明 adapter/contract。
+  descriptor v2 已版本化关闭 retry/recovery/persistence 矛盾：进程内精确 replay；重启后
   claim-free Bridge terminal 从 redacted metadata 精确恢复；claims-bearing 或 claim-free Provider terminal 返回正式
   `409 terminal_result_not_retained`；same key/different payload 返回 `409 idempotency_payload_mismatch`；所有不可恢复
   分支都禁止重调 Provider。request/response/citation/snapshot identity 保持 v1。前端 v2 DTO/runtime validator 已重生。
-- 当前源码验证：263/263 frontend、78/78 Bridge、36/36 Schema inventory、2/2 Python/Node canonical digest vectors、
+- 当前稳定版候选验证：265/265 frontend、78/78 Bridge、36/36 Schema inventory、2/2 Python/Node canonical digest vectors、
   29/29 desktop fixture Playwright、Python `py_compile`、`pnpm contracts:check`、`deps:check`、`typecheck`、lint、
   repo-wide `format:check`、build 和 `git diff --check` 通过。`bridge-contracts.ts` /
   `evidence-agent-validators.js` 已由 `pnpm contracts:generate` 重生；fixture/API/UI 已消费 descriptor v2，API 同时绑定
@@ -168,6 +172,7 @@ bridge/infra/               Git、部署与 runtime identity
 - F9 contract/evaluation：`docs/F9_EVIDENCE_AGENT_CONTRACT_AUDIT.md`、
   `docs/F9_EVIDENCE_AGENT_EVALUATION_SPEC.md`、`tests/fixtures/f9-agent-evaluation-cases.json`
 - 三路前端深化：`docs/PARALLEL_FRONTEND_WORKSTREAMS.md` 与三份 `docs/NEXT_*_DEVELOPMENT_PLAN.md`
+- 稳定版维护交接提示词：`docs/NEXT_STABLE_MAINTENANCE_PROMPT.md`
 - 结构化导出：`src/features/structured-report/`
 - Week 7：`src/features/week7-evidence/`、`src/views/Week7EvidenceView.vue`、`bridge/services/week7.py`
 - run-bound S9 audit：`src/views/AttributionView.vue`、`src/features/structured-report/model.ts`
@@ -247,14 +252,14 @@ topology domain → metrics domain 导航；浏览器验收同时覆盖 SHA/Poin
 ## 7. 保留债务
 
 - 结构化报告已由 Worker 完整生成 HTML；同步路径只作为 Worker 不可用时的完整降级，不得靠截断记录规避。
-- ECharts 已拆为约 339 kB runtime 与 182 kB renderer；新增图型前复查适用性和体积，不改成全量 import。
+- ECharts 已升级到 6.1.0 关闭 `GHSA-fgmj-fm8m-jvvx`，并保持约 347 kB runtime 与 183 kB renderer 的拆分；新增图型前复查适用性和体积，不改成全量 import。
 - `src/store/dashboard.ts` 与 `bridge/server.py` 保留兼容 facade/wrapper；只做渐进迁移。
 - 当前不存在前端依赖环；剩余耦合主要集中在 `EvidenceAgentPanel.vue`、`ExecutionView.vue`、
   `DesignSpaceView.vue`、execution visualization model 与分域过宽的 CSS。只按纯展示/纯配置边界小批次拆分，不以行数
   驱动重写 store、contract validation 或 dashboard facade。
 - 后端正式 canonical report schema、真实 calibration assets 和 held-out validation 尚未由前端工作关闭。
-- F9 provider 当前正式 unavailable；在 provider 可用并通过 live success/refusal、重复模型 hard gate 与人工 entailment
-  review 前，不得把 fixture available-draft 或 contract adaptation 描述为 live validated。
+- F9 Provider authenticated probe 当前正式 available；在通过 live success/refusal/timeout、重复模型 hard gate 与人工
+  entailment review 前，不得把 capability available、fixture draft 或 contract adaptation 描述为 live validated。
 - F9 descriptor v2 已关闭 terminal persistence 契约矛盾：metadata-only retention 明确排除 claims/raw response，
   `409 terminal_result_not_retained` 是正式的 claims-bearing 跨进程恢复结果，不得在前端绕过或自动换 key。
 
@@ -270,11 +275,12 @@ F0-F6A 的阶段过程、性能基线和 review closure 已移到 `docs/developm
 
 完整门禁以 `AGENTS.md` 为准。修改 Bridge contract 后执行 `pnpm contracts:generate` 并提交生成结果；普通任务只运行 `pnpm contracts:check`。
 
-当前 5173 已从 `D:\tileSim` 与 immutable TileSim Web release snapshot 部署 schema revision `sha256:be0c2274…`，并提供
-descriptor v2 Agent endpoint。后续重新部署仍必须获得授权并核对 health、manifest、release 和 descriptor revision：
+当前 5173 已从 `D:\tileSim-week8` 与 immutable TileSim Web release snapshot 部署 schema revision `sha256:92acce87…`，
+Web source revision 为 `d538aceb85095b27d17b4abe9ebb5946157bd381`，并提供 descriptor v2 Agent endpoint。当前稳定版候选的
+重复组件/i18n/ECharts 修复尚未重新部署；后续重新部署仍必须获得授权并核对 health、manifest、release 和 descriptor revision：
 
 ```powershell
-.\scripts\deploy-local-backend.ps1 -SourceRoot D:\tileSim
+.\scripts\deploy-local-backend.ps1 -SourceRoot D:\tileSim-week8
 ```
 
 `scripts/update-backend.ps1` 会切换到独立 `D:\tileSim-backend` 的干净 `origin/main` 模式，不能当作无风险的日常检查命令。详细模式见 `README.md`。
