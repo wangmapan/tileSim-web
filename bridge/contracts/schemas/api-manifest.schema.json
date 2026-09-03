@@ -44,6 +44,7 @@
         "capability_endpoint",
         "analysis_endpoint",
         "descriptor_schema_identity",
+        "descriptor_revision",
         "request_schema_identity",
         "response_schema_identity",
         "citation_schema_identity",
@@ -55,7 +56,10 @@
       "properties": {
         "capability_endpoint": { "const": "GET /api/agent/evidence-capabilities" },
         "analysis_endpoint": { "const": "POST /api/runs/{run_id}/agent/evidence-analyses" },
-        "descriptor_schema_identity": { "const": "tilesim.bridge.evidence_agent_descriptor.v1" },
+        "descriptor_schema_identity": { "const": "tilesim.bridge.evidence_agent_descriptor.v2" },
+        "descriptor_revision": {
+          "const": "sha256:5f78ed33e20c131f672af53368c5ca950f41d63fd2e8f5301757d1f42debe357"
+        },
         "request_schema_identity": { "const": "tilesim.bridge.evidence_agent_request.v1" },
         "response_schema_identity": { "const": "tilesim.bridge.evidence_agent_response.v1" },
         "citation_schema_identity": { "const": "tilesim.bridge.evidence_agent_citation.v1" },

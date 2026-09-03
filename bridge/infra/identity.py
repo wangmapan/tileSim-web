@@ -143,7 +143,7 @@ def backend_identity(tilesim_root: Path, tilesim_cli: Path, manifest_path: Path)
         and state_digests_match
     )
     branch = git_value(tilesim_root, "branch", "--show-current")
-    return {
+    result = {
         "tilesim_root": str(tilesim_root),
         "tilesim_cli": str(tilesim_cli),
         "backend_revision": source_revision,
@@ -159,6 +159,19 @@ def backend_identity(tilesim_root: Path, tilesim_cli: Path, manifest_path: Path)
         "deployed_at": manifest.get("deployed_at", "unknown"),
         "deployment_manifest": str(manifest_path),
     }
+    for field in (
+        "web_source_revision",
+        "web_source_state_digest",
+        "web_build_digest",
+        "web_release_identity",
+        "web_release_digest",
+        "web_bridge_digest",
+        "web_static_digest",
+        "schema_set_revision",
+    ):
+        if manifest.get(field):
+            result[field] = manifest[field]
+    return result
 
 
 def runtime_capabilities(tilesim_cli: Path) -> dict:

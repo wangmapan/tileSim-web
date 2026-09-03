@@ -213,6 +213,7 @@ const f9SchemaNames = [
   "evidence-agent-descriptor.schema.json",
   "evidence-agent-request.schema.json",
   "evidence-agent-response.schema.json",
+  "error.schema.json",
 ];
 const f9Schemas = await Promise.all(
   f9SchemaNames.map(async (name) => JSON.parse(await readFile(resolve(schemaDirectory, name), "utf8"))),
@@ -223,6 +224,7 @@ const evidenceAgentValidatorIds = {
   evidenceAgentDescriptor: f9Schemas[2].$id,
   evidenceAgentResponse: f9Schemas[4].$id,
   evidenceAgentCitation: f9Schemas[1].$id,
+  evidenceAgentError: f9Schemas[5].$id,
 };
 for (const schemaId of Object.values(evidenceAgentValidatorIds)) {
   if (!evidenceAgentAjv.getSchema(schemaId)) throw new Error(`Unable to compile F9 schema: ${schemaId}`);
@@ -236,6 +238,10 @@ const nextEvidenceAgentValidators = await format(`${evidenceAgentValidatorBanner
   ...prettierConfig,
   filepath: evidenceAgentValidatorsOutputPath,
 });
+
+function hasGeneratedDrift(current, generated) {
+  return current.replaceAll("\r\n", "\n") !== generated.replaceAll("\r\n", "\n");
+}
 
 if (process.argv.includes("--check")) {
   let currentTypes = "";
@@ -253,11 +259,11 @@ if (process.argv.includes("--check")) {
     // Missing output is reported as drift below.
   }
   if (
-    currentTypes !== nextTypes ||
-    currentClient !== nextClient ||
-    currentCreateRunSchema !== nextCreateRunSchema ||
-    currentExperimentValidators !== nextExperimentValidators ||
-    currentEvidenceAgentValidators !== nextEvidenceAgentValidators
+    hasGeneratedDrift(currentTypes, nextTypes) ||
+    hasGeneratedDrift(currentClient, nextClient) ||
+    hasGeneratedDrift(currentCreateRunSchema, nextCreateRunSchema) ||
+    hasGeneratedDrift(currentExperimentValidators, nextExperimentValidators) ||
+    hasGeneratedDrift(currentEvidenceAgentValidators, nextEvidenceAgentValidators)
   ) {
     process.stderr.write("Generated Bridge client is stale. Run pnpm contracts:generate.\n");
     process.exitCode = 1;

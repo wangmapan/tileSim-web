@@ -16,6 +16,8 @@
     "deps:check": "node scripts/check-frontend-dependencies.mjs",
     "perf:artifact-baseline": "node --expose-gc scripts/measure-artifact-baseline.mjs",
     "perf:artifact-worker": "vite-node scripts/measure-artifact-worker-baseline.ts",
+    "release:identity": "node scripts/release-identity.mjs",
+    "release:rehearse": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/rehearse-release.ps1",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
@@ -23,7 +25,7 @@
   "dependencies": {
     "@lucide/vue": "^1.31.0",
     "@tanstack/vue-query": "5.87.1",
-    "echarts": "6.0.0",
+    "echarts": "6.1.0",
     "lossless-json": "^4.3.1",
     "pinia": "3.0.3",
     "vue": "^3.5.13",

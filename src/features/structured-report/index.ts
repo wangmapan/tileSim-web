@@ -1,4 +1,8 @@
-export { createStructuredReportExport, downloadStructuredPerformanceReport } from "./download";
+export {
+  createStructuredReportExport,
+  createStructuredReportExportAsync,
+  downloadStructuredPerformanceReport,
+} from "./download";
 export {
   buildStructuredPerformanceReport,
   structuredReportSchema,

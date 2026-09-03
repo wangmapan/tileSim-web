@@ -4,7 +4,6 @@ import {
   ArrowRight,
   Braces,
   ChevronDown,
-  CircleDot,
   Download,
   GitBranch,
   Layers3,
@@ -19,7 +18,10 @@ import StatusPill from "../components/StatusPill.vue";
 import {
   attributionSource,
   buildExecutionResult,
-  causeSource,
+  executionLayerDetail,
+  executionLayerHeadline,
+  executionLayerName,
+  executionMetricLabel,
   executionStageSource,
   ExecutionVisualizationPanel,
   LayerRecordTable,
@@ -32,7 +34,6 @@ import { isLosslessInteger, losslessIntegerToBigInt } from "../contracts/lossles
 import type { LayerId } from "../features/execution-inspector";
 import { useI18n } from "../i18n";
 import ArtifactEvidenceLink from "../components/ArtifactEvidenceLink.vue";
-import { RunBoundEvidencePanel } from "../features/run-bound-evidence";
 import { useEvidenceSelectionStore } from "../stores/evidence-selection";
 
 type ExecutionResult = ReturnType<typeof buildExecutionResult>;
@@ -48,6 +49,13 @@ const result = computed(() => buildExecutionResult(state.bundle, state.inputs));
 const layerById = computed(() => new Map(result.value.layers.map((layer) => [layer.id, layer])));
 const selected = computed(() => layerById.value.get(selectedId.value) || result.value.layers[0]);
 const hasResult = computed(() => Boolean(state.bundle.run || state.bundle.metrics || state.bundle.validation));
+const flowSteps: LayerId[][] = [["S0"], ["S1"], ["S2"], ["S3", "S4", "S5"], ["S6"]];
+const currentFlowStep = computed(() => flowSteps.findIndex((step) => step.includes(selectedId.value)));
+
+function moveFlowStep(offset: -1 | 1) {
+  const target = flowSteps[currentFlowStep.value + offset];
+  if (target) selectedId.value = target[0];
+}
 
 const evidenceLabels: Record<string, string> = {
   reported: "有报告记录",
@@ -57,13 +65,15 @@ const evidenceLabels: Record<string, string> = {
   missing: "没有明细",
 };
 
-function selectEvidenceRequest(requestId: string) {
-  if (state.runId) evidenceSelection.select(state.runId, requestId);
-}
-
 function displayHeadline(layer: ExecutionLayer | undefined) {
   if (!layer?.headline) return "—";
-  return typeof layer.headline.value === "number" ? formatNumber(layer.headline.value, 0) : layer.headline.value;
+  return typeof layer.headline.value === "number"
+    ? formatNumber(layer.headline.value, 0)
+    : String(layer.headline.value);
+}
+
+function friendlyHeadline(layer: ExecutionLayer | undefined) {
+  return executionLayerHeadline(layer, displayHeadline(layer));
 }
 
 function durationUs(stage: ExecutionStage | undefined) {
@@ -100,7 +110,7 @@ async function exportStructuredReport() {
   exportingReport.value = true;
   try {
     const { downloadStructuredPerformanceReport } = await import("../features/structured-report");
-    const filename = downloadStructuredPerformanceReport({
+    const filename = await downloadStructuredPerformanceReport({
       bundle: state.bundle,
       inputs: state.inputs,
       runId: state.runId,
@@ -121,26 +131,32 @@ async function exportStructuredReport() {
 </script>
 
 <template>
-  <EmptyState v-if="!hasResult" title="没有可解析的分层运行结果" />
+  <EmptyState
+    v-if="!hasResult"
+    title="还没有执行过程可看"
+    description="请先打开一次已完成的实验，或运行一个新实验。"
+    action-label="新建实验"
+    action-to="/experiment"
+  />
   <div v-else class="view-stack execution-view">
     <section class="panel execution-map-panel">
       <header class="panel-header panel-header--row">
         <div>
-          <p class="section-kicker">CURRENT BACKEND EXECUTION PATH</p>
-          <h2>{{ t("S0–S6 分层结果") }}</h2>
-          <p>{{ t("点击子系统查看真实报告中的摘要和记录；S3、S4、S5 是并列资源语义，不是线性流水线。") }}</p>
+          <p class="section-kicker">{{ t("从左到右看请求") }}</p>
+          <h2>{{ t("请求执行路线") }}</h2>
+          <p>{{ t("点击任一环节，查看它在本次实验中做了什么。内存、设备计算和多设备协同是并列关系。") }}</p>
         </div>
         <div class="execution-map-actions">
           <div class="panel-count">
             <GitBranch :size="16" />{{ state.bundle.run?.summary?.range_label || t("边界未知") }}
           </div>
           <button class="button button--secondary" :disabled="exportingReport" @click="exportStructuredReport">
-            <Download :size="16" />{{ exportingReport ? t("生成中…") : t("导出结构化报告") }}
+            <Download :size="16" />{{ exportingReport ? t("生成中…") : t("导出完整技术报告") }}
           </button>
         </div>
       </header>
 
-      <div class="execution-flow" :aria-label="t('TileSim 分层执行链路')">
+      <div class="execution-flow" :aria-label="t('TileSim 分层执行链路')" data-help-anchor="execution-flow">
         <button
           v-for="id in ['S0', 'S1', 'S2']"
           :key="id"
@@ -151,15 +167,15 @@ async function exportStructuredReport() {
           @click="selectedId = id"
         >
           <span>{{ id }}</span>
-          <strong>{{ layerById.get(id)?.name }}</strong>
-          <small>{{ displayHeadline(layerById.get(id)) }} · {{ layerById.get(id)?.headline.label }}</small>
+          <strong>{{ executionLayerName(id) }}</strong>
+          <small>{{ friendlyHeadline(layerById.get(id)) }}</small>
         </button>
         <ArrowRight class="flow-arrow flow-arrow--one" :size="18" />
         <ArrowRight class="flow-arrow flow-arrow--two" :size="18" />
         <ArrowRight class="flow-arrow flow-arrow--three" :size="18" />
 
         <div class="resource-peer-group">
-          <small>RESOURCE SEMANTICS · PEERS</small>
+          <small>{{ t("三个并列资源环节") }}</small>
           <button
             v-for="id in ['S3', 'S4', 'S5']"
             :key="id"
@@ -170,8 +186,8 @@ async function exportStructuredReport() {
             @click="selectedId = id"
           >
             <span>{{ id }}</span>
-            <strong>{{ layerById.get(id)?.name }}</strong>
-            <small>{{ displayHeadline(layerById.get(id)) }} · {{ layerById.get(id)?.headline.label }}</small>
+            <strong>{{ executionLayerName(id) }}</strong>
+            <small>{{ friendlyHeadline(layerById.get(id)) }}</small>
           </button>
         </div>
 
@@ -183,27 +199,45 @@ async function exportStructuredReport() {
           @click="selectedId = 'S6'"
         >
           <span>S6</span>
-          <strong>{{ layerById.get("S6")?.name }}</strong>
-          <small>{{ displayHeadline(layerById.get("S6")) }} · {{ layerById.get("S6")?.headline.label }}</small>
+          <strong>{{ executionLayerName("S6") }}</strong>
+          <small>{{ friendlyHeadline(layerById.get("S6")) }}</small>
         </button>
       </div>
-      <div class="execution-current-selection" aria-live="polite">
+      <div class="execution-current-selection" aria-live="polite" data-help-anchor="execution-selection">
         <span>{{ selected.id }}</span>
         <div>
-          <small>{{ t("当前查看的子系统") }}</small>
-          <strong>{{ selected.name }} · {{ selected.title }}</strong>
+          <small>{{ t("当前查看的环节") }}</small>
+          <strong>{{ executionLayerName(selected.id) }} · {{ selected.id }}</strong>
         </div>
-        <small>{{ t("对应详情已显示在下方") }}</small>
+        <div class="execution-step-actions" :aria-label="t('逐步查看执行路线')">
+          <button
+            type="button"
+            class="button button--secondary"
+            :disabled="currentFlowStep <= 0"
+            @click="moveFlowStep(-1)"
+          >
+            {{ t("上一步") }}
+          </button>
+          <span>{{ t("第 {current} / {total} 步", { current: currentFlowStep + 1, total: flowSteps.length }) }}</span>
+          <button
+            type="button"
+            class="button button--secondary"
+            :disabled="currentFlowStep >= flowSteps.length - 1"
+            @click="moveFlowStep(1)"
+          >
+            {{ t("下一步") }}
+          </button>
+        </div>
       </div>
     </section>
 
     <section class="execution-detail-layout">
-      <article id="execution-layer-detail" class="panel layer-detail-panel">
+      <article id="execution-layer-detail" class="panel layer-detail-panel" data-help-anchor="execution-detail">
         <header class="layer-detail-header">
           <div class="layer-code">{{ selected.id }}</div>
           <div>
-            <small>{{ selected.name }}</small>
-            <h2>{{ selected.title }}</h2>
+            <small>{{ selected.id }} · {{ t(selected.title) }}</small>
+            <h2>{{ executionLayerName(selected.id) }}</h2>
             <p>{{ selected.role }}</p>
           </div>
           <div class="layer-detail-status">
@@ -212,11 +246,11 @@ async function exportStructuredReport() {
           </div>
         </header>
 
-        <p class="layer-detail-copy">{{ selected.detail }}</p>
+        <p class="layer-detail-copy">{{ executionLayerDetail(selected.id) }}</p>
 
         <div class="layer-metric-grid" :aria-label="t('本层关键指标')">
           <div v-for="metric in selected.stats" :key="metric.label" class="layer-metric">
-            <small>{{ metric.label }}</small>
+            <small>{{ executionMetricLabel(metric.label) }}</small>
             <strong :title="String(metric.value ?? '')">{{ displayValue(metric.value, metric.unit) }}</strong>
             <span v-if="metric.hint">{{ metric.hint }}</span>
             <ArtifactEvidenceLink v-if="metric.sourcePath" :source-path="metric.sourcePath" />
@@ -231,38 +265,51 @@ async function exportStructuredReport() {
           />
         </div>
 
-        <div class="layer-insight-grid">
-          <article>
-            <header>
-              <ShieldCheck :size="17" /><strong>{{ t("当前实现证据") }}</strong>
-            </header>
-            <p>{{ selected.implementation?.evidence || t("本次报告没有提供该层的实现说明。") }}</p>
-          </article>
-          <article class="layer-insight--gap">
-            <header>
-              <AlertTriangle :size="17" /><strong>{{ t("仍有限制") }}</strong>
-            </header>
-            <p>{{ selected.implementation?.gap || t("本次报告没有单独声明该层的实现限制。") }}</p>
-          </article>
-        </div>
+        <details class="layer-evidence-disclosure layer-context-disclosure">
+          <summary>
+            <span><ShieldCheck :size="16" />{{ t("实现证据与字段边界") }}</span>
+            <small>{{ t(evidenceLabels[selected.evidenceState] || selected.evidenceState) }}</small>
+            <ChevronDown :size="17" />
+          </summary>
+          <div class="layer-insight-grid">
+            <article>
+              <header>
+                <Braces :size="17" /><strong>{{ t("后端原始说明") }}</strong>
+              </header>
+              <p>{{ selected.detail }}</p>
+            </article>
+            <article>
+              <header>
+                <ShieldCheck :size="17" /><strong>{{ t("当前实现证据") }}</strong>
+              </header>
+              <p>{{ selected.implementation?.evidence || t("本次报告没有提供该层的实现说明。") }}</p>
+            </article>
+            <article class="layer-insight--gap">
+              <header>
+                <AlertTriangle :size="17" /><strong>{{ t("仍有限制") }}</strong>
+              </header>
+              <p>{{ selected.implementation?.gap || t("本次报告没有单独声明该层的实现限制。") }}</p>
+            </article>
+          </div>
 
-        <dl class="layer-source-list">
-          <div>
-            <dt>{{ t("证据状态") }}</dt>
-            <dd>{{ t(evidenceLabels[selected.evidenceState] || selected.evidenceState) }}</dd>
-          </div>
-          <div>
-            <dt>{{ t("报告字段") }}</dt>
-            <dd>
-              <code>{{ selected.source }}</code>
-              <ArtifactEvidenceLink :source-path="selected.source" />
-            </dd>
-          </div>
-          <div>
-            <dt>{{ t("独立 canonical trace") }}</dt>
-            <dd>{{ t("当前网页报告包未提供") }}</dd>
-          </div>
-        </dl>
+          <dl class="layer-source-list">
+            <div>
+              <dt>{{ t("证据状态") }}</dt>
+              <dd>{{ t(evidenceLabels[selected.evidenceState] || selected.evidenceState) }}</dd>
+            </div>
+            <div>
+              <dt>{{ t("报告字段") }}</dt>
+              <dd>
+                <code>{{ selected.source }}</code>
+                <ArtifactEvidenceLink :source-path="selected.source" />
+              </dd>
+            </div>
+            <div>
+              <dt>{{ t("独立 canonical trace") }}</dt>
+              <dd>{{ t("当前网页报告包未提供") }}</dd>
+            </div>
+          </dl>
+        </details>
 
         <details v-if="selected.checks.length" class="layer-evidence-disclosure">
           <summary>
@@ -321,93 +368,72 @@ async function exportStructuredReport() {
         </details>
       </article>
 
-      <article class="panel stage-panel">
-        <header class="panel-header">
+      <details class="panel stage-panel execution-secondary-disclosure" data-help-anchor="execution-host">
+        <summary class="panel-header">
           <div>
-            <p class="section-kicker">S7 EXECUTION ENVELOPE</p>
-            <h2>{{ t("统一时间轴阶段") }}</h2>
-            <p>{{ t("宿主记录的阶段摘要，不等同于 S0–S6 canonical trace。") }}</p>
+            <p class="section-kicker">{{ t("执行宿主（S7）") }}</p>
+            <h2>{{ t("统一时间轴记录") }}</h2>
+            <p>{{ t("这里记录各环节在同一模拟时间线上的开始和结束。") }}</p>
           </div>
+          <span>{{ t("{count} 个阶段", { count: result.stages.length }) }}</span>
           <TimerReset :size="20" />
-        </header>
-        <ExecutionVisualizationPanel :visualization="result.timeline" compact />
-        <ol v-if="result.stages.length" class="stage-list">
-          <li v-for="stage in result.stages" :key="stage.stage_id">
-            <span>{{ stage.subsystem }}</span>
-            <div>
-              <strong>{{ stage.stage_kind?.replaceAll("_", " ") }}</strong>
-              <p>{{ stage.detail }}</p>
-            </div>
-            <small>{{ durationUs(stage) }} µs</small>
-            <ArtifactEvidenceLink
-              :source-path="executionStageSource(state.bundle.execution_envelope?.stages || [], stage.stage_id)"
-            />
-          </li>
-        </ol>
-        <p v-else class="panel-empty-copy">{{ t("当前报告包没有 execution envelope 阶段记录。") }}</p>
-      </article>
+          <ChevronDown :size="17" />
+        </summary>
+        <div class="stage-panel-body">
+          <ExecutionVisualizationPanel :visualization="result.timeline" compact />
+          <ol v-if="result.stages.length" class="stage-list">
+            <li v-for="stage in result.stages" :key="stage.stage_id">
+              <span>{{ stage.subsystem }}</span>
+              <div>
+                <strong>{{ stage.stage_kind?.replaceAll("_", " ") }}</strong>
+                <p>{{ stage.detail }}</p>
+              </div>
+              <small>{{ durationUs(stage) }} µs</small>
+              <ArtifactEvidenceLink
+                :source-path="executionStageSource(state.bundle.execution_envelope?.stages || [], stage.stage_id)"
+              />
+            </li>
+          </ol>
+          <p v-else class="panel-empty-copy">{{ t("当前报告包没有 execution envelope 阶段记录。") }}</p>
+        </div>
+      </details>
     </section>
 
-    <RunBoundEvidencePanel
-      :run-id="state.runId"
-      :bundle="state.bundle"
-      :inputs="state.inputs"
-      :artifact-manifest="state.artifactManifest"
-      :selected-request-id="selectedEvidenceRequestId"
-      @request-selected="selectEvidenceRequest"
-    />
-
     <section class="execution-support-grid">
-      <article class="panel support-card">
-        <header>
+      <details class="panel support-card execution-secondary-disclosure">
+        <summary>
           <Layers3 :size="18" />
           <div>
             <small>RESOURCE CONVERGENCE</small><strong>{{ t("资源语义汇合") }}</strong>
           </div>
-        </header>
-        <template v-if="result.resourceConvergence">
-          <p>{{ result.resourceConvergence.summary || t("报告提供了资源汇合统计。") }}</p>
-          <dl>
-            <div>
-              <dt>Collective phases</dt>
-              <dd>{{ formatNumber(result.resourceConvergence.collective_phase_count, 0) }}</dd>
-            </div>
-            <div>
-              <dt>{{ t("已汇合请求") }}</dt>
-              <dd>{{ formatNumber(result.resourceConvergence.converged_request_count, 0) }}</dd>
-            </div>
-            <div>
-              <dt>{{ t("缺失内存事件") }}</dt>
-              <dd>{{ formatNumber(result.resourceConvergence.missing_memory_event_count, 0) }}</dd>
-            </div>
-            <div>
-              <dt>{{ t("缺失设备任务") }}</dt>
-              <dd>{{ formatNumber(result.resourceConvergence.missing_device_task_count, 0) }}</dd>
-            </div>
-          </dl>
-        </template>
-        <p v-else>{{ t("当前报告没有资源语义汇合摘要。") }}</p>
-      </article>
-
-      <article class="panel support-card">
-        <header>
-          <CircleDot :size="18" />
-          <div>
-            <small>S9 EXPLANATION</small><strong>{{ t("结果原因链") }}</strong>
-          </div>
-        </header>
-        <ol v-if="result.causeChain.length" class="compact-cause-list">
-          <li v-for="cause in result.causeChain.slice(0, 4)" :key="`${cause.subsystem}-${cause.cause_code}`">
-            <span>{{ cause.subsystem }}</span>
-            <div>
-              <strong>{{ cause.title || cause.cause_code }}</strong>
-              <p>{{ cause.evidence }}</p>
-            </div>
-            <ArtifactEvidenceLink :source-path="causeSource(state.bundle.tail?.cause_chain || [], cause.cause_id)" />
-          </li>
-        </ol>
-        <p v-else>{{ t("当前报告没有尾延迟原因链。") }}</p>
-      </article>
+          <span>{{ result.resourceConvergence ? t("已报告") : t("未报告") }}</span>
+          <ChevronDown :size="17" />
+        </summary>
+        <div class="support-card-body">
+          <template v-if="result.resourceConvergence">
+            <p>{{ result.resourceConvergence.summary || t("报告提供了资源汇合统计。") }}</p>
+            <dl>
+              <div>
+                <dt>Collective phases</dt>
+                <dd>{{ formatNumber(result.resourceConvergence.collective_phase_count, 0) }}</dd>
+              </div>
+              <div>
+                <dt>{{ t("已汇合请求") }}</dt>
+                <dd>{{ formatNumber(result.resourceConvergence.converged_request_count, 0) }}</dd>
+              </div>
+              <div>
+                <dt>{{ t("缺失内存事件") }}</dt>
+                <dd>{{ formatNumber(result.resourceConvergence.missing_memory_event_count, 0) }}</dd>
+              </div>
+              <div>
+                <dt>{{ t("缺失设备任务") }}</dt>
+                <dd>{{ formatNumber(result.resourceConvergence.missing_device_task_count, 0) }}</dd>
+              </div>
+            </dl>
+          </template>
+          <p v-else>{{ t("当前报告没有资源语义汇合摘要。") }}</p>
+        </div>
+      </details>
     </section>
 
     <section class="execution-boundary-note">

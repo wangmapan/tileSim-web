@@ -4,10 +4,14 @@ import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   buildEvidenceAgentRequest,
+  buildEvidenceAgentSnapshotDigest,
   canonicalJson,
   evidenceAgentBackendIdentity,
+  evidenceAgentFailure,
+  groupEvidenceAgentClaims,
   validateEvidenceAgentResult,
 } from "../../src/features/evidence-agent";
+import { BridgeApiError } from "../../src/lib/api";
 import { useEvidenceAgentStore } from "../../src/stores/evidence-agent";
 import {
   createCompletedAgentResponse,
@@ -70,7 +74,7 @@ describe("F9 canonical JSON and request binding", () => {
   });
 
   it("builds a supported-only run-bound allow-list and lossless canonical digests", async () => {
-    const { prepared } = await preparedRequest();
+    const { prepared, descriptor, manifest, structuredReport, bundle, inputs } = await preparedRequest();
 
     expect(prepared.request.schema_set_revision).toBe(f9SchemaRevision);
     expect(prepared.request.snapshot_reference.backend_identity).toMatchObject({
@@ -92,6 +96,18 @@ describe("F9 canonical JSON and request binding", () => {
     expect(prepared.canonicalText).toContain('"bytes":9007199254740993123');
     expect(prepared.inputSnapshotDigest).toMatch(/^sha256:[0-9a-f]{64}$/);
     expect(prepared.payloadDigest).toMatch(/^sha256:[0-9a-f]{64}$/);
+    await expect(
+      buildEvidenceAgentSnapshotDigest({
+        runId: f9RunId,
+        selectedRequestId: f9RequestId,
+        manifest,
+        descriptor,
+        health: f9Health,
+        structuredReport,
+        bundle,
+        inputs,
+      }),
+    ).resolves.toBe(prepared.inputSnapshotDigest);
   });
 
   it("fails closed when the provider is unavailable", async () => {
@@ -165,9 +181,79 @@ describe("F9 canonical JSON and request binding", () => {
       }),
     ).rejects.toMatchObject({ code: "ambiguous_reference" });
   });
+
+  it("excludes a nested subject that is duplicated in its containing artifact collection", async () => {
+    const context = createF9RunContext();
+    const contributions = context.bundle.metrics?.system_summary?.phase_fabric_contributions;
+    if (!contributions?.[0]) throw new Error("Expected an F9 phase contribution fixture.");
+    contributions.push({ ...contributions[0], phase_id: "phase-f9-duplicate" });
+
+    const prepared = await buildEvidenceAgentRequest({
+      runId: f9RunId,
+      selectedRequestId: f9RequestId,
+      manifest: context.manifest,
+      descriptor: createEvidenceAgentDescriptor(true),
+      health: f9Health,
+      structuredReport: context.structuredReport,
+      bundle: context.bundle,
+      inputs: context.inputs,
+      locale: "zh-CN",
+      taskKind: "explain_p99",
+      question: "Explain without ambiguous nested identities.",
+      clientRequestId: "agent-client:ambiguous-nested",
+    });
+    const metrics = prepared.request.artifact_allow_list.find((entry) => entry.artifact_id === "metrics")!;
+
+    expect(metrics.allowed_records).not.toContainEqual({
+      json_pointer: "/system_summary/phase_fabric_contributions/0",
+      subject: { kind: "memory_event", id: "memory-f9" },
+    });
+  });
 });
 
 describe("F9 atomic claim and citation validation", () => {
+  it("classifies every original atomic claim exactly once without rewriting or merging it", async () => {
+    const { prepared } = await preparedRequest();
+    const response = createCompletedAgentResponse(
+      prepared.inputSnapshotDigest,
+      prepared.request.client_request_id,
+      firstCitation(prepared),
+    );
+    const base = response.claims[0];
+    const kinds = [
+      "conditional_recommendation",
+      "numeric_fact",
+      "validation_boundary",
+      "help_text",
+      "reported_attribution",
+      "provenance_boundary",
+      "comparative_fact",
+      "fidelity_boundary",
+      "architecture_correction",
+    ] as const;
+    const claims = kinds.map((claimKind, index) => ({
+      ...structuredClone(base),
+      claim_id: `claim-group-${index}`,
+      claim_kind: claimKind,
+      text: `original atomic claim ${index}`,
+    }));
+    const before = canonicalJson(claims);
+
+    const groups = groupEvidenceAgentClaims(claims);
+    const presented = groups.flatMap((group) => group.claims);
+
+    expect(groups.map((group) => [group.id, group.claims.map((entry) => entry.originalIndex)])).toEqual([
+      ["conclusion", [1, 4, 6]],
+      ["limitations", [2, 5, 7, 8]],
+      ["next_steps", [0]],
+      ["help", [3]],
+    ]);
+    expect(presented).toHaveLength(claims.length);
+    expect(new Set(presented.map((entry) => entry.claim.claim_id)).size).toBe(claims.length);
+    for (const entry of presented) expect(entry.claim).toBe(claims[entry.originalIndex]);
+    expect(canonicalJson(claims)).toBe(before);
+  });
+
   it("accepts an exact citation while retaining uint64 decimal text", async () => {
     const { prepared, descriptor } = await preparedRequest();
     const response = createCompletedAgentResponse(
@@ -192,6 +278,21 @@ describe("F9 atomic claim and citation validation", () => {
       (response: ReturnType<typeof createCompletedAgentResponse>) => (response.claims[0].citations = []),
     ],
     [
+      "citation_identity_mismatch",
+      (response: ReturnType<typeof createCompletedAgentResponse>) =>
+        (response.claims[0].citations[0].run_id = "run-wrong"),
+    ],
+    [
+      "citation_not_allowed",
+      (response: ReturnType<typeof createCompletedAgentResponse>) =>
+        (response.claims[0].citations[0].artifact_id = "wrong-artifact"),
+    ],
+    [
+      "citation_not_allowed",
+      (response: ReturnType<typeof createCompletedAgentResponse>) =>
+        (response.claims[0].citations[0].schema_identity = "tilesim.wrong.v1"),
+    ],
+    [
       "citation_not_allowed",
       (response: ReturnType<typeof createCompletedAgentResponse>) =>
         (response.claims[0].citations[0].sha256 = "f".repeat(64)),
@@ -200,6 +301,11 @@ describe("F9 atomic claim and citation validation", () => {
       "citation_not_resolvable",
       (response: ReturnType<typeof createCompletedAgentResponse>) =>
         (response.claims[0].citations[0].json_pointer = "/request_metrics/99"),
+    ],
+    [
+      "citation_not_resolvable",
+      (response: ReturnType<typeof createCompletedAgentResponse>) =>
+        (response.claims[0].citations[0].subject.id = "req-wrong-subject"),
     ],
     [
       "claim_scope_mismatch",
@@ -224,26 +330,125 @@ describe("F9 atomic claim and citation validation", () => {
     ).toThrowError(expect.objectContaining({ code }));
   });
 
-  it("hides a late response after a run or backend switch", async () => {
+  it.each([
+    ["run", { runId: "run-new" }],
+    ["backend", { backendIdentity: "different-backend" }],
+    ["schema revision", { schemaSetRevision: `sha256:${"d".repeat(64)}` }],
+    ["snapshot digest", { inputSnapshotDigest: `sha256:${"e".repeat(64)}` }],
+  ])("hides a late response after a %s switch", async (_label, changedBinding) => {
     const { prepared, descriptor } = await preparedRequest();
     const response = createCompletedAgentResponse(
       prepared.inputSnapshotDigest,
       prepared.request.client_request_id,
       firstCitation(prepared),
     );
-    expect(
+    const binding = {
+      runId: f9RunId,
+      backendIdentity: evidenceAgentBackendIdentity(f9Health),
+      schemaSetRevision: f9SchemaRevision,
+      inputSnapshotDigest: prepared.inputSnapshotDigest,
+      ...changedBinding,
+    };
+    expect(validateEvidenceAgentResult(response, prepared, descriptor, binding).state).toBe("stale");
+  });
+
+  it("rejects invalid claims even when the response is stale", async () => {
+    const { prepared, descriptor } = await preparedRequest();
+    const response = createCompletedAgentResponse(
+      prepared.inputSnapshotDigest,
+      prepared.request.client_request_id,
+      firstCitation(prepared),
+    );
+    response.staleness.state = "stale";
+    response.claims[0].citations = [];
+
+    expect(() =>
       validateEvidenceAgentResult(response, prepared, descriptor, {
-        runId: "run-new",
-        backendIdentity: "different-backend",
+        runId: f9RunId,
+        backendIdentity: evidenceAgentBackendIdentity(f9Health),
         schemaSetRevision: f9SchemaRevision,
         inputSnapshotDigest: prepared.inputSnapshotDigest,
-      }).state,
-    ).toBe("stale");
+      }),
+    ).toThrowError(expect.objectContaining({ code: "missing_citation" }));
+  });
+
+  it("rejects a terminal reason that contradicts its completion state", async () => {
+    const { prepared, descriptor } = await preparedRequest();
+    const response = createCompletedAgentResponse(
+      prepared.inputSnapshotDigest,
+      prepared.request.client_request_id,
+      firstCitation(prepared),
+    );
+    response.completion_state = "failed";
+    response.claims = [];
+    response.refusal = { reason_code: "provider_unavailable", detail: "contradictory", retryable: false };
+
+    expect(() =>
+      validateEvidenceAgentResult(response, prepared, descriptor, {
+        runId: f9RunId,
+        backendIdentity: evidenceAgentBackendIdentity(f9Health),
+        schemaSetRevision: f9SchemaRevision,
+        inputSnapshotDigest: prepared.inputSnapshotDigest,
+      }),
+    ).toThrowError(expect.objectContaining({ code: "completion_state_invalid" }));
+  });
+
+  it("accepts validated claims plus a refusal for the unfinished part of a partial response", async () => {
+    const { prepared, descriptor } = await preparedRequest();
+    const response = createCompletedAgentResponse(
+      prepared.inputSnapshotDigest,
+      prepared.request.client_request_id,
+      firstCitation(prepared),
+    );
+    response.completion_state = "partial";
+    response.partial = true;
+    response.refusal = {
+      reason_code: "insufficient_evidence",
+      detail: "The requested P99 subject is not present in the verified snapshot.",
+      retryable: false,
+    };
+
+    const result = validateEvidenceAgentResult(response, prepared, descriptor, {
+      runId: f9RunId,
+      backendIdentity: evidenceAgentBackendIdentity(f9Health),
+      schemaSetRevision: f9SchemaRevision,
+      inputSnapshotDigest: prepared.inputSnapshotDigest,
+    });
+
+    expect(result.state).toBe("partial");
+    expect(result.response.claims).toHaveLength(1);
+    expect(result.detail).toBe("insufficient_evidence");
+  });
+
+  it.each([
+    ["refused response carrying claims", "refused", false, "insufficient_evidence"],
+    ["completed response carrying a refusal", "completed", false, "insufficient_evidence"],
+    ["completed response without claims", "completed", true, null],
+  ] as const)("rejects a %s", async (_label, completion, removeClaims, refusal) => {
+    const { prepared, descriptor } = await preparedRequest();
+    const response = createCompletedAgentResponse(
+      prepared.inputSnapshotDigest,
+      prepared.request.client_request_id,
+      firstCitation(prepared),
+    );
+    response.completion_state = completion;
+    if (removeClaims) response.claims = [];
+    if (refusal) response.refusal = { reason_code: refusal, detail: refusal, retryable: false };
+
+    expect(() =>
+      validateEvidenceAgentResult(response, prepared, descriptor, {
+        runId: f9RunId,
+        backendIdentity: evidenceAgentBackendIdentity(f9Health),
+        schemaSetRevision: f9SchemaRevision,
+        inputSnapshotDigest: prepared.inputSnapshotDigest,
+      }),
+    ).toThrowError(expect.objectContaining({ code: "completion_state_invalid" }));
   });
 
   it.each([
     ["partial", "partial", true, false, null],
     ["truncated", "truncated", false, true, null],
+    ["failed", "failed", false, false, "unsupported_schema"],
     ["timeout", "timeout", false, false, "timeout"],
     ["cancelled", "cancelled", false, false, "cancelled"],
     ["concurrency_limit", "refused", false, false, "concurrency_limit"],
@@ -304,9 +509,72 @@ describe("F9 atomic claim and citation validation", () => {
     expect(missingResult.response.claims[0].citations[0].availability).toBe("missing");
     expect(missingResult.response.claims[0].citations[0].value).toBeUndefined();
   });
+
+  it("rejects a numeric value attached to a non-available citation", async () => {
+    const { prepared, descriptor } = await preparedRequest();
+    const response = createCompletedAgentResponse(prepared.inputSnapshotDigest, prepared.request.client_request_id, {
+      ...firstCitation(prepared),
+      availability: "missing",
+    });
+
+    expect(() =>
+      validateEvidenceAgentResult(response, prepared, descriptor, {
+        runId: f9RunId,
+        backendIdentity: evidenceAgentBackendIdentity(f9Health),
+        schemaSetRevision: f9SchemaRevision,
+        inputSnapshotDigest: prepared.inputSnapshotDigest,
+      }),
+    ).toThrowError(expect.objectContaining({ code: "citation_availability_value_mismatch" }));
+  });
 });
 
 describe("F9 idempotency recovery store", () => {
+  it("persists only redacted submission metadata and never the question, payloads, response, claims, or secrets", async () => {
+    const { prepared, descriptor } = await preparedRequest();
+    const binding = {
+      runId: f9RunId,
+      backendIdentity: evidenceAgentBackendIdentity(f9Health),
+      schemaSetRevision: f9SchemaRevision,
+      inputSnapshotDigest: prepared.inputSnapshotDigest,
+    };
+    const store = useEvidenceAgentStore();
+    store.begin(binding, prepared.payloadDigest, prepared.request.client_request_id);
+    store.attachPrepared(prepared);
+    const response = createCompletedAgentResponse(
+      prepared.inputSnapshotDigest,
+      prepared.request.client_request_id,
+      firstCitation(prepared),
+    );
+    store.complete(validateEvidenceAgentResult(response, prepared, descriptor, binding), binding);
+
+    const serialized = window.sessionStorage.getItem("tilesim-web.evidence-agent-submission.v1") || "";
+    const retained = JSON.parse(serialized);
+    expect(Object.keys(retained).sort()).toEqual(
+      [
+        "runId",
+        "backendIdentity",
+        "schemaSetRevision",
+        "inputSnapshotDigest",
+        "payloadDigest",
+        "idempotencyKey",
+        "clientRequestId",
+      ].sort(),
+    );
+    for (const protectedContent of [
+      prepared.request.user_question.content,
+      prepared.canonicalText,
+      "artifactRoots",
+      response.claims[0].text,
+      response.provider.provider_id,
+      "provider_raw_response",
+      "credential",
+      "hidden_reasoning",
+    ]) {
+      expect(serialized).not.toContain(protectedContent);
+    }
+    expect(window.localStorage.getItem("tilesim-web.evidence-agent-submission.v1")).toBeNull();
+  });
+
   it("reuses only the same payload and rejects a different payload without rotating the key", () => {
     const store = useEvidenceAgentStore();
     const binding = {
@@ -319,9 +587,193 @@ describe("F9 idempotency recovery store", () => {
     const replay = store.begin(binding, `sha256:${"b".repeat(64)}`, "agent-client:recovery");
 
     expect(replay.idempotencyKey).toBe(first.idempotencyKey);
-    expect(() => store.begin(binding, `sha256:${"c".repeat(64)}`, "agent-client:other")).toThrowError(
-      expect.objectContaining({ code: "idempotency_payload_conflict" }),
-    );
+    let mismatch: unknown;
+    try {
+      store.begin(binding, `sha256:${"c".repeat(64)}`, "agent-client:other");
+    } catch (error) {
+      mismatch = error;
+    }
+    expect(mismatch).toEqual(expect.objectContaining({ code: "idempotency_payload_mismatch" }));
+    const failure = evidenceAgentFailure(mismatch);
+    store.fail(failure.state, failure.code);
+    expect(failure).toMatchObject({ state: "idempotency_payload_mismatch" });
     expect(store.pending?.idempotencyKey).toBe(first.idempotencyKey);
+    expect(store.state).toBe("idempotency_payload_mismatch");
+  });
+
+  it("keeps a completed analysis on the same key until explicit discard", async () => {
+    const { prepared, descriptor } = await preparedRequest();
+    const binding = {
+      runId: f9RunId,
+      backendIdentity: evidenceAgentBackendIdentity(f9Health),
+      schemaSetRevision: f9SchemaRevision,
+      inputSnapshotDigest: prepared.inputSnapshotDigest,
+    };
+    const store = useEvidenceAgentStore();
+    const pending = store.begin(binding, prepared.payloadDigest, prepared.request.client_request_id);
+    const response = createCompletedAgentResponse(
+      prepared.inputSnapshotDigest,
+      prepared.request.client_request_id,
+      firstCitation(prepared),
+    );
+    store.complete(validateEvidenceAgentResult(response, prepared, descriptor, binding), binding);
+
+    expect(store.pending?.idempotencyKey).toBe(pending.idempotencyKey);
+    store.synchronize({ ...binding, inputSnapshotDigest: "" });
+    expect(store.state).toBe("stale");
+    store.synchronize(binding);
+    expect(store.state).toBe("available_draft");
+    const replay = store.begin(binding, prepared.payloadDigest, prepared.request.client_request_id);
+    expect(replay.idempotencyKey).toBe(pending.idempotencyKey);
+
+    store.discardPending();
+    const next = store.begin(binding, prepared.payloadDigest, prepared.request.client_request_id);
+    expect(next.idempotencyKey).not.toBe(pending.idempotencyKey);
+  });
+
+  it("does not release a key after a non-retryable contract failure", () => {
+    const store = useEvidenceAgentStore();
+    const binding = {
+      runId: f9RunId,
+      backendIdentity: evidenceAgentBackendIdentity(f9Health),
+      schemaSetRevision: f9SchemaRevision,
+      inputSnapshotDigest: `sha256:${"a".repeat(64)}`,
+    };
+    const pending = store.begin(binding, `sha256:${"b".repeat(64)}`, "agent-client:contract-failure");
+    const failure = evidenceAgentFailure(new Error("invalid terminal"));
+
+    store.fail(failure.state, failure.code);
+
+    expect(store.state).toBe("contract_error");
+    expect(store.pending?.idempotencyKey).toBe(pending.idempotencyKey);
+    expect(() => store.begin(binding, `sha256:${"c".repeat(64)}`, "agent-client:replacement")).toThrowError(
+      expect.objectContaining({ code: "idempotency_payload_mismatch" }),
+    );
+
+    store.discardPending();
+    const next = store.begin(binding, `sha256:${"c".repeat(64)}`, "agent-client:replacement");
+    expect(next.idempotencyKey).not.toBe(pending.idempotencyKey);
+  });
+
+  it("ignores a discarded submission's late completion and failure after a replacement begins", async () => {
+    const { prepared, descriptor } = await preparedRequest();
+    const originalBinding = {
+      runId: f9RunId,
+      backendIdentity: evidenceAgentBackendIdentity(f9Health),
+      schemaSetRevision: f9SchemaRevision,
+      inputSnapshotDigest: prepared.inputSnapshotDigest,
+    };
+    const replacementBinding = { ...originalBinding, runId: "run-replacement" };
+    const store = useEvidenceAgentStore();
+    const original = store.begin(originalBinding, prepared.payloadDigest, prepared.request.client_request_id);
+    const response = createCompletedAgentResponse(
+      prepared.inputSnapshotDigest,
+      prepared.request.client_request_id,
+      firstCitation(prepared),
+    );
+    const lateResult = validateEvidenceAgentResult(response, prepared, descriptor, replacementBinding);
+
+    store.synchronize(replacementBinding);
+    expect(store.state).toBe("stale");
+    store.discardPending();
+    const replacement = store.begin(
+      replacementBinding,
+      `sha256:${"c".repeat(64)}`,
+      "agent-client:replacement-after-discard",
+    );
+
+    expect(store.complete(lateResult, originalBinding, original.idempotencyKey)).toBe(false);
+    expect(store.fail("contract_error", "late_failure", original.idempotencyKey)).toBe(false);
+    expect(store.pending?.idempotencyKey).toBe(replacement.idempotencyKey);
+    expect(store.state).toBe("submitting");
+    expect(store.result).toBeNull();
+  });
+
+  it.each([
+    ["run", { runId: "run-new" }],
+    ["backend", { backendIdentity: "backend-new" }],
+    ["schema revision", { schemaSetRevision: `sha256:${"d".repeat(64)}` }],
+    ["snapshot digest", { inputSnapshotDigest: `sha256:${"e".repeat(64)}` }],
+  ])("marks a pending analysis stale when the %s changes and keeps its key", (_label, changedBinding) => {
+    const store = useEvidenceAgentStore();
+    const binding = {
+      runId: f9RunId,
+      backendIdentity: evidenceAgentBackendIdentity(f9Health),
+      schemaSetRevision: f9SchemaRevision,
+      inputSnapshotDigest: `sha256:${"a".repeat(64)}`,
+    };
+    const pending = store.begin(binding, `sha256:${"b".repeat(64)}`, "agent-client:stale");
+    const currentBinding = { ...binding, ...changedBinding };
+
+    store.synchronize(currentBinding);
+
+    expect(store.state).toBe("stale");
+    expect(store.pending?.idempotencyKey).toBe(pending.idempotencyKey);
+    expect(() => store.begin(currentBinding, `sha256:${"c".repeat(64)}`, "agent-client:stale-new")).toThrowError(
+      expect.objectContaining({ code: "idempotency_payload_mismatch" }),
+    );
+    expect(store.pending?.idempotencyKey).toBe(pending.idempotencyKey);
+
+    store.discardPending();
+    const next = store.begin(currentBinding, `sha256:${"c".repeat(64)}`, "agent-client:stale-new");
+    expect(next.idempotencyKey).not.toBe(pending.idempotencyKey);
+  });
+
+  it("preserves the original key after terminal_result_not_retained until explicit discard", () => {
+    const store = useEvidenceAgentStore();
+    const binding = {
+      runId: f9RunId,
+      backendIdentity: evidenceAgentBackendIdentity(f9Health),
+      schemaSetRevision: f9SchemaRevision,
+      inputSnapshotDigest: `sha256:${"a".repeat(64)}`,
+    };
+    const pending = store.begin(binding, `sha256:${"b".repeat(64)}`, "agent-client:retention-gap");
+    const failure = evidenceAgentFailure(
+      new BridgeApiError("not retained", {
+        status: 409,
+        code: "terminal_result_not_retained",
+        retryable: false,
+      }),
+    );
+    store.fail(failure.state, failure.code);
+
+    expect(failure).toMatchObject({
+      state: "terminal_result_not_retained",
+    });
+    expect(store.pending?.idempotencyKey).toBe(pending.idempotencyKey);
+    expect(store.state).toBe("terminal_result_not_retained");
+
+    store.discardPending();
+    expect(store.pending).toBeNull();
+    expect(store.state).toBe("idle");
+  });
+
+  it("preserves the original key after idempotency_payload_mismatch until explicit discard", () => {
+    const store = useEvidenceAgentStore();
+    const binding = {
+      runId: f9RunId,
+      backendIdentity: evidenceAgentBackendIdentity(f9Health),
+      schemaSetRevision: f9SchemaRevision,
+      inputSnapshotDigest: `sha256:${"a".repeat(64)}`,
+    };
+    const pending = store.begin(binding, `sha256:${"b".repeat(64)}`, "agent-client:payload-mismatch");
+    const failure = evidenceAgentFailure(
+      new BridgeApiError("mismatch", {
+        status: 409,
+        code: "idempotency_payload_mismatch",
+        retryable: false,
+      }),
+    );
+    store.fail(failure.state, failure.code);
+
+    expect(failure).toMatchObject({
+      state: "idempotency_payload_mismatch",
+    });
+    expect(store.pending?.idempotencyKey).toBe(pending.idempotencyKey);
+    expect(store.state).toBe("idempotency_payload_mismatch");
+
+    store.discardPending();
+    expect(store.pending).toBeNull();
+    expect(store.state).toBe("idle");
   });
 });

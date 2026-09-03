@@ -1,65 +1,85 @@
 <script setup lang="ts">
-import { AlertTriangle, Check, CircleMinus, Layers3, ShieldCheck } from "@lucide/vue";
-import { computed } from "vue";
+import { AlertTriangle, Check, ChevronDown, CircleMinus, Layers3, ShieldCheck } from "@lucide/vue";
 import EmptyState from "../components/EmptyState.vue";
 import StatusPill from "../components/StatusPill.vue";
 import { formatPercent, statusLabel } from "../lib/format";
 import { useDashboard } from "../store/dashboard";
 import { useI18n } from "../i18n";
 import ArtifactEvidenceLink from "../components/ArtifactEvidenceLink.vue";
-import { RunBoundEvidencePanel } from "../features/run-bound-evidence";
 import { validationCheckSource } from "../features/execution-inspector";
-import { useEvidenceSelectionStore } from "../stores/evidence-selection";
 const { state, evidence } = useDashboard();
 const { t } = useI18n();
-const evidenceSelection = useEvidenceSelectionStore();
-const selectedEvidenceRequestId = computed(() => evidenceSelection.requestForRun(state.runId));
 
-function selectEvidenceRequest(requestId: string) {
-  if (state.runId) evidenceSelection.select(state.runId, requestId);
+function gapLabel(gap: string) {
+  if (gap === "Synthetic-trace validation cannot stand in for held-out real-trace fidelity claims.") {
+    return t("合成数据检查不能替代使用独立真实数据进行的可信度验证。");
+  }
+  return gap;
 }
 </script>
 
 <template>
-  <EmptyState v-if="!state.bundle.validation" title="没有验证报告" />
+  <EmptyState
+    v-if="!state.bundle.validation"
+    title="还没有可信度信息"
+    description="请先打开一次已完成的实验，页面会说明结果来源和限制。"
+    action-label="新建实验"
+    action-to="/experiment"
+  />
   <div v-else class="view-stack">
-    <section class="provenance-grid">
-      <article>
-        <small>TRACE SOURCE</small><StatusPill :value="evidence.sourceMode" />
-        <p>{{ t("数据来自哪里") }}</p>
+    <section class="provenance-grid" data-help-anchor="validation-scope">
+      <article data-help-anchor="validation-provenance">
+        <small>{{ t("数据来源") }}</small
+        ><StatusPill :value="evidence.sourceMode" />
+        <p>{{ t("说明输入是真实采集、合成生成还是兼容测试数据。") }}</p>
       </article>
       <article>
-        <small>CALIBRATION</small><StatusPill :value="evidence.calibration" />
-        <p>{{ t("是否经过真实校准") }}</p>
+        <small>{{ t("校准状态") }}</small
+        ><StatusPill :value="evidence.calibration" />
+        <p>{{ t("说明结果是否与真实硬件测量对齐。") }}</p>
       </article>
       <article>
-        <small>CLAIM SCOPE</small><StatusPill :value="evidence.claimScope" />
-        <p>{{ t("结果允许支持什么结论") }}</p>
+        <small>{{ t("可用范围") }}</small
+        ><StatusPill :value="evidence.claimScope" />
+        <p>{{ t("说明这些结果适合探索，还是可以支持更正式的判断。") }}</p>
       </article>
       <article>
-        <small>COMPLETENESS</small><strong>{{ formatPercent(state.bundle.validation.completeness) }}</strong>
-        <p>{{ t("证据字段覆盖程度") }}</p>
+        <small>{{ t("证据完整度") }}</small
+        ><strong>{{ formatPercent(state.bundle.validation.completeness) }}</strong>
+        <p>{{ t("表示需要的证据字段覆盖了多少，不是准确率。") }}</p>
       </article>
     </section>
 
-    <RunBoundEvidencePanel
-      :run-id="state.runId"
-      :bundle="state.bundle"
-      :inputs="state.inputs"
-      :artifact-manifest="state.artifactManifest"
-      :selected-request-id="selectedEvidenceRequestId"
-      @request-selected="selectEvidenceRequest"
-    />
-
-    <article v-if="state.bundle.validation.resolution_entries?.length" class="panel">
-      <header class="panel-header">
+    <section v-if="state.bundle.validation.open_gaps?.length" class="gap-panel" data-help-anchor="validation-gaps">
+      <header>
+        <AlertTriangle :size="19" />
         <div>
-          <p class="section-kicker">FIDELITY RESOLUTION</p>
-          <h2>{{ t("逐子系统实际保真度") }}</h2>
-          <p>{{ t("请求的 fidelity 不等于每个子系统最终执行的 fidelity；以报告的实际解析结果为准。") }}</p>
+          <strong>{{ t("仍需注意") }}</strong>
+          <p>{{ t("下面的问题尚未解决，因此本次结果只能支持有限结论。") }}</p>
         </div>
-        <Layers3 :size="21" />
       </header>
+      <ul>
+        <li v-for="(gap, index) in state.bundle.validation.open_gaps" :key="gap">
+          <span>{{ gapLabel(gap) }}</span
+          ><ArtifactEvidenceLink :source-path="'validation:/open_gaps/' + index" />
+        </li>
+      </ul>
+    </section>
+
+    <details
+      v-if="state.bundle.validation.resolution_entries?.length"
+      class="panel validation-disclosure"
+      data-help-anchor="validation-fidelity"
+    >
+      <summary>
+        <div>
+          <p class="section-kicker">{{ t("专业详情") }}</p>
+          <h2>{{ t("各环节实际使用的模拟精度") }}</h2>
+          <p>{{ t("你选择的精度可能因环节能力而调整；展开后可查看每个环节最终使用的精度。") }}</p>
+        </div>
+        <span>{{ t("{count} 个环节", { count: state.bundle.validation.resolution_entries.length }) }}</span>
+        <span class="validation-summary-icons"><Layers3 :size="21" /><ChevronDown :size="17" /></span>
+      </summary>
       <div class="fidelity-matrix">
         <div
           v-for="(entry, index) in state.bundle.validation.resolution_entries"
@@ -73,18 +93,20 @@ function selectEvidenceRequest(requestId: string) {
           <ArtifactEvidenceLink :source-path="'validation:/resolution_entries/' + index" />
         </div>
       </div>
-    </article>
+    </details>
 
-    <article class="panel">
-      <header class="panel-header panel-header--row">
+    <details class="panel validation-disclosure">
+      <summary>
         <div>
-          <p class="section-kicker">VALIDATION CHECKS</p>
-          <h2>{{ t("验证检查") }}</h2>
+          <p class="section-kicker">{{ t("专业详情") }}</p>
+          <h2>{{ t("逐项验证记录") }}</h2>
+          <p>{{ t("按需查看逐项状态、说明和精确证据链接。") }}</p>
         </div>
         <div class="panel-count">
-          <ShieldCheck :size="16" />{{ state.bundle.validation.checks?.length || 0 }} checks
+          <ShieldCheck :size="16" />{{ t("{count} 项检查", { count: state.bundle.validation.checks?.length || 0 }) }}
         </div>
-      </header>
+        <span class="validation-summary-icons"><ChevronDown :size="17" /></span>
+      </summary>
       <div class="check-list">
         <div
           v-for="check in state.bundle.validation.checks || []"
@@ -106,22 +128,6 @@ function selectEvidenceRequest(requestId: string) {
           />
         </div>
       </div>
-    </article>
-
-    <section v-if="state.bundle.validation.open_gaps?.length" class="gap-panel">
-      <header>
-        <AlertTriangle :size="19" />
-        <div>
-          <strong>{{ t("仍未关闭的证据缺口") }}</strong>
-          <p>{{ t("这些限制会直接缩小本次运行可支持的结论。") }}</p>
-        </div>
-      </header>
-      <ul>
-        <li v-for="(gap, index) in state.bundle.validation.open_gaps" :key="gap">
-          <span>{{ gap }}</span
-          ><ArtifactEvidenceLink :source-path="'validation:/open_gaps/' + index" />
-        </li>
-      </ul>
-    </section>
+    </details>
   </div>
 </template>

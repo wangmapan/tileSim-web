@@ -238,17 +238,17 @@ async function loadBundle(event) {
         </div>
       </div>
 
-      <ExperimentIdentityPanel :form="form" :surface="surface" :field-path="displayFieldPath" />
-      <ExperimentCapabilityPanel
-        :capabilities="state.capabilities"
-        :bridge="state.bridge"
+      <ExperimentIdentityPanel
+        :form="form"
         :surface="surface"
-        :manifest="state.bridge.manifest"
+        :field-path="displayFieldPath"
+        data-help-anchor="experiment-identity"
       />
       <ExperimentInputPanel
         v-model:mode="mode"
         v-model:runtime-json="runtimeJson"
         v-model:topology-json="topologyJson"
+        data-help-anchor="experiment-inputs"
         :form="form"
         :surface="surface"
         :control-groups="surface.controlGroups"
@@ -259,9 +259,17 @@ async function loadBundle(event) {
         @load-json-file="loadJsonFile"
       />
       <DesignSpaceInputPanel v-model="designSpaceJson" :field-path="displayFieldPath" @load-json-file="loadJsonFile" />
+      <ExperimentCapabilityPanel
+        data-help-anchor="experiment-capabilities"
+        :capabilities="state.capabilities"
+        :bridge="state.bridge"
+        :surface="surface"
+        :manifest="state.bridge.manifest"
+      />
     </section>
 
     <ExperimentSubmitCard
+      data-help-anchor="experiment-submit"
       :mode="mode"
       :form="form"
       :design-space-json="designSpaceJson"

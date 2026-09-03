@@ -39,7 +39,7 @@ Invoke-RestMethod http://127.0.0.1:5173/api/health | ConvertTo-Json -Depth 8
 .\scripts\deploy-local-backend.ps1 -SourceRoot D:\tileSim
 ```
 
-该模式在构建前后核对完整工作树摘要，并在 Bridge 启动与每次执行前同时核验源码摘要和构建摘要。部署后若后端工作树继续变化，执行接口会失败闭合，重新部署后才会恢复。不要用独立 worktree 模式覆盖用户正在验证的本地改动。
+该模式在构建前后核对完整工作树摘要，并在 Bridge 启动与每次执行前同时核验源码摘要和构建摘要。部署清单还绑定 Web source revision/state digest、Web build digest 与 Bridge schema-set revision。新版本启动失败时脚本恢复上一份 manifest 并尝试重新启动上一 Bridge；rollback 本身失败会作为部署失败显式报告。完整的旧 Python/static bytes 回滚仍要求 immutable Web release snapshot 或等价 blue/green 切换，完成故障注入 rehearsal 前不能把 manifest 恢复冒充完整发布回滚。部署后若后端或 Web 工作树继续变化，执行/启动会失败闭合，重新部署后才会恢复。不要用独立 worktree 模式覆盖用户正在验证的本地改动。
 
 ### 模式 B：干净的 `origin/main` 独立 worktree
 

@@ -115,6 +115,13 @@ export function recordCarriesEvidenceSubject(value: unknown, subject: Subject): 
   return value.kind === subject.kind && value.id === subject.id;
 }
 
+function subjectIsUniqueInContainingCollection(root: unknown, pointer: string, subject: Subject): boolean {
+  const separator = pointer.lastIndexOf("/");
+  const parentPointer = separator > 0 ? pointer.slice(0, separator) : "";
+  const parent = parentPointer ? resolveEvidencePointer(root, parentPointer) : root;
+  return !Array.isArray(parent) || parent.filter((entry) => recordCarriesEvidenceSubject(entry, subject)).length === 1;
+}
+
 function exactSubject(reference: StructuredRunBoundReference, target: unknown): Subject | null {
   if (subjectKinds.has(reference.subject.kind as Subject["kind"])) {
     return { kind: reference.subject.kind as Subject["kind"], id: reference.subject.id };
@@ -158,7 +165,12 @@ function collectAllowedRecords(
     }
     const target = resolveEvidencePointer(roots[reference.artifact_id], reference.json_pointer);
     const subject = exactSubject(reference, target);
-    if (!subject || !recordCarriesEvidenceSubject(target, subject)) continue;
+    if (
+      !subject ||
+      !recordCarriesEvidenceSubject(target, subject) ||
+      !subjectIsUniqueInContainingCollection(roots[reference.artifact_id], reference.json_pointer, subject)
+    )
+      continue;
     const key = `${reference.artifact_id}\u0000${reference.json_pointer}\u0000${subject.kind}\u0000${subject.id}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -283,7 +295,7 @@ function canonicalManifest(manifest: ArtifactManifestResponse): Record<string, u
   };
 }
 
-export interface BuildEvidenceAgentRequestOptions {
+export interface BuildEvidenceAgentSnapshotOptions {
   runId: string;
   selectedRequestId: string | null;
   manifest: ArtifactManifestResponse;
@@ -292,35 +304,19 @@ export interface BuildEvidenceAgentRequestOptions {
   structuredReport: StructuredPerformanceReport;
   bundle: ReportBundle;
   inputs: RunInputs;
+}
+
+export interface BuildEvidenceAgentRequestOptions extends BuildEvidenceAgentSnapshotOptions {
   locale: EvidenceAgentRequest["locale"];
   taskKind: EvidenceAgentRequest["task_kind"];
   question: string;
   clientRequestId: string;
 }
 
-export async function buildEvidenceAgentRequest(
-  options: BuildEvidenceAgentRequestOptions,
-): Promise<PreparedEvidenceAgentRequest> {
+async function buildEvidenceAgentSnapshot(options: BuildEvidenceAgentSnapshotOptions) {
   const { descriptor, manifest, runId } = options;
-  if (
-    descriptor.availability !== "available" ||
-    !descriptor.provider.configured ||
-    !descriptor.availability_predicate.evaluated_available
-  ) {
-    throw new EvidenceAgentContractError(descriptor.degradation.reason_code || "provider_unavailable");
-  }
   if (manifest.run_id !== runId || manifest.schema_set_revision !== descriptor.schema_set_revision) {
     throw new EvidenceAgentContractError("run_binding_mismatch");
-  }
-  if (
-    !descriptor.supported_locales.includes(options.locale) ||
-    !descriptor.supported_task_kinds.includes(options.taskKind)
-  ) {
-    throw new EvidenceAgentContractError("unsupported_agent_input");
-  }
-  const question = options.question.trim();
-  if (!question || Array.from(question).length > descriptor.limits.maximum_question_characters) {
-    throw new EvidenceAgentContractError("question_length_invalid");
   }
   const roots = artifactRoots(options.bundle, options.inputs);
   const records = collectAllowedRecords(options.structuredReport, manifest, roots);
@@ -383,6 +379,38 @@ export async function buildEvidenceAgentRequest(
     digestContract.input_snapshot_material_fields.map((field) => [field, snapshotMaterialCandidates[field]]),
   ) as typeof snapshotMaterialCandidates;
   const inputSnapshotDigest = await sha256Prefixed(canonicalJson(snapshotMaterial));
+  return { roots, snapshotMaterial, inputSnapshotDigest };
+}
+
+export async function buildEvidenceAgentSnapshotDigest(options: BuildEvidenceAgentSnapshotOptions): Promise<string> {
+  return (await buildEvidenceAgentSnapshot(options)).inputSnapshotDigest;
+}
+
+export async function buildEvidenceAgentRequest(
+  options: BuildEvidenceAgentRequestOptions,
+): Promise<PreparedEvidenceAgentRequest> {
+  const { descriptor, manifest, runId } = options;
+  if (
+    descriptor.availability !== "available" ||
+    !descriptor.provider.configured ||
+    !descriptor.availability_predicate.evaluated_available
+  ) {
+    throw new EvidenceAgentContractError(descriptor.degradation.reason_code || "provider_unavailable");
+  }
+  if (manifest.run_id !== runId || manifest.schema_set_revision !== descriptor.schema_set_revision) {
+    throw new EvidenceAgentContractError("run_binding_mismatch");
+  }
+  if (
+    !descriptor.supported_locales.includes(options.locale) ||
+    !descriptor.supported_task_kinds.includes(options.taskKind)
+  ) {
+    throw new EvidenceAgentContractError("unsupported_agent_input");
+  }
+  const question = options.question.trim();
+  if (!question || Array.from(question).length > descriptor.limits.maximum_question_characters) {
+    throw new EvidenceAgentContractError("question_length_invalid");
+  }
+  const { inputSnapshotDigest, roots, snapshotMaterial } = await buildEvidenceAgentSnapshot(options);
   const request = {
     ...snapshotMaterial,
     input_snapshot_digest: inputSnapshotDigest,

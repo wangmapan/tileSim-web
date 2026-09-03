@@ -139,23 +139,64 @@ S6 hotspot request Schema。
 `run_surface` 字段写入 OpenAPI。前端必须同时核对 manifest、descriptor 和响应 header 的
 schema-set revision；不一致时失败关闭。
 
-## F9B read-only evidence Agent
+## F9B/F9C read-only evidence Agent
 
 F9B 是 S9 的只读解释输出面，不产生新的模拟因果或 fidelity。它绑定既有
 `S0 -> S1 -> S2 -> {S3,S4,S5} -> S6` 证据，保持 S3/S4/S5 并列；S7 只作为执行宿主，
 S8/S9 不能进入 latency causal ranking。正式 identity 为：
 
-- descriptor：`tilesim.bridge.evidence_agent_descriptor.v1`
+- descriptor：`tilesim.bridge.evidence_agent_descriptor.v2`
 - request：`tilesim.bridge.evidence_agent_request.v1`
 - response：`tilesim.bridge.evidence_agent_response.v1`
 - citation：`tilesim.bridge.evidence_agent_citation.v1`
 - snapshot reference：`tilesim.bridge.evidence_snapshot_reference.v1`
 - 输入 compatibility contract：`tilesim.web.structured-performance-report.v2`
 
-当前没有生产 evidence Provider。capability 的 `availability=unavailable`、
-`provider.configured=false`，analysis endpoint 返回正式 response contract，
-`completion_state=refused` 和 `reason_code=provider_unavailable`；自动测试中的 validator
-test double 只验证成功结果的结构，不代表 live Agent closure。
+F9C 在 `providers/evidence_agent.py` 增加 TileSim-owned 固定 JSON/HTTPS Provider 边界。Provider
+未通过真实 authenticated capability probe 时，capability 仍正式返回
+`availability=unavailable`、`provider.configured=false`，analysis endpoint 返回正式 response contract、
+`completion_state=refused` 和 `reason_code=provider_unavailable`；自动测试中的 fake Provider 只验证
+adapter/contract，不代表 live Agent closure。Bridge 只读取以下环境变量，不回退使用通用 SDK 变量：
+
+- `TILESIM_EVIDENCE_AGENT_PROVIDER`：`tilesim_json_https_v1` 或版本化
+  `tilesim_newapi_openai_v1`
+- `TILESIM_EVIDENCE_AGENT_ENDPOINT`：固定 HTTPS endpoint；明文 HTTP 仅允许 loopback
+- `TILESIM_EVIDENCE_AGENT_API_KEY`：Bearer secret，只从进程环境读取
+- `TILESIM_EVIDENCE_AGENT_MODEL`
+- `TILESIM_EVIDENCE_AGENT_MODEL_REVISION`
+- 可选 `TILESIM_EVIDENCE_AGENT_TIMEOUT_MS`（1–120000）
+- 可选 `TILESIM_EVIDENCE_AGENT_PROBE_CACHE_SECONDS`（0–3600）
+
+配置完整还不代表 available。Bridge 会向同一固定 endpoint 发送最小
+`tilesim.evidence_agent_provider.v1` capability probe，并精确核对 protocol、capability、provider、model
+和 model revision；认证失败、transport 失败、identity 不匹配、redirect 或错误响应都保持 unavailable。
+endpoint 不得包含 userinfo、query 或 fragment，run、artifact、用户问题和 Provider 输出均不能更改目标。
+
+`tilesim_newapi_openai_v1` 是 TileSim-owned OpenAI-compatible transport adapter，不是 `OPENAI_*` fallback。
+endpoint 只能是一个 HTTPS origin、`/v1` 或固定 `/v1/chat/completions`；Bridge 确定性解析为同一个 chat
+completion target。该 adapter 使用 JSON response format、固定 system policy、空工具边界，并要求 NewAPI 外层
+response 的 `model` 与 `TILESIM_EVIDENCE_AGENT_MODEL`、`TILESIM_EVIDENCE_AGENT_MODEL_REVISION` 三者完全相同。
+模型返回 tool call、function call、reasoning content、非完整 JSON 或不同 model 时均失败关闭。当前 adapter 要求
+model 与 revision 使用同一精确、非浮动模型 ID。
+
+`scripts/start-evidence-agent.ps1` 通过隐藏输入读取 key，仅在当前启动进程中设置上述专用变量，再由 `WSLENV`
+继承给 Bridge；key 不写入命令行、deployment manifest、release snapshot 或仓库。示例：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-evidence-agent.ps1 `
+  -Endpoint https://provider.example.invalid `
+  -Model exact-model-id
+```
+
+需要本机自动重启时，可将同一组 `TILESIM_EVIDENCE_AGENT_*` 配置写入 Git 忽略的
+`runtime/evidence-agent.local.json`，并把 API key 保存为当前 Windows 用户绑定的 DPAPI 密文字段
+`TILESIM_EVIDENCE_AGENT_API_KEY_DPAPI`。该文件不得进入 release snapshot、deployment manifest 或 Git；
+只能由创建它的 Windows 用户在同一主机上解密。启动方式：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-evidence-agent.ps1 `
+  -ConfigPath runtime/evidence-agent.local.json
+```
 
 请求不携带浏览器文件路径或任意 URL。snapshot reference 绑定当前 run 的 verified
 `tilesim.bridge.artifact_manifest.v2` canonical SHA-256，并冻结 source/build revision、state digest
@@ -168,7 +209,8 @@ descriptor 的 `digest_contract` 固定 `tilesim.bridge.canonical_json.v1`：对
 point 升序，数组保持原顺序，UTF-8 紧凑 JSON 使用逗号/冒号且无空白，非 ASCII 不转义，整数按
 无损 canonical decimal JSON token，非有限数禁止。artifact manifest digest 覆盖完整 verified
 manifest；input snapshot digest 只覆盖 descriptor 声明的六个 material 字段，不覆盖 locale、
-task kind、client request ID 或不可信 user question。
+task kind、client request ID 或不可信 user question；其中 material `schema_version` 是 request root 的
+`tilesim.bridge.evidence_agent_request.v1`，不是内嵌 snapshot reference identity。
 
 每个 atomic claim 自带自己的 citations，禁止 answer-level citation fallback。citation 的
 `value` 使用 `decimal_string` 和明确 numeric kind 保留 uint64 ps/bytes/count；availability 保持
@@ -182,11 +224,35 @@ HTTP/网络、跨 run history、allow-list 扩张及模拟状态修改。artifac
 不能升级为 real、held-out 或 hardware，Analytical/DES 不能升级为 Cycle，reported attribution
 不能扩写为新 ranking，recommendation 只能是有引用且未执行的条件草稿。
 
+Provider 输入只投影已验证 allow-list 中的 records；每条 record 携带精确 citation identity 和
+`untrusted_verified_artifact_content` 标记。固定 system policy、prompt revision 和 policy revision 来自
+Bridge 代码，tools 始终为空。Provider 必须返回正式 response JSON；Bridge 再次核对 request/run/digest、
+schema-set、provider/model/revisions、claim ID、citation allow-list、SHA、Pointer、stable subject、
+provenance、fidelity 和 subsystem scope。无效 structured output 收敛为 `unsupported_schema`，无效 citation
+收敛为现有 `citation_not_allowed`/`citation_not_resolvable`，不会把原始回答作为成功结果返回。
+
 执行采用 `synchronous_terminal`，单槽非阻塞并发门禁，超时语义为 30 秒。同步终态返回后
-cancel 为 not applicable，不另设 status/SSE/cancel endpoint。同 key/同 canonical payload 恢复
-相同终态；同 key/不同 payload 返回冲突。私有
-`agent-evidence-analyses/{sha256(idempotency-key)}.json` 只保存 redacted terminal metadata/result，
-不保存 user question、snapshot payload、artifact content 或 hidden reasoning。
+cancel 为 not applicable，不另设 status/SSE/cancel endpoint。descriptor v2 将恢复语义发布为结构化分支：
+
+- 同 key、同 canonical payload 且当前进程仍持有终态：精确重放，不调用 Provider；
+- Bridge 重启后，claim-free Bridge terminal：从
+  `tilesim.bridge.evidence_agent_terminal_record.v2` 的 redacted metadata 精确恢复；
+- Bridge 重启后，claims-bearing terminal 或 claim-free Provider terminal：返回正式
+  `tilesim.bridge.error.v1`、HTTP `409`、`code=terminal_result_not_retained`、
+  `field_path=/headers/Idempotency-Key`、`retryable=false`；
+- 同 key、不同 canonical payload：返回 HTTP `409`、`code=idempotency_payload_mismatch`，字段路径相同且
+  `retryable=false`；
+- 所有跨进程不可恢复分支均禁止自动重新调用 Provider。
+
+私有 `agent-evidence-analyses/{sha256(idempotency-key)}.json` 只保存 digest、status、identity、claim count 和
+redacted terminal metadata，不保存 user question、snapshot/artifact payload、Provider raw response、
+validated model claims、credential 或 hidden reasoning。`/persistence/mode` 明确为
+`storage_scope=run_local`、`record_kind=redacted_terminal_metadata_only`；claim-free Bridge terminal 的安全元数据
+足以重建原正式 response，claims-bearing result 仅保留不可逆摘要和终态元数据。
+
+Provider/Bridge 终态映射固定为：`502 -> completion_state=failed`、
+`503 -> reason_code=provider_unavailable`、`504 -> completion_state=timeout`；三者都使用正式
+`tilesim.bridge.evidence_agent_response.v1`，409 则始终使用正式 Bridge error envelope。
 
 稳定 refusal/error reason 覆盖 `insufficient_evidence`、`citation_not_allowed`、
 `citation_not_resolvable`、`unsupported_schema`、`stale_schema_revision`、
@@ -204,12 +270,13 @@ cancel 为 not applicable，不另设 status/SSE/cancel endpoint。同 key/同 c
 - `repositories/runs.py`：run metadata、artifact manifest、恢复、幂等查询和原子写入。
 - `services/execution.py`：输入物化、TileSimCLI 参数构建、执行与失败终态收敛。
 - `services/week7.py`：Week 7 固定操作 allow-list、路径边界、CLI 调用和登记响应 Schema 校验。
-- `services/evidence_agent.py`：F9 redacted terminal persistence、幂等恢复及 Provider-unavailable 终态。
+- `providers/evidence_agent.py`：F9 固定 endpoint/config、authenticated probe、只读输入投影与 Provider transport。
+- `services/evidence_agent.py`：F9 Provider 执行、输出二次验证、redacted terminal persistence 和幂等恢复。
 - `infra/identity.py`：Git worktree、部署清单、源码/构建 identity 和 capabilities。
 
 新端点只在 `server.py` 做路由；校验、持久化、执行或基础设施逻辑应进入对应模块。保留 `server` wrapper 是为了兼容部署脚本和现有故障注入测试，不应在 wrapper 中重新实现业务逻辑。
 
-当前 Bridge 回归基线为 61 个 unittest，全部使用临时 HTTP 端口，不操作正在运行的 5173 服务。Week 7 操作不接受请求正文中的路径、命令或参数，并要求 source/build identity 一致；同一时刻最多执行一个 Week 7 操作。CLI 输出会按登记的响应 Schema 校验必需字段、类型、最小值和有限数，同 schema_version 的畸形报告也会失败关闭。
+当前 Python Bridge 回归基线为 76 个测试（64 个 server、9 个 Provider adapter、3 个 canonical digest），全部使用临时 HTTP 端口或纯函数路径，不操作正在运行的 5173 服务。Week 7 操作不接受请求正文中的路径、命令或参数，并要求 source/build identity 一致；同一时刻最多执行一个 Week 7 操作。CLI 输出会按登记的响应 Schema 校验必需字段、类型、最小值和有限数，同 schema_version 的畸形报告也会失败关闭。
 
 F7 另有 `bridge/test_f7_schemas.mjs`，使用 Ajv 8 的 Draft 2020-12 实现编译
 design-space、topology 和 metrics schema，并运行正反例；该测试不生成或修改前端代码。
@@ -223,3 +290,9 @@ F9 另有 `bridge/test_f9_schemas.mjs`，编译 descriptor/request/response/cita
 `tests/fixtures/f9-agent-evaluation-cases.json` 的全部 36 个 case 固定为不可删减 hard gate。
 
 受控运行要求 `source_revision == build_revision`。`local_worktree_snapshot` 模式还要求当前 `source_state_digest`、部署清单摘要与构建摘要三者一致。任一门禁不满足时 `/api/health` 返回 `execution_ready: false`，`POST /api/runs` 返回 503；提交版本使用 `scripts/update-backend.ps1`，未提交本地版本使用 `scripts/deploy-local-backend.ps1` 完成一致性部署后才会恢复执行。
+
+两个部署入口都会在切换 manifest 前，将候选运行时 `bridge/` 与 `dist/` 固化到
+`runtime/releases/<release-id>`。`start-backend.ps1` 校验 release 文件数、byte count、Bridge/static digest、Web
+source/build digest 和 schema-set revision 后才停止旧服务，并从不可变 snapshot 启动；`TILESIM_WEB_STATE_ROOT`
+使 `runs/` 保持在 snapshot 外。启动失败时 previous manifest 原子恢复，并尝试从 previous snapshot 重启。部署身份可用
+`pnpm release:identity` 与正式 artifact manifest 组合输出；该工具不会读取 Provider 环境变量值。

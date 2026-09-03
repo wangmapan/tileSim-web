@@ -17,7 +17,7 @@ const hasInvalidSchema = computed(() => reports.value.some((item) => item.status
 
 <template>
   <div class="view-stack">
-    <section class="gap-panel unsupported-schema-notice" role="alert">
+    <section class="gap-panel unsupported-schema-notice" role="alert" data-help-anchor="unsupported_schema-notice">
       <header>
         <AlertTriangle :size="19" />
         <div>
@@ -31,7 +31,7 @@ const hasInvalidSchema = computed(() => reports.value.some((item) => item.status
           </p>
         </div>
       </header>
-      <ul>
+      <ul data-help-anchor="unsupported_schema-identities">
         <li v-for="item in reports" :key="item.kind">
           <code>{{ item.kind }}</code
           >：<code>{{ item.schema || "legacy_unversioned" }}</code>
@@ -47,6 +47,11 @@ const hasInvalidSchema = computed(() => reports.value.some((item) => item.status
         {{ t("Bridge 已拒绝不受支持的 artifact；前端不会下载或套用旧 Schema。") }}
       </p>
     </section>
-    <JsonArtifactPanel v-if="reports.length" />
+    <div v-if="reports.length" data-help-anchor="unsupported_schema-raw">
+      <JsonArtifactPanel />
+    </div>
+    <p class="scope-callout" data-help-anchor="unsupported_schema-next">
+      {{ t("下一步可以打开其他已支持的运行，或等待对应版本适配。") }}
+    </p>
   </div>
 </template>

@@ -23,7 +23,7 @@ test("deployed Week 8 Bridge closes the request-bound F6B chain", async ({ page 
   const browserFailures = observeBrowserFailures(page);
 
   await page.goto(
-    `${liveBaseUrl}/execution?run=${encodeURIComponent(liveRunId)}&evidence_request=${encodeURIComponent(liveRequestId)}`,
+    `${liveBaseUrl}/attribution?run=${encodeURIComponent(liveRunId)}&evidence_request=${encodeURIComponent(liveRequestId)}`,
     { waitUntil: "domcontentloaded" },
   );
   const panel = page.locator(".run-bound-evidence-panel");
@@ -31,13 +31,6 @@ test("deployed Week 8 Bridge closes the request-bound F6B chain", async ({ page 
   await expect(panel).toContainText("partitioned_des", { timeout: 30_000 });
   await expect(panel.locator(".run-bound-identity-strip")).toContainText("版本化 contract");
   await expect(panel.locator('.run-bound-percentile-grid article[aria-current="true"]')).not.toHaveCount(0);
-
-  await expect(page.locator(".execution-current-selection")).toContainText("S1");
-  const s4Node = page.locator(".flow-node").filter({ hasText: "S4" });
-  await s4Node.click();
-  await expect(s4Node).toHaveAttribute("aria-pressed", "true");
-  await expect(page.locator(".execution-current-selection")).toContainText("S4");
-  await expect(page.locator("#execution-layer-detail .layer-code")).toHaveText("S4");
 
   const states = await panel.locator(".run-bound-node, .run-bound-output-node").evaluateAll((nodes) =>
     nodes.map((node) => ({
@@ -59,6 +52,7 @@ test("deployed Week 8 Bridge closes the request-bound F6B chain", async ({ page 
   }
 
   const week8 = panel.locator(".week8-execution-panel");
+  await week8.locator("summary").click();
   await expect(week8).toContainText("partitioned_des");
   await expect(week8).toContainText("synthetic_trace");
   await expect(week8).toContainText("single_process_reference");
@@ -82,7 +76,7 @@ test("deployed Week 8 Bridge serves metrics-backed F7 Fabric evidence", async ({
   const browserFailures = observeBrowserFailures(page);
 
   await page.goto(`${liveBaseUrl}/fabric?run=${encodeURIComponent(liveRunId)}`, { waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("heading", { name: "后端报告的主导 Fabric 热点" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "当前主要通信瓶颈" })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("heading", { name: "请求级 Fabric contribution" })).toBeVisible();
   await expect(page.locator(".fabric-request-table tbody tr")).not.toHaveCount(0);
   const targets = await page.locator(".fabric-request-table a.artifact-evidence-link").evaluateAll((links) =>
@@ -170,9 +164,10 @@ test("deployed Week 8 Bridge exposes the formal F8 schema-driven experiment surf
   const browserFailures = observeBrowserFailures(page);
   await page.goto(`${liveBaseUrl}/experiment`, { waitUntil: "domcontentloaded" });
 
+  await page.locator(".capability-disclosure > summary").click();
   const schemaPanel = page.locator(".experiment-schema-panel");
   await expect(schemaPanel).toBeVisible({ timeout: 30_000 });
-  await expect(schemaPanel).toContainText("sha256:b1136c7acf028d9bcf0e28ed9744f68bce6faa0b00c40342337c99abbe611159");
+  await expect(schemaPanel).toContainText("sha256:92acce87f4f611893fafb2bf81dd1fa4fac509316ea2b5215a60f1995688871e");
   await expect(schemaPanel).toContainText("sha256:fe6d389035f9ca5f15f68a2ec65292c49f1e6bdc79e35d95b1acd641f8bcee96");
   await expect(schemaPanel).toContainText("controls · json");
   await expect(schemaPanel).toContainText("built_in_synthetic · strict_s6_manifest");
@@ -188,6 +183,86 @@ test("deployed Week 8 Bridge exposes the formal F8 schema-driven experiment surf
   await page.locator(".experiment-request-preview summary").click();
   await expect(page.locator(".request-preview-error code")).toHaveText("/overrides/fabric/scale_out_latency_us");
 
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations.filter((item) => ["serious", "critical"].includes(item.impact))).toEqual([]);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
+    await page.evaluate(() => document.documentElement.clientWidth),
+  );
+  expect(browserFailures).toEqual([]);
+});
+
+test("deployed Bridge exposes the F9 descriptor v2 and reports authenticated Provider availability truthfully", async ({
+  page,
+  request,
+}) => {
+  test.skip(!liveBaseUrl || !liveRunId, "Live F9 Bridge coordinates were not provided.");
+
+  const manifestResponse = await request.get(`${liveBaseUrl}/api/manifest`);
+  expect(manifestResponse.ok()).toBe(true);
+  expect(manifestResponse.headers()["x-tilesim-schema-set-revision"]).toBe(
+    "sha256:92acce87f4f611893fafb2bf81dd1fa4fac509316ea2b5215a60f1995688871e",
+  );
+  const manifest = await manifestResponse.json();
+  expect(manifest.evidence_agent).toMatchObject({
+    descriptor_schema_identity: "tilesim.bridge.evidence_agent_descriptor.v2",
+    descriptor_revision: "sha256:5f78ed33e20c131f672af53368c5ca950f41d63fd2e8f5301757d1f42debe357",
+    request_schema_identity: "tilesim.bridge.evidence_agent_request.v1",
+    response_schema_identity: "tilesim.bridge.evidence_agent_response.v1",
+  });
+
+  const descriptorResponse = await request.get(`${liveBaseUrl}/api/agent/evidence-capabilities`);
+  expect(descriptorResponse.ok()).toBe(true);
+  const descriptor = await descriptorResponse.json();
+  expect(descriptor).toMatchObject({
+    schema_version: "tilesim.bridge.evidence_agent_descriptor.v2",
+    schema_set_revision: "sha256:92acce87f4f611893fafb2bf81dd1fa4fac509316ea2b5215a60f1995688871e",
+  });
+  if (descriptor.availability === "available") {
+    expect(descriptor.provider).toMatchObject({
+      configured: true,
+      provider_id: "tilesim_newapi_openai_v1",
+      model_id: "gpt-5.6-sol",
+      model_revision: "gpt-5.6-sol",
+    });
+  } else {
+    expect(descriptor).toMatchObject({
+      availability: "unavailable",
+      degradation: { reason_code: "provider_unavailable" },
+      provider: { configured: false },
+    });
+  }
+  expect(descriptor.execution.retry.same_key_same_canonical_payload.provider_reinvocation).toBe("forbidden");
+  expect(descriptor.execution.terminal_recovery.claims_bearing_terminal).toMatchObject({
+    outcome: "error",
+    http_status: 409,
+    code: "terminal_result_not_retained",
+    field_path: "/headers/Idempotency-Key",
+    retryable: false,
+  });
+  expect(Object.values(descriptor.persistence.payload_retention)).toEqual([
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+  ]);
+
+  const browserFailures = observeBrowserFailures(page);
+  await page.goto(`${liveBaseUrl}/evidence-agent?run=${encodeURIComponent(liveRunId)}`, {
+    waitUntil: "domcontentloaded",
+  });
+  await expect(page.getByRole("heading", { name: "AI 解释" })).toBeVisible({ timeout: 30_000 });
+  if (descriptor.availability === "available") {
+    await expect(page.locator(".evidence-agent-unavailable")).toHaveCount(0);
+  } else {
+    await expect(page.locator(".evidence-agent-unavailable")).toContainText("provider_unavailable");
+    await expect(page.getByRole("button", { name: "生成解释" })).toBeDisabled();
+  }
+  await page.locator(".evidence-agent-policy-disclosure > summary").click();
+  await expect(page.locator(".evidence-agent-contract-grid")).toContainText("terminal_result_not_retained");
+  await expect(page.locator(".evidence-agent-retention-list li")).toHaveCount(7);
   const results = await new AxeBuilder({ page }).analyze();
   expect(results.violations.filter((item) => ["serious", "critical"].includes(item.impact))).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(

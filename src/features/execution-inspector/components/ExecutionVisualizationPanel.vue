@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { AlertTriangle, BarChart3, Braces, Info, TableProperties } from "@lucide/vue";
-import { computed, defineAsyncComponent } from "vue";
+import { computed, defineAsyncComponent, ref, watch } from "vue";
 import { formatNumber, formatPercent } from "../../../lib/format";
 import type { LayerVisualization } from "../model/types";
 import { useI18n } from "../../../i18n";
@@ -11,6 +11,15 @@ const ExecutionChart = defineAsyncComponent(() => import("../charts/ExecutionCha
 const props = defineProps<{ visualization: LayerVisualization; compact?: boolean }>();
 const { t } = useI18n();
 const chartable = computed(() => ["bar", "stacked-bar", "scatter", "timeline"].includes(props.visualization.kind));
+const selectedRowIndex = ref<number | null>(null);
+const selectedRow = computed(() =>
+  selectedRowIndex.value === null ? null : props.visualization.rows[selectedRowIndex.value] || null,
+);
+const selectedEvidencePaths = computed(() =>
+  [selectedRow.value?.sourcePath, ...(selectedRow.value?.valueSourcePaths || [])].filter(
+    (path, index, paths): path is string => Boolean(path) && paths.indexOf(path) === index,
+  ),
+);
 const kindLabels: Record<string, string> = {
   none: "仅字段表",
   matrix: "状态矩阵",
@@ -36,6 +45,13 @@ const dataIssues = computed(() =>
   ),
 );
 
+watch(
+  () => props.visualization.id,
+  () => {
+    selectedRowIndex.value = null;
+  },
+);
+
 function display(value: string | number | null, column: string) {
   if (value === null || value === "") return t("缺失");
   if (props.visualization.unit === "%" || column.toLowerCase().includes("occupancy")) return formatPercent(value, 1);
@@ -55,18 +71,34 @@ function display(value: string | number | null, column: string) {
       </div>
       <div>
         <div class="visualization-title-line">
-          <h3>{{ visualization.title }}</h3>
+          <h3>{{ t(visualization.title) }}</h3>
           <span>{{ t(kindLabels[visualization.kind]) }}</span>
         </div>
-        <p>{{ visualization.description }}</p>
       </div>
     </header>
 
     <template v-if="chartable && visualization.rows.length">
-      <ExecutionChart :visualization="visualization" />
+      <ExecutionChart :visualization="visualization" @row-selected="selectedRowIndex = $event" />
       <p v-if="visualization.rows.length > 12" class="visualization-limit-note">
         {{ t("图中按报告顺序显示前 12 项；下方字段表保留全部 {count} 项。", { count: visualization.rows.length }) }}
       </p>
+      <div v-if="selectedRow" class="visualization-selection" aria-live="polite">
+        <div>
+          <small>{{ t("已选择图表项") }}</small>
+          <strong>{{ selectedRow.label }}</strong>
+          <span v-if="selectedRow.status">{{ selectedRow.status }}</span>
+          <p v-if="selectedRow.detail">{{ selectedRow.detail }}</p>
+        </div>
+        <span v-if="selectedEvidencePaths.length" class="visualization-selection__evidence">
+          <ArtifactEvidenceLink
+            v-for="path in selectedEvidencePaths"
+            :key="path"
+            :source-path="path"
+            label="查看当前 run 的正式证据"
+          />
+        </span>
+        <small v-else>{{ t("该图表项没有可导航的精确 evidence pointer。") }}</small>
+      </div>
     </template>
     <div v-else-if="visualization.kind === 'matrix'" class="visualization-matrix">
       <div v-for="row in visualization.rows" :key="row.label">
@@ -79,12 +111,7 @@ function display(value: string | number | null, column: string) {
       <Info :size="17" /><span>{{ visualization.emptyReason }}</span>
     </div>
 
-    <div class="visualization-rationale">
-      <Info :size="15" /><span
-        ><strong>{{ t("类型依据：") }}</strong
-        >{{ visualization.rationale }}</span
-      >
-    </div>
+    <p class="visualization-caption">{{ t(visualization.description) }}</p>
 
     <div v-if="dataIssues.length" class="visualization-issues" role="status">
       <AlertTriangle :size="16" />
@@ -101,15 +128,34 @@ function display(value: string | number | null, column: string) {
 
     <details v-if="visualization.rows.length" class="visualization-data" :open="visualization.kind === 'matrix'">
       <summary>
-        <span><Braces :size="15" />{{ t("图表数据与 JSON 字段") }}</span
+        <span><Braces :size="15" />{{ t("查看数据与证据") }}</span
         ><small>{{ t("{count} 行", { count: visualization.rows.length }) }}</small>
       </summary>
+      <dl class="visualization-contract">
+        <div>
+          <dt>{{ t("来源") }}</dt>
+          <dd>
+            <code>{{ visualization.sourcePaths.join(" · ") || t("没有字段来源") }}</code>
+          </dd>
+        </div>
+        <div>
+          <dt>derivation</dt>
+          <dd>
+            <code>{{ visualization.derivation }}</code>
+          </dd>
+        </div>
+        <div>
+          <dt>{{ t("单位") }}</dt>
+          <dd>{{ visualization.unit || t("不适用") }}</dd>
+        </div>
+      </dl>
       <div class="visualization-table-scroll">
         <table>
           <thead>
             <tr>
               <th>{{ t("实体") }}</th>
-              <th v-for="column in visualization.columns" :key="column">{{ column }}</th>
+              <th v-for="column in visualization.columns" :key="column">{{ t(column) }}</th>
+              <th v-if="visualization.rows.some((row) => row.status)">{{ t("报告状态") }}</th>
               <th>{{ t("JSON 字段来源") }}</th>
             </tr>
           </thead>
@@ -118,7 +164,19 @@ function display(value: string | number | null, column: string) {
               <th scope="row">{{ row.label }}</th>
               <td v-for="(value, index) in row.values" :key="index">
                 {{ display(value, visualization.columns[index]) }}
-                <small v-if="row.rawValues?.[index]">raw: {{ row.rawValues[index] }} ps</small>
+                <small v-if="row.rawValues?.[index]">
+                  {{ visualization.rawColumns?.[index] || "raw" }}: {{ row.rawValues[index] }}
+                  {{ visualization.rawUnit }}
+                </small>
+                <ArtifactEvidenceLink
+                  v-if="row.valueSourcePaths?.[index]"
+                  :source-path="row.valueSourcePaths[index]"
+                  :label="`${visualization.columns[index]} 证据`"
+                />
+              </td>
+              <td v-if="visualization.rows.some((item) => item.status)">
+                <code>{{ row.status || t("未报告") }}</code>
+                <small v-if="row.detail">{{ row.detail }}</small>
               </td>
               <td>
                 <code>{{ row.sourcePath || "—" }}</code>

@@ -4,7 +4,7 @@ export type {
   EvidenceAgentRequestSource,
   EvidenceAgentUiState,
   EvidenceArtifactRoots,
-  PendingEvidenceAgentSubmission,
+  RetainedEvidenceAgentSubmission,
   PreparedEvidenceAgentRequest,
   ValidatedEvidenceAgentResult,
 } from "./model";

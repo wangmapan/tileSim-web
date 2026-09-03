@@ -121,8 +121,7 @@ html[data-appearance="dark"] body {
 html[data-appearance="dark"] .button--primary,
 html[data-appearance="dark"] .layer-code,
 html[data-appearance="dark"] .execution-current-selection > span,
-html[data-appearance="dark"] .layer-attribution-list > li > span,
-html[data-appearance="dark"] .run-row.selected .compare-check {
+html[data-appearance="dark"] .layer-attribution-list > li > span {
   color: #07131b;
 }
 

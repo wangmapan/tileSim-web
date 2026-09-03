@@ -1,19 +1,17 @@
 import { parseJsonLossless } from "../contracts/lossless-json";
-import { bundleReports, normalizeApiReports } from "../lib/reports";
+import { bundleReports } from "../lib/reports";
 import type { ApplyBundleOptions } from "../entities/dashboard/types";
 import { t } from "../i18n";
 import { isWorkspaceView, navItems } from "../entities/navigation/model";
 import { buildBridgeStatusPresentation, fetchBridgeBootstrap } from "../features/bridge-status";
-import { fetchRunEvidence as queryRunEvidence } from "../features/run-evidence";
-import { fetchRunHistory, renameRun as renameRunMutation } from "../features/run-history";
 import { persistDashboardSelection as persist, restoreDashboardSelection } from "./dashboard-persistence";
+import { createDashboardRunCoordinator } from "./dashboard-runs";
 import {
   currentTitle,
   dashboardView,
   errorMessage,
   evidence,
   filteredRuns,
-  queryContext,
   runSummary,
   session,
   state,
@@ -41,6 +39,8 @@ function applyBundle(value: unknown, options: ApplyBundleOptions = {}) {
   workspace.applyBundle(value, options);
   persist();
 }
+
+const runs = createDashboardRunCoordinator({ applyBundle, setView });
 
 async function checkBridge({ refresh = true } = {}) {
   state.bridge.checking = true;
@@ -91,76 +91,6 @@ async function checkBridge({ refresh = true } = {}) {
   }
 }
 
-async function fetchRunEvidence(runId: string) {
-  return queryRunEvidence(runId, queryContext());
-}
-
-async function loadHistory({ quiet = false, refresh = false }: { quiet?: boolean; refresh?: boolean } = {}) {
-  if (!state.bridge.connected) return;
-  state.history.loading = true;
-  try {
-    const payload = await fetchRunHistory(queryContext(), { refresh });
-    state.history.runs = payload.runs || [];
-  } catch (error) {
-    if (!quiet) session.notify(t("读取运行记录失败：{message}", { message: errorMessage(error) }), "danger");
-  } finally {
-    state.history.loading = false;
-  }
-}
-
-async function openRun(runId: string) {
-  state.busy = true;
-  try {
-    const { payload, inputs, artifactManifest } = await fetchRunEvidence(runId);
-    const run = state.history.runs.find((item) => item.run_id === runId);
-    applyBundle(payload.reports, { runId, runName: run?.run_name || runId, inputs, artifactManifest });
-    setView("overview");
-    session.notify(t("已载入该次运行的完整证据包。"), "positive");
-  } catch (error) {
-    session.notify(t("打开运行失败：{message}", { message: errorMessage(error) }), "danger");
-  } finally {
-    state.busy = false;
-  }
-}
-
-async function fetchComparison(runId: string) {
-  const { payload, inputs } = await fetchRunEvidence(runId);
-  return {
-    artifacts: normalizeApiReports(payload.reports),
-    input: { runtime_trace: inputs.runtime_trace },
-  };
-}
-
-async function toggleComparison(runId: string) {
-  const index = state.history.selected.indexOf(runId);
-  if (index >= 0) {
-    state.history.selected.splice(index, 1);
-    persist();
-    return;
-  }
-  try {
-    if (!state.history.comparisons[runId]) state.history.comparisons[runId] = await fetchComparison(runId);
-    if (state.history.selected.length === 2) state.history.selected.shift();
-    state.history.selected.push(runId);
-    persist();
-  } catch (error) {
-    session.notify(t("无法加入对比：{message}", { message: errorMessage(error) }), "danger");
-  }
-}
-
-function clearComparisons() {
-  state.history.selected = [];
-  persist();
-}
-
-async function renameRun(runId: string, name: string) {
-  const payload = await renameRunMutation(runId, name, queryContext());
-  const run = state.history.runs.find((item) => item.run_id === runId);
-  if (run) run.run_name = payload.run_name;
-  if (state.runId === runId) state.runName = payload.run_name;
-  session.notify(t("实验名称已更新。"), "positive");
-}
-
 async function importFiles(files: File[]) {
   const reports: unknown[] = [];
   for (const file of files) reports.push(parseJsonLossless(await file.text()));
@@ -170,49 +100,12 @@ async function importFiles(files: File[]) {
   session.notify(t("已导入 {count} 份报告。", { count: files.length }), "positive");
 }
 
-async function restoreRemoteState() {
-  await loadHistory({ quiet: true });
-  if (state.runId) {
-    try {
-      const { payload, inputs, artifactManifest } = await fetchRunEvidence(state.runId);
-      const run = state.history.runs.find((item) => item.run_id === state.runId);
-      applyBundle(payload.reports, {
-        runId: state.runId,
-        runName: run?.run_name || state.runId,
-        inputs,
-        artifactManifest,
-      });
-    } catch {
-      state.runId = null;
-      persist();
-    }
-  }
-  const selected = [...state.history.selected];
-  const restoredComparisons = await Promise.all(
-    selected.map(async (runId) => {
-      try {
-        return { runId, comparison: await fetchComparison(runId) };
-      } catch {
-        return null;
-      }
-    }),
-  );
-  const restored = [];
-  for (const entry of restoredComparisons) {
-    if (entry) {
-      state.history.comparisons[entry.runId] = entry.comparison;
-      restored.push(entry.runId);
-    }
-  }
-  state.history.selected = restored;
-}
-
 async function synchronizeNavigation(view: string, requestedRunId: string | null) {
   const synchronizationRevision = ++routeSynchronizationRevision;
   session.setCurrentView(view);
   persist();
   if (view === "evidence_lab") return;
-  if (view === "history") void loadHistory();
+  if (view === "history") void runs.loadHistory();
   if (requestedRunId === state.runId) return;
   if (!requestedRunId) {
     workspace.resetDemo();
@@ -223,7 +116,7 @@ async function synchronizeNavigation(view: string, requestedRunId: string | null
 
   state.busy = true;
   try {
-    const { payload, inputs, artifactManifest } = await fetchRunEvidence(requestedRunId);
+    const { payload, inputs, artifactManifest } = await runs.fetchRunEvidence(requestedRunId);
     if (synchronizationRevision !== routeSynchronizationRevision) return;
     const run = state.history.runs.find((item) => item.run_id === requestedRunId);
     applyBundle(payload.reports, {
@@ -250,7 +143,7 @@ async function initialize(
   session.setCurrentView(initialNavigation.view);
   await checkBridge({ refresh: false });
   if (!state.bridge.connected) return;
-  await restoreRemoteState();
+  await runs.restoreRemoteState();
   await synchronizeNavigation(initialNavigation.view, initialNavigation.runId);
 }
 
@@ -269,13 +162,13 @@ export function useDashboard() {
     resumeToast: session.resumeToast,
     applyBundle,
     checkBridge,
-    loadHistory,
-    openRun,
-    toggleComparison,
-    clearComparisons,
-    renameRun,
+    loadHistory: runs.loadHistory,
+    openRun: runs.openRun,
+    toggleComparison: runs.toggleComparison,
+    clearComparisons: runs.clearComparisons,
+    renameRun: runs.renameRun,
     importFiles,
-    fetchRunEvidence,
+    fetchRunEvidence: runs.fetchRunEvidence,
     initialize,
     synchronizeNavigation,
     persist,

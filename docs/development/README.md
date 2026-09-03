@@ -1,9 +1,11 @@
 # Development Evidence Index
 
 本目录保存阶段性验证证据，不是当前开发状态来源。后续 AI 应先读取仓库 `AGENTS.md` 和 `docs/AI_HANDOFF.md`。
+稳定版维护任务还应读取 `docs/NEXT_STABLE_MAINTENANCE_PROMPT.md`。
 
 ## 当前有效记录
 
+- `FRONTEND_STABLE_CANDIDATE_AUDIT_2026-09-02.md`：并发 workstream 集成体检、重复组件/i18n 所有权修复、ECharts 安全升级和稳定版候选门禁。
 - `FRONTEND_READABILITY_REVIEW_2026-08-31.md`：全仓可读性审查、i18n/Bridge 状态分离和稳定 ID Pointer 统一。
 - `FRONTEND_COUPLING_REFACTOR_2026-08-31.md`：F6B evidence model 与 F7 presentation 的职责拆分、边界审计和保留债务。
 - `F7_FABRIC_SLICE_2026-08-30.md`：metrics-backed Fabric hotspot、request/phase Pointer、F7 capability degradation 和结构化导出同步。

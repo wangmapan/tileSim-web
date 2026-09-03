@@ -17,6 +17,7 @@ import { formatNumber } from "../lib/format";
 import { useDashboard } from "../store/dashboard";
 import type { ReportKind } from "../contracts/report-model";
 import { useI18n } from "../i18n";
+import { GuidedHelpTrigger } from "../features/guided-help";
 
 interface ArtifactDefinition {
   id: string;
@@ -354,7 +355,7 @@ onBeforeUnmount(releaseCurrentArtifact);
 
 <template>
   <details ref="detailsElement" class="panel json-artifact-panel" @toggle="onToggle">
-    <summary>
+    <summary data-help-anchor="raw_evidence-open">
       <span
         ><Braces :size="18" /><span
           ><strong>{{ t("完整 JSON 证据") }}</strong
@@ -364,8 +365,9 @@ onBeforeUnmount(releaseCurrentArtifact);
       <span>{{ t("按需加载") }}</span>
     </summary>
     <div class="json-artifact-body">
+      <GuidedHelpTrigger guide-id="raw_evidence" label="查看原始证据指引" />
       <header>
-        <label>
+        <label data-help-anchor="raw_evidence-artifact">
           <small>{{ t("选择工件") }}</small>
           <select v-model="selectedArtifact" @change="onArtifactChange">
             <option v-for="artifact in availableDefinitions" :key="artifact.id" :value="artifact.id">
@@ -373,7 +375,7 @@ onBeforeUnmount(releaseCurrentArtifact);
             </option>
           </select>
         </label>
-        <label class="json-search-field">
+        <label class="json-search-field" data-help-anchor="raw_evidence-search">
           <small>{{ t("搜索字段或值") }}</small>
           <span
             ><Search :size="15" /><input v-model="query" type="search" :placeholder="t('例如 device_latency_us')"
@@ -392,7 +394,7 @@ onBeforeUnmount(releaseCurrentArtifact);
           {{ t("原始文件") }}<ExternalLink :size="14" />
         </a>
       </header>
-      <div class="json-artifact-meta">
+      <div class="json-artifact-meta" data-help-anchor="raw_evidence-verify">
         <span>{{
           loading ? t("正在读取并建立索引…") : t("{count} 个字符", { count: formatNumber(rawText.length, 0) })
         }}</span>

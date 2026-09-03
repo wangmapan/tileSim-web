@@ -10,6 +10,7 @@ import { useDashboard } from "./store/dashboard";
 import { unsupportedSchemaReports } from "./lib/reports";
 import { useI18n } from "./i18n";
 import { useEvidenceSelectionStore } from "./stores/evidence-selection";
+import { guideFor, GuidedHelpHost, PagePrimer, type GuideId } from "./features/guided-help";
 
 const activeRoute = useRoute();
 const { state, initialize, synchronizeNavigation } = useDashboard();
@@ -24,6 +25,10 @@ const showUnsupported = computed(
 );
 const { t } = useI18n();
 const evidenceSelection = useEvidenceSelectionStore();
+const currentGuideId = computed<GuideId>(() =>
+  showUnsupported.value ? "unsupported_schema" : ((guideFor(state.view)?.id || "overview") as GuideId),
+);
+const currentGuide = computed(() => guideFor(currentGuideId.value));
 
 const requestedRunId = computed(() => navigationSnapshot().runId);
 const navigationUnavailable = computed(
@@ -72,7 +77,8 @@ onMounted(() => initialize(navigationSnapshot()));
             })
           }}</span>
         </section>
-        <EvidenceStrip v-if="!['experiment', 'evidence_lab'].includes(state.view)" />
+        <EvidenceStrip v-if="!['experiment', 'evidence_lab', 'history'].includes(state.view)" />
+        <PagePrimer v-if="currentGuide" :guide="currentGuide" />
         <RouterView v-slot="{ Component, route }">
           <Transition name="view-fade" mode="out-in">
             <component :is="showUnsupported ? UnsupportedSchemaView : Component" :key="String(route.name)" />
@@ -80,6 +86,7 @@ onMounted(() => initialize(navigationSnapshot()));
         </RouterView>
       </div>
     </main>
+    <GuidedHelpHost :default-guide-id="currentGuideId" />
     <ToastStack />
     <div v-if="state.busy" class="global-busy" :aria-label="t('正在载入')"><span></span></div>
   </div>

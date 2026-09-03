@@ -1,5 +1,6 @@
 <script setup>
 import { Braces, Cpu, Database, Network, RotateCcw, SlidersHorizontal } from "@lucide/vue";
+import { ref } from "vue";
 import { useI18n } from "../../i18n";
 
 const form = defineModel("form", { type: Object, required: true });
@@ -13,6 +14,7 @@ defineProps({
 });
 defineEmits(["reset-controls", "load-template", "load-bundle", "load-json-file"]);
 const { t } = useI18n();
+const showFieldContracts = ref(false);
 </script>
 
 <template>
@@ -24,20 +26,30 @@ const { t } = useI18n();
         <p>{{ t("快捷控制适合对比实验；JSON 适合精确复现。") }}</p>
       </div>
     </header>
-    <div class="segmented-control">
+    <div class="experiment-input-toolbar">
+      <div class="segmented-control">
+        <button
+          :class="{ active: mode === 'controls' }"
+          :disabled="!surface.inputModes.includes('controls')"
+          @click="mode = 'controls'"
+        >
+          <SlidersHorizontal :size="16" />{{ t("快捷控制") }}
+        </button>
+        <button
+          :class="{ active: mode === 'json' }"
+          :disabled="!surface.inputModes.includes('json')"
+          @click="mode = 'json'"
+        >
+          <Braces :size="16" />{{ t("JSON 输入") }}
+        </button>
+      </div>
       <button
-        :class="{ active: mode === 'controls' }"
-        :disabled="!surface.inputModes.includes('controls')"
-        @click="mode = 'controls'"
+        v-if="mode === 'controls'"
+        class="text-button"
+        :aria-pressed="showFieldContracts"
+        @click="showFieldContracts = !showFieldContracts"
       >
-        <SlidersHorizontal :size="16" />{{ t("快捷控制") }}
-      </button>
-      <button
-        :class="{ active: mode === 'json' }"
-        :disabled="!surface.inputModes.includes('json')"
-        @click="mode = 'json'"
-      >
-        <Braces :size="16" />{{ t("JSON 输入") }}
+        <Braces :size="14" />{{ showFieldContracts ? t("隐藏字段契约") : t("显示字段契约") }}
       </button>
     </div>
 
@@ -87,7 +99,7 @@ const { t } = useI18n();
               :placeholder="field.explicitDefaultAvailable ? undefined : t('未设置（省略字段）')"
               :aria-invalid="fieldPath === field.requestJsonPointer"
             />
-            <small class="field-help"
+            <small v-if="showFieldContracts || fieldPath === field.requestJsonPointer" class="field-help"
               ><code>{{ field.fieldId }}</code> · <code>{{ field.requestJsonPointer }}</code></small
             >
             <small v-if="!field.available" class="field-error">{{ field.unavailableReason }}</small>
@@ -96,7 +108,7 @@ const { t } = useI18n();
             }}</small>
           </label>
         </div>
-        <small class="schema-source-note">
+        <small v-if="showFieldContracts" class="schema-source-note">
           {{ group.fields[0]?.contractStatus }} ·
           {{
             group.fields[0]?.contractStatus === "backend_descriptor" ? t("正式后端参数描述契约") : t("旧版兼容参数描述")

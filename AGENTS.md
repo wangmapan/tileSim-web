@@ -8,15 +8,16 @@
 
 1. `AGENTS.md`
 2. `docs/AI_HANDOFF.md`
-3. 当前任务涉及的代码和测试
-4. 仅在需要追溯时读取 `docs/development/`
+3. 稳定版维护或交接任务读取 `docs/NEXT_STABLE_MAINTENANCE_PROMPT.md`
+4. 当前任务涉及的代码和测试
+5. 仅在需要追溯时读取 `docs/development/`
 
 `docs/AI_HANDOFF.md` 是当前事实来源；阶段文档是历史证据，不能用旧状态覆盖当前状态。
 
 ## 2. 当前状态
 
-- F0-F6A 已验证并部署；下一阶段是 F6B run-bound S7/S8/S9 联动。
-- 当前完整基线：58/58 TileSim CTest、97/97 frontend、36/36 Bridge、18/18 desktop Playwright。
+- F0-F8 与 F10 发布机制已验证；F9 descriptor v2 已部署且 authenticated capability probe 返回 available，live Provider acceptance 与人工 citation entailment review 尚未执行。
+- 当前稳定版候选基线：61/61 TileSim CTest、265/265 frontend、78/78 Bridge、29/29 desktop fixture Playwright；上一部署的 5/5 live deployment Playwright 保持历史证据。F9 live model repetitions 仍为 0。
 - 产品范围只包含电脑网页端；不要为移动端增加实现或验收工作。
 - 前端工作目录可能长期包含 F0-F4 未提交改动。保留用户改动，不 reset、不清理、不擅自提交。
 - `127.0.0.1:5173` 可能运行用户正在使用的 Bridge。除非用户明确要求部署，不停止、不重启、不替换它。
@@ -43,6 +44,7 @@
 - Week 7 backend-global query 必须保留 backend identity 与 schema-set revision；三个固定 CLI 操作共享 Bridge 单槽，前端按 evidence map -> calibration -> orchestration 顺序请求。
 - 进入 backend-global 页面不得清除当前 run；run-bound 和 backend-global state 分开维护。
 - `src/store/dashboard.ts` 是兼容 controller，不要把状态重新集中进去。
+- 页面引导定义归 `src/features/guided-help/` 所有，不要写回 navigation model；并行开发的新英文文案分别写入 `src/i18n/workstreams/`，避免扩大共享 legacy catalog。
 - Bridge 依次使用 `api`、`contracts`、`services`、`repositories`、`infra`；`server.py` 只保留配置、兼容 wrapper 和端点协调。
 - 保留 `server` wrapper 的测试 patch 接口，尤其是 execution/subprocess 故障注入。
 
@@ -71,4 +73,4 @@ git diff --check
 pnpm test:e2e
 ```
 
-当前基线：97 个 frontend tests、36 个 Bridge tests、18 个 desktop Playwright tests。
+当前稳定版候选基线：265 个 frontend tests、78 个 Bridge tests、29 个 desktop fixture Playwright tests。live deployment 仍以已部署版本的独立门禁为准。

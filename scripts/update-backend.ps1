@@ -27,6 +27,19 @@ function Invoke-Checked {
     }
 }
 
+function Write-AtomicTextFile {
+    param([string]$Path, [string]$Text)
+    $directory = Split-Path -Parent $Path
+    New-Item -ItemType Directory -Path $directory -Force | Out-Null
+    $temporary = Join-Path $directory "$([System.IO.Path]::GetFileName($Path)).$PID.tmp"
+    try {
+        [System.IO.File]::WriteAllText($temporary, $Text, [System.Text.UTF8Encoding]::new($false))
+        Move-Item -LiteralPath $temporary -Destination $Path -Force
+    } finally {
+        if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force }
+    }
+}
+
 function Resolve-GitCommit {
     param([string]$GitRef)
     $revision = (& git -C $repository rev-parse "$GitRef`^{commit}" 2>$null)
@@ -74,11 +87,62 @@ function Convert-ToWslPath {
     return "/mnt/$($matches[1].ToLower())/$($matches[2].Replace('\', '/'))"
 }
 
+function Get-SourceStateDigest {
+    param([string]$SourceRootWsl)
+    $output = @(& wsl.exe -d $WslDistro --exec env "TILESIM_ROOT=$SourceRootWsl" python3 "/mnt/d/tileSim-web/bridge/server.py" --print-source-state-digest)
+    if ($LASTEXITCODE -ne 0) { throw "Could not calculate the backend source-state digest." }
+    $digest = $output | Where-Object { $_ -match '^[0-9a-f]{64}$' } | Select-Object -Last 1
+    if (-not $digest) { throw "The backend source-state digest was not returned." }
+    return $digest.Trim()
+}
+
+function Get-DirectoryDigest {
+    param([string]$Directory, [string]$ExcludedNames = "")
+    $arguments = @((Join-Path $PSScriptRoot "release-traceability.mjs"), $Directory)
+    if ($ExcludedNames) { $arguments += $ExcludedNames }
+    $digest = (& $node @arguments).Trim()
+    if ($LASTEXITCODE -ne 0 -or $digest -notmatch '^[0-9a-f]{64}$') {
+        throw "Could not calculate release traceability digest for $Directory."
+    }
+    return $digest
+}
+
+function Get-SchemaSetRevision {
+    $output = @(& wsl.exe -d $WslDistro --exec python3 "/mnt/d/tileSim-web/bridge/server.py" --print-schema-set-revision)
+    if ($LASTEXITCODE -ne 0) { throw "Could not calculate the Bridge schema-set revision." }
+    $revision = $output | Where-Object { $_ -match '^sha256:[0-9a-f]{64}$' } | Select-Object -Last 1
+    if (-not $revision) { throw "The Bridge schema-set revision was not returned." }
+    return $revision.Trim()
+}
+
+function New-WebReleaseSnapshot {
+    param(
+        [string]$WebRevision,
+        [string]$WebSourceDigest,
+        [string]$WebBuildDigest,
+        [string]$SchemaSetRevision
+    )
+    $releaseRoot = Join-Path $runtimeRoot "releases"
+    $output = & $node (Join-Path $PSScriptRoot "release-snapshot.mjs") create `
+        --source-root $webRoot `
+        --releases-root $releaseRoot `
+        --web-source-revision $WebRevision `
+        --web-source-state-digest $WebSourceDigest `
+        --web-build-digest $WebBuildDigest `
+        --schema-set-revision $SchemaSetRevision
+    if ($LASTEXITCODE -ne 0) { throw "Could not create the immutable TileSim Web release snapshot." }
+    return ($output | Select-Object -Last 1) | ConvertFrom-Json
+}
+
 if (-not $mutex.WaitOne(0)) { throw "Another backend update is already running." }
 $previousManifest = $null
+$previousManifestText = $null
+$manifestWritten = $false
+$restartAttempted = $false
 try {
     if (Test-Path -LiteralPath $manifestPath) {
-        $previousManifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
+        $previousManifestText = Get-Content -Raw -LiteralPath $manifestPath
+        $previousManifest = $previousManifestText | ConvertFrom-Json
     }
     $targetRevision = Resolve-GitCommit $Ref
     $isRemoteTrackingRef = $Ref -match '^origin/'
@@ -115,6 +179,12 @@ try {
     $backendWsl = Convert-ToWslPath $backend
     $shortRevision = $targetRevision.Substring(0, 12)
     $buildDirWsl = "/home/mapanwang/tilesim-backend-builds/$shortRevision"
+    $sourceDigest = Get-SourceStateDigest $backendWsl
+    $webRevision = (& git -C $webRoot rev-parse HEAD).Trim()
+    if ($LASTEXITCODE -ne 0 -or $webRevision -notmatch '^[0-9a-f]{40}$') {
+        throw "TileSim Web source is not a valid Git worktree: $webRoot"
+    }
+    $webSourceDigest = Get-DirectoryDigest $webRoot
     Invoke-Checked "wsl.exe" @("-d", $WslDistro, "--exec", "env", "TILESIM_WSL_BUILD_DIR=$buildDirWsl", "bash", "$backendWsl/scripts/build_wsl.sh")
     Invoke-Checked "wsl.exe" @("-d", $WslDistro, "--exec", "ctest", "--test-dir", $buildDirWsl, "--output-on-failure")
     Write-Output "Backend validation passed; validating and rebuilding the frontend once..."
@@ -122,37 +192,83 @@ try {
     Invoke-Checked $node @((Join-Path $webRoot "node_modules\vitest\vitest.mjs"), "run") $webRoot
     Invoke-Checked $node @((Join-Path $webRoot "node_modules\vite\bin\vite.js"), "build") $webRoot
 
+    $verifiedSourceDigest = Get-SourceStateDigest $backendWsl
+    if ($verifiedSourceDigest -ne $sourceDigest) {
+        throw "Backend source changed during build or validation; deployment aborted."
+    }
+    $verifiedWebSourceDigest = Get-DirectoryDigest $webRoot
+    if ($verifiedWebSourceDigest -ne $webSourceDigest) {
+        throw "TileSim Web source changed during build or validation; deployment aborted."
+    }
+    $webBuildDigest = Get-DirectoryDigest (Join-Path $webRoot "dist") ""
+    $schemaSetRevision = Get-SchemaSetRevision
+    $webRelease = New-WebReleaseSnapshot $webRevision $webSourceDigest $webBuildDigest $schemaSetRevision
+    $webReleaseRootWsl = Convert-ToWslPath $webRelease.release_root_windows
+    $webStateRootWsl = Convert-ToWslPath $webRoot
+
     New-Item -ItemType Directory -Path $runtimeRoot -Force | Out-Null
     $manifest = [ordered]@{
         deployment_mode = "dedicated_worktree"
         source_ref = $Ref
         source_revision = $targetRevision
         build_revision = $targetRevision
+        source_state_digest = $sourceDigest
+        build_state_digest = $sourceDigest
+        web_source_revision = $webRevision
+        web_source_state_digest = $webSourceDigest
+        web_build_digest = $webBuildDigest
+        web_release_identity = $webRelease.identity
+        web_release_digest = $webRelease.release_digest
+        web_bridge_digest = $webRelease.bridge.digest
+        web_static_digest = $webRelease.static.digest
+        web_release_root_windows = $webRelease.release_root_windows
+        web_release_root_wsl = $webReleaseRootWsl
+        web_state_root_wsl = $webStateRootWsl
+        schema_set_revision = $schemaSetRevision
         source_root_windows = $backend
         tilesim_root_wsl = $backendWsl
         build_dir_wsl = $buildDirWsl
         tilesim_cli_wsl = "$buildDirWsl/TileSimCLI"
-        manifest_path_wsl = "/mnt/d/tileSim-web/runtime/backend-current.json"
+        manifest_path_wsl = Convert-ToWslPath $manifestPath
         deployed_at = [DateTimeOffset]::Now.ToString("o")
         validation = [ordered]@{
             tilesim_ctest = "passed"
             web = "passed"
         }
     }
-    $temporaryManifest = Join-Path $runtimeRoot "backend-current.$PID.tmp"
-    [System.IO.File]::WriteAllText($temporaryManifest, ($manifest | ConvertTo-Json -Depth 6), [System.Text.UTF8Encoding]::new($false))
-    Move-Item -LiteralPath $temporaryManifest -Destination $manifestPath -Force
+    Write-AtomicTextFile $manifestPath ($manifest | ConvertTo-Json -Depth 6)
+    $manifestWritten = $true
 
     if (-not $NoRestart) {
+        $restartAttempted = $true
         & (Join-Path $PSScriptRoot "start-backend.ps1") -ManifestPath $manifestPath -WslDistro $WslDistro
         if ($LASTEXITCODE -ne 0) { throw "Backend build passed, but bridge restart failed." }
     }
     Write-Output "TileSim backend deployed: $Ref -> $targetRevision"
 } catch {
+    $deploymentError = $_
+    $rollbackError = $null
     if ($previousManifest.source_revision -and (Test-Path -LiteralPath $backend)) {
         & git -C $backend switch --detach $previousManifest.source_revision | Out-Null
     }
-    throw
+    if ($manifestWritten -and $null -ne $previousManifestText) {
+        Write-AtomicTextFile $manifestPath $previousManifestText
+        if ($restartAttempted) {
+            try {
+                & (Join-Path $PSScriptRoot "start-backend.ps1") -ManifestPath $manifestPath -WslDistro $WslDistro
+                if ($LASTEXITCODE -ne 0) { throw "Previous Bridge restart returned exit code $LASTEXITCODE." }
+                Write-Warning "Deployment failed; the previous deployment manifest and Bridge service were restored."
+            } catch {
+                $rollbackError = $_
+            }
+        }
+    } elseif ($manifestWritten -and (Test-Path -LiteralPath $manifestPath)) {
+        Remove-Item -LiteralPath $manifestPath -Force
+    }
+    if ($rollbackError) {
+        throw "Deployment failed: $($deploymentError.Exception.Message) Rollback also failed: $($rollbackError.Exception.Message)"
+    }
+    throw $deploymentError
 } finally {
     $mutex.ReleaseMutex()
     $mutex.Dispose()

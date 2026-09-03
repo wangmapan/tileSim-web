@@ -10,6 +10,7 @@ import { chartOption } from "./chart-options";
 use([BarChart, ScatterChart, GridComponent, TooltipComponent, LegendComponent, SVGRenderer]);
 
 const props = defineProps<{ visualization: LayerVisualization }>();
+const emit = defineEmits<{ rowSelected: [index: number] }>();
 const host = ref<HTMLDivElement | null>(null);
 let chart: EChartsType | null = null;
 let observer: ResizeObserver | null = null;
@@ -17,7 +18,12 @@ let appearanceObserver: MutationObserver | null = null;
 
 function renderChart() {
   if (!host.value) return;
-  if (!chart) chart = init(host.value, undefined, { renderer: "svg" });
+  if (!chart) {
+    chart = init(host.value, undefined, { renderer: "svg" });
+    chart.on("click", (event) => {
+      if (typeof event.dataIndex === "number") emit("rowSelected", event.dataIndex);
+    });
+  }
   chart.setOption(chartOption(props.visualization), true);
 }
 

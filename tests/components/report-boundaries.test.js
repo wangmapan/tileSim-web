@@ -18,7 +18,13 @@ describe("report boundary components", () => {
     const fixture = fixtureCase("boundary-expected-absence");
     applyBundle(fixture.reports, { runName: fixture.id, inputs: fixture.inputs });
     const wrapper = mount(MetricsView, {
-      global: { stubs: { RunBoundEvidencePanel: true, RequestEvidenceAction: true } },
+      global: {
+        stubs: {
+          RunBoundEvidencePanel: true,
+          RequestEvidenceAction: true,
+          RouterLink: { template: "<a><slot /></a>" },
+        },
+      },
     });
     expect(wrapper.text()).toContain("不适用");
     expect(wrapper.text()).toContain("0/0 请求完成");

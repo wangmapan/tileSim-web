@@ -11,6 +11,37 @@ export function formatPercent(value, digits = 0) {
   return typeof value === "number" && Number.isFinite(value) ? `${formatNumber(value * 100, digits)}%` : "—";
 }
 
+function formatScaledInteger(value, scale, unit) {
+  const negative = value < 0n;
+  const absolute = negative ? -value : value;
+  let whole = absolute / scale;
+  let hundredths = ((absolute % scale) * 100n + scale / 2n) / scale;
+  if (hundredths === 100n) {
+    whole += 1n;
+    hundredths = 0n;
+  }
+  const fraction = hundredths.toString().padStart(2, "0").replace(/0+$/, "");
+  return `${negative ? "-" : ""}${whole.toLocaleString(currentLocale())}${fraction ? `.${fraction}` : ""} ${unit}`;
+}
+
+export function formatPicoseconds(value) {
+  let integer;
+  try {
+    if (typeof value === "bigint") integer = value;
+    else if (typeof value === "string" && /^-?\d+$/.test(value)) integer = BigInt(value);
+    else if (typeof value === "number" && Number.isSafeInteger(value)) integer = BigInt(value);
+  } catch {
+    integer = undefined;
+  }
+  if (integer === undefined) return "—";
+  const absolute = integer < 0n ? -integer : integer;
+  if (absolute >= 1_000_000_000_000n) return formatScaledInteger(integer, 1_000_000_000_000n, "s");
+  if (absolute >= 1_000_000_000n) return formatScaledInteger(integer, 1_000_000_000n, "ms");
+  if (absolute >= 1_000_000n) return formatScaledInteger(integer, 1_000_000n, "µs");
+  if (absolute >= 1_000n) return formatScaledInteger(integer, 1_000n, "ns");
+  return `${integer.toLocaleString(currentLocale())} ps`;
+}
+
 export function formatDate(value) {
   if (!value) return t("时间未知");
   const date = new Date(value);
@@ -39,15 +70,18 @@ export function statusLabel(value) {
     matched: "已匹配",
     synthetic_consistency: "合成一致性",
     synthetic_consistency_with_resource_convergence: "合成一致性 · 含资源汇合",
-    synthetic_trace: "合成 Trace",
-    real_trace: "真实 Trace",
-    compatibility_harness_trace: "兼容夹具 Trace",
+    synthetic_trace: "合成数据",
+    real_trace: "真实采集数据",
+    compatibility_harness_trace: "兼容测试数据",
     uncalibrated: "未校准",
     exploratory: "探索性结论",
     covered: "已覆盖",
-    analytical: "Analytical",
-    des: "DES",
-    cycle: "Cycle",
+    analytical: "估算（Analytical）",
+    des: "离散事件模拟（DES）",
+    cycle: "周期级模拟（Cycle）",
+    queue_delay: "排队等待",
+    congestion_delay: "拥塞等待",
+    runtime: "实际执行",
     unknown: "未知",
   };
   return labels[value] ? t(labels[value]) : String(value || t("未知")).replaceAll("_", " ");

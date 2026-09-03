@@ -57,7 +57,8 @@ function legacyShapeIssues(kind: ReportKind, report: JsonRecord): string[] {
   if (kind === "run") requireRecord("summary");
   if (kind === "design_space") requireArray("ranking");
   if (kind === "execution_envelope") requireArray("stages");
-  if (kind === "run_bound_des_evidence") issues.push("/schema_version must use the Week 8 versioned contract");
+  if (kind === "run_bound_des_evidence")
+    issues.push("/schema_version must use the versioned S7 execution-evidence contract");
   for (const key of ["request_metrics", "resolution_entries", "checks", "cause_chain", "attribution_ranking"]) {
     if (report[key] !== undefined && !Array.isArray(report[key])) issues.push(`/${key} must be an array`);
   }

@@ -11,11 +11,11 @@ import type {
   RunInputs,
   ValidationCheck,
 } from "../../contracts/report-model";
-import { buildExecutionResult, executionStageSource } from "../execution-inspector";
-import type { ExecutionRecord, ExecutionStat, LayerId, LayerVisualization } from "../execution-inspector";
+import { buildExecutionResult, executionStageSource } from "../execution-inspector/model-api";
+import type { ExecutionRecord, ExecutionStat, LayerId, LayerVisualization } from "../execution-inspector/model-api";
 import { buildDesignSpaceAnalysis, buildF7Capabilities, buildFabricAnalysis } from "../f7-analysis";
 import type { F7Availability, F7Capability, F7EvidenceIdentity } from "../f7-analysis";
-import { buildRunBoundEvidenceChain } from "../run-bound-evidence";
+import { buildRunBoundEvidenceChain } from "../run-bound-evidence/model-api";
 import type {
   PercentileNavigation,
   RunBoundAvailability,
@@ -23,7 +23,7 @@ import type {
   RunBoundEvidenceNode,
   RunBoundReference,
   Week8ExecutionSummary,
-} from "../run-bound-evidence";
+} from "../run-bound-evidence/model-api";
 import { t } from "../../i18n";
 
 export const structuredReportSchema = "tilesim.web.structured-performance-report.v2";

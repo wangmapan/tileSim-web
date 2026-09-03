@@ -137,12 +137,64 @@ appearance: light | dark
 | 阶段   | 状态   | 已完成结果                                                                       |
 | ------ | ------ | -------------------------------------------------------------------------------- |
 | 阶段一 | 已完成 | appearance 独立状态、持久化、双语切换控件、深色 token、ECharts 主题联动          |
-| 阶段二 | 已完成 | 1440px 桌面工作区、全局排版与间距、语义化表面层级、受控动效和 reduced motion     |
+| 阶段二 | 已完成 | 1320px 内容工作区、全局排版与间距、语义化表面层级、受控动效和 reduced motion     |
 | 阶段三 | 已完成 | Overview、Execution/F6B、证据页、Experiment、History 与 Design Space 视觉精修    |
 | 阶段四 | 已完成 | 契约/依赖/类型/lint/format/build、107 个前端测试和 20 个桌面 Playwright 全部通过 |
 
 人工检查覆盖了浅色主证据页、未知 Schema fail-closed 页和 Mint 深色证据页。更新视觉快照前均核对了
 canonical flow、S3/S4/S5 并列关系、S7-S9 输出面、原始 JSON 完整性和桌面 overflow。
+
+### 信息架构去重（2026-08-31）
+
+本轮在不改变报告事实、契约状态和稳定证据身份的前提下，将页面组织从“同一能力在多页完整重复”调整为
+“一个页面回答一个主问题”：
+
+- `请求证据` 是完整 F6B run-bound chain 的唯一主工作区；从 P99/request 展示 S1、并列 S3/S4/S5、S6 和
+  S7/S8/S9 输出面。
+- `分层结果` 只负责 S0-S6 canonical flow、当前 subsystem detail、S7 execution envelope 和资源汇合。
+- `性能指标` 保留指标、request 列表和轻量“查看证据链”入口，不再嵌入完整 F6B panel。
+- `验证边界` 只负责 provenance、fidelity、coverage 与 contract gap，不再复制 request chain。
+- `请求证据` 内用两个同级视图分离“跨子系统证据链”和“S9 尾延迟归因”，避免同时纵向展开两套证据。
+- `运行概览` 删除与顶部证据条重复的 Run Facts，以及已有独立页面承载的 Recent Runs。
+- 侧栏按“分析 / 实验 / 工具”重组；页头、证据条、panel 间距和工作区宽度统一压缩。
+
+F6B 不再作为跨页面重复出现的阶段 banner。原始 JSON、稳定 ID、SHA-256、JSON Pointer、contract status 和
+degradation 仍完整保留，只改变首屏层级、默认 disclosure 状态和页面归属。视觉回归覆盖浅色请求证据页、深色
+分层结果页、长中英文 ID、axe、键盘路径及桌面 overflow。
+
+### 信息密度收尾（2026-09-01）
+
+在既有页面归属不变的前提下，完成了两批默认 disclosure 与重复操作收敛：
+
+- Evidence Agent 将提问置于契约详情之前；descriptor identity、retry/recovery/persistence 与 retention 细节按需展开，
+  摘要仍直接显示进程内 replay、metadata-only 和正式 409/502/503/504 状态。
+- 新建实验默认隐藏重复的 field ID、JSON Pointer 与能力清单；精确字段错误仍自动显示对应 Pointer，自定义 S6
+  manifest 存在时仍自动展开编辑器。
+- 设计空间把候选排名置于 provenance、manifest、fidelity 和候选完整记录之前；正式 capability 和候选证据按需展开。
+- Fabric 默认展示总体指标、后端显式热点、域比较和 request contribution；Schema/SHA 与逐域 Topology 证据改为
+  disclosure，避免域卡片和表格同时占据首屏。
+- 验证边界把 open gaps 提升到 fidelity/check 明细之前；逐子系统 resolution 与 validation checks 默认折叠。
+- 分层结果保留 S0-S6 flow、选中层指标和图表；实现证据、字段边界、S7 阶段、资源汇合与原始 JSON 按需展开。
+- 请求证据继续完整承载 F6B chain，并移除指向当前页面的重复上下文链接；S9 归因默认先显示 causal ranking，
+  attribution audit 和 cause chain 按需展开，S7/S8/S9 仍不进入 causal ranking。
+- 校准与血缘将 calibration、field lineage 和 deterministic orchestration 组织成三个键盘可操作的摘要；运行记录
+  移除重复选择控件，并只在用户开始选择后显示 comparison workspace。
+- 全局 EvidenceStrip 压缩为单行上下文；完整 held-out 限制保留在可访问名称和验证边界页面中。
+
+本轮没有删除证据、contract gap、SHA-256、JSON Pointer、原始记录或状态映射，也没有修改 canonical digest、无损
+uint64、requested/resolved fidelity、trace provenance 或 S0-S9 语义。回归继续覆盖中英文、键盘、axe、reduced-motion、
+长 ID、桌面 overflow 和浅色/深色模式。
+
+### 可视化深入拓展（2026-09-02）
+
+- Execution、Metrics、Fabric、Design Space、Attribution 的模型与设计记录共用“回答的问题 / 先看哪里 / 解释边界 / 查看数据与证据”协议；页面不显示并排解释卡，只在图下保留一句简要说明，专业数据与证据按需展开。
+- Metrics 增加请求 TTFT/TPOT/端到端比较，ps→µs 只作显示换算，完整表保留精确 ps；真实 0 与 missing 分开。
+- Fabric 增加通信域和请求两个 runtime/queue/congestion 构成图，只读取后端字段，不反推未报告贡献。
+- Design Space 只使用正式 objectives 与报告的 Pareto membership；双 objective 数据不足时明确降级，不重算 Pareto、
+  dominance、rank 或 promotion reason，继续固定 `execution_scope=S6_only`。
+- Attribution 的图形 ranking 只包含 S0-S6；S7/S8/S9 原始输出记录进入独立表，不参与 latency causal ranking。
+- 图点选与字段表共用当前 run/artifact/SHA-256/Pointer 解析；12 项图形上限显式说明，完整字段表不截断。
+- 继续复用 `echarts/core`、按需 Bar/Scatter 与 SVG renderer；图表运行时仍通过异步组件加载。
 
 ### 阶段一：外观基础设施
 

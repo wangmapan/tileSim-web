@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { Bot, Braces, CircleSlash2, FileCheck2, LockKeyhole, Send, ShieldCheck } from "@lucide/vue";
-import { computed, ref } from "vue";
-import { RouterLink } from "vue-router";
+import { CircleSlash2, Send, ShieldCheck } from "@lucide/vue";
+import { computed, nextTick, ref, watch } from "vue";
+import { adaptEvidenceAgentDescriptor } from "../../../adapters/evidence-agent-descriptor";
 import type {
   ArtifactManifestResponse,
   ApiManifestResponse,
@@ -13,16 +13,21 @@ import type { ReportBundle, RunInputs } from "../../../contracts/report-model";
 import type {
   EvidenceAgentBinding,
   EvidenceAgentUiState,
-  PendingEvidenceAgentSubmission,
   PreparedEvidenceAgentRequest,
+  RetainedEvidenceAgentSubmission,
   ValidatedEvidenceAgentResult,
 } from "../../../entities/evidence-agent";
 import { useI18n, currentLocale } from "../../../i18n";
-import { artifactEvidenceRoute } from "../../inspect-artifact";
 import { buildRunBoundEvidenceChain } from "../../run-bound-evidence";
 import { buildStructuredPerformanceReport } from "../../structured-report";
 import { EvidenceAgentContractError } from "../errors";
 import { buildEvidenceAgentRequest, evidenceAgentBackendIdentity } from "../request-builder";
+import EvidenceAgentContractPolicy from "./EvidenceAgentContractPolicy.vue";
+import EvidenceAgentResultPanel from "./EvidenceAgentResultPanel.vue";
+import EvidenceAgentServiceDetails from "./EvidenceAgentServiceDetails.vue";
+import EvidenceAgentSubmissionLeaseNotice from "./EvidenceAgentSubmissionLeaseNotice.vue";
+import EvidenceAgentSubmissionPreview from "./EvidenceAgentSubmissionPreview.vue";
+import EvidenceAgentTaskCards from "./EvidenceAgentTaskCards.vue";
 
 const props = defineProps<{
   descriptor: EvidenceAgentDescriptorResponse | null;
@@ -38,7 +43,8 @@ const props = defineProps<{
   inputs: RunInputs;
   agentState: EvidenceAgentUiState;
   agentResult: ValidatedEvidenceAgentResult | null;
-  pending: PendingEvidenceAgentSubmission | null;
+  pending: RetainedEvidenceAgentSubmission | null;
+  prepared: PreparedEvidenceAgentRequest | null;
   submissionError: string;
 }>();
 const emit = defineEmits<{
@@ -46,12 +52,42 @@ const emit = defineEmits<{
   submitPrepared: [prepared: PreparedEvidenceAgentRequest, binding: EvidenceAgentBinding];
   discardPending: [];
 }>();
-const { t } = useI18n();
-const question = ref(t("请解释当前 request 的 P99 与尾延迟证据边界。"));
+const { isEnglish, t } = useI18n();
+const questionInput = ref<HTMLTextAreaElement | null>(null);
 const taskKind = ref<EvidenceAgentRequest["task_kind"]>("explain_p99");
+const suggestedQuestions: Record<EvidenceAgentRequest["task_kind"], { zh: string; en: string }> = {
+  explain_p99: {
+    zh: "请用通俗语言解释这个请求的 P99 表现，以及报告中有哪些直接依据。",
+    en: "Explain this request's P99 behavior in plain language and show the direct evidence in the report.",
+  },
+  explain_tail: {
+    zh: "请用通俗语言解释这个请求的尾延迟表现，并指出报告中已有的依据。",
+    en: "Explain this request's tail-latency behavior in plain language and point to the evidence in the report.",
+  },
+  summarize_validation: {
+    zh: "这份结果有多可信？请说明数据来源、验证情况和使用限制。",
+    en: "How trustworthy is this result? Explain its data source, validation status, and limitations.",
+  },
+  draft_conditional_recommendations: {
+    zh: "基于当前证据，下一步最值得验证哪些优化方向？",
+    en: "Based on the current evidence, which optimization directions are most worth testing next?",
+  },
+};
+function suggestedQuestion(kind: EvidenceAgentRequest["task_kind"], english = isEnglish.value) {
+  return suggestedQuestions[kind][english ? "en" : "zh"];
+}
+const question = ref(suggestedQuestion(taskKind.value));
 const localError = ref("");
 
+watch([taskKind, isEnglish], ([nextKind, nextEnglish], [previousKind, previousEnglish]) => {
+  const previousSuggestion = suggestedQuestion(previousKind, previousEnglish);
+  if (!question.value.trim() || question.value === previousSuggestion) {
+    question.value = suggestedQuestion(nextKind, nextEnglish);
+  }
+});
+
 const backendIdentity = computed(() => evidenceAgentBackendIdentity(props.health));
+const descriptorPolicy = computed(() => (props.descriptor ? adaptEvidenceAgentDescriptor(props.descriptor) : null));
 const chain = computed(() =>
   buildRunBoundEvidenceChain({
     runId: props.runId,
@@ -64,6 +100,67 @@ const chain = computed(() =>
 const supportedArtifacts = computed(
   () => props.manifest?.artifacts.filter((entry) => entry.contract_status === "supported") || [],
 );
+const supportedArtifactIds = computed(() => new Set(supportedArtifacts.value.map((entry) => entry.artifact_id)));
+const citableReferences = computed(() => {
+  const references = [
+    ...chain.value.percentileSubjects.flatMap((subject) => (subject.reference ? [subject.reference] : [])),
+    ...chain.value.nodes.flatMap((node) => node.references),
+    ...(chain.value.week8Execution.reference ? [chain.value.week8Execution.reference] : []),
+  ];
+  const unique = new Map<string, (typeof references)[number]>();
+  for (const reference of references) {
+    const artifact = props.manifest?.artifacts.find((entry) => entry.artifact_id === reference.artifactId);
+    if (
+      artifact?.contract_status !== "supported" ||
+      artifact.schema_identity !== reference.schemaIdentity ||
+      artifact.sha256 !== reference.sha256
+    ) {
+      continue;
+    }
+    unique.set(
+      `${reference.artifactId}\u0000${reference.jsonPointer}\u0000${reference.entityKind}\u0000${reference.entityId}`,
+      reference,
+    );
+  }
+  return [...unique.values()];
+});
+const citableArtifactCount = computed(() => new Set(citableReferences.value.map((entry) => entry.artifactId)).size);
+const previewProvenance = computed(
+  () =>
+    chain.value.week8Execution.provenance || {
+      sourceMode: "not_covered",
+      calibrationLevel: "not_covered",
+      allowedClaimScope: "not_covered",
+    },
+);
+const snapshotReadiness = computed(() => {
+  if (!props.runId) {
+    return {
+      state: "missing" as const,
+      title: "先运行一次实验",
+      detail: "这个页面负责解释已有结果，不会替你运行实验。",
+    };
+  }
+  if (!props.manifest) {
+    return { state: "loading" as const, title: "正在读取实验结果", detail: "请稍候，证据清单仍在加载。" };
+  }
+  if (!supportedArtifactIds.value.has("metrics")) {
+    return {
+      state: "unavailable" as const,
+      title: "当前实验不能用于提问",
+      detail: "这次实验没有生成正式 metrics 证据。请重新运行实验，旧结果无法补齐。",
+    };
+  }
+  if (!props.selectedRequestId) {
+    return { state: "select" as const, title: "请选择一个 request", detail: "选择后才能把问题绑定到具体请求。" };
+  }
+  return {
+    state: "ready" as const,
+    title: "可以开始提问",
+    detail: "选择问题类型，确认问题内容，然后点击“生成证据草稿”。",
+  };
+});
+const snapshotReady = computed(() => snapshotReadiness.value.state === "ready");
 const capabilityAvailable = computed(
   () =>
     props.descriptorStatus === "supported" &&
@@ -71,11 +168,20 @@ const capabilityAvailable = computed(
     props.descriptor.provider.configured &&
     props.descriptor.availability_predicate.evaluated_available,
 );
-const displayState = computed(() => {
-  if (props.descriptorStatus !== "supported") return "contract_error";
-  if (!capabilityAvailable.value) return props.descriptor?.degradation.reason_code || "provider_unavailable";
-  return props.agentState;
+const currentDraftMatchesPending = computed(() => {
+  if (!props.pending || !props.prepared) return false;
+  const request = props.prepared.request;
+  return (
+    props.prepared.payloadDigest === props.pending.payloadDigest &&
+    props.prepared.inputSnapshotDigest === props.pending.inputSnapshotDigest &&
+    request.run_id === props.pending.runId &&
+    request.client_request_id === props.pending.clientRequestId &&
+    request.locale === currentLocale() &&
+    request.task_kind === taskKind.value &&
+    request.user_question.content === question.value.trim()
+  );
 });
+const mustDiscardBeforeSubmit = computed(() => Boolean(props.pending && !currentDraftMatchesPending.value));
 const canSubmit = computed(
   () =>
     capabilityAvailable.value &&
@@ -87,32 +193,27 @@ const canSubmit = computed(
       props.selectedRequestId &&
       question.value.trim(),
     ) &&
-    props.agentState !== "submitting",
+    snapshotReady.value &&
+    !mustDiscardBeforeSubmit.value &&
+    !["submitting", "terminal_result_not_retained", "idempotency_payload_mismatch"].includes(props.agentState) &&
+    !(props.pending && props.agentState === "stale"),
 );
-const visibleClaims = computed(() => (props.agentState === "stale" ? [] : props.agentResult?.response.claims || []));
-const statusLabels: Record<string, string> = {
-  idle: "等待提问",
-  submitting: "正在生成证据草稿",
-  available_draft: "待确认草稿",
-  refused: "已拒答",
-  partial: "部分结果",
-  truncated: "输出已截断",
-  timeout: "请求超时",
-  cancelled: "请求已取消",
-  stale: "结果已过期",
-  concurrency_limit: "并发槽已占用",
-  provider_unavailable: "Provider 未配置",
-  provider_disabled: "Provider 已禁用",
-  unsupported_schema: "不支持的 Schema",
-  contract_error: "Agent 契约不可用",
-};
+const errorCode = computed(() => localError.value || props.submissionError);
+const errorMessage = computed(() => {
+  if (errorCode.value === "insufficient_evidence") {
+    return t("当前实验没有足够的正式证据，Agent 请求没有发送。请重新运行实验后再提问。");
+  }
+  if (errorCode.value === "question_length_invalid") return t("请输入一个简短、明确的问题。");
+  return errorCode.value;
+});
 
-const taskLabels: Record<EvidenceAgentRequest["task_kind"], string> = {
-  explain_p99: "解释 P99",
-  explain_tail: "解释尾延迟",
-  summarize_validation: "总结验证边界",
-  draft_conditional_recommendations: "起草条件建议",
-};
+watch(
+  () => props.descriptor?.supported_task_kinds,
+  (supported) => {
+    if (supported?.length && !supported.includes(taskKind.value)) taskKind.value = supported[0];
+  },
+  { immediate: true },
+);
 
 function currentClientRequestId() {
   const pending = props.pending;
@@ -129,6 +230,13 @@ function currentClientRequestId() {
 
 function chooseRequest(event: Event) {
   emit("requestSelected", (event.target as HTMLSelectElement).value);
+}
+
+async function discardAndStartNew() {
+  localError.value = "";
+  emit("discardPending");
+  await nextTick();
+  questionInput.value?.focus();
 }
 
 async function submit() {
@@ -169,126 +277,67 @@ async function submit() {
       error instanceof EvidenceAgentContractError ? error.code : error instanceof Error ? error.message : String(error);
   }
 }
-
-function citationRoute(citation: (typeof visibleClaims.value)[number]["citations"][number]) {
-  return artifactEvidenceRoute({
-    runId: citation.run_id,
-    artifactId: citation.artifact_id,
-    sha256: citation.sha256,
-    pointer: citation.json_pointer,
-  });
-}
 </script>
 
 <template>
-  <div class="evidence-agent-stack">
-    <section class="panel evidence-agent-hero" aria-labelledby="evidence-agent-title">
-      <header>
-        <div class="evidence-agent-icon"><Bot :size="24" /></div>
-        <div>
-          <p class="section-kicker">F9B · READ-ONLY EVIDENCE AGENT</p>
-          <h2 id="evidence-agent-title">{{ t("只读证据 Agent") }}</h2>
-          <p>{{ t("只在已验证的 run、artifact、SHA-256、JSON Pointer 与 stable subject 上生成独立草稿。") }}</p>
-        </div>
-        <span class="evidence-agent-state" :data-state="displayState">{{
-          t(statusLabels[displayState] || displayState)
-        }}</span>
-      </header>
-
-      <div v-if="descriptorStatus === 'supported' && descriptor" class="evidence-agent-identity-grid">
-        <div>
-          <small>{{ t("Descriptor") }}</small
-          ><code>{{ descriptor.schema_version }}</code>
-        </div>
-        <div>
-          <small>{{ t("Schema revision") }}</small
-          ><code>{{ descriptor.schema_set_revision }}</code>
-        </div>
-        <div>
-          <small>{{ t("Provider / model") }}</small
-          ><code>{{ descriptor.provider.provider_id }} / {{ descriptor.provider.model_id }}</code>
-        </div>
-        <div>
-          <small>{{ t("Model revision") }}</small
-          ><code>{{ descriptor.provider.model_revision }}</code>
-        </div>
-      </div>
-
-      <div v-if="!capabilityAvailable" class="evidence-agent-unavailable" role="status">
-        <CircleSlash2 :size="20" />
-        <div>
-          <strong>{{ t("正式能力当前不可用") }}</strong>
+  <div class="evidence-agent-stack" data-help-anchor="evidence_agent-availability">
+    <div
+      v-if="!capabilityAvailable"
+      class="panel evidence-agent-unavailable evidence-agent-unavailable--standalone"
+      role="status"
+    >
+      <CircleSlash2 :size="20" />
+      <div>
+        <strong>{{ t("AI 解释当前不可用") }}</strong>
+        <p>{{ t("当前后端没有提供可用的 AI 解释能力。你仍可查看实验结果，稍后再试或检查服务配置。") }}</p>
+        <details class="evidence-agent-error-detail">
+          <summary>{{ t("查看技术原因") }}</summary>
           <p>{{ descriptor?.degradation.detail || descriptorError }}</p>
           <code>{{ descriptor?.degradation.reason_code || descriptorError }}</code>
-        </div>
+        </details>
       </div>
-    </section>
-
-    <section v-if="descriptor" class="evidence-agent-contract-grid">
-      <article class="panel evidence-agent-contract-card">
-        <header>
-          <LockKeyhole :size="18" /><strong>{{ t("工具与安全边界") }}</strong>
-        </header>
-        <dl>
-          <div>
-            <dt>{{ t("允许") }}</dt>
-            <dd>
-              <code>{{ descriptor.tools.allowed.join(" · ") }}</code>
-            </dd>
-          </div>
-          <div>
-            <dt>{{ t("禁止") }}</dt>
-            <dd>
-              <code>{{ descriptor.tools.forbidden.join(" · ") }}</code>
-            </dd>
-          </div>
-          <div>
-            <dt>{{ t("扩张 allow-list") }}</dt>
-            <dd>
-              <code>{{ descriptor.tools.allow_list_expansion }}</code>
-            </dd>
-          </div>
-        </dl>
-      </article>
-      <article class="panel evidence-agent-contract-card">
-        <header>
-          <FileCheck2 :size="18" /><strong>{{ t("执行与留存") }}</strong>
-        </header>
-        <dl>
-          <div>
-            <dt>{{ t("执行模式") }}</dt>
-            <dd>
-              <code>{{ descriptor.execution.mode }}</code>
-            </dd>
-          </div>
-          <div>
-            <dt>{{ t("超时") }}</dt>
-            <dd>{{ descriptor.execution.timeout_ms }} ms</dd>
-          </div>
-          <div>
-            <dt>{{ t("留存") }}</dt>
-            <dd>
-              <code>{{ descriptor.persistence.mode }}</code>
-            </dd>
-          </div>
-        </dl>
-      </article>
-    </section>
+    </div>
 
     <section class="panel evidence-agent-compose">
       <header class="panel-header">
         <div>
-          <p class="section-kicker">RUN-BOUND SNAPSHOT</p>
-          <h2>{{ t("准备证据问题") }}</h2>
-          <p>{{ t("只有 supported artifact 和精确 stable-ID Pointer 会进入请求 allow-list。") }}</p>
+          <p class="section-kicker">{{ isEnglish ? "HOW TO USE" : "怎么使用" }}</p>
+          <h2>{{ isEnglish ? "Use AI to understand a completed request" : "让 AI 帮你看懂一次已完成的请求" }}</h2>
+          <p>
+            {{
+              isEnglish
+                ? "Choose a request and what you want to learn, review the suggested question, then generate the explanation."
+                : "选择一个请求和你想了解的内容，确认推荐问题后生成解释。"
+            }}
+          </p>
         </div>
         <div class="panel-count">
-          <ShieldCheck :size="16" />{{ t("{count} 个 supported artifacts", { count: supportedArtifacts.length }) }}
+          <ShieldCheck :size="16" />{{
+            t("{supported}/{total} 份引用依据可用", {
+              supported: supportedArtifacts.length,
+              total: manifest?.artifacts.length || 0,
+            })
+          }}
         </div>
       </header>
+      <div class="evidence-agent-readiness" :data-state="snapshotReadiness.state" role="status">
+        <ShieldCheck v-if="snapshotReady" :size="20" />
+        <CircleSlash2 v-else :size="20" />
+        <span>
+          <strong>{{ t(snapshotReadiness.title) }}</strong>
+          <small>{{ t(snapshotReadiness.detail) }}</small>
+        </span>
+        <RouterLink
+          v-if="snapshotReadiness.state === 'missing' || snapshotReadiness.state === 'unavailable'"
+          :to="{ name: 'experiment' }"
+          class="button button--secondary"
+        >
+          {{ t("重新运行实验") }}
+        </RouterLink>
+      </div>
       <div class="evidence-agent-form">
-        <label>
-          <span>{{ t("当前 request") }}</span>
+        <label data-help-anchor="evidence_agent-request">
+          <span>{{ isEnglish ? "1. Choose the request to explain" : "1. 选择要解释的请求" }}</span>
           <select :value="selectedRequestId || ''" :disabled="!runId" @change="chooseRequest">
             <option value="" disabled>{{ t("请选择请求") }}</option>
             <option v-for="option in chain.requestOptions" :key="option.requestId" :value="option.requestId">
@@ -296,94 +345,73 @@ function citationRoute(citation: (typeof visibleClaims.value)[number]["citations
             </option>
           </select>
         </label>
-        <label>
-          <span>{{ t("任务类型") }}</span>
-          <select v-model="taskKind" :disabled="!capabilityAvailable">
-            <option v-for="kind in descriptor?.supported_task_kinds || []" :key="kind" :value="kind">
-              {{ t(taskLabels[kind]) }}
-            </option>
-          </select>
-        </label>
-        <label class="evidence-agent-question">
-          <span>{{ t("问题（不受信任内容）") }}</span>
+        <EvidenceAgentTaskCards
+          v-model="taskKind"
+          :supported-task-kinds="descriptor?.supported_task_kinds || []"
+          :disabled="!capabilityAvailable"
+        />
+        <label class="evidence-agent-question" data-help-anchor="evidence_agent-question">
+          <span>{{ isEnglish ? "3. Review or refine the question" : "3. 确认或补充问题" }}</span>
           <textarea
+            ref="questionInput"
             v-model="question"
             :maxlength="descriptor?.limits.maximum_question_characters || 4000"
             :disabled="!capabilityAvailable"
           ></textarea>
+          <small class="evidence-agent-question-hint">{{
+            isEnglish
+              ? "Keep the suggested question if it already matches what you need."
+              : "推荐问题可以直接使用；有特别关注的内容再修改。"
+          }}</small>
         </label>
+        <EvidenceAgentSubmissionPreview
+          :request-id="selectedRequestId"
+          :citation-location-count="citableReferences.length"
+          :citation-artifact-count="citableArtifactCount"
+          :source-mode="previewProvenance.sourceMode"
+          :calibration-level="previewProvenance.calibrationLevel"
+          :allowed-claim-scope="previewProvenance.allowedClaimScope"
+          :requested-fidelity="chain.week8Execution.requestedFidelity || 'not_covered'"
+          :resolved-fidelity="chain.week8Execution.resolvedFidelity || 'not_covered'"
+          :execution-mode="chain.week8Execution.executionMode || 'not_covered'"
+          :timeout-ms="descriptor?.execution.timeout_ms || 0"
+        />
         <div class="evidence-agent-submit-row">
           <p>
-            <code>{{ runId || "run_missing" }}</code
-            ><br />{{ t("草稿不会写回确定性报告事实区。") }}
+            {{ t("生成的解释不会改动原始实验结果。") }}
           </p>
           <button class="button" :disabled="!canSubmit" @click="submit">
-            <Send :size="16" />{{ agentState === "submitting" ? t("正在生成…") : t("生成证据草稿") }}
+            <Send :size="16" />{{ agentState === "submitting" ? t("正在生成…") : t("生成解释") }}
           </button>
         </div>
-        <div v-if="pending" class="evidence-agent-pending" role="status">
-          <code>{{ pending.idempotencyKey }}</code>
-          <span>{{ t("仅同一 canonical payload 可复用该 Idempotency-Key。") }}</span>
-          <button class="button button--secondary" @click="emit('discardPending')">{{ t("放弃待恢复请求") }}</button>
+        <EvidenceAgentSubmissionLeaseNotice
+          v-if="pending"
+          :pending="pending"
+          :agent-state="agentState"
+          :must-discard-before-submit="mustDiscardBeforeSubmit"
+          @discard="discardAndStartNew"
+        />
+        <div v-if="errorCode" class="evidence-agent-error" role="alert">
+          <strong>{{ errorMessage }}</strong>
+          <code>{{ errorCode }}</code>
         </div>
-        <p v-if="localError || submissionError" class="evidence-agent-error" role="alert">
-          {{ localError || submissionError }}
-        </p>
       </div>
     </section>
 
-    <section v-if="agentResult" class="panel evidence-agent-result" :aria-label="t('Agent 独立草稿')">
-      <header class="panel-header">
-        <div>
-          <p class="section-kicker">ATOMIC CLAIMS · USER CONFIRMATION REQUIRED</p>
-          <h2>{{ t("Agent 独立草稿") }}</h2>
-          <p>{{ t("每条事实单独验证引用；结果不会覆盖 deterministic report。") }}</p>
-        </div>
-        <span class="evidence-agent-state" :data-state="agentState">{{
-          t(statusLabels[agentState] || agentState)
-        }}</span>
-      </header>
-      <div v-if="agentState === 'stale'" class="evidence-agent-unavailable" role="alert">
-        <CircleSlash2 :size="20" />
-        <div>
-          <strong>{{ t("结果与当前 run 不再匹配") }}</strong>
-          <p>{{ t("已隐藏旧 claims，不能挂接到当前证据。") }}</p>
-        </div>
-      </div>
-      <div v-else-if="agentResult.response.refusal" class="evidence-agent-unavailable" role="status">
-        <CircleSlash2 :size="20" />
-        <div>
-          <strong>{{ agentResult.response.refusal.reason_code }}</strong>
-          <p>{{ agentResult.response.refusal.detail }}</p>
-        </div>
-      </div>
-      <ol v-else class="evidence-agent-claims">
-        <li v-for="claim in visibleClaims" :key="claim.claim_id">
-          <header>
-            <code>{{ claim.claim_kind }}</code
-            ><span>{{ claim.claim_id }}</span>
-          </header>
-          <p>{{ claim.text }}</p>
-          <div class="evidence-agent-citations">
-            <RouterLink
-              v-for="citation in claim.citations"
-              :key="`${citation.artifact_id}:${citation.json_pointer}:${citation.subject.kind}:${citation.subject.id}`"
-              :to="citationRoute(citation)"
-            >
-              <Braces :size="14" /><span
-                ><code>{{ citation.artifact_id }}{{ citation.json_pointer }}</code
-                ><small
-                  >{{ citation.subject.kind }} · {{ citation.subject.id }} · {{ citation.availability
-                  }}<template v-if="citation.value">
-                    · {{ citation.value.decimal
-                    }}<template v-if="citation.unit"> {{ citation.unit }}</template></template
-                  ></small
-                ></span
-              >
-            </RouterLink>
-          </div>
-        </li>
-      </ol>
-    </section>
+    <EvidenceAgentServiceDetails v-if="descriptorStatus === 'supported' && descriptor" :descriptor="descriptor" />
+
+    <EvidenceAgentContractPolicy
+      v-if="descriptor && descriptorPolicy"
+      :descriptor="descriptor"
+      :policy="descriptorPolicy"
+      :api-manifest="apiManifest"
+    />
+
+    <EvidenceAgentResultPanel
+      v-if="agentResult"
+      :agent-state="agentState"
+      :agent-result="agentResult"
+      data-help-anchor="evidence_agent-result"
+    />
   </div>
 </template>

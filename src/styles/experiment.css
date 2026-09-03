@@ -52,6 +52,78 @@
   color: var(--muted);
   font-size: var(--text-md);
 }
+
+.capability-disclosure,
+.design-space-disclosure {
+  overflow: hidden;
+}
+
+.capability-disclosure:not([open]),
+.design-space-disclosure:not([open]) {
+  padding-bottom: 0;
+}
+
+.capability-disclosure > summary,
+.design-space-disclosure > summary {
+  grid-template-columns: max-content minmax(0, 1fr) auto auto;
+  align-items: center;
+  cursor: pointer;
+  list-style: none;
+}
+
+.capability-disclosure > summary::-webkit-details-marker,
+.design-space-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.capability-disclosure > summary::after,
+.design-space-disclosure > summary::after {
+  content: "+";
+  color: var(--muted);
+  font-size: 18px;
+}
+
+.capability-disclosure[open] > summary::after,
+.design-space-disclosure[open] > summary::after {
+  content: "−";
+  color: var(--accent);
+}
+
+.capability-disclosure-state,
+.design-space-disclosure-state {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+  justify-content: flex-end;
+  max-width: 310px;
+}
+
+.capability-disclosure-state span,
+.capability-disclosure-state small,
+.design-space-disclosure-state strong,
+.design-space-disclosure-state small {
+  padding: 4px 7px;
+  border-radius: 6px;
+  background: var(--surface-muted);
+  font-size: var(--text-xs);
+}
+
+.capability-disclosure-state .available {
+  color: var(--positive-ink);
+  background: var(--positive-soft);
+}
+
+.capability-disclosure-state .unavailable,
+.capability-disclosure-state .partial {
+  color: var(--warning-ink);
+  background: var(--warning-soft);
+}
+
+.capability-disclosure-state small,
+.design-space-disclosure-state small {
+  color: var(--muted);
+}
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -115,6 +187,16 @@
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface-muted);
+}
+.experiment-input-toolbar {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 25px 20px;
+}
+.experiment-input-toolbar .segmented-control {
+  margin: 0;
 }
 .segmented-control button {
   display: flex;
@@ -618,7 +700,6 @@ details > summary:hover {
 }
 @keyframes surface-enter {
   from {
-    opacity: 0;
     transform: translateY(5px);
   }
 }
@@ -688,7 +769,7 @@ details > summary:hover {
     grid-template-columns: repeat(2, 1fr);
   }
   .run-row {
-    grid-template-columns: 26px minmax(200px, 1fr) 95px 92px 115px;
+    grid-template-columns: minmax(200px, 1fr) 95px 92px 115px;
   }
   .run-row .run-metric:nth-of-type(2) {
     display: none;
@@ -698,6 +779,24 @@ details > summary:hover {
   }
   .run-submit-card {
     position: static;
+  }
+
+  .capability-disclosure > summary,
+  .design-space-disclosure > summary {
+    grid-template-columns: max-content minmax(0, 1fr) auto;
+  }
+
+  .capability-disclosure-state,
+  .design-space-disclosure-state {
+    grid-column: 2 / -1;
+    justify-content: flex-start;
+    max-width: none;
+  }
+
+  .capability-disclosure > summary::after,
+  .design-space-disclosure > summary::after {
+    grid-column: 3;
+    grid-row: 1;
   }
 }
 
@@ -740,7 +839,17 @@ details > summary:hover {
     padding: 22px 22px 50px;
   }
   .evidence-strip {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .evidence-friendly-summary {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .page-primer {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .page-primer__emphasis {
+    grid-column: 1 / -1;
   }
   .evidence-path {
     display: none;
@@ -763,7 +872,7 @@ details > summary:hover {
     grid-template-columns: repeat(2, 1fr);
   }
   .run-row {
-    grid-template-columns: 26px minmax(180px, 1fr) 95px 105px;
+    grid-template-columns: minmax(180px, 1fr) 95px 105px;
   }
   .run-metric {
     display: none;
@@ -804,6 +913,24 @@ details > summary:hover {
     grid-template-columns: 1fr;
     gap: 10px;
     padding: 12px;
+  }
+  .evidence-friendly-summary {
+    grid-column: auto;
+    grid-row: auto;
+  }
+  .evidence-technical-disclosure {
+    justify-self: start;
+  }
+  .evidence-technical-content {
+    right: auto;
+    left: 0;
+    width: min(520px, calc(100vw - 40px));
+  }
+  .page-primer {
+    grid-template-columns: 1fr;
+  }
+  .page-primer__emphasis {
+    grid-column: auto;
   }
   .evidence-tags {
     flex-wrap: wrap;
@@ -894,7 +1021,7 @@ details > summary:hover {
     border-radius: 0;
   }
   .run-row {
-    grid-template-columns: 22px 1fr auto;
+    grid-template-columns: 1fr auto;
     gap: 9px;
     padding: 12px 8px;
   }

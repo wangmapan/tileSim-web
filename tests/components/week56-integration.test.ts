@@ -200,11 +200,12 @@ describe("Week 5 and Week 6 frontend integration", () => {
     expect(wrapper.text()).toContain("local_worktree_snapshot");
     expect(wrapper.text()).toContain("week6");
     expect(wrapper.text()).toContain("1234567890ab");
-    expect(wrapper.text()).toContain("F8 编排契约");
+    expect(wrapper.text()).toContain("实验编排契约");
     expect(wrapper.text()).toContain("experiment_descriptor_unavailable");
+    expect(wrapper.attributes("open")).toBeUndefined();
   });
 
-  it("renders S0, S1, and S6 controls from one descriptor set with exact field Pointers", () => {
+  it("renders S0, S1, and S6 controls while keeping field contracts on demand", async () => {
     const surface = buildExperimentSurface(
       {
         scenarios: [{ scenario_id: "s1_des_example", label: "S1" }],
@@ -235,6 +236,10 @@ describe("Week 5 and Week 6 frontend integration", () => {
     expect(
       wrapper.find('[data-field-path="/overrides/fabric/scale_out_latency_us"] input').attributes("aria-invalid"),
     ).toBe("true");
+    expect(wrapper.text()).not.toContain("/overrides/runtime/batch_scheduler");
+    await wrapper.get('button[aria-pressed="false"]').trigger("click");
+    expect(wrapper.text()).toContain("/overrides/runtime/batch_scheduler");
+    expect(wrapper.get('button[aria-pressed="true"]').text()).toContain("隐藏字段契约");
   });
 
   it("preflights custom manifest candidate and transfer budgets", () => {
@@ -248,6 +253,12 @@ describe("Week 5 and Week 6 frontend integration", () => {
     expect(wrapper.text()).toContain("自定义候选 manifest");
     expect(wrapper.text()).toContain("3 / 256 候选");
     expect(wrapper.text()).toContain("24 / 100,000 transfers");
+    expect(wrapper.attributes("open")).toBeDefined();
+
+    const builtInWrapper = mount(DesignSpaceInputPanel, {
+      props: { modelValue: "", "onUpdate:modelValue": () => undefined },
+    });
+    expect(builtInWrapper.attributes("open")).toBeUndefined();
   });
 
   it("renders candidate metrics, provenance, execution state, and attribution", () => {
@@ -265,14 +276,17 @@ describe("Week 5 and Week 6 frontend integration", () => {
     expect(wrapper.text()).toContain("Pareto membership");
     expect(wrapper.text()).toContain("contract gap");
     expect(wrapper.text()).toContain("不是可导航 EvidenceRef");
+    expect(wrapper.get(".design-contract-disclosure").attributes("open")).toBeUndefined();
+    expect(wrapper.get(".candidate-detail").attributes("open")).toBeUndefined();
+    expect(wrapper.get(".design-evidence-disclosure").attributes("open")).toBeUndefined();
   });
 
   it("renders backend-reported Fabric hotspot and request contributions without a topology join", () => {
     const fixture = fixtureCase("synthetic-s1-s6-complete");
     applyBundle(fixture.reports, { runName: fixture.id, inputs: fixture.inputs });
     const wrapper = mount(FabricView);
-    expect(wrapper.text()).toContain("Metrics-backed Fabric 证据");
-    expect(wrapper.text()).toContain("后端报告的主导 Fabric 热点");
+    expect(wrapper.text()).toContain("专业证据与契约信息");
+    expect(wrapper.text()).toContain("当前主要通信瓶颈");
     expect(wrapper.text()).toContain("请求级 Fabric contribution");
     expect(wrapper.text()).toContain("req-0");
     expect(wrapper.text()).toContain("phase-0");

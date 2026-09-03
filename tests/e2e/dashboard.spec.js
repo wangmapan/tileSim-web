@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import { createHash } from "node:crypto";
 import { fixtureCase } from "../helpers/fixtures";
 import { createF8ExperimentDescriptor, f8Capabilities, f8SchemaRevision } from "../fixtures/experiment-descriptor";
-import { createEvidenceAgentDescriptor } from "../fixtures/evidence-agent-descriptor";
+import { createEvidenceAgentDescriptor, f9DescriptorRevision } from "../fixtures/evidence-agent-descriptor";
 
 const runId = "run-fixture-f1";
 
@@ -243,6 +243,98 @@ function addWeek8Contracts(fixture, linkedRequestId) {
   };
 }
 
+function createEvidenceAgentTerminal(request, mode = "completed") {
+  const descriptor = { ...createEvidenceAgentDescriptor(true), schema_set_revision: f8SchemaRevision };
+  const artifact = request.artifact_allow_list.find((entry) => entry.allowed_records.length > 0);
+  const record = artifact?.allowed_records[0];
+  const citation =
+    artifact && record
+      ? {
+          schema_version: "tilesim.bridge.evidence_agent_citation.v1",
+          run_id: request.run_id,
+          artifact_id: artifact.artifact_id,
+          schema_identity: artifact.schema_identity,
+          sha256: artifact.sha256,
+          json_pointer: record.json_pointer,
+          subject: record.subject,
+          citation_role: "direct_fact",
+          availability: "available",
+        }
+      : null;
+  const scope = request.snapshot_reference.evidence_scope;
+  const claims = citation
+    ? [
+        {
+          claim_id: `claim-${mode}`,
+          claim_kind: "numeric_fact",
+          text: "This atomic claim is bound to the exact verified fixture record.",
+          citations: [citation],
+          scope: {
+            source_mode: scope.source_mode,
+            requested_fidelity: scope.requested_fidelity,
+            resolved_fidelity: scope.resolved_fidelity,
+            execution_mode: scope.execution_mode,
+            resource_semantics_relation: "S3_S4_S5_peer",
+            causal_subsystems: ["S1", "S6"],
+            attribution_semantics: "not_applicable",
+            recommendation_semantics: "not_applicable",
+          },
+        },
+      ]
+    : [];
+  const terminal = {
+    schema_version: "tilesim.bridge.evidence_agent_response.v1",
+    schema_set_revision: f8SchemaRevision,
+    request_id: `agent-fixture-${mode}`,
+    client_request_id: request.client_request_id,
+    run_id: request.run_id,
+    input_snapshot_digest: request.input_snapshot_digest,
+    completion_state: mode,
+    provider: descriptor.provider,
+    revisions: descriptor.revisions,
+    claims,
+    refusal: null,
+    partial: mode === "partial",
+    truncated: mode === "truncated",
+    degradation: { state: "none", reason_code: "none" },
+    audit_summary: {
+      operations: ["verified_snapshot_read", "citation_resolution"],
+      tool_invocation_count: 2,
+      hidden_reasoning_returned: false,
+    },
+    generated_at: "2026-08-31T00:00:00.000Z",
+    persistence: {
+      mode: "run_local_terminal_metadata_only",
+      retained_until: null,
+      snapshot_payload_retained: false,
+      user_question_retained: false,
+    },
+    staleness: {
+      state: mode === "stale" ? "stale" : "current_at_generation",
+      binding_fields: ["run_id", "input_snapshot_digest", "schema_set_revision", "backend_identity"],
+    },
+  };
+  if (mode === "stale") terminal.completion_state = "completed";
+  const reasonByMode = {
+    failed: "unsupported_schema",
+    refused: "insufficient_evidence",
+    provider_unavailable: "provider_unavailable",
+    timeout: "timeout",
+    cancelled: "cancelled",
+  };
+  if (reasonByMode[mode]) {
+    terminal.completion_state = mode === "provider_unavailable" ? "refused" : mode;
+    terminal.claims = [];
+    terminal.refusal = {
+      reason_code: reasonByMode[mode],
+      detail: `fixture_${reasonByMode[mode]}`,
+      retryable: ["provider_unavailable", "timeout"].includes(mode),
+    };
+    terminal.degradation = { state: reasonByMode[mode], reason_code: reasonByMode[mode] };
+  }
+  return terminal;
+}
+
 function addFormalF7Contracts(fixture) {
   const provenance = {
     source_mode: "synthetic_trace",
@@ -383,7 +475,7 @@ function addFormalF7Contracts(fixture) {
   );
 }
 
-async function installFixtureApi(page, fixture) {
+async function installFixtureApi(page, fixture, { evidenceAgentConfigured = false, evidenceAgentHandler = null } = {}) {
   let week7OperationActive = false;
   await page.route(/^https?:\/\/[^/]+\/api(?:\/|$)/, async (route) => {
     const url = new URL(route.request().url());
@@ -437,7 +529,8 @@ async function installFixtureApi(page, fixture) {
         evidence_agent: {
           capability_endpoint: "GET /api/agent/evidence-capabilities",
           analysis_endpoint: "POST /api/runs/{run_id}/agent/evidence-analyses",
-          descriptor_schema_identity: "tilesim.bridge.evidence_agent_descriptor.v1",
+          descriptor_schema_identity: "tilesim.bridge.evidence_agent_descriptor.v2",
+          descriptor_revision: f9DescriptorRevision,
           request_schema_identity: "tilesim.bridge.evidence_agent_request.v1",
           response_schema_identity: "tilesim.bridge.evidence_agent_response.v1",
           citation_schema_identity: "tilesim.bridge.evidence_agent_citation.v1",
@@ -467,6 +560,8 @@ async function installFixtureApi(page, fixture) {
         state_digests_match: true,
         source_revision: "fixture-source",
         build_revision: "fixture-source",
+        source_state_digest: "fixture-source-state",
+        build_state_digest: "fixture-source-state",
         deployment_ref: "fixture:f1",
       };
     } else if (path === "/api/catalog") {
@@ -482,7 +577,23 @@ async function installFixtureApi(page, fixture) {
     } else if (path === "/api/experiment-schema") {
       payload = createF8ExperimentDescriptor();
     } else if (path === "/api/agent/evidence-capabilities") {
-      payload = { ...createEvidenceAgentDescriptor(false), schema_set_revision: f8SchemaRevision };
+      payload = { ...createEvidenceAgentDescriptor(evidenceAgentConfigured), schema_set_revision: f8SchemaRevision };
+    } else if (
+      path === `/api/runs/${runId}/agent/evidence-analyses` &&
+      route.request().method() === "POST" &&
+      evidenceAgentHandler
+    ) {
+      const result = await evidenceAgentHandler({
+        request: route.request().postDataJSON(),
+        idempotencyKey: route.request().headers()["idempotency-key"],
+      });
+      await route.fulfill({
+        status: result.status,
+        contentType: "application/json",
+        headers: { "X-TileSim-Schema-Set-Revision": f8SchemaRevision },
+        body: JSON.stringify(result.body),
+      });
+      return;
     } else if (path === "/api/runs") {
       payload = {
         runs: [
@@ -536,7 +647,7 @@ async function installFixtureApi(page, fixture) {
   });
 }
 
-async function openFixture(page, fixture, view = "execution") {
+async function openFixture(page, fixture, view = "execution", apiOptions = {}) {
   const browserFailures = [];
   page.on("console", (message) => {
     if (message.type() === "error" && !message.text().startsWith("Failed to load resource:")) {
@@ -545,9 +656,11 @@ async function openFixture(page, fixture, view = "execution") {
   });
   page.on("pageerror", (error) => browserFailures.push(`pageerror: ${error.message}`));
   page.on("response", (response) => {
-    if (response.status() >= 500) browserFailures.push(`response: ${response.status()} ${response.url()}`);
+    if (response.status() >= 500 && !apiOptions.expectedHttpStatuses?.includes(response.status())) {
+      browserFailures.push(`response: ${response.status()} ${response.url()}`);
+    }
   });
-  await installFixtureApi(page, fixture);
+  await installFixtureApi(page, fixture, apiOptions);
   await page.addInitScript(
     ({ id, initialView }) => {
       localStorage.setItem(
@@ -600,15 +713,10 @@ async function expectNoUnexpectedTextOverflow(page) {
 test("synthetic evidence view is stable, accessible, and field-complete", async ({ page }, testInfo) => {
   const fixture = fixtureCase("synthetic-s1-s6-complete");
   const browserFailures = await openFixture(page, fixture);
-  await expect(page.getByRole("heading", { name: "S0–S6 分层结果" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "请求执行路线" })).toBeVisible();
   await expect(page.locator(".flow-node")).toHaveCount(7);
   await expect(page.locator(".execution-current-selection")).toContainText("S1");
-  const detailBeforeEvidence = await page.evaluate(() => {
-    const detail = document.querySelector("#execution-layer-detail");
-    const evidence = document.querySelector(".run-bound-evidence-panel");
-    return Boolean(detail && evidence && detail.compareDocumentPosition(evidence) & Node.DOCUMENT_POSITION_FOLLOWING);
-  });
-  expect(detailBeforeEvidence).toBe(true);
+  await expect(page.locator(".run-bound-evidence-panel")).toHaveCount(0);
   await expect(page.locator(".stage-list li")).toHaveCount(3);
   await expect(page.locator('.visualization-panel[data-chart-kind="bar"] .execution-chart svg')).toBeVisible();
   await page.locator(".flow-node").filter({ hasText: "S5" }).click();
@@ -617,13 +725,13 @@ test("synthetic evidence view is stable, accessible, and field-complete", async 
   await expect(page.locator("#execution-layer-detail .layer-code")).toHaveText("S5");
   await expect(page.locator('.visualization-panel[data-chart-kind="stacked-bar"] .execution-chart svg')).toBeVisible();
   await expect(
-    page.locator('.visualization-panel[data-chart-kind="stacked-bar"] .visualization-rationale'),
-  ).toContainText("堆叠");
+    page.locator('.visualization-panel[data-chart-kind="stacked-bar"] .visualization-caption'),
+  ).toBeVisible();
   await page.locator(".flow-node--fabric").click();
   await expect(page.locator(".layer-visualizations .visualization-panel")).toHaveCount(2);
   await expect(page.locator(".layer-visualizations .visualization-empty")).toHaveCount(0);
   await expect(page.locator(".visualization-panel > footer").first()).toContainText("request_fabric_contributions");
-  await expect(page.locator(".evidence-warning")).toContainText("当前结论不能替代真实留出验证");
+  await expect(page.locator(".evidence-warning")).toContainText("查看为什么结果受限");
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
     await page.evaluate(() => document.documentElement.clientWidth),
   );
@@ -656,21 +764,21 @@ test("synthetic evidence view is stable, accessible, and field-complete", async 
 test("desktop routes preserve run deep links and browser history", async ({ page }) => {
   const fixture = fixtureCase("synthetic-s1-s6-complete");
   const browserFailures = await openFixture(page, fixture, "execution");
-  await expect(page).toHaveURL(new RegExp(`/execution\\?run=${runId}&evidence_request=req-0$`));
+  await expect(page).toHaveURL(new RegExp(`/execution\\?run=${runId}$`));
   await page.getByRole("button", { name: /性能指标/ }).click();
-  await expect(page).toHaveURL(new RegExp(`/metrics\\?run=${runId}&evidence_request=req-0$`));
+  await expect(page).toHaveURL(new RegExp(`/metrics\\?run=${runId}$`));
   await expect(page.getByRole("heading", { name: "请求级结果" })).toBeVisible();
 
   await page.goBack();
-  await expect(page).toHaveURL(new RegExp(`/execution\\?run=${runId}&evidence_request=req-0$`));
-  await expect(page.getByRole("heading", { name: "S0–S6 分层结果" })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/execution\\?run=${runId}$`));
+  await expect(page.getByRole("heading", { name: "请求执行路线" })).toBeVisible();
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(page).toHaveURL(new RegExp(`/execution\\?run=${runId}&evidence_request=req-0$`));
-  await expect(page.getByRole("heading", { name: "S0–S6 分层结果" })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/execution\\?run=${runId}$`));
+  await expect(page.getByRole("heading", { name: "请求执行路线" })).toBeVisible();
   expect(browserFailures).toEqual([]);
 });
 
-test("F6B request evidence stays run-bound across peer resources and S7-S9 pages", async ({ page }) => {
+test("F6B request evidence stays run-bound across peer resources and S7-S9 pages", async ({ page }, testInfo) => {
   const fixture = fixtureCase("synthetic-s1-s6-complete");
   const longRequestId = `req-${"长请求-LongRequest-".repeat(18)}`;
   fixture.inputs.runtime_trace.requests[0].request_id = longRequestId;
@@ -681,7 +789,7 @@ test("F6B request evidence stays run-bound across peer resources and S7-S9 pages
   });
   fixture.reports.tail.explained_entity.id = longRequestId;
   addWeek8Contracts(fixture, longRequestId);
-  const browserFailures = await openFixture(page, fixture, "metrics");
+  const browserFailures = await openFixture(page, fixture, "attribution");
 
   const panel = page.locator(".run-bound-evidence-panel");
   await expect(panel.getByRole("heading", { name: "请求级跨子系统证据链" })).toBeVisible();
@@ -694,14 +802,26 @@ test("F6B request evidence stays run-bound across peer resources and S7-S9 pages
   await expect(panel.locator(".run-bound-output-node").filter({ hasText: "S7" })).toContainText("已绑定");
   await expect(panel.locator(".run-bound-output-node").filter({ hasText: "S8" })).toContainText("已绑定");
   await expect(panel.locator(".run-bound-output-node").filter({ hasText: "S9" })).toContainText("已绑定");
-  await expect(panel.getByRole("heading", { name: "Run-bound DES 执行证据" })).toBeVisible();
+  await expect(panel.locator(".week8-execution-panel")).toContainText("执行详情");
+  await panel.locator(".week8-execution-panel summary").click();
   await expect(panel.locator(".week8-execution-panel")).toContainText("partitioned_des");
   await expect(panel.locator(".week8-execution-panel")).toContainText("synthetic_trace");
+  await panel.locator(".week8-execution-panel summary").click();
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect(page).toHaveScreenshot(`request-evidence-${testInfo.project.name}.png`, { fullPage: true });
 
-  await panel.getByRole("link", { name: "分层结果" }).click();
+  await panel.getByRole("link", { name: "执行过程" }).click();
   await expect(page).toHaveURL(/\/execution\?/);
   expect(new URL(page.url()).searchParams.get("run")).toBe(runId);
   expect(new URL(page.url()).searchParams.get("evidence_request")).toBe(longRequestId);
+  await expect(page.locator(".run-bound-evidence-panel")).toHaveCount(0);
+
+  await page.getByRole("button", { name: /^性能指标$/ }).click();
+  await expect(page.locator(".run-bound-evidence-panel")).toHaveCount(0);
+  await page.getByRole("button", { name: /^结果可信度$/ }).click();
+  await expect(page.locator(".run-bound-evidence-panel")).toHaveCount(0);
+  await page.getByRole("button", { name: /^慢请求原因$/ }).click();
+  await expect(page.locator(".run-bound-evidence-panel")).toHaveCount(1);
   await expect(page.locator(".run-bound-evidence-panel select")).toHaveValue(longRequestId);
 
   await page.locator(".run-bound-evidence-panel select").focus();
@@ -731,16 +851,50 @@ test("F9B read-only Agent exposes formal provider unavailability without mock cl
   addWeek8Contracts(fixture, "req-0");
   const browserFailures = await openFixture(page, fixture, "evidence_agent");
 
-  await expect(page.getByRole("heading", { name: "只读证据 Agent" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "AI 解释" })).toBeVisible();
   await expect(page.locator(".evidence-agent-unavailable")).toContainText("provider_unavailable");
-  await expect(page.getByRole("button", { name: "生成证据草稿" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "生成解释" })).toBeDisabled();
   await expect(page.locator(".evidence-agent-claims > li")).toHaveCount(0);
+  await expect(page.locator(".evidence-agent-policy-disclosure")).not.toHaveAttribute("open", "");
+  await page.locator(".evidence-agent-policy-disclosure > summary").click();
+  await expect(page.locator(".evidence-agent-policy-disclosure")).toHaveAttribute("open", "");
   await expect(page.locator(".evidence-agent-identity-grid")).toContainText(
-    "tilesim.bridge.evidence_agent_descriptor.v1",
+    "tilesim.bridge.evidence_agent_descriptor.v2",
   );
+  await expect(page.locator(".evidence-agent-contract-grid")).toContainText("redacted_terminal_metadata_only");
+  await expect(page.locator(".evidence-agent-contract-grid")).toContainText("terminal_result_not_retained");
+  await expect(page.locator(".evidence-agent-contract-grid")).toContainText("forbidden");
   await expect(page.locator(".evidence-agent-contract-grid")).toContainText("verified_snapshot_read");
-  await page.locator(".evidence-agent-compose select").first().selectOption("req-0");
-  await expect(page.locator(".evidence-agent-compose select").first()).toHaveValue("req-0");
+  await expect(page.locator(".evidence-agent-contract-grid")).toContainText("S3 · S4 · S5");
+  await expect(page.locator(".evidence-agent-contract-grid")).toContainText("S8 · S9");
+  await expect(page.locator(".evidence-agent-retention-list li")).toHaveCount(7);
+  await expect(page.locator(".evidence-agent-retention-list li")).toHaveText([
+    /用户问题.*禁止留存/,
+    /snapshot payload.*禁止留存/,
+    /artifact payload.*禁止留存/,
+    /Provider raw response.*禁止留存/,
+    /validated model claims.*禁止留存/,
+    /credential.*禁止留存/,
+    /hidden reasoning.*禁止留存/,
+  ]);
+  await expect(page.locator(".evidence-agent-terminal-list li")).toHaveCount(5);
+  for (const status of ["HTTP 409", "HTTP 502", "HTTP 503", "HTTP 504"]) {
+    await expect(page.locator(".evidence-agent-terminal-list")).toContainText(status);
+  }
+  await expect(page.locator(".evidence-agent-terminal-list")).toContainText("tilesim.bridge.error.v1");
+  await expect(page.locator(".evidence-agent-terminal-list")).toContainText(
+    "tilesim.bridge.evidence_agent_response.v1",
+  );
+  await expect(page.locator(".evidence-agent-terminal-list")).toContainText("field_path=/headers/Idempotency-Key");
+  await expect(page.locator(".evidence-agent-terminal-list")).toContainText("retryable=false");
+  await expect(page.locator(".evidence-agent-terminal-list")).toContainText(
+    "completion_state=refused · reason_code=provider_unavailable",
+  );
+  const requestSelect = page.locator(".evidence-agent-compose select").first();
+  await requestSelect.focus();
+  await expect(requestSelect).toBeFocused();
+  await requestSelect.selectOption("req-0");
+  await expect(requestSelect).toHaveValue("req-0");
   await expect.poll(() => new URL(page.url()).searchParams.get("evidence_request")).toBe("req-0");
 
   const results = await new AxeBuilder({ page }).analyze();
@@ -751,9 +905,192 @@ test("F9B read-only Agent exposes formal provider unavailability without mock cl
   );
 
   await page.getByRole("button", { name: "切换到英文" }).click();
-  await expect(page.getByRole("heading", { name: "Read-only evidence Agent" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "AI explanation" })).toBeVisible();
   await expect(page.locator(".evidence-agent-unavailable")).toContainText("provider_unavailable");
+  await expect(page.getByText("Replay and terminal recovery", { exact: true })).toBeVisible();
+  await expect(
+    page.locator(".evidence-agent-contract-grid").getByText("Metadata-only retention", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("Formal HTTP terminals", { exact: true })).toBeVisible();
+  await expect(page.getByText("Provider unavailable", { exact: true })).toBeVisible();
+  await expect(page.locator(".evidence-agent-retention-list li").first()).toContainText("Retention prohibited");
   await expectNoUnexpectedTextOverflow(page);
+
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.reload({ waitUntil: "domcontentloaded" });
+  expect(
+    await page
+      .locator(".evidence-agent-contract-card")
+      .first()
+      .evaluate((element) => parseFloat(getComputedStyle(element).transitionDuration)),
+  ).toBeLessThanOrEqual(0.001);
+  expect(browserFailures).toEqual([]);
+});
+
+test("Evidence Agent validates citations, terminal states, stale isolation, and recovery boundaries", async ({
+  page,
+}) => {
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  addWeek8Contracts(fixture, "req-0");
+  const submissions = [];
+  const browserFailures = await openFixture(page, fixture, "evidence_agent", {
+    evidenceAgentConfigured: true,
+    expectedHttpStatuses: [409, 502, 503, 504],
+    evidenceAgentHandler: async ({ request, idempotencyKey }) => {
+      const mode = request.user_question.content;
+      submissions.push({ mode, idempotencyKey, taskKind: request.task_kind });
+      if (mode === "recovery") {
+        return {
+          status: 409,
+          body: {
+            schema_version: "tilesim.bridge.error.v1",
+            error: {
+              code: "terminal_result_not_retained",
+              message: "The prior claims terminal was intentionally not retained.",
+              field_path: "/headers/Idempotency-Key",
+              retryable: false,
+            },
+            request_id: "fixture-terminal-result-not-retained",
+          },
+        };
+      }
+      if (mode === "server-mismatch") {
+        return {
+          status: 409,
+          body: {
+            schema_version: "tilesim.bridge.error.v1",
+            error: {
+              code: "idempotency_payload_mismatch",
+              message: "The key is already bound to a different canonical payload.",
+              field_path: "/headers/Idempotency-Key",
+              retryable: false,
+            },
+            request_id: "fixture-idempotency-payload-mismatch",
+          },
+        };
+      }
+      const status = { failed: 502, provider_unavailable: 503, timeout: 504 }[mode] || 200;
+      return { status, body: createEvidenceAgentTerminal(request, mode) };
+    },
+  });
+
+  await page.locator(".evidence-agent-compose select").first().selectOption("req-0");
+  const taskRadios = page.locator('.evidence-agent-task-cards input[type="radio"]');
+  await expect(taskRadios).toHaveCount(4);
+  await expect(taskRadios.first()).toBeChecked();
+  await taskRadios.first().focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(taskRadios.nth(1)).toBeChecked();
+  const preview = page.locator(".evidence-agent-submission-preview");
+  await expect(preview).toContainText("req-0");
+  await expect(preview).toContainText(/\d+ 个精确引用位置，来自 \d+ 份 artifact/);
+  await expect(preview).toContainText("仅为合成证据");
+  await expect(preview).toContainText("服务上限 30 秒");
+  await preview.locator(":scope > details > summary").click();
+  await expect(preview).toContainText("synthetic_trace");
+  await expect(preview).toContainText("requested_fidelity");
+  await expect(preview).toContainText("resolved_fidelity");
+  const question = page.locator(".evidence-agent-question textarea");
+  const submit = page.getByRole("button", { name: "生成解释" });
+
+  await question.fill("completed");
+  await submit.click();
+  await expect(page.locator(".evidence-agent-state").last()).toHaveText("解释已生成，待确认");
+  await expect(page.locator(".evidence-agent-claims > li")).toHaveCount(1);
+  const claimEvidence = page.locator(".evidence-agent-claim-evidence");
+  await expect(claimEvidence).not.toHaveAttribute("open", "");
+  await claimEvidence.locator(":scope > summary").click();
+  await expect(page.locator(".evidence-agent-citations a")).toHaveAttribute("href", /evidence_pointer=(%2F|\/)/);
+  const citationIdentity = page.locator(".evidence-agent-citation-identity");
+  await expect(citationIdentity).not.toHaveAttribute("open", "");
+  await citationIdentity.locator(":scope > summary").click();
+  await expect(citationIdentity).toContainText("json_pointer");
+  await expect(citationIdentity).toContainText("subject");
+  await expect(citationIdentity).toContainText("sha256");
+  const completedSubmission = submissions.at(-1);
+  expect(completedSubmission.taskKind).toBe("explain_tail");
+  await submit.click();
+  await expect.poll(() => submissions.filter((entry) => entry.mode === "completed").length).toBe(2);
+  expect(submissions.at(-1).idempotencyKey).toBe(completedSubmission.idempotencyKey);
+  const completedReplayCount = submissions.length;
+  await question.fill("different canonical payload");
+  await expect(submit).toBeDisabled();
+  await expect(page.getByText(/前端已阻止冲突提交/)).toBeVisible();
+  expect(submissions).toHaveLength(completedReplayCount);
+  await expect
+    .poll(() =>
+      page.evaluate(() => JSON.parse(sessionStorage.getItem("tilesim-web.evidence-agent-submission.v1") || "null")),
+    )
+    .toMatchObject({ idempotencyKey: completedSubmission.idempotencyKey });
+  await page.getByRole("button", { name: "放弃旧分析并开始新问题" }).click();
+  await expect(question).toBeFocused();
+
+  await question.fill("stale");
+  await submit.click();
+  await expect(page.getByText("结果与当前证据绑定不再匹配")).toBeVisible();
+  await expect(page.locator(".evidence-agent-claims > li")).toHaveCount(0);
+  await expect(submit).toBeDisabled();
+  await page.getByRole("button", { name: "明确放弃当前分析并开始新分析" }).click();
+
+  for (const [mode, label, boundary] of [
+    ["partial", "部分结果", "未完成部分不会由前端补写"],
+    ["refused", "已拒答", "服务已正式拒答"],
+    ["truncated", "输出已截断", "不能视为完整回答"],
+    ["failed", "生成失败", "正式 HTTP 502 EvidenceAgentResponse"],
+    ["provider_unavailable", "AI 服务暂不可用", "正式 HTTP 503 EvidenceAgentResponse"],
+    ["timeout", "请求超时", "正式 HTTP 504 EvidenceAgentResponse"],
+  ]) {
+    await question.fill(mode);
+    await submit.click();
+    await expect(page.locator(".evidence-agent-state").last()).toHaveText(label);
+    await expect(page.locator(`.evidence-agent-result-boundary[data-state="${mode}"]`)).toContainText(boundary);
+    await page.getByRole("button", { name: "明确放弃当前分析并开始新分析" }).click();
+  }
+
+  await question.fill("recovery");
+  await submit.click();
+  await expect(page.getByText("无法恢复先前的 claims 终态")).toBeVisible();
+  await expect(page.locator(".evidence-agent-unavailable code")).toHaveText("terminal_result_not_retained");
+  await expect(submit).toBeDisabled();
+  const recoverySubmission = submissions.at(-1);
+  expect(recoverySubmission.mode).toBe("recovery");
+  await expect
+    .poll(() =>
+      page.evaluate(() => JSON.parse(sessionStorage.getItem("tilesim-web.evidence-agent-submission.v1") || "null")),
+    )
+    .toMatchObject({ idempotencyKey: recoverySubmission.idempotencyKey });
+  await page.waitForTimeout(150);
+  expect(submissions.filter((entry) => entry.mode === "recovery")).toHaveLength(1);
+
+  const discardUnretained = page.getByRole("button", { name: "明确放弃该终态并开始新分析" });
+  await discardUnretained.focus();
+  await expect(discardUnretained).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(question).toBeFocused();
+  await expect(submit).toBeEnabled();
+  await expect(page.getByText("无法恢复先前的 claims 终态")).toHaveCount(0);
+
+  await question.fill("server-mismatch");
+  await submit.click();
+  await expect(page.getByText("幂等键已绑定到不同载荷")).toBeVisible();
+  await expect(page.locator(".evidence-agent-unavailable code")).toHaveText("idempotency_payload_mismatch");
+  await expect(submit).toBeDisabled();
+  const serverMismatchSubmission = submissions.at(-1);
+  expect(serverMismatchSubmission.mode).toBe("server-mismatch");
+  await expect
+    .poll(() =>
+      page.evaluate(() => JSON.parse(sessionStorage.getItem("tilesim-web.evidence-agent-submission.v1") || "null")),
+    )
+    .toMatchObject({ idempotencyKey: serverMismatchSubmission.idempotencyKey });
+  await page.waitForTimeout(150);
+  expect(submissions.filter((entry) => entry.mode === "server-mismatch")).toHaveLength(1);
+  const discardMismatch = page.getByRole("button", { name: "明确放弃旧分析并开始新分析" });
+  await discardMismatch.focus();
+  await expect(discardMismatch).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(question).toBeFocused();
+  await expect(submit).toBeEnabled();
+  await expect(page.getByText("幂等键已绑定到不同载荷")).toHaveCount(0);
   expect(browserFailures).toEqual([]);
 });
 
@@ -761,22 +1098,26 @@ test("Week 7 evidence chain exposes calibration, lineage, and deterministic orch
   const fixture = fixtureCase("synthetic-s1-s6-complete");
   const browserFailures = await openFixture(page, fixture, "execution");
 
-  await page.getByRole("button", { name: /Week 7 证据链/ }).click();
+  await page.getByRole("button", { name: /校准与追踪/ }).click();
   await expect(page).toHaveURL(/\/evidence-lab$/);
   await expect(page.getByRole("heading", { name: "离线校准工作流" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "报告字段证据血缘" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "固定工具调用编排" })).toBeVisible();
+  await expect(page.locator(".week7-section").first()).not.toHaveAttribute("open", "");
+  await page.locator(".week7-section").first().locator(":scope > summary").focus();
+  await page.keyboard.press("Enter");
   await expect(page.locator(".week7-timeline li")).toHaveCount(5);
   await expect(page.getByText("offline_fixture_consistency")).toBeVisible();
   await expect(page.getByText("workflow_consistency_only")).toBeVisible();
+  await page.locator(".week7-section").nth(2).locator(":scope > summary").click();
   await expect(page.getByText("partial", { exact: true })).toBeVisible();
   await expect(page.getByText("H100")).toBeVisible();
   await expectNoUnexpectedTextOverflow(page);
 
   await page.getByRole("button", { name: /性能指标/ }).click();
-  await expect(page).toHaveURL(new RegExp(`/metrics\\?run=${runId}&evidence_request=req-0$`));
+  await expect(page).toHaveURL(new RegExp(`/metrics\\?run=${runId}$`));
   await expect(page.getByRole("heading", { name: "请求级结果" })).toBeVisible();
-  await page.getByRole("button", { name: /Week 7 证据链/ }).click();
+  await page.getByRole("button", { name: /校准与追踪/ }).click();
   await expect(page).toHaveURL(/\/evidence-lab$/);
   await expect(page.getByRole("heading", { name: "离线校准工作流" })).toBeVisible();
 
@@ -824,7 +1165,7 @@ test("hash-bound evidence links locate JSON Pointers and survive reload", async 
   await expect(page.locator(".artifact-virtual-line--active")).toContainText("throughput_requests_per_second");
 
   await page.goBack();
-  await expect(page).toHaveURL(/\/metrics\?run=run-fixture-f1&evidence_request=req-0$/);
+  await expect(page).toHaveURL(/\/metrics\?run=run-fixture-f1$/);
   await page.goForward();
   await expect(page.locator(".artifact-evidence-target")).toContainText("/summary/throughput_requests_per_second");
 
@@ -832,10 +1173,13 @@ test("hash-bound evidence links locate JSON Pointers and survive reload", async 
   await expect(page.locator(".artifact-evidence-target")).toContainText("/summary/throughput_requests_per_second");
   await expect(page.locator(".artifact-virtual-line--active")).toContainText("throughput_requests_per_second");
 
-  await page.getByRole("button", { name: /证据与验证/ }).click();
+  await page.getByRole("button", { name: /结果可信度/ }).click();
+  await expect(page.locator(".validation-disclosure").first()).not.toHaveAttribute("open", "");
+  await page.locator(".validation-disclosure").filter({ hasText: "逐项验证记录" }).locator("summary").click();
   await expect(page.locator(".check-row .artifact-evidence-link").first()).toBeVisible();
   await expectNoUnexpectedTextOverflow(page);
-  await page.getByRole("button", { name: /尾延迟归因/ }).click();
+  await page.getByRole("button", { name: /慢请求原因/ }).click();
+  await page.getByRole("button", { name: "S9 尾延迟归因" }).click();
   await expect(page.locator(".ranking-row .artifact-evidence-link")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "归因守恒与传播审计" })).toBeVisible();
   await expect(page.locator(".attribution-audit")).toContainText("partial_attribution");
@@ -848,6 +1192,80 @@ test("hash-bound evidence links locate JSON Pointers and survive reload", async 
       "&evidence_pointer=%2Fsummary%2Fthroughput_requests_per_second",
   );
   await expect(page.locator(".json-artifact-empty--error")).toContainText("SHA-256");
+  expect(browserFailures).toEqual([]);
+});
+
+test("analysis charts keep complete tables and bind selected points to the current run artifact identity", async ({
+  page,
+}) => {
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  const browserFailures = await openFixture(page, fixture, "metrics");
+  const panel = page.locator(".visualization-panel").filter({ hasText: "请求延迟比较" }).first();
+  await expect(panel.locator(".visualization-reading-protocol")).toHaveCount(0);
+  await expect(panel.locator(".visualization-caption")).toContainText("TTFT");
+  await expect(panel.locator(".execution-chart svg")).toBeVisible();
+  await panel.locator(".visualization-data > summary").click();
+  await expect(panel.locator(".visualization-table-scroll tbody tr")).toHaveCount(
+    fixture.reports.metrics.request_metrics.length,
+  );
+  await expect(panel.locator(".visualization-contract")).toContainText("unit_conversion");
+  await expect(panel.locator(".visualization-table-scroll")).toContainText(
+    `ttft_ps: ${fixture.reports.metrics.request_metrics[0].ttft_ps} ps`,
+  );
+
+  const marks = panel.locator('svg path[fill]:not([fill="none"])');
+  let selectedMark = null;
+  for (let index = 0; index < (await marks.count()); index += 1) {
+    const candidate = marks.nth(index);
+    const box = await candidate.boundingBox();
+    if (box && box.width > 2 && box.height > 2) {
+      selectedMark = candidate;
+      break;
+    }
+  }
+  expect(selectedMark).not.toBeNull();
+  await selectedMark.scrollIntoViewIfNeeded();
+  await selectedMark.click({ force: true });
+  const selectedLink = panel.locator(".visualization-selection a.artifact-evidence-link").first();
+  await expect(selectedLink).toBeVisible();
+  const target = new URL(await selectedLink.getAttribute("href"), "http://tilesim.local");
+  const metricsArtifact = artifactManifestEntries(fixture).find((entry) => entry.artifact_id === "metrics");
+  expect(target.searchParams.get("run")).toBe(runId);
+  expect(target.searchParams.get("evidence_artifact")).toBe("metrics");
+  expect(target.searchParams.get("evidence_sha")).toBe(metricsArtifact.sha256);
+  expect(target.searchParams.get("evidence_pointer")).toBe("/request_metrics/0");
+  await expectNoUnexpectedTextOverflow(page);
+  expect(browserFailures).toEqual([]);
+});
+
+test("S0-S6 attribution chart and S7-S9 output records remain visibly partitioned", async ({ page }) => {
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  addWeek8Contracts(fixture, "req-0");
+  fixture.reports.tail.attribution_ranking.push(
+    { attribution_id: "host-s7", rank: 2, subsystem: "S7", component_code: "host", score_ps: 3, share: 0.2 },
+    {
+      attribution_id: "validation-s8",
+      rank: 3,
+      subsystem: "S8",
+      component_code: "validation",
+      score_ps: 2,
+      share: 0.1,
+    },
+    { attribution_id: "output-s9", rank: 4, subsystem: "S9", component_code: "output", score_ps: 1, share: 0.1 },
+  );
+  const browserFailures = await openFixture(page, fixture, "attribution");
+  await page.getByRole("button", { name: "S9 尾延迟归因" }).click();
+  const causalPanel = page.locator(".visualization-panel").filter({ hasText: "S0–S6 延迟贡献" });
+  await causalPanel.locator(".visualization-data > summary").click();
+  await expect(causalPanel.locator(".visualization-table-scroll tbody tr")).toHaveCount(1);
+  await expect(causalPanel.locator(".visualization-table-scroll tbody tr")).toContainText("S6");
+  await expect(page.locator(".attribution-output-plane tbody tr")).toHaveCount(3);
+  await expect(page.locator(".attribution-output-plane tbody")).toContainText("S7");
+  await expect(page.locator(".attribution-output-plane tbody")).toContainText("S8");
+  await expect(page.locator(".attribution-output-plane tbody")).toContainText("S9");
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations.filter((item) => ["serious", "critical"].includes(item.impact))).toEqual([]);
+  await expectNoUnexpectedTextOverflow(page);
   expect(browserFailures).toEqual([]);
 });
 
@@ -866,7 +1284,7 @@ test("a missing evidence Pointer remains visible as a persistent error", async (
 test("Week 6 design space exposes complete candidate evidence without desktop overflow", async ({ page }) => {
   const fixture = fixtureCase("synthetic-s1-s6-complete");
   const browserFailures = await openFixture(page, fixture, "design_space");
-  await expect(page.getByRole("heading", { name: "候选排名与选择性 DES" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "方案排名" })).toBeVisible();
   await expect(page.locator(".candidate-detail")).toHaveCount(1);
   await expect(page.locator(".candidate-detail").first()).toContainText("fixture-manifest#candidate-0");
   await expect(page.locator(".candidate-detail").first()).toContainText("single_deterministic_run");
@@ -889,6 +1307,13 @@ test("F7 formal contract exposes Pareto, artifact-record, knob, and topology evi
   await expect(page.locator(".f7-formal-summary")).toContainText("pareto-formal-f7");
   await expect(page.locator(".candidate-detail").first()).toContainText("backend-formal-f7");
   await expect(page.locator(".candidate-detail").first()).toContainText("9,007,199,254,740,993 ps");
+  const objectiveChart = page.locator(".visualization-panel").filter({ hasText: "正式 Objective 候选图" });
+  await expect(objectiveChart).toHaveAttribute("data-chart-kind", "bar");
+  await expect(objectiveChart.locator(".visualization-reading-protocol")).toHaveCount(0);
+  await expect(objectiveChart.locator(".visualization-caption")).toContainText("可配对的正式 objective 不足");
+  await objectiveChart.locator(".visualization-data > summary").click();
+  await expect(objectiveChart.locator(".visualization-table-scroll tbody")).toContainText("pareto_member");
+  await expect(objectiveChart.locator(".visualization-contract")).toContainText("identity");
   const candidateTargets = await page
     .locator(".candidate-detail a.artifact-evidence-link")
     .evaluateAll((links) => links.map((link) => new URL(link.href).searchParams.get("evidence_pointer")));
@@ -920,8 +1345,18 @@ test("F7 Fabric view preserves backend order and exact metrics evidence", async 
   const fixture = fixtureCase("synthetic-s1-s6-complete");
   addWeek8Contracts(fixture, "req-0");
   const browserFailures = await openFixture(page, fixture, "fabric");
-  await expect(page.getByRole("heading", { name: "后端报告的主导 Fabric 热点" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "当前主要通信瓶颈" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "请求级 Fabric contribution" })).toBeVisible();
+  await expect(page.locator(".analysis-visualization-stack .visualization-panel")).toHaveCount(2);
+  await expect(page.locator(".analysis-visualization-stack .execution-chart svg")).toHaveCount(2);
+  await expect(page.locator(".analysis-visualization-stack .visualization-reading-protocol")).toHaveCount(0);
+  await expect(page.locator(".analysis-visualization-stack .visualization-caption")).toHaveCount(2);
+  await expect(page.locator(".fabric-contract-strip")).not.toHaveAttribute("open", "");
+  await expect(page.locator(".fabric-domain-disclosure")).not.toHaveAttribute("open", "");
+  await page.locator(".fabric-domain-disclosure summary").focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".fabric-domain-disclosure")).toHaveAttribute("open", "");
+  await page.keyboard.press("Enter");
   const requestRow = page.locator(".fabric-request-table tbody tr").first();
   await expect(requestRow).toContainText("req-0");
   await expect(requestRow).toContainText("phase-0");
@@ -952,28 +1387,31 @@ test("F7 Fabric view preserves backend order and exact metrics evidence", async 
 test("language switch updates the desktop workspace and survives reload", async ({ page }) => {
   const fixture = fixtureCase("synthetic-s1-s6-complete");
   const browserFailures = await openFixture(page, fixture, "execution");
-  await expect(page.getByRole("heading", { name: "S0–S6 分层结果" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "请求执行路线" })).toBeVisible();
 
   await page.getByRole("button", { name: "切换到英文" }).click();
-  await expect(page.getByRole("heading", { name: "S0–S6 layered results" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Request execution path" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Switch to Chinese" })).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await page.getByRole("button", { name: /Performance metrics/ }).click();
   await expect(page.getByRole("heading", { name: "Per-request results" })).toBeVisible();
-  await page.getByRole("button", { name: /Evidence and validation/ }).click();
-  await expect(page.getByRole("heading", { name: "Resolved fidelity by subsystem" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Request latency comparison" })).toBeVisible();
+  await expect(page.locator(".visualization-reading-protocol")).toHaveCount(0);
+  await expect(page.locator(".visualization-caption").first()).toContainText("TTFT");
+  await page.getByRole("button", { name: /Result confidence/ }).click();
+  await expect(page.getByRole("heading", { name: "Simulation detail actually used by each stage" })).toBeVisible();
   await page.locator(".new-run-button").click();
   await expect(page.getByRole("heading", { name: "Review and run" })).toBeVisible();
-  await page.getByRole("button", { name: /Layered results/ }).click();
-  await expect(page.getByRole("heading", { name: "S0–S6 layered results" })).toBeVisible();
+  await page.getByRole("button", { name: /Execution flow/ }).click();
+  await expect(page.getByRole("heading", { name: "Request execution path" })).toBeVisible();
 
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("heading", { name: "S0–S6 layered results" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Request execution path" })).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expectNoUnexpectedTextOverflow(page);
 
   await page.getByRole("button", { name: "Switch to Chinese" }).click();
-  await expect(page.getByRole("heading", { name: "S0–S6 分层结果" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "请求执行路线" })).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
   expect(browserFailures).toEqual([]);
 });
@@ -1035,15 +1473,20 @@ test("F8 experiment builder binds schema options, request preview, and exact err
   const fixture = fixtureCase("synthetic-s1-s6-complete");
   const browserFailures = await openFixture(page, fixture, "experiment");
 
+  await expect(page.locator(".capability-disclosure")).not.toHaveAttribute("open", "");
+  await page.locator(".capability-disclosure > summary").click();
+  await expect(page.locator(".capability-disclosure")).toHaveAttribute("open", "");
   await expect(page.locator(".experiment-schema-panel")).toBeVisible();
-  await expect(page.locator(".experiment-schema-panel")).toContainText("F8 编排契约");
+  await expect(page.locator(".experiment-schema-panel")).toContainText("实验编排契约");
   await expect(page.locator(".experiment-schema-panel")).toContainText("supported");
   await expect(page.locator(".experiment-schema-panel")).toContainText("S3=not_exposed");
   await expect(page.locator("[data-field-path]")).toHaveCount(8);
+  await expect(page.locator(".schema-control-group .field-help code")).toHaveCount(0);
 
   const latency = page.locator('[data-field-path="/overrides/fabric/scale_out_latency_us"] input');
   await latency.fill("1000");
   await expect(latency).toHaveAttribute("aria-invalid", "true");
+  await expect(page.locator(".schema-control-group .field-help code")).toHaveCount(2);
   await expect(page.locator("button.run-submit")).toBeDisabled();
   await page.locator(".experiment-request-preview summary").click();
   await expect(page.locator(".request-preview-error code")).toHaveText("/overrides/fabric/scale_out_latency_us");
@@ -1094,7 +1537,7 @@ test("dark appearance preserves palette, chart readability, accessibility, and d
   await expect(page.locator("html")).toHaveAttribute("data-appearance", "dark");
 
   await page.getByRole("button", { name: "切换到英文" }).click();
-  await expect(page.getByRole("heading", { name: "Request-bound cross-subsystem evidence chain" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Request execution path" })).toBeVisible();
   const results = await new AxeBuilder({ page }).analyze();
   expect(results.violations.filter((item) => ["serious", "critical"].includes(item.impact))).toEqual([]);
   await expectNoUnexpectedTextOverflow(page);
@@ -1122,7 +1565,7 @@ test("dark appearance preserves palette, chart readability, accessibility, and d
 test("desktop motion is restrained and reduced-motion removes decorative transitions", async ({ page }) => {
   const fixture = fixtureCase("synthetic-s1-s6-complete");
   const browserFailures = await openFixture(page, fixture, "execution");
-  await expect(page.getByRole("heading", { name: "S0–S6 分层结果" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "请求执行路线" })).toBeVisible();
 
   const flowNode = page.locator(".execution-flow > .flow-node").first();
   const defaultMotion = await flowNode.evaluate((element) => {
@@ -1141,7 +1584,7 @@ test("desktop motion is restrained and reduced-motion removes decorative transit
 
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("heading", { name: "S0–S6 分层结果" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "请求执行路线" })).toBeVisible();
 
   const surfaceMotion = await page
     .locator(".view-stack > *")
@@ -1185,6 +1628,11 @@ test("desktop motion is restrained and reduced-motion removes decorative transit
 test("rename modal traps focus, closes with Escape, and restores its trigger", async ({ page }) => {
   const fixture = fixtureCase("synthetic-s1-s6-complete");
   await openFixture(page, fixture, "history");
+  await expect(page.locator(".compare-shell")).toHaveCount(0);
+  const compareTrigger = page.getByRole("button", { name: "对比", exact: true }).first();
+  await expect(compareTrigger).toBeVisible();
+  await compareTrigger.click();
+  await expect(page.locator(".compare-shell")).toBeVisible();
   const trigger = page.locator('button[title="重命名"]').first();
   await trigger.click();
 
@@ -1200,7 +1648,7 @@ test("structured performance report exports a readable and machine-readable S0-S
   const fixture = fixtureCase("synthetic-s1-s6-complete");
   const browserFailures = await openFixture(page, fixture);
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "导出结构化报告" }).click();
+  await page.getByRole("button", { name: "导出完整技术报告" }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("synthetic-s1-s6-complete-structured-performance-report.html");
   const stream = await download.createReadStream();
@@ -1239,7 +1687,7 @@ test("unknown schema fails closed to the complete raw report", async ({ page }, 
 test("held-out provenance is retained without a synthetic warning", async ({ page }) => {
   const fixture = fixtureCase("held-out-s1-s6");
   const browserFailures = await openFixture(page, fixture);
-  await expect(page.locator(".evidence-tags")).toContainText("真实 Trace");
+  await expect(page.locator(".evidence-tags")).toContainText("真实采集数据");
   await expect(page.locator(".evidence-tags")).toContainText("held out validated");
   await expect(page.locator(".evidence-tags")).toContainText("held out validation");
   await expect(page.locator(".evidence-warning")).toHaveCount(0);
@@ -1262,8 +1710,72 @@ test("boundary metrics remain unavailable rather than becoming zero", async ({ p
 test("legacy bundles remain readable without invented optional artifacts", async ({ page }) => {
   const legacy = fixtureCase("legacy-missing-optional");
   const legacyFailures = await openFixture(page, legacy, "overview");
-  await expect(page.locator(".evidence-identity")).toContainText("fixture-legacy::events");
+  await page.locator(".evidence-technical-disclosure > summary").click();
+  await expect(page.locator(".evidence-technical-content code")).toContainText("fixture-legacy::events");
   await expect(page.getByRole("alert")).toHaveCount(0);
   await expectNoUnexpectedTextOverflow(page);
   expect(legacyFailures).toEqual([]);
+});
+
+test("guided help is keyboard-complete, bilingual, accessible, and reduced-motion safe", async ({ page }) => {
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  const browserFailures = await openFixture(page, fixture, "overview");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.evaluate(() => {
+    window.__guidedHelpScrollBehaviors = [];
+    Element.prototype.scrollIntoView = function (options) {
+      window.__guidedHelpScrollBehaviors.push(options?.behavior || "auto");
+    };
+  });
+
+  const start = page.getByRole("button", { name: "开始逐步指引" });
+  await start.focus();
+  await page.keyboard.press("Enter");
+  const panel = page.locator(".guided-step-panel");
+  await expect(panel).toBeVisible();
+  await expect(panel.locator("ol > li")).toHaveCount(4);
+  await expect(panel.locator('[aria-current="step"]')).toContainText("确认运行状态");
+  await expect(page.locator('[data-help-anchor="overview-status"]')).toHaveAttribute("data-help-active", "true");
+  await expect(panel.getByRole("button", { name: "关闭指引" })).toBeFocused();
+  expect(await page.evaluate(() => window.__guidedHelpScrollBehaviors)).toContain("auto");
+
+  const next = panel.getByRole("button", { name: "下一步", exact: true });
+  await next.focus();
+  await page.keyboard.press("Enter");
+  await expect(panel.locator('[aria-current="step"]')).toContainText("查看四个关键数字");
+
+  const glossary = panel.getByRole("button", { name: /术语解释/ });
+  await glossary.focus();
+  await page.keyboard.press("Enter");
+  await expect(glossary).toHaveAttribute("aria-expanded", "true");
+  await page.keyboard.press("Escape");
+  await expect(glossary).toHaveAttribute("aria-expanded", "false");
+  await expect(glossary).toBeFocused();
+  await expect(panel).toBeVisible();
+
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations).toEqual([]);
+  await expectNoUnexpectedTextOverflow(page);
+
+  await page.keyboard.press("Escape");
+  await expect(panel).toHaveCount(0);
+  await expect(start).toBeFocused();
+  await page.getByRole("button", { name: "切换到英文" }).click();
+  await expect(page.getByRole("button", { name: "Start step-by-step guide" })).toBeVisible();
+  await expect(page.locator(".key-takeaway")).toContainText("Key takeaway");
+  expect(browserFailures).toEqual([]);
+});
+
+test("raw and unsupported evidence guides remain available at fail-closed boundaries", async ({ page }) => {
+  const fixture = fixtureCase("unknown-run-schema");
+  const browserFailures = await openFixture(page, fixture);
+  await expect(page.locator(".page-primer")).toContainText("这个报告版本暂时不能安全地结构化展示");
+  await page.locator(".json-artifact-panel > summary").click();
+  await page.getByRole("button", { name: "查看原始证据指引" }).click();
+  const panel = page.locator(".guided-step-panel");
+  await expect(panel).toContainText("原始证据查看器用于复核");
+  await expect(panel.locator("ol > li")).toHaveCount(4);
+  await expect(page.locator('[data-help-anchor="raw_evidence-open"]')).toHaveAttribute("data-help-active", "true");
+  await expectNoUnexpectedTextOverflow(page);
+  expect(browserFailures).toEqual([]);
 });

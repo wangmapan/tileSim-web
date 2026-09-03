@@ -363,6 +363,117 @@ def f9_artifact_and_request(run_dir: Path, run_id: str, *, duplicate_stage: bool
     return artifact, manifest, request
 
 
+def f9_completed_provider_response(payload: dict) -> dict:
+    binding = payload["response_binding"]
+    scope = payload["immutable_snapshot"]["snapshot_reference"]["evidence_scope"]
+    citation = {
+        **payload["verified_records"][0]["citation_identity"],
+        "citation_role": "direct_fact",
+        "availability": "available",
+        "value": {
+            "encoding": "decimal_string",
+            "numeric_kind": "uint64",
+            "decimal": "18446744073709551615",
+        },
+        "unit": "ps",
+    }
+    return {
+        "schema_version": "tilesim.bridge.evidence_agent_response.v1",
+        "schema_set_revision": binding["schema_set_revision"],
+        "request_id": binding["request_id"],
+        "client_request_id": binding["client_request_id"],
+        "run_id": binding["run_id"],
+        "input_snapshot_digest": binding["input_snapshot_digest"],
+        "completion_state": "completed",
+        "provider": binding["provider"],
+        "revisions": {
+            "prompt_template_revision": server.evidence_agent.PROMPT_TEMPLATE_REVISION,
+            "policy_revision": server.evidence_agent.POLICY_REVISION,
+        },
+        "claims": [
+            {
+                "claim_id": "claim-provider-replay-sentinel",
+                "claim_kind": "numeric_fact",
+                "text": "claims-bearing-provider-response-must-remain-memory-only",
+                "citations": [citation],
+                "scope": {
+                    "source_mode": scope["source_mode"],
+                    "requested_fidelity": scope["requested_fidelity"],
+                    "resolved_fidelity": scope["resolved_fidelity"],
+                    "execution_mode": scope["execution_mode"],
+                    "resource_semantics_relation": "S3_S4_S5_peer",
+                    "causal_subsystems": ["S1", "S3", "S4", "S5", "S6"],
+                    "attribution_semantics": "not_applicable",
+                    "recommendation_semantics": "not_applicable",
+                },
+                "percentile_subject": scope["percentile_subject"],
+            }
+        ],
+        "refusal": None,
+        "partial": False,
+        "truncated": False,
+        "degradation": {"state": "none", "reason_code": "none"},
+        "audit_summary": {
+            "operations": ["verified_snapshot_read", "citation_resolution"],
+            "tool_invocation_count": 2,
+            "hidden_reasoning_returned": False,
+        },
+        "generated_at": "2026-08-31T00:00:00+00:00",
+        "persistence": {
+            "mode": "run_local_terminal_metadata_only",
+            "retained_until": None,
+            "snapshot_payload_retained": False,
+            "user_question_retained": False,
+        },
+        "staleness": {
+            "state": "current_at_generation",
+            "binding_fields": [
+                "run_id",
+                "input_snapshot_digest",
+                "schema_set_revision",
+                "backend_identity",
+            ],
+        },
+    }
+
+
+class ReleaseIdentityTest(unittest.TestCase):
+    def test_backend_identity_exposes_manifest_bound_web_release_fields(self) -> None:
+        web_fields = {
+            "web_source_revision": "a" * 40,
+            "web_source_state_digest": "b" * 64,
+            "web_build_digest": "c" * 64,
+            "web_release_identity": "tilesim.web.release_snapshot.v1",
+            "web_release_digest": "d" * 64,
+            "web_bridge_digest": "e" * 64,
+            "web_static_digest": "f" * 64,
+            "schema_set_revision": f"sha256:{'1' * 64}",
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest_path = Path(temporary) / "backend-current.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "source_revision": "2" * 40,
+                        "build_revision": "2" * 40,
+                        "source_state_digest": "3" * 64,
+                        "build_state_digest": "3" * 64,
+                        **web_fields,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with (
+                mock.patch.object(server.identity, "git_value", return_value="2" * 40),
+                mock.patch.object(server.identity, "worktree_state_digest", return_value="3" * 64),
+            ):
+                value = server.identity.backend_identity(Path(temporary), Path("TileSimCLI"), manifest_path)
+
+        self.assertTrue(value["versions_match"])
+        for field, expected in web_fields.items():
+            self.assertEqual(value[field], expected)
+
+
 class DesignSpaceBridgeTest(unittest.TestCase):
     def test_worktree_digest_tracks_uncommitted_content(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -637,6 +748,15 @@ class BridgeApiContractTest(unittest.TestCase):
         self.previous_bridge_instance_id = server.BRIDGE_INSTANCE_ID
         self.start_execution_patcher = mock.patch.object(server, "start_run_execution")
         self.start_execution_mock = self.start_execution_patcher.start()
+        self.runtime_capabilities_patcher = mock.patch.object(
+            server,
+            "runtime_capabilities",
+            return_value={
+                "schema_version": "tilesim.runtime_capabilities.v1",
+                "run_surface": server.identity.controlled_run_surface(),
+            },
+        )
+        self.runtime_capabilities_patcher.start()
         self.httpd = server.ThreadingHTTPServer(("127.0.0.1", 0), server.BridgeHandler)
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
         self.thread.start()
@@ -649,6 +769,7 @@ class BridgeApiContractTest(unittest.TestCase):
         server.RUNS_ROOT = self.previous_runs_root
         server.BRIDGE_INSTANCE_ID = self.previous_bridge_instance_id
         server.runs.clear()
+        self.runtime_capabilities_patcher.stop()
         self.start_execution_patcher.stop()
         self.temporary_directory.cleanup()
 
@@ -1683,10 +1804,15 @@ class BridgeApiContractTest(unittest.TestCase):
         self.assertFalse(payload["error"]["retryable"])
 
     def test_f9_capability_and_manifest_publish_formal_unavailable_contract(self) -> None:
-        status, descriptor, _ = self.request("/api/agent/evidence-capabilities")
+        status, descriptor, headers = self.request("/api/agent/evidence-capabilities")
         self.assertEqual(status, 200)
-        self.assertEqual(descriptor["schema_version"], "tilesim.bridge.evidence_agent_descriptor.v1")
+        self.assertEqual(descriptor["schema_version"], "tilesim.bridge.evidence_agent_descriptor.v2")
         self.assertEqual(descriptor["schema_set_revision"], server.SCHEMA_SET_REVISION)
+        self.assertEqual(headers["X-TileSim-Schema-Set-Revision"], server.SCHEMA_SET_REVISION)
+        self.assertEqual(
+            descriptor["descriptor_revision"],
+            server.EVIDENCE_AGENT_CONTRACT["descriptor_revision"],
+        )
         self.assertEqual(descriptor["availability"], "unavailable")
         self.assertFalse(descriptor["provider"]["configured"])
         self.assertEqual(descriptor["degradation"]["reason_code"], "provider_unavailable")
@@ -1707,6 +1833,13 @@ class BridgeApiContractTest(unittest.TestCase):
             manifest["evidence_agent"]["response_schema_identity"],
             "tilesim.bridge.evidence_agent_response.v1",
         )
+        self.assertEqual(
+            manifest["evidence_agent"]["descriptor_schema_identity"],
+            "tilesim.bridge.evidence_agent_descriptor.v2",
+        )
+        self.assertEqual(
+            manifest["evidence_agent"]["descriptor_revision"], descriptor["descriptor_revision"]
+        )
 
     def test_f9_provider_unavailable_is_run_bound_redacted_and_idempotent(self) -> None:
         run_id = "run-f9-unavailable"
@@ -1726,6 +1859,9 @@ class BridgeApiContractTest(unittest.TestCase):
         self.assertEqual(first["input_snapshot_digest"], request["input_snapshot_digest"])
         self.assertEqual(first["claims"], [])
 
+        with server.evidence_agent_service._live_terminal_cache_lock:
+            server.evidence_agent_service._live_terminal_cache.clear()
+        self.restart_http_server()
         status, replay, _ = self.request(
             f"/api/runs/{run_id}/agent/evidence-analyses", headers, method="POST", payload=request
         )
@@ -1738,7 +1874,12 @@ class BridgeApiContractTest(unittest.TestCase):
         self.assertNotIn(request["user_question"]["content"], persisted_text)
         self.assertNotIn("untrusted_text", persisted_text)
         record = json.loads(persisted_text)
+        self.assertEqual(record["terminal_class"], "claim_free_bridge_terminal")
+        self.assertNotIn("bridge_terminal_response", record)
         self.assertFalse(record["redaction"]["snapshot_payload_retained"])
+        self.assertFalse(record["redaction"]["artifact_payload_retained"])
+        self.assertFalse(record["redaction"]["provider_raw_response_retained"])
+        self.assertFalse(record["redaction"]["validated_model_claims_retained"])
         self.assertFalse(record["redaction"]["hidden_reasoning_retained"])
 
         changed = json.loads(json.dumps(request))
@@ -1748,6 +1889,147 @@ class BridgeApiContractTest(unittest.TestCase):
         )
         self.assertEqual(status, 409)
         self.assertEqual(conflict["error"]["code"], "idempotency_payload_mismatch")
+        self.assertEqual(conflict["error"]["field_path"], "/headers/Idempotency-Key")
+        self.assertFalse(conflict["error"]["retryable"])
+
+    def test_f9_claims_terminal_replays_in_process_then_restart_returns_formal_409(self) -> None:
+        run_id = "run-f9-claims-recovery"
+        run_dir = server.RUNS_ROOT / run_id
+        run_dir.mkdir()
+        artifact, _, request = f9_artifact_and_request(run_dir, run_id)
+        provider_module = server.evidence_agent_provider_contract
+        config = provider_module.ProviderConfig(
+            provider_id=provider_module.SUPPORTED_PROVIDER_ID,
+            endpoint="https://provider.example.invalid/fixed",
+            api_key="claims-recovery-credential-sentinel",
+            model_id="claims-recovery-model",
+            model_revision="claims-recovery-revision",
+        )
+        provider_calls: list[dict] = []
+
+        def transport(_config, payload):
+            provider_calls.append(payload)
+            if payload["operation"] == "capability_probe":
+                return {
+                    "protocol": provider_module.PROVIDER_PROTOCOL,
+                    "capability": "structured_evidence_analysis",
+                    "available": True,
+                    "provider_id": config.provider_id,
+                    "model_id": config.model_id,
+                    "model_revision": config.model_revision,
+                }
+            return {
+                "protocol": provider_module.PROVIDER_PROTOCOL,
+                "response": f9_completed_provider_response(payload),
+            }
+
+        original_provider = server.evidence_agent_provider
+        server.evidence_agent_provider = provider_module.ProviderRuntime(config, transport)
+        headers = {"Content-Type": "application/json", "Idempotency-Key": "f9-claims-recovery-key"}
+        try:
+            status, first, _ = self.request(
+                f"/api/runs/{run_id}/agent/evidence-analyses",
+                headers,
+                method="POST",
+                payload=request,
+            )
+            self.assertEqual(status, 200)
+            self.assertEqual(first["completion_state"], "completed")
+            self.assertEqual(len(provider_calls), 2)  # one authenticated probe and one analysis
+
+            status, replay, _ = self.request(
+                f"/api/runs/{run_id}/agent/evidence-analyses",
+                headers,
+                method="POST",
+                payload=request,
+            )
+            self.assertEqual(status, 200)
+            self.assertEqual(replay, first)
+            self.assertEqual(len(provider_calls), 2)
+
+            record_path = next((run_dir / "agent-evidence-analyses").glob("*.json"))
+            record_text = record_path.read_text(encoding="utf-8")
+            self.assertNotIn(request["user_question"]["content"], record_text)
+            self.assertNotIn(artifact["untrusted_text"], record_text)
+            self.assertNotIn("claims-bearing-provider-response-must-remain-memory-only", record_text)
+            self.assertNotIn(config.api_key, record_text)
+            self.assertNotIn("hidden-reasoning-sentinel", record_text)
+            record = json.loads(record_text)
+            self.assertEqual(record["terminal_class"], "claims_bearing_terminal")
+            self.assertFalse(record["redaction"]["validated_model_claims_retained"])
+
+            with server.evidence_agent_service._live_terminal_cache_lock:
+                server.evidence_agent_service._live_terminal_cache.clear()
+            self.restart_http_server()
+            status, not_retained, _ = self.request(
+                f"/api/runs/{run_id}/agent/evidence-analyses",
+                headers,
+                method="POST",
+                payload=request,
+            )
+            self.assertEqual(status, 409)
+            self.assertEqual(not_retained["schema_version"], "tilesim.bridge.error.v1")
+            self.assertEqual(not_retained["error"]["code"], "terminal_result_not_retained")
+            self.assertEqual(
+                not_retained["error"]["field_path"], "/headers/Idempotency-Key"
+            )
+            self.assertFalse(not_retained["error"]["retryable"])
+            self.assertEqual(len(provider_calls), 2)
+        finally:
+            server.evidence_agent_provider = original_provider
+
+    def test_f9_configured_provider_invalid_output_fails_closed_as_formal_response(self) -> None:
+        run_id = "run-f9-invalid-provider-output"
+        run_dir = server.RUNS_ROOT / run_id
+        run_dir.mkdir()
+        _, _, request = f9_artifact_and_request(run_dir, run_id)
+        provider_module = server.evidence_agent_provider_contract
+        config = provider_module.ProviderConfig(
+            provider_id=provider_module.SUPPORTED_PROVIDER_ID,
+            endpoint="https://provider.example.invalid/fixed",
+            api_key="route-test-secret",
+            model_id="route-test-model",
+            model_revision="route-test-revision",
+        )
+
+        def transport(_config, payload):
+            if payload["operation"] == "capability_probe":
+                return {
+                    "protocol": provider_module.PROVIDER_PROTOCOL,
+                    "capability": "structured_evidence_analysis",
+                    "available": True,
+                    "provider_id": config.provider_id,
+                    "model_id": config.model_id,
+                    "model_revision": config.model_revision,
+                }
+            return {"protocol": provider_module.PROVIDER_PROTOCOL, "response": "not-an-object"}
+
+        original_provider = server.evidence_agent_provider
+        server.evidence_agent_provider = provider_module.ProviderRuntime(config, transport)
+        try:
+            status, descriptor, _ = self.request("/api/agent/evidence-capabilities")
+            self.assertEqual(status, 200)
+            self.assertEqual(descriptor["availability"], "available")
+            self.assertEqual(descriptor["provider"], config.public_identity)
+
+            status, response, _ = self.request(
+                f"/api/runs/{run_id}/agent/evidence-analyses",
+                {"Content-Type": "application/json", "Idempotency-Key": "f9-invalid-provider-key"},
+                method="POST",
+                payload=request,
+            )
+            self.assertEqual(status, 502)
+            self.assertEqual(response["schema_version"], "tilesim.bridge.evidence_agent_response.v1")
+            self.assertEqual(response["completion_state"], "failed")
+            self.assertEqual(response["refusal"]["reason_code"], "unsupported_schema")
+            self.assertEqual(response["claims"], [])
+            persisted = next((run_dir / "agent-evidence-analyses").glob("*.json")).read_text(
+                encoding="utf-8"
+            )
+            self.assertNotIn(request["user_question"]["content"], persisted)
+            self.assertNotIn(config.api_key, persisted)
+        finally:
+            server.evidence_agent_provider = original_provider
 
     def test_f9_request_fails_closed_on_revision_tools_identity_and_concurrency(self) -> None:
         run_id = "run-f9-fail-closed"

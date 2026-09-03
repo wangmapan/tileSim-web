@@ -86,13 +86,11 @@ const bridgeDetail = computed(() => {
           :key="item.id"
           class="nav-link"
           :class="{ active: state.view === item.id }"
+          :title="t(item.description)"
           @click="setView(item.id)"
         >
           <component :is="icons[item.id]" :size="18" stroke-width="1.8" />
-          <span
-            ><strong>{{ t(item.label) }}</strong
-            ><small>{{ t(item.description) }}</small></span
-          >
+          <strong>{{ t(item.label) }}</strong>
         </button>
       </section>
     </nav>

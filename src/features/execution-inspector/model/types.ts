@@ -42,6 +42,9 @@ export interface VisualizationRow {
   values: Array<string | number | null>;
   rawValues?: string[];
   sourcePath?: string | null;
+  valueSourcePaths?: Array<string | null>;
+  status?: string;
+  detail?: string;
 }
 
 export interface VisualizationSeries {
@@ -56,11 +59,16 @@ export interface LayerVisualization {
   kind: LayerVisualizationKind;
   title: string;
   description: string;
+  question: string;
+  firstLook: string;
+  boundary: string;
   rationale: string;
   unit: string;
   sourcePaths: string[];
   derivation: "identity" | "display_group" | "display_sum" | "unit_conversion";
   columns: string[];
+  rawColumns?: string[];
+  rawUnit?: string;
   series: VisualizationSeries[];
   rows: VisualizationRow[];
   emptyReason?: string;

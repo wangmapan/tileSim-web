@@ -289,6 +289,27 @@
 .f7-capability-panel {
   overflow: hidden;
 }
+.design-contract-disclosure > summary,
+.design-evidence-disclosure > summary {
+  cursor: pointer;
+  list-style: none;
+}
+.design-contract-disclosure > summary::-webkit-details-marker,
+.design-evidence-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.design-contract-disclosure > summary::after,
+.design-evidence-disclosure > summary::after {
+  content: "+";
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 18px;
+}
+.design-contract-disclosure[open] > summary::after,
+.design-evidence-disclosure[open] > summary::after {
+  content: "−";
+  color: var(--accent);
+}
 .f7-formal-summary {
   padding: 18px;
   overflow: hidden;
@@ -422,6 +443,41 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
+}
+.design-evidence-disclosure {
+  padding: 0;
+  overflow: hidden;
+}
+.design-evidence-disclosure > summary {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px;
+}
+.design-evidence-disclosure > summary > span,
+.design-evidence-disclosure > summary > span > span {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  min-width: 0;
+}
+.design-evidence-disclosure > summary > span > span {
+  display: grid;
+  gap: 3px;
+}
+.design-evidence-disclosure > summary small {
+  color: var(--muted);
+}
+.design-evidence-disclosure > .design-evidence-grid {
+  gap: 1px;
+  border-top: 1px solid var(--line);
+  background: var(--line);
+}
+.design-evidence-disclosure > .design-evidence-grid .panel {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 .design-evidence-grid article {
   padding: 19px;
@@ -563,7 +619,7 @@
   place-items: center;
   min-height: 31px;
   border-radius: 7px;
-  color: var(--accent);
+  color: var(--accent-hover);
   background: var(--accent-soft);
   font: 750 var(--text-sm) var(--font-mono);
 }

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import re
@@ -9,14 +10,15 @@ from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 
 
-DESCRIPTOR_SCHEMA_IDENTITY = "tilesim.bridge.evidence_agent_descriptor.v1"
+DESCRIPTOR_SCHEMA_IDENTITY = "tilesim.bridge.evidence_agent_descriptor.v2"
 REQUEST_SCHEMA_IDENTITY = "tilesim.bridge.evidence_agent_request.v1"
 RESPONSE_SCHEMA_IDENTITY = "tilesim.bridge.evidence_agent_response.v1"
 CITATION_SCHEMA_IDENTITY = "tilesim.bridge.evidence_agent_citation.v1"
 SNAPSHOT_REFERENCE_SCHEMA_IDENTITY = "tilesim.bridge.evidence_snapshot_reference.v1"
 STRUCTURED_REPORT_SCHEMA_IDENTITY = "tilesim.web.structured-performance-report.v2"
-PROMPT_TEMPLATE_REVISION = "tilesim.evidence_agent.prompt_template.v1"
-POLICY_REVISION = "tilesim.evidence_agent.read_only_policy.v1"
+TERMINAL_RECORD_SCHEMA_IDENTITY = "tilesim.bridge.evidence_agent_terminal_record.v2"
+PROMPT_TEMPLATE_REVISION = "tilesim.evidence_agent.prompt_template.v3"
+POLICY_REVISION = "tilesim.evidence_agent.read_only_policy.v2"
 
 SUPPORTED_LOCALES = ("en-US", "zh-CN")
 SUPPORTED_TASK_KINDS = (
@@ -135,6 +137,79 @@ EVALUATION_CASE_IDS = {
     "truncated-output",
     "timeout-and-cancel",
 }
+PERSISTENCE_POLICY = {
+    "mode": {
+        "storage_scope": "run_local",
+        "record_kind": "redacted_terminal_metadata_only",
+        "record_schema_identity": TERMINAL_RECORD_SCHEMA_IDENTITY,
+    },
+    "retention_seconds": 86_400,
+    "terminal_classes": {
+        "claim_free_bridge_terminal": {
+            "terminal_metadata_retained": True,
+            "exact_response_recoverable_after_restart": True,
+        },
+        "claims_bearing_terminal": {
+            "terminal_metadata_retained": True,
+            "validated_model_claims_retained": False,
+            "exact_response_recoverable_after_restart": False,
+        },
+        "claim_free_provider_terminal": {
+            "terminal_metadata_retained": True,
+            "validated_provider_response_retained": False,
+            "exact_response_recoverable_after_restart": False,
+        },
+    },
+    "payload_retention": {
+        "user_question_retained": False,
+        "snapshot_payload_retained": False,
+        "artifact_payload_retained": False,
+        "provider_raw_response_retained": False,
+        "validated_model_claims_retained": False,
+        "credentials_retained": False,
+        "hidden_reasoning_retained": False,
+    },
+}
+RETRY_POLICY = {
+    "payload_identity": "tilesim.bridge.canonical_json.v1_sha256",
+    "same_key_same_canonical_payload": {
+        "in_process": "exact_terminal_replay",
+        "after_restart_claim_free_bridge_terminal": "exact_terminal_replay_from_redacted_record",
+        "after_restart_claims_bearing_terminal": "error_terminal_result_not_retained",
+        "after_restart_claim_free_provider_terminal": "error_terminal_result_not_retained",
+        "provider_reinvocation": "forbidden",
+    },
+    "same_key_different_canonical_payload": {
+        "outcome": "error",
+        "http_status": 409,
+        "code": "idempotency_payload_mismatch",
+        "field_path": "/headers/Idempotency-Key",
+        "retryable": False,
+    },
+}
+TERMINAL_RECOVERY_POLICY = {
+    "record_scope": "run_local",
+    "record_schema_identity": TERMINAL_RECORD_SCHEMA_IDENTITY,
+    "claim_free_bridge_terminal": {
+        "outcome": "exact_terminal_replay",
+        "source": "redacted_terminal_metadata",
+    },
+    "claims_bearing_terminal": {
+        "outcome": "error",
+        "http_status": 409,
+        "code": "terminal_result_not_retained",
+        "field_path": "/headers/Idempotency-Key",
+        "retryable": False,
+    },
+    "claim_free_provider_terminal": {
+        "outcome": "error",
+        "http_status": 409,
+        "code": "terminal_result_not_retained",
+        "field_path": "/headers/Idempotency-Key",
+        "retryable": False,
+    },
+    "provider_reinvocation": "forbidden",
+}
 DESCRIPTOR_REVISION = "sha256:" + hashlib.sha256(
     json.dumps(
         {
@@ -156,6 +231,9 @@ DESCRIPTOR_REVISION = "sha256:" + hashlib.sha256(
             "availability_states": AVAILABILITY_STATES,
             "digest_contract": "tilesim.bridge.canonical_json.v1",
             "evaluation_case_ids": sorted(EVALUATION_CASE_IDS),
+            "retry": RETRY_POLICY,
+            "terminal_recovery": TERMINAL_RECOVERY_POLICY,
+            "persistence": PERSISTENCE_POLICY,
         },
         sort_keys=True,
         separators=(",", ":"),
@@ -178,33 +256,67 @@ class EvidenceAgentContractError(ValueError):
         self.http_status = http_status
 
 
+def canonical_json_text(value: object) -> str:
+    """Encode the F9 canonical JSON subset without lossy numeric conversions."""
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, str):
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        raise TypeError("Canonical F9 digests forbid binary floating-point input.")
+    if isinstance(value, list):
+        return "[" + ",".join(canonical_json_text(item) for item in value) + "]"
+    if isinstance(value, dict):
+        if any(not isinstance(key, str) for key in value):
+            raise TypeError("Canonical F9 JSON object keys must be strings.")
+        return "{" + ",".join(
+            canonical_json_text(key) + ":" + canonical_json_text(value[key])
+            for key in sorted(value)
+        ) + "}"
+    raise TypeError(f"Canonical F9 JSON cannot encode {type(value).__name__}.")
+
+
 def canonical_sha256(value: object) -> str:
-    encoded = json.dumps(
-        value,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
+    encoded = canonical_json_text(value).encode("utf-8")
     return "sha256:" + hashlib.sha256(encoded).hexdigest()
 
 
-def build_descriptor(schema_set_revision: str) -> dict:
-    """Publish the complete contract without pretending a provider is configured."""
+def build_descriptor(schema_set_revision: str, provider_capability: object | None = None) -> dict:
+    """Publish the complete contract from an authenticated capability decision."""
+    available = bool(getattr(provider_capability, "available", False))
+    provider = getattr(provider_capability, "provider", None)
+    if not isinstance(provider, dict):
+        provider = {
+            "configured": False,
+            "provider_id": "not_configured",
+            "model_id": "not_configured",
+            "model_revision": "not_configured",
+        }
+    degradation_state = getattr(provider_capability, "degradation_state", "not_configured")
+    degradation_detail = getattr(
+        provider_capability,
+        "detail",
+        "No authenticated TileSim evidence Provider configuration is available.",
+    )
     return {
         "schema_version": DESCRIPTOR_SCHEMA_IDENTITY,
         "schema_set_revision": schema_set_revision,
         "descriptor_revision": DESCRIPTOR_REVISION,
-        "availability": "unavailable",
+        "availability": "available" if available else "unavailable",
         "degradation": {
-            "state": "not_configured",
-            "reason_code": "provider_unavailable",
-            "detail": "No production evidence Agent provider is configured for this Bridge.",
+            "state": "none" if available else degradation_state,
+            "reason_code": "none" if available else "provider_unavailable",
+            "detail": degradation_detail,
         },
         "availability_predicate": {
             "capability_path": "/provider/configured",
             "operator": "equals",
             "expected_value": True,
-            "evaluated_available": False,
+            "evaluated_available": available,
         },
         "schema_identities": {
             "request": REQUEST_SCHEMA_IDENTITY,
@@ -213,12 +325,7 @@ def build_descriptor(schema_set_revision: str) -> dict:
             "snapshot_reference": SNAPSHOT_REFERENCE_SCHEMA_IDENTITY,
             "structured_report": STRUCTURED_REPORT_SCHEMA_IDENTITY,
         },
-        "provider": {
-            "configured": False,
-            "provider_id": "not_configured",
-            "model_id": "not_configured",
-            "model_revision": "not_configured",
-        },
+        "provider": provider,
         "revisions": {
             "prompt_template_revision": PROMPT_TEMPLATE_REVISION,
             "policy_revision": POLICY_REVISION,
@@ -260,16 +367,13 @@ def build_descriptor(schema_set_revision: str) -> dict:
             "forbidden": list(FORBIDDEN_TOOLS),
             "allow_list_expansion": False,
         },
-        "persistence": {
-            "mode": "run_local_terminal_metadata_only",
-            "retention_seconds": 86_400,
-            "snapshot_payload_retained": False,
-            "user_question_retained": False,
-            "hidden_reasoning_retained": False,
-        },
+        "persistence": copy.deepcopy(PERSISTENCE_POLICY),
         "redaction": {
-            "user_question": "digest_only",
-            "artifact_content": "not_retained",
+            "user_question": "not_retained",
+            "snapshot_payload": "not_retained",
+            "artifact_payload": "not_retained",
+            "provider_raw_response": "not_retained",
+            "validated_model_claims": "memory_only_until_process_exit",
             "credentials": "never_retained",
             "hidden_chain_of_thought": "never_returned_or_retained",
         },
@@ -278,8 +382,8 @@ def build_descriptor(schema_set_revision: str) -> dict:
             "timeout_ms": 30_000,
             "cancellation": "not_applicable_after_synchronous_terminal_response",
             "maximum_concurrent_operations": 1,
-            "retry": "same_idempotency_key_and_same_payload_replays_terminal_result",
-            "terminal_recovery": "run_local_redacted_terminal_record",
+            "retry": copy.deepcopy(RETRY_POLICY),
+            "terminal_recovery": copy.deepcopy(TERMINAL_RECOVERY_POLICY),
         },
     }
 
@@ -542,7 +646,7 @@ def _validate_evidence_scope(scope: object) -> dict:
 
 def snapshot_material(request: dict) -> dict:
     return {
-        "schema_version": SNAPSHOT_REFERENCE_SCHEMA_IDENTITY,
+        "schema_version": request["schema_version"],
         "schema_set_revision": request["schema_set_revision"],
         "run_id": request["run_id"],
         "structured_report_schema_identity": request["structured_report_schema_identity"],
@@ -893,7 +997,13 @@ def validate_citation(citation: object, request: dict, path: str) -> dict:
     return citation
 
 
-def validate_response(response: object, request: dict) -> dict:
+def validate_response(
+    response: object,
+    request: dict,
+    *,
+    expected_provider: dict | None = None,
+    expected_request_id: str | None = None,
+) -> dict:
     response = _closed_object(
         response,
         {
@@ -942,6 +1052,10 @@ def validate_response(response: object, request: dict) -> dict:
         raise EvidenceAgentContractError("unsupported_schema", "Agent response schema is unsupported.", "/schema_version")
     if not isinstance(response["request_id"], str) or not re.fullmatch(r"agent-[A-Za-z0-9._:-]+", response["request_id"]):
         raise EvidenceAgentContractError("unsupported_schema", "Agent request_id is invalid.", "/request_id")
+    if expected_request_id is not None and response["request_id"] != expected_request_id:
+        raise EvidenceAgentContractError(
+            "stale_schema_revision", "Agent response request_id is stale.", "/request_id"
+        )
     if response["schema_set_revision"] != request["schema_set_revision"]:
         raise EvidenceAgentContractError("stale_schema_revision", "Agent response schema revision is stale.", "/schema_set_revision")
     for field in ("run_id", "input_snapshot_digest", "client_request_id"):
@@ -962,6 +1076,12 @@ def validate_response(response: object, request: dict) -> dict:
         for field in ("provider_id", "model_id", "model_revision")
     ):
         raise EvidenceAgentContractError("unsupported_schema", "Provider identity is invalid.", "/provider")
+    if expected_provider is not None and provider != expected_provider:
+        raise EvidenceAgentContractError(
+            "stale_schema_revision",
+            "Provider or model identity does not match the authenticated configuration.",
+            "/provider",
+        )
     revisions = _closed_object(
         response["revisions"],
         {"prompt_template_revision", "policy_revision"},
@@ -983,6 +1103,10 @@ def validate_response(response: object, request: dict) -> dict:
         raise EvidenceAgentContractError("output_truncated", "Claim count exceeds the contract limit.", "/claims")
     if completion == "completed" and (not claims or response["refusal"] is not None):
         raise EvidenceAgentContractError("insufficient_evidence", "Completed responses require cited claims and no refusal.", "/claims")
+    if claims and provider["configured"] is not True:
+        raise EvidenceAgentContractError(
+            "provider_unavailable", "Unconfigured Providers cannot return claims.", "/provider/configured"
+        )
     if completion in {"refused", "failed", "timeout", "cancelled"} and (claims or not isinstance(response["refusal"], dict)):
         raise EvidenceAgentContractError("unsupported_schema", "Terminal refusal responses cannot carry claims.", "/claims")
     if not isinstance(response["partial"], bool) or not isinstance(response["truncated"], bool):
@@ -1011,6 +1135,7 @@ def validate_response(response: object, request: dict) -> dict:
             )
     scope = request["snapshot_reference"]["evidence_scope"]
     claim_ids: set[str] = set()
+    output_characters = 0
     for index, claim in enumerate(claims):
         path = f"/claims/{index}"
         claim = _closed_object(
@@ -1025,6 +1150,11 @@ def validate_response(response: object, request: dict) -> dict:
         claim_ids.add(claim_id)
         if not isinstance(claim["text"], str) or not claim["text"]:
             raise EvidenceAgentContractError("unsupported_schema", "Claim text is required.", f"{path}/text")
+        output_characters += len(claim["text"])
+        if output_characters > 64_000:
+            raise EvidenceAgentContractError(
+                "output_truncated", "Claim text exceeds the output contract limit.", f"{path}/text"
+            )
         if claim["claim_kind"] not in EVIDENTIARY_CLAIM_KINDS | {"help_text"}:
             raise EvidenceAgentContractError("unsupported_schema", "Claim kind is unsupported.", f"{path}/claim_kind")
         citations = claim["citations"]
@@ -1137,7 +1267,17 @@ def validate_response(response: object, request: dict) -> dict:
     return response
 
 
-def provider_unavailable_response(request: dict, request_id: str, schema_set_revision: str) -> dict:
+def terminal_refusal_response(
+    request: dict,
+    request_id: str,
+    schema_set_revision: str,
+    *,
+    provider: dict,
+    completion_state: str,
+    reason_code: str,
+    detail: str,
+    retryable: bool,
+) -> dict:
     generated_at = datetime.now(timezone.utc)
     response = {
         "schema_version": RESPONSE_SCHEMA_IDENTITY,
@@ -1146,26 +1286,21 @@ def provider_unavailable_response(request: dict, request_id: str, schema_set_rev
         "client_request_id": request["client_request_id"],
         "run_id": request["run_id"],
         "input_snapshot_digest": request["input_snapshot_digest"],
-        "completion_state": "refused",
-        "provider": {
-            "configured": False,
-            "provider_id": "not_configured",
-            "model_id": "not_configured",
-            "model_revision": "not_configured",
-        },
+        "completion_state": completion_state,
+        "provider": provider,
         "revisions": {
             "prompt_template_revision": PROMPT_TEMPLATE_REVISION,
             "policy_revision": POLICY_REVISION,
         },
         "claims": [],
         "refusal": {
-            "reason_code": "provider_unavailable",
-            "detail": "No production evidence Agent provider is configured.",
-            "retryable": False,
+            "reason_code": reason_code,
+            "detail": detail,
+            "retryable": retryable,
         },
-        "partial": False,
-        "truncated": False,
-        "degradation": {"state": "unavailable", "reason_code": "provider_unavailable"},
+        "partial": completion_state == "partial",
+        "truncated": completion_state == "truncated",
+        "degradation": {"state": completion_state, "reason_code": reason_code},
         "audit_summary": {
             "operations": [],
             "tool_invocation_count": 0,
@@ -1188,5 +1323,23 @@ def provider_unavailable_response(request: dict, request_id: str, schema_set_rev
             ],
         },
     }
-    validate_response(response, request)
+    validate_response(response, request, expected_provider=provider, expected_request_id=request_id)
     return response
+
+
+def provider_unavailable_response(request: dict, request_id: str, schema_set_revision: str) -> dict:
+    return terminal_refusal_response(
+        request,
+        request_id,
+        schema_set_revision,
+        provider={
+            "configured": False,
+            "provider_id": "not_configured",
+            "model_id": "not_configured",
+            "model_revision": "not_configured",
+        },
+        completion_state="refused",
+        reason_code="provider_unavailable",
+        detail="No authenticated production evidence Agent Provider is available.",
+        retryable=False,
+    )

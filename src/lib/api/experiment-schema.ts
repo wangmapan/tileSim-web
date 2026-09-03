@@ -7,7 +7,7 @@ import { apiRequestWithMetadata, isRecord } from "./transport";
 const revisionPattern = /^sha256:[0-9a-f]{64}$/;
 
 function contractError(code: string, detail: string): BridgeApiError {
-  return new BridgeApiError(t("F8 实验契约不可用：{detail}", { detail }), {
+  return new BridgeApiError(t("实验编排契约不可用：{detail}", { detail }), {
     status: 0,
     code,
     retryable: false,

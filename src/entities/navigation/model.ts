@@ -1,14 +1,14 @@
 export const navItems = [
-  { id: "overview", group: "结果", label: "运行概览", description: "结论与关键数字" },
-  { id: "execution", group: "结果", label: "分层结果", description: "S0–S6 执行链路" },
-  { id: "metrics", group: "结果", label: "性能指标", description: "请求与尾延迟" },
-  { id: "fabric", group: "结果", label: "Fabric 分析", description: "域、利用率与背压" },
-  { id: "attribution", group: "证据", label: "尾延迟归因", description: "跨子系统贡献" },
-  { id: "validation", group: "证据", label: "证据与验证", description: "来源与保真度" },
-  { id: "evidence_agent", group: "证据", label: "只读证据 Agent", description: "引用约束的独立草稿" },
-  { id: "evidence_lab", group: "证据", label: "Week 7 证据链", description: "校准、血缘与 Agent" },
-  { id: "design_space", group: "实验", label: "设计空间", description: "S6 候选与 DES 晋升" },
+  { id: "overview", group: "分析", label: "运行概览", description: "结论与关键数字" },
+  { id: "execution", group: "分析", label: "执行过程", description: "一次请求经过了哪些环节" },
+  { id: "metrics", group: "分析", label: "性能指标", description: "请求速度与尾延迟" },
+  { id: "fabric", group: "分析", label: "网络与通信", description: "通信负载、排队与拥塞" },
+  { id: "attribution", group: "分析", label: "慢请求原因", description: "为什么某些请求更慢" },
+  { id: "validation", group: "分析", label: "结果可信度", description: "这些结果能信到什么程度" },
+  { id: "design_space", group: "实验", label: "方案对比", description: "比较不同配置方案" },
   { id: "history", group: "实验", label: "运行记录", description: "查找、打开与对比" },
+  { id: "evidence_agent", group: "工具", label: "AI 解释", description: "基于已有证据解释结果" },
+  { id: "evidence_lab", group: "工具", label: "校准与追踪", description: "查看校准状态和数据来源" },
 ] as const;
 
 export type WorkspaceView = (typeof navItems)[number]["id"] | "experiment";

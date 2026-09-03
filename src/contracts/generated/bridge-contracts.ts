@@ -163,7 +163,8 @@ export interface ApiManifestResponse {
   evidence_agent: {
     capability_endpoint: "GET /api/agent/evidence-capabilities";
     analysis_endpoint: "POST /api/runs/{run_id}/agent/evidence-analyses";
-    descriptor_schema_identity: "tilesim.bridge.evidence_agent_descriptor.v1";
+    descriptor_schema_identity: "tilesim.bridge.evidence_agent_descriptor.v2";
+    descriptor_revision: "sha256:5f78ed33e20c131f672af53368c5ca950f41d63fd2e8f5301757d1f42debe357";
     request_schema_identity: "tilesim.bridge.evidence_agent_request.v1";
     response_schema_identity: "tilesim.bridge.evidence_agent_response.v1";
     citation_schema_identity: "tilesim.bridge.evidence_agent_citation.v1";
@@ -900,7 +901,7 @@ export interface ValidationReportV1 {
   [k: string]: unknown;
 }
 export interface EvidenceAgentDescriptor {
-  schema_version: "tilesim.bridge.evidence_agent_descriptor.v1";
+  schema_version: "tilesim.bridge.evidence_agent_descriptor.v2";
   schema_set_revision: string;
   descriptor_revision: string;
   availability: "available" | "degraded" | "unavailable" | "disabled";
@@ -966,8 +967,11 @@ export interface EvidenceAgentDescriptor {
   };
   persistence: PersistencePolicy;
   redaction: {
-    user_question: "digest_only";
-    artifact_content: "not_retained";
+    user_question: "not_retained";
+    snapshot_payload: "not_retained";
+    artifact_payload: "not_retained";
+    provider_raw_response: "not_retained";
+    validated_model_claims: "memory_only_until_process_exit";
     credentials: "never_retained";
     hidden_chain_of_thought: "never_returned_or_retained";
   };
@@ -976,8 +980,8 @@ export interface EvidenceAgentDescriptor {
     timeout_ms: number;
     cancellation: "not_applicable_after_synchronous_terminal_response";
     maximum_concurrent_operations: 1;
-    retry: "same_idempotency_key_and_same_payload_replays_terminal_result";
-    terminal_recovery: "run_local_redacted_terminal_record";
+    retry: RetryPolicy;
+    terminal_recovery: TerminalRecoveryPolicy;
   };
 }
 export interface Provider {
@@ -991,11 +995,75 @@ export interface Revisions {
   policy_revision: string;
 }
 export interface PersistencePolicy {
-  mode: "run_local_terminal_metadata_only";
+  mode: {
+    storage_scope: "run_local";
+    record_kind: "redacted_terminal_metadata_only";
+    record_schema_identity: "tilesim.bridge.evidence_agent_terminal_record.v2";
+  };
   retention_seconds: number;
-  snapshot_payload_retained: false;
-  user_question_retained: false;
-  hidden_reasoning_retained: false;
+  terminal_classes: {
+    claim_free_bridge_terminal: {
+      terminal_metadata_retained: true;
+      exact_response_recoverable_after_restart: true;
+    };
+    claims_bearing_terminal: {
+      terminal_metadata_retained: true;
+      validated_model_claims_retained: false;
+      exact_response_recoverable_after_restart: false;
+    };
+    claim_free_provider_terminal: {
+      terminal_metadata_retained: true;
+      validated_provider_response_retained: false;
+      exact_response_recoverable_after_restart: false;
+    };
+  };
+  payload_retention: {
+    user_question_retained: false;
+    snapshot_payload_retained: false;
+    artifact_payload_retained: false;
+    provider_raw_response_retained: false;
+    validated_model_claims_retained: false;
+    credentials_retained: false;
+    hidden_reasoning_retained: false;
+  };
+}
+export interface RetryPolicy {
+  payload_identity: "tilesim.bridge.canonical_json.v1_sha256";
+  same_key_same_canonical_payload: {
+    in_process: "exact_terminal_replay";
+    after_restart_claim_free_bridge_terminal: "exact_terminal_replay_from_redacted_record";
+    after_restart_claims_bearing_terminal: "error_terminal_result_not_retained";
+    after_restart_claim_free_provider_terminal: "error_terminal_result_not_retained";
+    provider_reinvocation: "forbidden";
+  };
+  same_key_different_canonical_payload: ErrorOutcome & {
+    code?: "idempotency_payload_mismatch";
+    [k: string]: unknown;
+  };
+}
+export interface ErrorOutcome {
+  outcome: "error";
+  http_status: 409;
+  code: "idempotency_payload_mismatch" | "terminal_result_not_retained";
+  field_path: "/headers/Idempotency-Key";
+  retryable: false;
+}
+export interface TerminalRecoveryPolicy {
+  record_scope: "run_local";
+  record_schema_identity: "tilesim.bridge.evidence_agent_terminal_record.v2";
+  claim_free_bridge_terminal: {
+    outcome: "exact_terminal_replay";
+    source: "redacted_terminal_metadata";
+  };
+  claims_bearing_terminal: ErrorOutcome & {
+    code?: "terminal_result_not_retained";
+    [k: string]: unknown;
+  };
+  claim_free_provider_terminal: ErrorOutcome & {
+    code?: "terminal_result_not_retained";
+    [k: string]: unknown;
+  };
+  provider_reinvocation: "forbidden";
 }
 export interface EvidenceAgentRequest {
   schema_version: "tilesim.bridge.evidence_agent_request.v1";
@@ -1553,7 +1621,7 @@ export interface Week7OrchestrationResponse {
 export type Revision = string;
 
 export interface EvidenceAgentDescriptorResponse {
-  schema_version: "tilesim.bridge.evidence_agent_descriptor.v1";
+  schema_version: "tilesim.bridge.evidence_agent_descriptor.v2";
   schema_set_revision: Revision;
   descriptor_revision: Revision;
   availability: "available" | "degraded" | "unavailable" | "disabled";
@@ -1619,8 +1687,11 @@ export interface EvidenceAgentDescriptorResponse {
   };
   persistence: PersistencePolicy;
   redaction: {
-    user_question: "digest_only";
-    artifact_content: "not_retained";
+    user_question: "not_retained";
+    snapshot_payload: "not_retained";
+    artifact_payload: "not_retained";
+    provider_raw_response: "not_retained";
+    validated_model_claims: "memory_only_until_process_exit";
     credentials: "never_retained";
     hidden_chain_of_thought: "never_returned_or_retained";
   };
@@ -1629,8 +1700,8 @@ export interface EvidenceAgentDescriptorResponse {
     timeout_ms: number;
     cancellation: "not_applicable_after_synchronous_terminal_response";
     maximum_concurrent_operations: 1;
-    retry: "same_idempotency_key_and_same_payload_replays_terminal_result";
-    terminal_recovery: "run_local_redacted_terminal_record";
+    retry: RetryPolicy;
+    terminal_recovery: TerminalRecoveryPolicy;
   };
 }
 export interface Provider {
@@ -1644,11 +1715,75 @@ export interface Revisions {
   policy_revision: string;
 }
 export interface PersistencePolicy {
-  mode: "run_local_terminal_metadata_only";
+  mode: {
+    storage_scope: "run_local";
+    record_kind: "redacted_terminal_metadata_only";
+    record_schema_identity: "tilesim.bridge.evidence_agent_terminal_record.v2";
+  };
   retention_seconds: number;
-  snapshot_payload_retained: false;
-  user_question_retained: false;
-  hidden_reasoning_retained: false;
+  terminal_classes: {
+    claim_free_bridge_terminal: {
+      terminal_metadata_retained: true;
+      exact_response_recoverable_after_restart: true;
+    };
+    claims_bearing_terminal: {
+      terminal_metadata_retained: true;
+      validated_model_claims_retained: false;
+      exact_response_recoverable_after_restart: false;
+    };
+    claim_free_provider_terminal: {
+      terminal_metadata_retained: true;
+      validated_provider_response_retained: false;
+      exact_response_recoverable_after_restart: false;
+    };
+  };
+  payload_retention: {
+    user_question_retained: false;
+    snapshot_payload_retained: false;
+    artifact_payload_retained: false;
+    provider_raw_response_retained: false;
+    validated_model_claims_retained: false;
+    credentials_retained: false;
+    hidden_reasoning_retained: false;
+  };
+}
+export interface RetryPolicy {
+  payload_identity: "tilesim.bridge.canonical_json.v1_sha256";
+  same_key_same_canonical_payload: {
+    in_process: "exact_terminal_replay";
+    after_restart_claim_free_bridge_terminal: "exact_terminal_replay_from_redacted_record";
+    after_restart_claims_bearing_terminal: "error_terminal_result_not_retained";
+    after_restart_claim_free_provider_terminal: "error_terminal_result_not_retained";
+    provider_reinvocation: "forbidden";
+  };
+  same_key_different_canonical_payload: ErrorOutcome & {
+    code?: "idempotency_payload_mismatch";
+    [k: string]: unknown;
+  };
+}
+export interface ErrorOutcome {
+  outcome: "error";
+  http_status: 409;
+  code: "idempotency_payload_mismatch" | "terminal_result_not_retained";
+  field_path: "/headers/Idempotency-Key";
+  retryable: false;
+}
+export interface TerminalRecoveryPolicy {
+  record_scope: "run_local";
+  record_schema_identity: "tilesim.bridge.evidence_agent_terminal_record.v2";
+  claim_free_bridge_terminal: {
+    outcome: "exact_terminal_replay";
+    source: "redacted_terminal_metadata";
+  };
+  claims_bearing_terminal: ErrorOutcome & {
+    code?: "terminal_result_not_retained";
+    [k: string]: unknown;
+  };
+  claim_free_provider_terminal: ErrorOutcome & {
+    code?: "terminal_result_not_retained";
+    [k: string]: unknown;
+  };
+  provider_reinvocation: "forbidden";
 }
 
 export type CreateRunResponse = ApiRun & { idempotent_replay: boolean };
