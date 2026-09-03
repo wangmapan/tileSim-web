@@ -11,6 +11,7 @@ defineProps({
   runStatus: { type: String, default: "" },
   requestPreview: { type: Object, required: true },
   surface: { type: Object, required: true },
+  tracePackage: { type: Object, default: null },
 });
 defineEmits(["submit", "back"]);
 const { t } = useI18n();
@@ -23,7 +24,7 @@ const { t } = useI18n();
     <dl>
       <div>
         <dt>{{ t("边界") }}</dt>
-        <dd>S1 → S6</dd>
+        <dd>{{ mode === "trace_package" ? `${tracePackage?.entry_boundary || "—"} → S6` : "S1 → S6" }}</dd>
       </div>
       <div>
         <dt>{{ t("宿主") }}</dt>
@@ -31,7 +32,9 @@ const { t } = useI18n();
       </div>
       <div>
         <dt>{{ t("输入") }}</dt>
-        <dd>{{ mode === "controls" ? t("受控参数") : "JSON pair" }}</dd>
+        <dd>
+          {{ mode === "controls" ? t("受控参数") : mode === "json" ? "JSON pair" : tracePackage?.package_id || "—" }}
+        </dd>
       </div>
       <div>
         <dt>{{ t("请求 fidelity") }}</dt>
@@ -43,7 +46,9 @@ const { t } = useI18n();
       </div>
       <div>
         <dt>{{ t("设计空间") }}</dt>
-        <dd>{{ designSpaceJson.trim() ? "EXTERNAL MANIFEST" : "BUILT-IN S6" }}</dd>
+        <dd>
+          {{ mode === "trace_package" ? "NOT COMBINED" : designSpaceJson.trim() ? "EXTERNAL MANIFEST" : "BUILT-IN S6" }}
+        </dd>
       </div>
       <div>
         <dt>{{ t("编排契约") }}</dt>

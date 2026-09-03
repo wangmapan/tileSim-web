@@ -14,6 +14,8 @@ import type {
   ErrorResponse,
   ExperimentDescriptorResponse,
   HealthResponse,
+  TracePackageCatalogResponse,
+  TracePackageInspectResponse,
   Week7CalibrationResponse,
   Week7EvidenceMapResponse,
   Week7OrchestrationResponse,
@@ -32,6 +34,8 @@ export type {
   ErrorResponse,
   ExperimentDescriptorResponse,
   HealthResponse,
+  TracePackageCatalogResponse,
+  TracePackageInspectResponse,
   Week7CalibrationResponse,
   Week7EvidenceMapResponse,
   Week7OrchestrationResponse,
@@ -57,6 +61,7 @@ export interface LegacyApiManifestResponse {
   endpoints: Record<string, string>;
   run_creation?: undefined;
   run_events?: undefined;
+  trace_packages?: undefined;
   legacy_unversioned: true;
 }
 

@@ -23,6 +23,7 @@ class ValidatedRunRequest:
     overrides: dict
     custom_inputs: dict | None
     design_space_candidates: dict | None
+    trace_package_id: str | None
 
 
 def validate_run_request(
@@ -41,6 +42,7 @@ def validate_run_request(
         "overrides",
         "custom_inputs",
         "design_space_candidates",
+        "trace_package_id",
     }
     if unknown := set(request) - allowed_request_fields:
         field = sorted(unknown)[0]
@@ -69,8 +71,29 @@ def validate_run_request(
 
     has_overrides = "overrides" in request
     has_custom_inputs = "custom_inputs" in request
+    has_trace_package = "trace_package_id" in request
     if has_overrides and has_custom_inputs:
         raise RequestValidationError("Use either overrides or custom_inputs, not both.", "/custom_inputs")
+    if has_trace_package and (has_overrides or has_custom_inputs):
+        raise RequestValidationError(
+            "Trace-package mode cannot be combined with overrides or custom_inputs.",
+            "/trace_package_id",
+        )
+    if has_trace_package and "design_space_candidates" in request:
+        raise RequestValidationError(
+            "Trace-package mode cannot be combined with design_space_candidates.",
+            "/design_space_candidates",
+        )
+    trace_package_id = request.get("trace_package_id")
+    if has_trace_package and (
+        not isinstance(trace_package_id, str)
+        or not trace_package_id
+        or len(trace_package_id) > 128
+    ):
+        raise RequestValidationError(
+            "trace_package_id must be a nonempty stable identifier of at most 128 characters.",
+            "/trace_package_id",
+        )
     try:
         overrides = (
             validate_overrides(request.get("overrides"), capabilities=capabilities)
@@ -101,4 +124,5 @@ def validate_run_request(
         overrides=overrides,
         custom_inputs=custom_inputs,
         design_space_candidates=design_space_candidates,
+        trace_package_id=trace_package_id if has_trace_package else None,
     )

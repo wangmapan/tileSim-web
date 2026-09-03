@@ -18,6 +18,8 @@ import type {
   ReportsResponse,
   RunListResponse,
   TemplateResponse,
+  TracePackageCatalogResponse,
+  TracePackageInspectResponse,
   Week7CalibrationResponse,
   Week7EvidenceMapResponse,
   Week7OrchestrationResponse,
@@ -33,6 +35,8 @@ export const bridgePaths = {
   catalog: () => "/catalog",
   capabilities: () => "/capabilities",
   experimentSchema: () => "/experiment-schema",
+  tracePackages: () => "/trace-packages",
+  inspectTracePackage: (packageId: string) => `/trace-packages/${encodeURIComponent(packageId)}/inspect`,
   evidenceAgentCapabilities: () => "/agent/evidence-capabilities",
   week7EvidenceMap: () => "/week7/evidence-map",
   runWeek7CalibrationExample: () => "/week7/calibration-example",
@@ -71,6 +75,16 @@ export class GeneratedBridgeClient {
 
   experimentSchema(): Promise<ExperimentDescriptorResponse> {
     return this.transport.request<ExperimentDescriptorResponse>(bridgePaths.experimentSchema(), {});
+  }
+
+  tracePackages(): Promise<TracePackageCatalogResponse> {
+    return this.transport.request<TracePackageCatalogResponse>(bridgePaths.tracePackages(), {});
+  }
+
+  inspectTracePackage(packageId: string): Promise<TracePackageInspectResponse> {
+    return this.transport.request<TracePackageInspectResponse>(bridgePaths.inspectTracePackage(packageId), {
+      method: "POST",
+    });
   }
 
   evidenceAgentCapabilities(): Promise<EvidenceAgentDescriptorResponse> {

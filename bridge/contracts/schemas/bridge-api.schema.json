@@ -15,6 +15,8 @@
     "topologyRequestInput": { "$ref": "topology-request-input.schema.json" },
     "designSpaceCandidates": { "$ref": "design-space-candidates.schema.json" },
     "experimentDescriptor": { "$ref": "experiment-descriptor.schema.json" },
+    "tracePackageCatalog": { "$ref": "trace-package-catalog.schema.json" },
+    "tracePackageInspect": { "$ref": "trace-package-inspect.schema.json" },
     "run": { "$ref": "run.schema.json" },
     "runList": { "$ref": "run-list.schema.json" },
     "reports": { "$ref": "reports.schema.json" },

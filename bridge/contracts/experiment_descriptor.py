@@ -61,6 +61,7 @@ GPU_PARTICIPATION_MODES = (
 INPUT_MODES = (
     {"input_mode": "controls", "available": True, "unavailable_reason": None},
     {"input_mode": "json", "available": True, "unavailable_reason": None},
+    {"input_mode": "trace_package", "available": True, "unavailable_reason": None},
 )
 
 DESIGN_SPACE_MODES = (
@@ -83,7 +84,7 @@ SOURCE_MODE_OPTIONS = (
         "unavailable_reason": None,
         "allowed_claim_scope": "synthetic_consistency_and_exploratory_s6_only",
         "calibration_requirement": "not_required_for_consistency_only",
-        "applicable_input_modes": ["controls", "json"],
+        "applicable_input_modes": ["controls", "json", "trace_package"],
         "capability_predicate": None,
     },
     {
@@ -92,7 +93,7 @@ SOURCE_MODE_OPTIONS = (
         "unavailable_reason": "real_trace_submission_not_exposed",
         "allowed_claim_scope": "held_out_fidelity_only_with_real_calibrated_evidence",
         "calibration_requirement": "calibrated_and_held_out_validation_required",
-        "applicable_input_modes": ["json"],
+        "applicable_input_modes": ["json", "trace_package"],
         "capability_predicate": {
             "capability_path": "/run_surface/real_trace_submission_available",
             "operator": "equals",
@@ -106,7 +107,7 @@ SOURCE_MODE_OPTIONS = (
         "unavailable_reason": "compatibility_harness_submission_not_exposed",
         "allowed_claim_scope": "semantic_extraction_and_compatibility_consistency_only",
         "calibration_requirement": "not_ground_truth_fidelity_evidence",
-        "applicable_input_modes": ["json"],
+        "applicable_input_modes": ["json", "trace_package"],
         "capability_predicate": {
             "capability_path": "/run_surface/compatibility_harness_submission_available",
             "operator": "equals",

@@ -16,7 +16,7 @@ def controlled_run_surface() -> dict:
     """Stable web submission capabilities; executable discovery cannot upgrade them."""
     return {
         "gpu_participation_modes": ["gpu_free"],
-        "input_modes": ["controls", "json"],
+        "input_modes": ["controls", "json", "trace_package"],
         "design_space_modes": ["built_in_synthetic", "strict_s6_manifest"],
         "source_modes": ["synthetic_trace"],
         "override_parameter_subsystems": ["S0", "S1", "S6"],

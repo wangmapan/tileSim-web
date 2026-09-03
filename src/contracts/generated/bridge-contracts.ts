@@ -10,6 +10,7 @@ export type CreateRunRequest = {
   overrides?: TileSimControlledS0S1S6RunOverrides;
   custom_inputs?: ControlledCustomInputsForTheHostedS1ToS6Path;
   design_space_candidates?: StrictS6OnlyDesignSpaceCandidateManifest;
+  trace_package_id?: string;
 };
 export type GpuOptions = {
   gpu_participation_mode: "gpu_free";
@@ -17,7 +18,7 @@ export type GpuOptions = {
   unavailable_reason: string | null;
 }[];
 export type InputOptions = {
-  input_mode: "controls" | "json";
+  input_mode: "controls" | "json" | "trace_package";
   available: boolean;
   unavailable_reason: string | null;
 }[];
@@ -131,6 +132,8 @@ export interface BridgeApiContracts {
   topologyRequestInput?: ControlledPreMaterializationS6TopologyRequestInput;
   designSpaceCandidates?: StrictS6OnlyDesignSpaceCandidateManifest;
   experimentDescriptor?: ExperimentDescriptorResponse;
+  tracePackageCatalog?: TracePackageCatalogResponse;
+  tracePackageInspect?: TracePackageInspectResponse;
   run?: ApiRun;
   runList?: RunListResponse;
   reports?: ReportsResponse;
@@ -159,6 +162,18 @@ export interface ApiManifestResponse {
     endpoint: "GET /api/experiment-schema";
     schema_identity: "tilesim.bridge.experiment_descriptor.v1";
     create_run_schema_identity: "tilesim.bridge.create_run_request.v1";
+  };
+  trace_packages: {
+    catalog_endpoint: "GET /api/trace-packages";
+    inspect_endpoint: "POST /api/trace-packages/{package_id}/inspect";
+    package_schema_identity: "tilesim.trace_package.v1alpha1";
+    catalog_schema_identity: "tilesim.bridge.trace_package_catalog.v1";
+    inspect_schema_identity: "tilesim.bridge.trace_package_inspect.v1";
+    /**
+     * @minItems 1
+     * @maxItems 1
+     */
+    submission_source_modes: ["synthetic_trace"];
   };
   evidence_agent: {
     capability_endpoint: "GET /api/agent/evidence-capabilities";
@@ -503,7 +518,7 @@ export interface ExperimentDescriptorResponse {
       unavailable_reason: string | null;
       allowed_claim_scope: string;
       calibration_requirement: string;
-      applicable_input_modes: ("controls" | "json")[];
+      applicable_input_modes: ("controls" | "json" | "trace_package")[];
       capability_predicate: CapabilityPredicate | null;
     },
     {
@@ -512,7 +527,7 @@ export interface ExperimentDescriptorResponse {
       unavailable_reason: string | null;
       allowed_claim_scope: string;
       calibration_requirement: string;
-      applicable_input_modes: ("controls" | "json")[];
+      applicable_input_modes: ("controls" | "json" | "trace_package")[];
       capability_predicate: CapabilityPredicate | null;
     },
     {
@@ -521,7 +536,7 @@ export interface ExperimentDescriptorResponse {
       unavailable_reason: string | null;
       allowed_claim_scope: string;
       calibration_requirement: string;
-      applicable_input_modes: ("controls" | "json")[];
+      applicable_input_modes: ("controls" | "json" | "trace_package")[];
       capability_predicate: CapabilityPredicate | null;
     },
   ];
@@ -625,17 +640,102 @@ export interface ParameterDescriptor {
   applicable_input_modes: ("controls" | "json")[];
   applicable_scenarios: string[];
 }
+export interface TracePackageCatalogResponse {
+  schema_version: "tilesim.bridge.trace_package_catalog.v1";
+  trace_package_schema_identity: "tilesim.trace_package.v1alpha1";
+  schema_set_revision: string;
+  backend_identity: TracePackageBackendIdentity;
+  capability: TracePackageCapability;
+  packages: TracePackageItem[];
+  discovery_errors: TracePackageError[];
+}
+export interface TracePackageBackendIdentity {
+  source_revision?: string;
+  build_revision?: string;
+  source_state_digest?: string;
+  build_state_digest?: string;
+  versions_match?: boolean;
+  state_digests_match?: boolean;
+  deployment_mode?: string;
+  deployment_ref?: string;
+}
+export interface TracePackageCapability {
+  available: boolean;
+  reason: string | null;
+}
+export interface TracePackageItem {
+  package_id: string;
+  producer?: TracePackageProducer;
+  experiment_id?: string;
+  physical_run_id?: string;
+  entry_boundary?: "S0" | "S1" | "S2" | "S3" | "S4" | "S5";
+  entry_trace_kind?:
+    "s0_workload" | "s1_runtime" | "s2_execution" | "s2_kernel" | "s3_memory" | "s4_device" | "s5_collective";
+  trace_provenance?: TracePackageProvenance;
+  manifest_sha256: string;
+  inspect_status: "valid" | "invalid";
+  inspect_errors: TracePackageError[];
+  submission_available: boolean;
+  unavailable_reason: string | null;
+  artifact_integrity: TracePackageArtifactIntegrity;
+}
+export interface TracePackageProducer {
+  name: string;
+  version: string;
+}
+export interface TracePackageProvenance {
+  source_mode: "real_trace" | "synthetic_trace" | "compatibility_harness_trace";
+  calibration_level: "uncalibrated" | "partially_calibrated" | "calibrated" | "held_out_validated";
+  allowed_claim_scope: "exploratory" | "comparative" | "calibrated_prediction" | "held_out_validation";
+  source_id: string;
+  generation_path: string;
+  capture_or_generation_time: string;
+  upstream_tooling: string;
+  trace_kind: "trace_package";
+  /**
+   * @minItems 1
+   */
+  notes: [string, ...string[]];
+}
+export interface TracePackageError {
+  candidate?: string;
+  code: string;
+  message: string;
+}
+export interface TracePackageArtifactIntegrity {
+  complete: boolean;
+  semantic_artifact_count: number;
+  semantic_roles: ("request" | "batch" | "iteration" | "tile_execution" | "kv_cache" | "network_flow")[];
+  sha256_verified: boolean;
+  entry_trace_verified: boolean;
+}
+export interface TracePackageInspectResponse {
+  schema_version: "tilesim.bridge.trace_package_inspect.v1";
+  trace_package_schema_identity: "tilesim.trace_package.v1alpha1";
+  schema_set_revision: string;
+  backend_identity: TracePackageBackendIdentity;
+  package: TracePackageItem;
+}
 export interface ApiRun {
   run_id: string;
   run_name?: string | null;
   status?: "preparing" | "running" | "completed" | "failed" | "incomplete";
-  input_mode?: "controls" | "json" | "legacy";
+  input_mode?: "controls" | "json" | "trace_package" | "legacy";
   created_at?: string;
   finished_at?: string;
   scenario_id?: string;
   fidelity_policy?: string;
   gpu_participation_mode?: string;
   design_space_mode?: string;
+  trace_package?: {
+    package_id: string;
+    manifest_sha256: string;
+    entry_boundary: "S0" | "S1" | "S2" | "S3" | "S4" | "S5";
+    entry_trace_kind: string;
+    trace_provenance: {
+      [k: string]: unknown;
+    };
+  };
   error?: string;
   failure_code?: string;
   exit_code?: number;
@@ -1482,7 +1582,7 @@ export interface CatalogResponse {
     label: string;
   }[];
   fidelity_policies: ("default" | "des")[];
-  input_modes: ("controls" | "json")[];
+  input_modes: ("controls" | "json" | "trace_package")[];
   design_space_modes: ("built_in_synthetic" | "strict_s6_manifest")[];
   gpu_participation_modes: "gpu_free"[];
 }
@@ -1501,7 +1601,7 @@ export interface CapabilitiesResponse {
   };
   run_surface: {
     gpu_participation_modes: "gpu_free"[];
-    input_modes: ("controls" | "json")[];
+    input_modes: ("controls" | "json" | "trace_package")[];
     design_space_modes: ("built_in_synthetic" | "strict_s6_manifest")[];
     source_modes: "synthetic_trace"[];
     override_parameter_subsystems: ("S0" | "S1" | "S6")[];

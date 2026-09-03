@@ -118,6 +118,7 @@ def api_manifest(
     run_creation_contract: dict,
     run_event_contract: dict,
     evidence_agent_contract: dict,
+    trace_package_contract: dict,
 ) -> dict:
     endpoints = {}
     for path, path_item in openapi_contract["paths"].items():
@@ -136,6 +137,7 @@ def api_manifest(
         "run_creation": run_creation_contract,
         "run_events": run_event_contract,
         "evidence_agent": evidence_agent_contract,
+        "trace_packages": trace_package_contract,
         "endpoints": endpoints,
     }
 

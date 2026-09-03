@@ -21,13 +21,14 @@ from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 from api import responses
 from infra import identity
 from repositories import runs as run_repository
 from services import execution
 from services import evidence_agent as evidence_agent_service
+from services import trace_packages
 from services import week7
 from providers import evidence_agent as evidence_agent_provider_contract
 
@@ -65,6 +66,11 @@ STATIC_ROOT = WEB_ROOT / "dist" if (WEB_ROOT / "dist/index.html").is_file() else
 STATE_ROOT = Path(os.environ.get("TILESIM_WEB_STATE_ROOT", str(WEB_ROOT)))
 TILESIM_ROOT = Path(os.environ.get("TILESIM_ROOT", "/mnt/d/tileSim"))
 TILESIM_CLI = Path(os.environ.get("TILESIM_CLI", "/home/mapanwang/tilesim-build/TileSimCLI"))
+TRACE_PACKAGE_ROOT = (
+    Path(os.environ["TILESIM_TRACE_PACKAGE_ROOT"])
+    if os.environ.get("TILESIM_TRACE_PACKAGE_ROOT")
+    else None
+)
 DEPLOYMENT_MANIFEST = Path(
     os.environ.get("TILESIM_DEPLOYMENT_MANIFEST", "/mnt/d/tileSim-web/runtime/backend-current.json")
 )
@@ -118,6 +124,7 @@ JSON_ARTIFACT_DEFINITIONS = CONTRACT_METADATA["artifacts"]
 RUN_CREATION_CONTRACT = CONTRACT_METADATA["run_creation"]
 RUN_EVENT_CONTRACT = CONTRACT_METADATA["run_events"]
 EVIDENCE_AGENT_CONTRACT = CONTRACT_METADATA["evidence_agent"]
+TRACE_PACKAGE_CONTRACT = CONTRACT_METADATA["trace_packages"]
 SCHEMA_SET_REVISION = "sha256:" + hashlib.sha256(
     json.dumps(
         {
@@ -225,6 +232,7 @@ def api_manifest() -> dict:
         run_creation_contract=RUN_CREATION_CONTRACT,
         run_event_contract=RUN_EVENT_CONTRACT,
         evidence_agent_contract=EVIDENCE_AGENT_CONTRACT,
+        trace_package_contract=TRACE_PACKAGE_CONTRACT,
     )
 
 
@@ -427,6 +435,54 @@ def materialize_design_space_candidates(run_dir: Path, manifest: dict | None) ->
     return execution.materialize_design_space_candidates(run_dir, manifest)
 
 
+def materialize_trace_package_inputs(
+    run_dir: Path,
+    scenario: dict,
+    *,
+    manifest_path: Path,
+    manifest_sha256: str,
+    source_mode: str,
+) -> dict:
+    return execution.materialize_trace_package_inputs(
+        run_dir,
+        scenario,
+        manifest_path=manifest_path,
+        manifest_sha256=manifest_sha256,
+        source_mode=source_mode,
+    )
+
+
+def trace_package_catalog() -> dict:
+    return trace_packages.catalog(
+        TRACE_PACKAGE_ROOT,
+        schema_set_revision=SCHEMA_SET_REVISION,
+        backend_identity=backend_identity(),
+        tilesim_cli=TILESIM_CLI,
+        tilesim_root=TILESIM_ROOT,
+        process_runner=subprocess.run,
+    )
+
+
+def inspect_trace_package(package_id: str) -> tuple[trace_packages.TracePackageCandidate, dict]:
+    return trace_packages.inspect_package(
+        TRACE_PACKAGE_ROOT,
+        package_id,
+        tilesim_cli=TILESIM_CLI,
+        tilesim_root=TILESIM_ROOT,
+        process_runner=subprocess.run,
+    )
+
+
+def trace_package_error_status(error: trace_packages.TracePackageError) -> HTTPStatus:
+    if error.code == "trace_package_not_found":
+        return HTTPStatus.NOT_FOUND
+    if error.code == "trace_package_inspect_timeout":
+        return HTTPStatus.GATEWAY_TIMEOUT
+    if error.retryable:
+        return HTTPStatus.SERVICE_UNAVAILABLE
+    return HTTPStatus.UNPROCESSABLE_ENTITY
+
+
 def execute_run(run_id: str, scenario: dict, fidelity_policy: str) -> None:
     return execution.execute_run(
         run_id,
@@ -503,6 +559,8 @@ class BridgeHandler(SimpleHTTPRequestHandler):
                 HTTPStatus.OK,
                 build_experiment_descriptor(SCHEMA_SET_REVISION, runtime_capabilities()),
             )
+        if path == "/api/trace-packages":
+            return write_json(self, HTTPStatus.OK, trace_package_catalog())
         if path == "/api/agent/evidence-capabilities":
             return write_json(
                 self,
@@ -581,6 +639,28 @@ class BridgeHandler(SimpleHTTPRequestHandler):
             and parts[3:] == ["agent", "evidence-analyses"]
         ):
             return self.create_evidence_analysis(parts[2])
+        if len(parts) == 4 and parts[:2] == ["api", "trace-packages"] and parts[3] == "inspect":
+            package_id = unquote(parts[2])
+            try:
+                _, inspected = inspect_trace_package(package_id)
+            except trace_packages.TracePackageError as error:
+                return write_error(
+                    self,
+                    trace_package_error_status(error),
+                    error.code,
+                    str(error),
+                    field_path="/trace_package_id",
+                    retryable=error.retryable,
+                )
+            return write_json(
+                self,
+                HTTPStatus.OK,
+                trace_packages.inspect_response(
+                    inspected,
+                    schema_set_revision=SCHEMA_SET_REVISION,
+                    backend_identity=backend_identity(),
+                ),
+            )
         if path != "/api/runs":
             return write_error(
                 self,
@@ -644,6 +724,7 @@ class BridgeHandler(SimpleHTTPRequestHandler):
             overrides = command.overrides
             custom_inputs = command.custom_inputs
             design_space_candidates = command.design_space_candidates
+            trace_package_id = command.trace_package_id
         except (ValueError, json.JSONDecodeError) as error:
             validation = request_validation_error(error)
             return write_error(
@@ -671,6 +752,32 @@ class BridgeHandler(SimpleHTTPRequestHandler):
                 "Backend source and TileSimCLI build revisions do not match; run scripts/update-backend.ps1.",
             )
 
+        trace_package_candidate = None
+        trace_package_inspection = None
+        if trace_package_id is not None:
+            try:
+                trace_package_candidate, trace_package_inspection = inspect_trace_package(
+                    trace_package_id
+                )
+            except trace_packages.TracePackageError as error:
+                return write_error(
+                    self,
+                    trace_package_error_status(error),
+                    error.code,
+                    str(error),
+                    field_path="/trace_package_id",
+                    retryable=error.retryable,
+                )
+            if trace_package_inspection["trace_provenance"].get("source_mode") != "synthetic_trace":
+                return write_error(
+                    self,
+                    HTTPStatus.BAD_REQUEST,
+                    "trace_package_source_mode_unavailable",
+                    "The prototype only permits synthetic_trace Trace packages.",
+                    field_path="/trace_package_id",
+                    retryable=False,
+                )
+
         with runs_lock:
             existing = idempotent_run(idempotency_key)
             if existing is not None:
@@ -691,7 +798,16 @@ class BridgeHandler(SimpleHTTPRequestHandler):
                 else:
                     run_id = f"run-{datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:8]}"
                     run_dir = RUNS_ROOT / run_id
-                    input_mode = "json" if custom_inputs is not None else "controls"
+                    input_mode = (
+                        "trace_package"
+                        if trace_package_id is not None
+                        else "json"
+                        if custom_inputs is not None
+                        else "controls"
+                    )
+                    input_files = {"topology": "input-topology.json"}
+                    if trace_package_id is None:
+                        input_files["runtime_trace"] = "input-runtime-trace.json"
                     metadata = {
                         "run_id": run_id,
                         "status": "preparing",
@@ -702,18 +818,27 @@ class BridgeHandler(SimpleHTTPRequestHandler):
                         "gpu_participation_mode": gpu_participation_mode,
                         "input_mode": input_mode,
                         "overrides": overrides,
-                        "input_files": {
-                            "runtime_trace": "input-runtime-trace.json",
-                            "topology": "input-topology.json",
-                        },
+                        "input_files": input_files,
                         "design_space_mode": (
-                            "external_manifest" if design_space_candidates is not None else "built_in_synthetic"
+                            "not_applicable_trace_package"
+                            if trace_package_id is not None
+                            else "external_manifest"
+                            if design_space_candidates is not None
+                            else "built_in_synthetic"
                         ),
                         "idempotency_key": idempotency_key,
                         "request_payload_sha256": payload_digest,
                         "bridge_instance_id": BRIDGE_INSTANCE_ID,
                         "bridge_pid": os.getpid(),
                     }
+                    if trace_package_inspection is not None:
+                        metadata["trace_package"] = {
+                            "package_id": trace_package_inspection["package_id"],
+                            "manifest_sha256": trace_package_inspection["manifest_sha256"],
+                            "entry_boundary": trace_package_inspection["entry_boundary"],
+                            "entry_trace_kind": trace_package_inspection["entry_trace_kind"],
+                            "trace_provenance": trace_package_inspection["trace_provenance"],
+                        }
                     if design_space_candidates is not None:
                         metadata["input_files"]["design_space_candidates"] = "input-design-space-candidates.json"
                     try:
@@ -756,11 +881,22 @@ class BridgeHandler(SimpleHTTPRequestHandler):
             )
 
         try:
-            resolved_scenario = (
-                materialize_custom_inputs(run_dir, SCENARIOS[scenario_id], custom_inputs)
-                if custom_inputs is not None
-                else materialize_inputs(run_dir, SCENARIOS[scenario_id], overrides)
-            )
+            if trace_package_candidate is not None and trace_package_inspection is not None:
+                resolved_scenario = materialize_trace_package_inputs(
+                    run_dir,
+                    SCENARIOS[scenario_id],
+                    manifest_path=trace_package_candidate.manifest_path,
+                    manifest_sha256=trace_package_inspection["manifest_sha256"],
+                    source_mode=trace_package_inspection["trace_provenance"]["source_mode"],
+                )
+            elif custom_inputs is not None:
+                resolved_scenario = materialize_custom_inputs(
+                    run_dir, SCENARIOS[scenario_id], custom_inputs
+                )
+            else:
+                resolved_scenario = materialize_inputs(
+                    run_dir, SCENARIOS[scenario_id], overrides
+                )
             resolved_scenario["design_space_candidates"] = materialize_design_space_candidates(
                 run_dir,
                 design_space_candidates,

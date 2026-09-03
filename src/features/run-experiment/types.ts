@@ -5,7 +5,7 @@ export type CanonicalSubsystem = "S0" | "S1" | "S2" | "S3" | "S4" | "S5" | "S6";
 export type ContractStatus = "supported" | "legacy_compatibility" | "contract_error";
 export type ParameterValue = string | number | boolean | null | undefined;
 
-export type ExperimentInputMode = "controls" | "json";
+export type ExperimentInputMode = "controls" | "json" | "trace_package";
 
 export interface ExperimentFormState {
   scenario_id: string;
@@ -99,6 +99,7 @@ export interface BuildExperimentRequestOptions {
   runtimeJson: string;
   topologyJson: string;
   designSpaceJson: string;
+  tracePackageId?: string;
 }
 
 export interface ExperimentRequestPreview {

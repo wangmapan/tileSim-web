@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/trace-package-inspect.schema.json",
+  "x-tilesim-schema-identity": "tilesim.bridge.trace_package_inspect.v1",
+  "title": "TracePackageInspectResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "trace_package_schema_identity", "schema_set_revision", "backend_identity", "package"],
+  "properties": {
+    "schema_version": { "const": "tilesim.bridge.trace_package_inspect.v1" },
+    "trace_package_schema_identity": { "const": "tilesim.trace_package.v1alpha1" },
+    "schema_set_revision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "backend_identity": {
+      "$ref": "trace-package-catalog.schema.json#/$defs/tracePackageBackendIdentity"
+    },
+    "package": {
+      "$ref": "trace-package-catalog.schema.json#/$defs/tracePackageItem"
+    }
+  }
+}

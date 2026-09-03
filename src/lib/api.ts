@@ -12,6 +12,7 @@ import {
 import { waitForRun } from "./api/run-events";
 import { getExperimentDescriptor } from "./api/experiment-schema";
 import { getEvidenceAgentDescriptor, postEvidenceAgentAnalysis } from "./api/evidence-agent";
+import { getTracePackageCatalog, postTracePackageInspect } from "./api/trace-packages";
 
 export type {
   ApiManifestResponse,
@@ -28,6 +29,8 @@ export type {
   EvidenceAgentResponse,
   ExperimentDescriptorResponse,
   HealthResponse,
+  TracePackageCatalogResponse,
+  TracePackageInspectResponse,
   Week7CalibrationResponse,
   Week7EvidenceMapResponse,
   Week7OrchestrationResponse,
@@ -44,6 +47,8 @@ export const bridgeApi = {
   capabilities: () => generatedBridgeClient.capabilities(),
   experimentSchema: getExperimentDescriptor,
   evidenceAgentCapabilities: getEvidenceAgentDescriptor,
+  tracePackages: getTracePackageCatalog,
+  inspectTracePackage: postTracePackageInspect,
   createEvidenceAnalysis: postEvidenceAgentAnalysis,
   week7EvidenceMap: () => generatedBridgeClient.week7EvidenceMap(),
   runWeek7CalibrationExample: () => generatedBridgeClient.runWeek7CalibrationExample(),

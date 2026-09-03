@@ -163,6 +163,9 @@ bridge/infra/               Git、部署与 runtime identity
 - F6B run-bound evidence：`src/features/run-bound-evidence/`（reference、percentile、node、Week 8 summary 已分离）
 - F7 presentation：`src/features/f7-analysis/{model,presentation}.ts`
 - F8 experiment schema：`src/features/run-experiment/model.ts`、`docs/F8_EXPERIMENT_ORCHESTRATION_AUDIT.md`
+- Trace-package 快速原型：`src/features/run-experiment/TracePackageInputPanel.vue`、
+  `src/features/run-experiment/trace-package-queries.ts`、`bridge/services/trace_packages.py`、
+  `docs/TRACE_PACKAGE_WEB_PROTOTYPE.md`
 - F9 runtime/adaptation：`src/features/evidence-agent/`、`src/lib/api/evidence-agent.ts`、
   `src/stores/evidence-agent.ts`、`src/views/EvidenceAgentView.vue`
 - F9 contract/evaluation：`docs/F9_EVIDENCE_AGENT_CONTRACT_AUDIT.md`、
@@ -257,6 +260,9 @@ topology domain → metrics domain 导航；浏览器验收同时覆盖 SHA/Poin
   review 前，不得把 fixture available-draft 或 contract adaptation 描述为 live validated。
 - F9 descriptor v2 已关闭 terminal persistence 契约矛盾：metadata-only retention 明确排除 claims/raw response，
   `409 terminal_result_not_retained` 是正式的 claims-bearing 跨进程恢复结果，不得在前端绕过或自动换 key。
+- Trace-package 原型只允许受控目录中的 `synthetic_trace` 提交。catalog 中可见的 `real_trace` 与
+  `compatibility_harness_trace` 必须保持 unavailable；测试 fixture 只能证明契约/流程一致性，不能写成校准、
+  held-out validation 或硬件 fidelity。浏览器不得持有或提交服务器 manifest 路径。
 
 F0-F6A 的阶段过程、性能基线和 review closure 已移到 `docs/development/README.md`，不要把历史测试数或旧路径带回当前文档。
 
@@ -289,5 +295,6 @@ descriptor v2 Agent endpoint。后续重新部署仍必须获得授权并核对 
 - F9 Agent 契约审计：`docs/F9_EVIDENCE_AGENT_CONTRACT_AUDIT.md`
 - F9 Agent 评测规格：`docs/F9_EVIDENCE_AGENT_EVALUATION_SPEC.md`
 - Bridge contract：`bridge/README.md`
+- Trace-package Web 原型：`docs/TRACE_PACKAGE_WEB_PROTOTYPE.md`
 - 历史验证索引：`docs/development/README.md`
 - 后端 canonical 架构：`D:\tileSim\AGENTS.md`

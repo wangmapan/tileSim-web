@@ -1,5 +1,5 @@
 <script setup>
-import { Braces, Cpu, Database, Network, RotateCcw, SlidersHorizontal } from "@lucide/vue";
+import { Braces, Cpu, Database, Network, PackageSearch, RotateCcw, SlidersHorizontal } from "@lucide/vue";
 import { ref } from "vue";
 import { useI18n } from "../../i18n";
 
@@ -41,6 +41,13 @@ const showFieldContracts = ref(false);
           @click="mode = 'json'"
         >
           <Braces :size="16" />{{ t("JSON 输入") }}
+        </button>
+        <button
+          :class="{ active: mode === 'trace_package' }"
+          :disabled="!surface.inputModes.includes('trace_package')"
+          @click="mode = 'trace_package'"
+        >
+          <PackageSearch :size="16" />{{ t("Trace package") }}
         </button>
       </div>
       <button
@@ -117,7 +124,7 @@ const showFieldContracts = ref(false);
       </section>
     </div>
 
-    <div v-else class="json-editor-section">
+    <div v-else-if="mode === 'json'" class="json-editor-section">
       <div class="json-toolbar">
         <button class="button button--secondary" @click="$emit('load-template')">
           <Database :size="15" />{{ t("加载场景模板") }}
@@ -161,6 +168,9 @@ const showFieldContracts = ref(false);
           ></textarea>
         </label>
       </div>
+    </div>
+    <div v-else class="trace-package-state">
+      {{ t("从下方受控目录选择 package；浏览器不会发送或显示服务器文件路径。") }}
     </div>
   </article>
 </template>
