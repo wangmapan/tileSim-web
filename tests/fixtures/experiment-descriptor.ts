@@ -10,7 +10,7 @@ export const f8Capabilities = {
   dependencies: {},
   run_surface: {
     gpu_participation_modes: ["gpu_free"],
-    input_modes: ["controls", "json"],
+    input_modes: ["controls", "json", "trace_package"],
     design_space_modes: ["built_in_synthetic", "strict_s6_manifest"],
     source_modes: ["synthetic_trace"],
     override_parameter_subsystems: ["S0", "S1", "S6"],
@@ -238,6 +238,7 @@ export function createF8ExperimentDescriptor(): ExperimentDescriptorResponse {
     input_modes: [
       { input_mode: "controls", available: true, unavailable_reason: null },
       { input_mode: "json", available: true, unavailable_reason: null },
+      { input_mode: "trace_package", available: true, unavailable_reason: null },
     ],
     design_space_modes: [
       { design_space_mode: "built_in_synthetic", available: true, unavailable_reason: null },
@@ -250,7 +251,7 @@ export function createF8ExperimentDescriptor(): ExperimentDescriptorResponse {
         unavailable_reason: null,
         allowed_claim_scope: "synthetic_consistency_and_exploratory_s6_only",
         calibration_requirement: "not_required_for_consistency_only",
-        applicable_input_modes: ["controls", "json"],
+        applicable_input_modes: ["controls", "json", "trace_package"],
         capability_predicate: null,
       },
       {
@@ -259,7 +260,7 @@ export function createF8ExperimentDescriptor(): ExperimentDescriptorResponse {
         unavailable_reason: "real_trace_submission_not_exposed",
         allowed_claim_scope: "held_out_fidelity_only_with_real_calibrated_evidence",
         calibration_requirement: "calibrated_and_held_out_validation_required",
-        applicable_input_modes: ["json"],
+        applicable_input_modes: ["json", "trace_package"],
         capability_predicate: {
           capability_path: "/run_surface/real_trace_submission_available",
           operator: "equals",
@@ -273,7 +274,7 @@ export function createF8ExperimentDescriptor(): ExperimentDescriptorResponse {
         unavailable_reason: "compatibility_harness_submission_not_exposed",
         allowed_claim_scope: "semantic_extraction_and_compatibility_consistency_only",
         calibration_requirement: "not_ground_truth_fidelity_evidence",
-        applicable_input_modes: ["json"],
+        applicable_input_modes: ["json", "trace_package"],
         capability_predicate: {
           capability_path: "/run_surface/compatibility_harness_submission_available",
           operator: "equals",

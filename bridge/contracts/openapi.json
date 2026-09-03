@@ -16,6 +16,14 @@
       "schema_identity": "tilesim.bridge.experiment_descriptor.v1",
       "create_run_schema_identity": "tilesim.bridge.create_run_request.v1"
     },
+    "trace_packages": {
+      "catalog_endpoint": "GET /api/trace-packages",
+      "inspect_endpoint": "POST /api/trace-packages/{package_id}/inspect",
+      "package_schema_identity": "tilesim.trace_package.v1alpha1",
+      "catalog_schema_identity": "tilesim.bridge.trace_package_catalog.v1",
+      "inspect_schema_identity": "tilesim.bridge.trace_package_inspect.v1",
+      "submission_source_modes": ["synthetic_trace"]
+    },
     "known_report_schema_identities": {
       "run": ["wind_tunnel.run.v1alpha1"],
       "metrics": ["tilesim.metrics_report.v1"],
@@ -159,6 +167,27 @@
         "x-client-response-type": "ExperimentDescriptorResponse",
         "responses": {
           "200": { "$ref": "#/components/responses/ExperimentDescriptor" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/trace-packages": {
+      "get": {
+        "operationId": "tracePackages",
+        "x-client-response-type": "TracePackageCatalogResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/TracePackageCatalog" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/trace-packages/{package_id}/inspect": {
+      "parameters": [{ "$ref": "#/components/parameters/PackageId" }],
+      "post": {
+        "operationId": "inspectTracePackage",
+        "x-client-response-type": "TracePackageInspectResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/TracePackageInspect" },
           "default": { "$ref": "#/components/responses/Error" }
         }
       }
@@ -336,6 +365,7 @@
     "parameters": {
       "RunId": { "name": "run_id", "in": "path", "required": true, "schema": { "type": "string" } },
       "ScenarioId": { "name": "scenario_id", "in": "path", "required": true, "schema": { "type": "string" } },
+      "PackageId": { "name": "package_id", "in": "path", "required": true, "schema": { "type": "string" } },
       "ArtifactId": { "name": "artifact_id", "in": "path", "required": true, "schema": { "type": "string" } },
       "IdempotencyKey": {
         "name": "Idempotency-Key",
@@ -391,7 +421,7 @@
           },
           "input_modes": {
             "type": "array",
-            "items": { "enum": ["controls", "json"] },
+            "items": { "enum": ["controls", "json", "trace_package"] },
             "uniqueItems": true
           },
           "design_space_modes": {
@@ -450,7 +480,7 @@
               },
               "input_modes": {
                 "type": "array",
-                "items": { "enum": ["controls", "json"] },
+                "items": { "enum": ["controls", "json", "trace_package"] },
                 "uniqueItems": true
               },
               "design_space_modes": {
@@ -484,6 +514,8 @@
         "additionalProperties": true
       },
       "ExperimentDescriptorResponse": { "$ref": "./schemas/experiment-descriptor.schema.json" },
+      "TracePackageCatalogResponse": { "$ref": "./schemas/trace-package-catalog.schema.json" },
+      "TracePackageInspectResponse": { "$ref": "./schemas/trace-package-inspect.schema.json" },
       "EvidenceAgentDescriptorResponse": { "$ref": "./schemas/evidence-agent-descriptor.schema.json" },
       "EvidenceAgentRequest": { "$ref": "./schemas/evidence-agent-request.schema.json" },
       "EvidenceAgentResponse": { "$ref": "./schemas/evidence-agent-response.schema.json" },
@@ -568,6 +600,18 @@
         "description": "Schema-set-bound F8 experiment parameter descriptor",
         "content": {
           "application/json": { "schema": { "$ref": "#/components/schemas/ExperimentDescriptorResponse" } }
+        }
+      },
+      "TracePackageCatalog": {
+        "description": "Controlled Trace-package catalog without local filesystem paths",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/TracePackageCatalogResponse" } }
+        }
+      },
+      "TracePackageInspect": {
+        "description": "Fresh TileSimCLI Trace-package inspection",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/TracePackageInspectResponse" } }
         }
       },
       "EvidenceAgentDescriptor": {

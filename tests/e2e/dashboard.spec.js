@@ -6,6 +6,67 @@ import { createF8ExperimentDescriptor, f8Capabilities, f8SchemaRevision } from "
 import { createEvidenceAgentDescriptor, f9DescriptorRevision } from "../fixtures/evidence-agent-descriptor";
 
 const runId = "run-fixture-f1";
+const tracePackageManifestSha256 = `sha256:${"a".repeat(64)}`;
+
+function tracePackageItem(packageId, sourceMode, { boundary = "S1", traceKind = "s1_runtime" } = {}) {
+  const submissionAvailable = sourceMode === "synthetic_trace";
+  return {
+    package_id: packageId,
+    producer: { name: "tilesim-trace-fixture", version: "0.1.0" },
+    experiment_id: "experiment-trace-fixture",
+    physical_run_id: `physical-${packageId}`,
+    entry_boundary: boundary,
+    entry_trace_kind: traceKind,
+    trace_provenance: {
+      source_mode: sourceMode,
+      calibration_level: "uncalibrated",
+      allowed_claim_scope: "exploratory",
+      source_id: `fixture:${packageId}`,
+      generation_path: "temporary synthetic E2E fixture",
+      capture_or_generation_time: "2026-09-03T00:00:00Z",
+      upstream_tooling: "playwright fixture",
+      trace_kind: "trace_package",
+      notes: ["Contract and flow consistency only; not hardware or held-out fidelity evidence."],
+    },
+    manifest_sha256: tracePackageManifestSha256,
+    inspect_status: "valid",
+    inspect_errors: [],
+    submission_available: submissionAvailable,
+    unavailable_reason: submissionAvailable ? null : "source_mode_not_enabled_in_prototype",
+    artifact_integrity: {
+      complete: true,
+      semantic_artifact_count: 6,
+      semantic_roles: ["request", "batch", "iteration", "tile_execution", "kv_cache", "network_flow"],
+      sha256_verified: true,
+      entry_trace_verified: true,
+    },
+  };
+}
+
+const tracePackageCatalog = {
+  schema_version: "tilesim.bridge.trace_package_catalog.v1",
+  trace_package_schema_identity: "tilesim.trace_package.v1alpha1",
+  schema_set_revision: f8SchemaRevision,
+  backend_identity: {
+    source_revision: "fixture-source",
+    build_revision: "fixture-source",
+    source_state_digest: "fixture-source-state",
+    build_state_digest: "fixture-source-state",
+    versions_match: true,
+    state_digests_match: true,
+    deployment_ref: "fixture:f1",
+  },
+  capability: { available: true, reason: null },
+  packages: [
+    tracePackageItem("synthetic-package", "synthetic_trace"),
+    tracePackageItem("real-package", "real_trace", { boundary: "S2", traceKind: "s2_execution" }),
+    tracePackageItem("compatibility-package", "compatibility_harness_trace", {
+      boundary: "S5",
+      traceKind: "s5_collective",
+    }),
+  ],
+  discovery_errors: [],
+};
 
 const week7EvidenceMap = {
   schema_version: "tilesim.s9.report_field_evidence_map.v1alpha1",
@@ -475,7 +536,11 @@ function addFormalF7Contracts(fixture) {
   );
 }
 
-async function installFixtureApi(page, fixture, { evidenceAgentConfigured = false, evidenceAgentHandler = null } = {}) {
+async function installFixtureApi(
+  page,
+  fixture,
+  { evidenceAgentConfigured = false, evidenceAgentHandler = null, tracePackageRunHandler = null } = {},
+) {
   let week7OperationActive = false;
   await page.route(/^https?:\/\/[^/]+\/api(?:\/|$)/, async (route) => {
     const url = new URL(route.request().url());
@@ -526,6 +591,14 @@ async function installFixtureApi(page, fixture, { evidenceAgentConfigured = fals
           schema_identity: "tilesim.bridge.experiment_descriptor.v1",
           create_run_schema_identity: "tilesim.bridge.create_run_request.v1",
         },
+        trace_packages: {
+          catalog_endpoint: "GET /api/trace-packages",
+          inspect_endpoint: "POST /api/trace-packages/{package_id}/inspect",
+          package_schema_identity: "tilesim.trace_package.v1alpha1",
+          catalog_schema_identity: "tilesim.bridge.trace_package_catalog.v1",
+          inspect_schema_identity: "tilesim.bridge.trace_package_inspect.v1",
+          submission_source_modes: ["synthetic_trace"],
+        },
         evidence_agent: {
           capability_endpoint: "GET /api/agent/evidence-capabilities",
           analysis_endpoint: "POST /api/runs/{run_id}/agent/evidence-analyses",
@@ -568,7 +641,7 @@ async function installFixtureApi(page, fixture, { evidenceAgentConfigured = fals
       payload = {
         scenarios: [{ scenario_id: "s1_des_example", label: "S1 → S6 synthetic runtime example" }],
         fidelity_policies: ["des", "default"],
-        input_modes: ["controls", "json"],
+        input_modes: ["controls", "json", "trace_package"],
         design_space_modes: ["built_in_synthetic", "strict_s6_manifest"],
         gpu_participation_modes: ["gpu_free"],
       };
@@ -576,6 +649,16 @@ async function installFixtureApi(page, fixture, { evidenceAgentConfigured = fals
       payload = f8Capabilities;
     } else if (path === "/api/experiment-schema") {
       payload = createF8ExperimentDescriptor();
+    } else if (path === "/api/trace-packages") {
+      payload = tracePackageCatalog;
+    } else if (path === "/api/trace-packages/synthetic-package/inspect" && route.request().method() === "POST") {
+      payload = {
+        schema_version: "tilesim.bridge.trace_package_inspect.v1",
+        trace_package_schema_identity: "tilesim.trace_package.v1alpha1",
+        schema_set_revision: f8SchemaRevision,
+        backend_identity: tracePackageCatalog.backend_identity,
+        package: tracePackageCatalog.packages[0],
+      };
     } else if (path === "/api/agent/evidence-capabilities") {
       payload = { ...createEvidenceAgentDescriptor(evidenceAgentConfigured), schema_set_revision: f8SchemaRevision };
     } else if (
@@ -592,6 +675,44 @@ async function installFixtureApi(page, fixture, { evidenceAgentConfigured = fals
         contentType: "application/json",
         headers: { "X-TileSim-Schema-Set-Revision": f8SchemaRevision },
         body: JSON.stringify(result.body),
+      });
+      return;
+    } else if (path === "/api/runs" && route.request().method() === "POST" && tracePackageRunHandler) {
+      await tracePackageRunHandler({
+        request: route.request().postDataJSON(),
+        idempotencyKey: route.request().headers()["idempotency-key"],
+      });
+      await route.fulfill({
+        status: 202,
+        contentType: "application/json",
+        body: JSON.stringify({
+          run_id: runId,
+          run_name: "Trace package E2E",
+          status: "running",
+          input_mode: "trace_package",
+          created_at: "2026-09-03T00:00:00Z",
+          idempotent_replay: false,
+        }),
+      });
+      return;
+    } else if (path === `/api/runs/${runId}/events` && tracePackageRunHandler) {
+      await route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        body: [
+          "id: 2",
+          "event: run",
+          `data: ${JSON.stringify({
+            run_id: runId,
+            run_name: "Trace package E2E",
+            status: "completed",
+            input_mode: "trace_package",
+            created_at: "2026-09-03T00:00:00Z",
+            finished_at: "2026-09-03T00:00:01Z",
+          })}`,
+          "",
+          "",
+        ].join("\n"),
       });
       return;
     } else if (path === "/api/runs") {
@@ -639,7 +760,12 @@ async function installFixtureApi(page, fixture, { evidenceAgentConfigured = fals
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      headers: ["/api/experiment-schema", "/api/agent/evidence-capabilities"].includes(path)
+      headers: [
+        "/api/experiment-schema",
+        "/api/trace-packages",
+        "/api/trace-packages/synthetic-package/inspect",
+        "/api/agent/evidence-capabilities",
+      ].includes(path)
         ? { "X-TileSim-Schema-Set-Revision": f8SchemaRevision }
         : {},
       body: JSON.stringify(payload),
@@ -1506,6 +1632,65 @@ test("F8 experiment builder binds schema options, request preview, and exact err
   const results = await new AxeBuilder({ page }).analyze();
   expect(results.violations.filter((item) => ["serious", "critical"].includes(item.impact))).toEqual([]);
   await expectNoUnexpectedTextOverflow(page);
+  expect(browserFailures).toEqual([]);
+});
+
+test("Trace package mode exposes inspected provenance without promoting synthetic evidence", async ({ page }) => {
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  const submittedRequests = [];
+  const browserFailures = await openFixture(page, fixture, "experiment", {
+    tracePackageRunHandler: ({ request, idempotencyKey }) => {
+      submittedRequests.push({ request, idempotencyKey });
+    },
+  });
+
+  const traceMode = page.getByRole("button", { name: "Trace package" });
+  await traceMode.focus();
+  await expect(traceMode).toBeFocused();
+  await page.keyboard.press("Enter");
+
+  const panel = page.locator(".trace-package-panel");
+  await expect(panel).toBeVisible();
+  await expect(panel.getByText("synthetic-package", { exact: true }).first()).toBeVisible();
+  await expect(panel).toContainText("tilesim-trace-fixture");
+  await expect(panel).toContainText("experiment-trace-fixture");
+  await expect(panel).toContainText("physical-synthetic-package");
+  await expect(panel).toContainText("s1_runtime");
+  await expect(panel).toContainText("synthetic_trace");
+  await expect(panel).toContainText("uncalibrated");
+  await expect(panel).toContainText("exploratory");
+  await expect(panel).toContainText("6/6");
+  await expect(panel.locator(".trace-package-list .available")).toHaveCount(1);
+  await expect(panel.locator(".trace-package-list .unavailable")).toHaveCount(2);
+  await expect(page.locator("button.run-submit")).toBeEnabled();
+
+  await panel.locator(".trace-package-list button").filter({ hasText: "real-package" }).click();
+  await expect(panel).toContainText("real_trace");
+  await expect(panel).toContainText("首版仅开放 synthetic_trace，不构成校准或留出验证证据。");
+  await expect(page.locator("button.run-submit")).toBeDisabled();
+
+  await panel.locator(".trace-package-list button").filter({ hasText: "synthetic-package" }).click();
+  await panel.getByRole("button", { name: "重新检查" }).click();
+  await expect(page.locator("button.run-submit")).toBeEnabled();
+  await page.locator(".experiment-request-preview summary").click();
+  const request = JSON.parse((await page.locator(".experiment-request-preview pre").textContent()) || "{}");
+  expect(request.trace_package_id).toBe("synthetic-package");
+  expect(request).not.toHaveProperty("overrides");
+  expect(request).not.toHaveProperty("custom_inputs");
+  expect(request).not.toHaveProperty("design_space_candidates");
+
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations.filter((item) => ["serious", "critical"].includes(item.impact))).toEqual([]);
+  await expectNoUnexpectedTextOverflow(page);
+
+  await page.locator("button.run-submit").click();
+  await expect(page.getByRole("heading", { name: /运行结果已就绪|运行已完成，证据范围受限/ })).toBeVisible();
+  expect(submittedRequests).toHaveLength(1);
+  expect(submittedRequests[0].request.trace_package_id).toBe("synthetic-package");
+  expect(submittedRequests[0].request).not.toHaveProperty("overrides");
+  expect(submittedRequests[0].request).not.toHaveProperty("custom_inputs");
+  expect(submittedRequests[0].request).not.toHaveProperty("design_space_candidates");
+  expect(submittedRequests[0].idempotencyKey).toMatch(/^run-/);
   expect(browserFailures).toEqual([]);
 });
 

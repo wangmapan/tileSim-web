@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import threading
@@ -109,6 +110,46 @@ def materialize_custom_inputs(run_dir: Path, scenario: dict, inputs: dict) -> di
     return {**scenario, "trace": trace_path, "topology": topology_path}
 
 
+def materialize_trace_package_inputs(
+    run_dir: Path,
+    scenario: dict,
+    *,
+    manifest_path: Path,
+    manifest_sha256: str,
+    source_mode: str,
+) -> dict:
+    """Materialize only the allow-listed topology; the CLI owns Trace-package intake."""
+    topology = json.loads(scenario["topology"].read_text(encoding="utf-8"))
+    bind_topology_contract(topology, run_dir.name, default_source_mode=source_mode)
+    topology_path = run_dir / "input-topology.json"
+    topology_path.write_text(
+        json.dumps(topology, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return {
+        **scenario,
+        "topology": topology_path,
+        "trace_package": manifest_path,
+        "trace_package_manifest_sha256": manifest_sha256,
+    }
+
+
+def trace_package_manifest_matches(scenario: dict) -> bool:
+    expected = scenario.get("trace_package_manifest_sha256")
+    manifest = scenario.get("trace_package")
+    if not isinstance(expected, str):
+        return True
+    if not isinstance(manifest, Path):
+        return False
+    try:
+        if manifest.is_symlink():
+            return False
+        body = manifest.read_bytes()
+    except OSError:
+        return False
+    return "sha256:" + hashlib.sha256(body).hexdigest() == expected
+
+
 def materialize_design_space_candidates(run_dir: Path, manifest: dict | None) -> Path | None:
     if manifest is None:
         return None
@@ -141,12 +182,14 @@ def execute_run(
         "run",
         "--mode",
         "dev",
-        "--from",
-        scenario["from"],
+    ]
+    if scenario.get("trace_package") is not None:
+        command.extend(["--trace-package", str(scenario["trace_package"])])
+    else:
+        command.extend(["--from", scenario["from"], "--trace", str(scenario["trace"])])
+    command.extend([
         "--to",
         scenario["to"],
-        "--trace",
-        str(scenario["trace"]),
         "--topology",
         str(scenario["topology"]),
         "--fidelity-policy",
@@ -165,7 +208,7 @@ def execute_run(
         str(report_paths["design_space"]),
         "--execution-envelope-out",
         str(report_paths["execution_envelope"]),
-    ]
+    ])
     if fidelity_policy == "des":
         command.extend(
             [
@@ -175,6 +218,27 @@ def execute_run(
         )
     if scenario.get("design_space_candidates") is not None:
         command.extend(["--design-space-candidates", str(scenario["design_space_candidates"])])
+
+    if not trace_package_manifest_matches(scenario):
+        failure = "Trace-package manifest changed after inspection; execution was rejected."
+        failed_at = now()
+        with runs_lock:
+            run = runs[run_id]
+            run["status"] = "failed"
+            run["finished_at"] = failed_at
+            run["error"] = failure
+            run["failure_code"] = "trace_package_changed"
+        try:
+            update_run_metadata(
+                run_dir,
+                status="failed",
+                finished_at=failed_at,
+                error=failure,
+                failure_code="trace_package_changed",
+            )
+        except OSError:
+            pass
+        return
 
     try:
         completed = process_runner(
@@ -195,6 +259,7 @@ def execute_run(
             except json.JSONDecodeError:
                 # Artifact reports remain valid if a future CLI emits non-JSON stdout.
                 pass
+        trace_package_changed = not trace_package_manifest_matches(scenario)
         with runs_lock:
             run = runs[run_id]
             run["finished_at"] = now()
@@ -202,7 +267,11 @@ def execute_run(
             run["stdout"] = completed.stdout[-4000:]
             run["stderr"] = completed.stderr[-4000:]
             run["report_paths"] = report_paths
-            if completed.returncode == 0 and is_valid_json_file(report_paths["run"]):
+            if trace_package_changed:
+                run["status"] = "failed"
+                run["error"] = "Trace-package manifest changed during execution."
+                run["failure_code"] = "trace_package_changed"
+            elif completed.returncode == 0 and is_valid_json_file(report_paths["run"]):
                 run["status"] = "completed"
             elif completed.returncode == 0:
                 run["status"] = "failed"

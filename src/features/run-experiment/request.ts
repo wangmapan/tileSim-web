@@ -138,13 +138,24 @@ export function buildExperimentRequest(options: BuildExperimentRequestOptions): 
       const value = controlValue(form, field);
       if (value !== undefined && value !== null) setRequestValueByPointer(request, field.requestJsonPointer, value);
     }
-  } else {
+  } else if (mode === "json") {
     request.custom_inputs = {
       runtime_trace: parseJsonObject(options.runtimeJson, "/custom_inputs/runtime_trace", "Runtime trace"),
       topology: parseJsonObject(options.topologyJson, "/custom_inputs/topology", "Fabric topology"),
     };
+  } else {
+    if (!options.tracePackageId) {
+      throw new ExperimentRequestError("A valid Trace package is required.", "/trace_package_id");
+    }
+    request.trace_package_id = options.tracePackageId;
   }
   if (options.designSpaceJson.trim()) {
+    if (mode === "trace_package") {
+      throw new ExperimentRequestError(
+        "Trace-package mode cannot be combined with design-space candidates.",
+        "/design_space_candidates",
+      );
+    }
     const designSpace = parseJsonObject(
       options.designSpaceJson,
       "/design_space_candidates",
@@ -182,6 +193,7 @@ export function resolveExperimentErrorPointer(
     "/gpu_participation_mode",
     "/run_name",
     "/input_mode",
+    "/trace_package_id",
   ]);
   if (exactPointers.has(fieldPath)) return { fieldPath, controlPointer: fieldPath, fieldId: null };
   for (const root of ["/custom_inputs/runtime_trace", "/custom_inputs/topology", "/design_space_candidates"]) {

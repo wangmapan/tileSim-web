@@ -12,6 +12,7 @@
     "artifact_manifest_schema_version",
     "known_report_schema_identities",
     "experiment_descriptor",
+    "trace_packages",
     "evidence_agent",
     "run_creation",
     "run_events",
@@ -35,6 +36,32 @@
         "endpoint": { "const": "GET /api/experiment-schema" },
         "schema_identity": { "const": "tilesim.bridge.experiment_descriptor.v1" },
         "create_run_schema_identity": { "const": "tilesim.bridge.create_run_request.v1" }
+      }
+    },
+    "trace_packages": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "catalog_endpoint",
+        "inspect_endpoint",
+        "package_schema_identity",
+        "catalog_schema_identity",
+        "inspect_schema_identity",
+        "submission_source_modes"
+      ],
+      "properties": {
+        "catalog_endpoint": { "const": "GET /api/trace-packages" },
+        "inspect_endpoint": { "const": "POST /api/trace-packages/{package_id}/inspect" },
+        "package_schema_identity": { "const": "tilesim.trace_package.v1alpha1" },
+        "catalog_schema_identity": { "const": "tilesim.bridge.trace_package_catalog.v1" },
+        "inspect_schema_identity": { "const": "tilesim.bridge.trace_package_inspect.v1" },
+        "submission_source_modes": {
+          "type": "array",
+          "items": { "const": "synthetic_trace" },
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true
+        }
       }
     },
     "evidence_agent": {

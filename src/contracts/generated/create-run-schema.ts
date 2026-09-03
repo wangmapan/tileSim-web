@@ -33,6 +33,10 @@ export const createRunRequestSchema = {
     design_space_candidates: {
       $ref: "design-space-candidates.schema.json",
     },
+    trace_package_id: {
+      type: "string",
+      pattern: "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+    },
   },
   allOf: [
     {
@@ -42,6 +46,33 @@ export const createRunRequestSchema = {
           custom_inputs: {},
         },
         required: ["overrides", "custom_inputs"],
+      },
+    },
+    {
+      not: {
+        properties: {
+          trace_package_id: {},
+          overrides: {},
+        },
+        required: ["trace_package_id", "overrides"],
+      },
+    },
+    {
+      not: {
+        properties: {
+          trace_package_id: {},
+          custom_inputs: {},
+        },
+        required: ["trace_package_id", "custom_inputs"],
+      },
+    },
+    {
+      not: {
+        properties: {
+          trace_package_id: {},
+          design_space_candidates: {},
+        },
+        required: ["trace_package_id", "design_space_candidates"],
       },
     },
   ],
@@ -189,7 +220,7 @@ export const experimentDescriptorSchema = {
           applicable_input_modes: {
             type: "array",
             items: {
-              enum: ["controls", "json"],
+              enum: ["controls", "json", "trace_package"],
             },
             uniqueItems: true,
           },
@@ -326,7 +357,7 @@ export const experimentDescriptorSchema = {
         required: ["input_mode", "available", "unavailable_reason"],
         properties: {
           input_mode: {
-            enum: ["controls", "json"],
+            enum: ["controls", "json", "trace_package"],
           },
           available: {
             type: "boolean",

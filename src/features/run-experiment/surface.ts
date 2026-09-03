@@ -325,9 +325,10 @@ function baseOptions(
   const schemaInputModes: ExperimentInputMode[] = [
     ...(Object.hasOwn(schemaProperties, "overrides") ? (["controls"] as const) : []),
     ...(Object.hasOwn(schemaProperties, "custom_inputs") ? (["json"] as const) : []),
+    ...(Object.hasOwn(schemaProperties, "trace_package_id") ? (["trace_package"] as const) : []),
   ];
   const inputModes = supportedValues(schemaInputModes, catalog.input_modes).filter(
-    (value): value is ExperimentInputMode => value === "controls" || value === "json",
+    (value): value is ExperimentInputMode => value === "controls" || value === "json" || value === "trace_package",
   );
   const designSpaceModes = commonValues(
     stringArray(catalog.design_space_modes),

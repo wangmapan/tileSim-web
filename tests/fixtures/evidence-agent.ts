@@ -194,6 +194,14 @@ export const f9ApiManifest: ApiManifestResponse = {
     schema_identity: "tilesim.bridge.experiment_descriptor.v1",
     create_run_schema_identity: "tilesim.bridge.create_run_request.v1",
   },
+  trace_packages: {
+    catalog_endpoint: "GET /api/trace-packages",
+    inspect_endpoint: "POST /api/trace-packages/{package_id}/inspect",
+    package_schema_identity: "tilesim.trace_package.v1alpha1",
+    catalog_schema_identity: "tilesim.bridge.trace_package_catalog.v1",
+    inspect_schema_identity: "tilesim.bridge.trace_package_inspect.v1",
+    submission_source_modes: ["synthetic_trace"],
+  },
   evidence_agent: {
     capability_endpoint: "GET /api/agent/evidence-capabilities",
     analysis_endpoint: "POST /api/runs/{run_id}/agent/evidence-analyses",

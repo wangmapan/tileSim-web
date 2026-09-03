@@ -360,6 +360,91 @@
   margin: 8px 0 0;
   padding-bottom: 2px;
 }
+.trace-package-state {
+  display: grid;
+  gap: 6px;
+  margin: 0 25px;
+  padding: 18px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+  color: var(--muted);
+  background: var(--surface-subtle);
+}
+.trace-package-panel > .service-warning,
+.trace-package-panel > .trace-package-state,
+.trace-package-list,
+.trace-package-detail {
+  margin-right: 25px;
+  margin-left: 25px;
+}
+.trace-package-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.trace-package-list > button {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  background: var(--surface-subtle);
+  text-align: left;
+  cursor: pointer;
+}
+.trace-package-list > button.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.trace-package-list button > span:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+.trace-package-list small,
+.trace-package-detail small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.trace-package-detail {
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-subtle);
+}
+.trace-package-detail > header,
+.trace-package-integrity {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.trace-package-detail > header > div,
+.trace-package-integrity p {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  margin: 0;
+}
+.trace-package-detail .experiment-schema-grid {
+  margin-top: 14px;
+}
+.trace-package-integrity {
+  justify-content: flex-start;
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 7px;
+  color: var(--accent);
+  background: var(--surface-muted);
+}
+.trace-package-detail dd {
+  overflow-wrap: anywhere;
+}
 .run-submit-card {
   position: sticky;
   top: 108px;

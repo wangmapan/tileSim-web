@@ -9,6 +9,7 @@ import {
   ExperimentInputPanel,
   ExperimentRequestError,
   ExperimentSubmitCard,
+  TracePackageInputPanel,
   buildExperimentRequestPreview,
   buildExperimentSurface,
   createExperimentForm,
@@ -16,6 +17,9 @@ import {
   resolveExperimentErrorPointer,
   resetExperimentControls,
   runExperiment,
+  fetchTracePackageCatalog,
+  inspectTracePackage,
+  tracePackageBackendIdentity,
 } from "../features/run-experiment";
 import { useDashboard } from "../store/dashboard";
 import { useI18n } from "../i18n";
@@ -37,6 +41,12 @@ const runStatus = ref("");
 const runtimeJson = ref("");
 const topologyJson = ref("");
 const designSpaceJson = ref("");
+const tracePackageCatalog = ref(null);
+const tracePackageCatalogStatus = ref("idle");
+const tracePackageError = ref("");
+const tracePackageInspectError = ref("");
+const selectedTracePackageId = ref("");
+const inspectingTracePackage = ref(false);
 const fieldPath = ref("");
 const submissionContractError = ref("");
 const pendingSubmission = state.experimentSubmission;
@@ -51,6 +61,17 @@ const surface = computed(() =>
   ),
 );
 const form = reactive(createExperimentForm(surface.value));
+const selectedTracePackage = computed(
+  () => tracePackageCatalog.value?.packages.find((item) => item.package_id === selectedTracePackageId.value) || null,
+);
+const tracePackageQueryContext = computed(() => {
+  const manifest = state.bridge.manifest;
+  if (!manifest || manifest.legacy_unversioned) return null;
+  return {
+    backendIdentity: tracePackageBackendIdentity(state.bridge.identity || {}),
+    manifest,
+  };
+});
 const requestPreview = computed(() =>
   buildExperimentRequestPreview({
     form,
@@ -58,7 +79,8 @@ const requestPreview = computed(() =>
     surface: surface.value,
     runtimeJson: runtimeJson.value,
     topologyJson: topologyJson.value,
-    designSpaceJson: designSpaceJson.value,
+    designSpaceJson: mode.value === "trace_package" ? "" : designSpaceJson.value,
+    tracePackageId: selectedTracePackageId.value,
   }),
 );
 const displayFieldPath = computed(() => {
@@ -71,14 +93,73 @@ const canRun = computed(
     surface.value.canSubmit &&
     !submissionContractError.value &&
     requestPreview.value.request !== null &&
+    (mode.value !== "trace_package" || selectedTracePackage.value?.submission_available === true) &&
     !submitting.value,
 );
+
+async function loadTracePackages(refresh = false) {
+  const context = tracePackageQueryContext.value;
+  if (!context) {
+    tracePackageCatalog.value = null;
+    tracePackageCatalogStatus.value = "error";
+    tracePackageError.value = "trace_package_manifest_contract_unavailable";
+    return;
+  }
+  tracePackageCatalogStatus.value = "loading";
+  tracePackageError.value = "";
+  try {
+    const catalog = await fetchTracePackageCatalog(context, { refresh });
+    tracePackageCatalog.value = catalog;
+    tracePackageCatalogStatus.value = "success";
+    if (!catalog.packages.some((item) => item.package_id === selectedTracePackageId.value)) {
+      selectedTracePackageId.value =
+        catalog.packages.find((item) => item.submission_available)?.package_id || catalog.packages[0]?.package_id || "";
+    }
+  } catch (error) {
+    tracePackageCatalogStatus.value = "error";
+    tracePackageError.value = error instanceof Error ? error.message : String(error);
+  }
+}
+
+async function inspectSelectedTracePackage() {
+  const item = selectedTracePackage.value;
+  const context = tracePackageQueryContext.value;
+  if (!item || !context) return;
+  inspectingTracePackage.value = true;
+  tracePackageInspectError.value = "";
+  try {
+    const result = await inspectTracePackage(item.package_id, item.manifest_sha256, context);
+    tracePackageCatalog.value = {
+      ...tracePackageCatalog.value,
+      packages: tracePackageCatalog.value.packages.map((candidate) =>
+        candidate.package_id === result.package.package_id ? result.package : candidate,
+      ),
+    };
+  } catch (error) {
+    tracePackageInspectError.value = error instanceof Error ? error.message : String(error);
+  } finally {
+    inspectingTracePackage.value = false;
+  }
+}
+
+async function selectTracePackage(packageId) {
+  selectedTracePackageId.value = packageId;
+  await inspectSelectedTracePackage();
+}
 
 watch(
   surface,
   (nextSurface) => {
     reconcileExperimentForm(form, nextSurface);
     if (!nextSurface.inputModes.includes(mode.value)) mode.value = nextSurface.inputModes[0] || "controls";
+  },
+  { immediate: true },
+);
+
+watch(
+  [mode, () => state.bridge.manifest?.schema_set_revision],
+  ([nextMode]) => {
+    if (nextMode === "trace_package") void loadTracePackages();
   },
   { immediate: true },
 );
@@ -258,7 +339,25 @@ async function loadBundle(event) {
         @load-bundle="loadBundle"
         @load-json-file="loadJsonFile"
       />
-      <DesignSpaceInputPanel v-model="designSpaceJson" :field-path="displayFieldPath" @load-json-file="loadJsonFile" />
+      <TracePackageInputPanel
+        v-if="mode === 'trace_package'"
+        :catalog="tracePackageCatalog"
+        :status="tracePackageCatalogStatus"
+        :error="tracePackageError"
+        :inspect-error="tracePackageInspectError"
+        :selected-package-id="selectedTracePackageId"
+        :inspecting="inspectingTracePackage"
+        :field-path="displayFieldPath"
+        @select="selectTracePackage"
+        @inspect="inspectSelectedTracePackage"
+        @refresh="loadTracePackages(true)"
+      />
+      <DesignSpaceInputPanel
+        v-else
+        v-model="designSpaceJson"
+        :field-path="displayFieldPath"
+        @load-json-file="loadJsonFile"
+      />
       <ExperimentCapabilityPanel
         data-help-anchor="experiment-capabilities"
         :capabilities="state.capabilities"
@@ -278,6 +377,7 @@ async function loadBundle(event) {
       :run-status="runStatus"
       :request-preview="requestPreview"
       :surface="surface"
+      :trace-package="selectedTracePackage"
       @submit="submit"
       @back="setView('overview')"
     />

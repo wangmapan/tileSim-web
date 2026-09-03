@@ -10,9 +10,11 @@ bridge 在 `127.0.0.1:5173` 上托管构建后的前端和受控 API。它不会
 - `GET /api/health`：bridge、CLI、核心仓库与前端构建状态，并返回实际的 `backend_revision`、`backend_branch` 与 `tilesim_root`，用于核验网页当前连接的代码版本。
 - `GET /api/catalog`：白名单场景、fidelity policy 与输入模式。
 - `GET /api/experiment-schema`：返回绑定当前 schema-set 的 F8 实验参数 descriptor；字段身份、JSON Pointer、范围、单位与 capability predicate 均由 Bridge 发布。
+- `GET /api/trace-packages`：从 `TILESIM_TRACE_PACKAGE_ROOT` 的固定目录布局发现 package，并返回经 TileSimCLI 检查的身份、入口边界、trace kind、provenance 与 artifact 完整性；不返回服务器路径。
+- `POST /api/trace-packages/{package_id}/inspect`：按稳定 package ID 重新调用 `TileSimCLI inspect-trace-package`，并返回绑定当前 schema-set revision 的检查结果。
 - `GET /api/agent/evidence-capabilities`：返回 F9 read-only evidence Agent 的 provider、model、版本、能力、降级和执行语义；当前生产 Provider 未配置，结构化状态为 `unavailable`。
 - `GET /api/templates/{scenario}`：受控场景的输入模板。
-- `POST /api/runs`：提交结构化覆盖参数或一对受限 JSON 输入；要求 8–128 字符的 `Idempotency-Key`，可附带严格的 `tilesim.design_space.s6_candidates.v1` 候选 manifest 对象。
+- `POST /api/runs`：提交结构化覆盖参数、一对受限 JSON 输入或稳定 `trace_package_id`；要求 8–128 字符的 `Idempotency-Key`。Trace-package 与 overrides、custom inputs、design-space candidates 互斥。
 - `GET /api/runs/{id}`：读取任务状态。
 - `GET /api/runs/{id}/events`：SSE 状态流；事件 ID `1` 表示 active、`2` 表示 terminal，使用 `Last-Event-ID` 恢复。
 - `GET /api/runs/{id}/reports`：读取完整 run-bound 报告包，包括可用的 execution envelope、S8 validation 和 S9 metrics/attribution；前端据此展示分层结果。
@@ -28,6 +30,29 @@ bridge 在 `127.0.0.1:5173` 上托管构建后的前端和受控 API。它不会
 请求体最大 2.1 MB；单份自定义输入最大 1 MB。跨域只允许本地 Vite 开发地址，生产页面与 API 使用同源访问。
 
 Bridge 默认只允许 1 个 `preparing/running` 任务，避免多标签页并发启动多个 TileSimCLI 耗尽本机资源。容量已满时，新 idempotency key 返回 retryable `429 run_capacity_reached`；相同 key 的恢复请求仍返回原 run。开发者可通过 `TILESIM_MAX_ACTIVE_RUNS` 显式提高上限。
+
+## Trace-package 快速原型
+
+受控根目录通过 `TILESIM_TRACE_PACKAGE_ROOT` 配置，固定布局为
+`<root>/<package-directory>/trace_package.json`。浏览器只能提交满足 HTTP 安全约束的稳定
+`package_id`，不能提交绝对路径、相对路径或上传内容。根目录、package 目录、manifest 及
+package 内文件如包含 symlink/junction，或解析后逃逸受控目录，均失败关闭；manifest 的 Bridge
+发现上限为 1 MiB，完整语义与 SHA-256 校验仍由后端 TracePackageAdapter 权威执行。
+
+catalog 只有在受控根目录、TileSim 根目录和 TileSimCLI 均可用时才发布
+`capability.available=true`。每次创建 run 前都会重新 inspect；执行命令使用参数数组传递
+`run --trace-package <manifest> --topology <allow-listed topology> --to S6`，不传 `--trace`，也不传
+固定 `--from`。Bridge 在执行前后复核 manifest SHA-256，检查后发生变化时以
+`trace_package_changed` 失败终止。
+
+运行私有 metadata 保存 package ID、manifest SHA-256、入口边界、trace kind 和原始 provenance，
+但 manifest 路径不进入浏览器可见 run 或 artifact 接口。当前仅允许
+`source_mode=synthetic_trace` 提交；`real_trace` 与 `compatibility_harness_trace` 可以在 catalog 中
+显示，但状态为 unavailable。该原型只证明工作负载抽象与负载描述语言模块生成的六类 Trace
+package 可以通过 Bridge 进入统一仿真内核模块，并复用既有报告、History 与 Evidence 展示链；
+synthetic fixture 只属于契约和流程一致性证据，不构成真实设备校准、独立留出验证或硬件 fidelity。
+
+完整实现、边界和验证方法见 `docs/TRACE_PACKAGE_WEB_PROTOTYPE.md`。
 
 Week 7 三个固定操作另共享一个非阻塞单槽，容量满返回 retryable `429 week7_capacity_reached`。前端必须按 evidence map、calibration、orchestration 顺序请求；不要使用并发请求自撞容量门禁。它们属于 backend-global fixture，不绑定当前 run，进入对应页面也不应清除当前 run。
 

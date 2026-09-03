@@ -84,7 +84,7 @@
           "calibration_requirement": { "type": "string", "minLength": 1 },
           "applicable_input_modes": {
             "type": "array",
-            "items": { "enum": ["controls", "json"] },
+            "items": { "enum": ["controls", "json", "trace_package"] },
             "uniqueItems": true
           },
           "capability_predicate": { "oneOf": [{ "$ref": "#/$defs/capabilityPredicate" }, { "type": "null" }] }
@@ -167,7 +167,7 @@
         "additionalProperties": false,
         "required": ["input_mode", "available", "unavailable_reason"],
         "properties": {
-          "input_mode": { "enum": ["controls", "json"] },
+          "input_mode": { "enum": ["controls", "json", "trace_package"] },
           "available": { "type": "boolean" },
           "unavailable_reason": { "type": ["string", "null"] }
         }

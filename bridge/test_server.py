@@ -12,6 +12,66 @@ from unittest import mock
 import server
 
 
+def trace_package_inspect_report(
+    package_id: str = "synthetic-package",
+    *,
+    source_mode: str = "synthetic_trace",
+) -> dict:
+    calibration_level = "uncalibrated"
+    return {
+        "report_kind": "trace_package_intake",
+        "valid": True,
+        "schema_version": "tilesim.trace_package.v1alpha1",
+        "package_id": package_id,
+        "producer": {"name": "synthetic-fixture", "version": "0.1.0"},
+        "experiment_id": "experiment-fixture",
+        "physical_run_id": "physical-run-fixture",
+        "entry_boundary": "S1",
+        "entry_trace_kind": "s1_runtime",
+        "entry_trace_path": "must-not-reach-browser",
+        "trace_provenance": {
+            "source_mode": source_mode,
+            "calibration_level": calibration_level,
+            "allowed_claim_scope": "exploratory",
+            "source_id": "fixture-source",
+            "generation_path": "temporary synthetic fixture",
+            "capture_or_generation_time": "2026-09-03T00:00:00Z",
+            "upstream_tooling": "bridge-test",
+            "trace_kind": "trace_package",
+            "notes": ["Synthetic contract fixture; not hardware or held-out evidence."],
+        },
+        "semantic_roles": [
+            "request",
+            "batch",
+            "iteration",
+            "tile_execution",
+            "kv_cache",
+            "network_flow",
+        ],
+        "errors": [],
+    }
+
+
+def write_trace_package_candidate(
+    root: Path,
+    package_id: str,
+    directory_name: str | None = None,
+) -> Path:
+    directory = root / (directory_name or package_id)
+    directory.mkdir(parents=True, exist_ok=False)
+    manifest = directory / "trace_package.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": "tilesim.trace_package.v1alpha1",
+                "package_id": package_id,
+            }
+        ),
+        encoding="utf-8",
+    )
+    return manifest
+
+
 def f7_subject(kind: str, stable_id: str) -> dict:
     typed_fields = {
         "candidate": "candidate_id",
@@ -744,6 +804,9 @@ class BridgeApiContractTest(unittest.TestCase):
         self.previous_runs_root = server.RUNS_ROOT
         server.RUNS_ROOT = Path(self.temporary_directory.name) / "runs"
         server.RUNS_ROOT.mkdir()
+        self.previous_trace_package_root = server.TRACE_PACKAGE_ROOT
+        server.TRACE_PACKAGE_ROOT = Path(self.temporary_directory.name) / "trace-packages"
+        server.TRACE_PACKAGE_ROOT.mkdir()
         server.runs.clear()
         self.previous_bridge_instance_id = server.BRIDGE_INSTANCE_ID
         self.start_execution_patcher = mock.patch.object(server, "start_run_execution")
@@ -767,6 +830,7 @@ class BridgeApiContractTest(unittest.TestCase):
         self.httpd.server_close()
         self.thread.join(timeout=2)
         server.RUNS_ROOT = self.previous_runs_root
+        server.TRACE_PACKAGE_ROOT = self.previous_trace_package_root
         server.BRIDGE_INSTANCE_ID = self.previous_bridge_instance_id
         server.runs.clear()
         self.runtime_capabilities_patcher.stop()
@@ -863,7 +927,7 @@ class BridgeApiContractTest(unittest.TestCase):
     def test_catalog_and_capabilities_publish_stable_run_surface_types(self) -> None:
         status, catalog, _ = self.request("/api/catalog")
         self.assertEqual(status, 200)
-        self.assertEqual(catalog["input_modes"], ["controls", "json"])
+        self.assertEqual(catalog["input_modes"], ["controls", "json", "trace_package"])
         self.assertEqual(
             catalog["design_space_modes"],
             ["built_in_synthetic", "strict_s6_manifest"],
@@ -878,6 +942,180 @@ class BridgeApiContractTest(unittest.TestCase):
         self.assertFalse(run_surface["cycle_hotspot_request_available"])
         self.assertFalse(run_surface["real_trace_submission_available"])
         self.assertFalse(run_surface["compatibility_harness_submission_available"])
+
+    def test_trace_package_catalog_returns_inspected_synthetic_package_without_paths(self) -> None:
+        write_trace_package_candidate(server.TRACE_PACKAGE_ROOT, "synthetic-package")
+        completed = server.subprocess.CompletedProcess(
+            [], 0, stdout=json.dumps(trace_package_inspect_report()), stderr=""
+        )
+        identity = {
+            "source_revision": "source-test",
+            "build_revision": "build-test",
+            "versions_match": True,
+            "state_digests_match": True,
+            "tilesim_root": "must-not-reach-browser",
+            "tilesim_cli": "must-not-reach-browser",
+        }
+        with (
+            mock.patch.object(server.subprocess, "run", return_value=completed),
+            mock.patch.object(server, "backend_identity", return_value=identity),
+            mock.patch.object(server, "TILESIM_CLI", Path(server.__file__)),
+            mock.patch.object(server, "TILESIM_ROOT", Path(server.__file__).parent),
+        ):
+            status, payload, _ = self.request("/api/trace-packages")
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["capability"]["available"])
+        self.assertEqual(payload["packages"][0]["package_id"], "synthetic-package")
+        self.assertTrue(payload["packages"][0]["submission_available"])
+        serialized = json.dumps(payload)
+        self.assertNotIn("entry_trace_path", serialized)
+        self.assertNotIn("must-not-reach-browser", serialized)
+
+    def test_trace_package_catalog_is_unavailable_when_root_is_missing(self) -> None:
+        with (
+            mock.patch.object(server, "TRACE_PACKAGE_ROOT", None),
+            mock.patch.object(server, "backend_identity", return_value={"versions_match": True}),
+        ):
+            status, payload, _ = self.request("/api/trace-packages")
+        self.assertEqual(status, 200)
+        self.assertFalse(payload["capability"]["available"])
+        self.assertEqual(payload["capability"]["reason"], "trace_package_root_not_configured")
+        self.assertEqual(payload["packages"], [])
+
+    def test_trace_package_catalog_is_unavailable_when_cli_is_missing(self) -> None:
+        write_trace_package_candidate(server.TRACE_PACKAGE_ROOT, "synthetic-package")
+        with (
+            mock.patch.object(server, "TILESIM_CLI", Path("missing-TileSimCLI")),
+            mock.patch.object(server, "TILESIM_ROOT", Path(server.__file__).parent),
+            mock.patch.object(server, "backend_identity", return_value={"versions_match": True}),
+        ):
+            status, payload, _ = self.request("/api/trace-packages")
+        self.assertEqual(status, 200)
+        self.assertFalse(payload["capability"]["available"])
+        self.assertEqual(payload["capability"]["reason"], "tilesim_cli_unavailable")
+        self.assertEqual(payload["packages"], [])
+
+    def test_trace_package_unknown_id_and_path_traversal_fail_closed(self) -> None:
+        for package_id in ("unknown-package", "../escape"):
+            with self.assertRaises(server.trace_packages.TracePackageError) as raised:
+                server.trace_packages.resolve_candidate(server.TRACE_PACKAGE_ROOT, package_id)
+            self.assertEqual(raised.exception.code, "trace_package_not_found")
+
+    def test_trace_package_resolved_escape_symlink_and_duplicate_id_are_rejected(self) -> None:
+        outside = Path(self.temporary_directory.name) / "outside-package"
+        outside.mkdir()
+        with self.assertRaises(server.trace_packages.TracePackageError) as escaped:
+            server.trace_packages._candidate_for_directory(server.TRACE_PACKAGE_ROOT, outside)
+        self.assertEqual(escaped.exception.code, "trace_package_path_escape")
+
+        inside = server.TRACE_PACKAGE_ROOT / "symlink-candidate"
+        inside.mkdir()
+        with mock.patch.object(Path, "is_symlink", return_value=True):
+            with self.assertRaises(server.trace_packages.TracePackageError) as symlinked:
+                server.trace_packages._candidate_for_directory(server.TRACE_PACKAGE_ROOT, inside)
+        self.assertEqual(symlinked.exception.code, "trace_package_symlink_rejected")
+
+        nested = server.TRACE_PACKAGE_ROOT / "nested-symlink-candidate"
+        nested.mkdir()
+        (nested / "trace_package.json").write_text(
+            json.dumps({"package_id": "nested-symlink-package"}),
+            encoding="utf-8",
+        )
+        with mock.patch.object(
+            server.trace_packages,
+            "_is_link",
+            side_effect=lambda path: path.name == "artifact-link",
+        ):
+            (nested / "artifact-link").write_text("fixture", encoding="utf-8")
+            with self.assertRaises(server.trace_packages.TracePackageError) as nested_symlink:
+                server.trace_packages._candidate_for_directory(server.TRACE_PACKAGE_ROOT, nested)
+        self.assertEqual(nested_symlink.exception.code, "trace_package_symlink_rejected")
+
+        write_trace_package_candidate(server.TRACE_PACKAGE_ROOT, "duplicate-package", "first")
+        write_trace_package_candidate(server.TRACE_PACKAGE_ROOT, "duplicate-package", "second")
+        candidates, errors, unavailable = server.trace_packages.discover_candidates(
+            server.TRACE_PACKAGE_ROOT
+        )
+        self.assertIsNone(unavailable)
+        self.assertNotIn("duplicate-package", candidates)
+        self.assertIn("duplicate_package_id", {item["code"] for item in errors})
+
+    def test_trace_package_inspect_success_nonzero_timeout_and_malformed_output(self) -> None:
+        manifest = write_trace_package_candidate(server.TRACE_PACKAGE_ROOT, "synthetic-package")
+        candidate = server.trace_packages.TracePackageCandidate(
+            "synthetic-package",
+            manifest,
+            "sha256:" + hashlib.sha256(manifest.read_bytes()).hexdigest(),
+        )
+        completed = server.subprocess.CompletedProcess(
+            [], 0, stdout=json.dumps(trace_package_inspect_report()), stderr=""
+        )
+        inspected = server.trace_packages.inspect_candidate(
+            candidate,
+            tilesim_cli=Path("TileSimCLI"),
+            tilesim_root=Path("."),
+            process_runner=mock.Mock(return_value=completed),
+        )
+        self.assertEqual(inspected["inspect_status"], "valid")
+        self.assertTrue(inspected["artifact_integrity"]["complete"])
+
+        failures = (
+            (
+                server.subprocess.CompletedProcess(
+                    [],
+                    2,
+                    stdout=json.dumps({"report_kind": "trace_package_intake", "valid": False, "errors": ["bad SHA"]}),
+                    stderr="",
+                ),
+                "trace_package_inspect_nonzero_exit",
+            ),
+            (server.subprocess.CompletedProcess([], 0, stdout="not-json", stderr=""), "trace_package_inspect_invalid_output"),
+        )
+        for result, code in failures:
+            with self.assertRaises(server.trace_packages.TracePackageError) as raised:
+                server.trace_packages.inspect_candidate(
+                    candidate,
+                    tilesim_cli=Path("TileSimCLI"),
+                    tilesim_root=Path("."),
+                    process_runner=mock.Mock(return_value=result),
+                )
+            self.assertEqual(raised.exception.code, code)
+
+        with self.assertRaises(server.trace_packages.TracePackageError) as timed_out:
+            server.trace_packages.inspect_candidate(
+                candidate,
+                tilesim_cli=Path("TileSimCLI"),
+                tilesim_root=Path("."),
+                process_runner=mock.Mock(
+                    side_effect=server.subprocess.TimeoutExpired("TileSimCLI", 15)
+                ),
+            )
+        self.assertEqual(timed_out.exception.code, "trace_package_inspect_timeout")
+
+    def test_trace_package_inspect_endpoint_rejects_invalid_sha_report(self) -> None:
+        write_trace_package_candidate(server.TRACE_PACKAGE_ROOT, "invalid-package")
+        completed = server.subprocess.CompletedProcess(
+            [],
+            1,
+            stdout=json.dumps(
+                {
+                    "report_kind": "trace_package_intake",
+                    "valid": False,
+                    "errors": [
+                        "SHA-256 mismatch for /private/trace-packages/invalid-package/request.jsonl"
+                    ],
+                }
+            ),
+            stderr="",
+        )
+        with mock.patch.object(server.subprocess, "run", return_value=completed):
+            status, payload, _ = self.request(
+                "/api/trace-packages/invalid-package/inspect", method="POST"
+            )
+        self.assertEqual(status, 422)
+        self.assertEqual(payload["error"]["code"], "trace_package_inspect_nonzero_exit")
+        self.assertEqual(payload["error"]["field_path"], "/trace_package_id")
+        self.assertNotIn("/private/trace-packages", json.dumps(payload))
 
     def test_week7_allow_listed_endpoints_return_cli_reports(self) -> None:
         responses = {
@@ -1306,6 +1544,209 @@ class BridgeApiContractTest(unittest.TestCase):
         )
         self.assertEqual(status, 400)
         self.assertEqual(payload["error"]["field_path"], "/custom_inputs")
+
+    def test_trace_package_run_creation_persists_validated_identity(self) -> None:
+        manifest = write_trace_package_candidate(
+            server.TRACE_PACKAGE_ROOT, "synthetic-run-package"
+        )
+        candidate = server.trace_packages.TracePackageCandidate(
+            "synthetic-run-package",
+            manifest,
+            "sha256:" + hashlib.sha256(manifest.read_bytes()).hexdigest(),
+        )
+        inspected = server.trace_packages.inspect_candidate(
+            candidate,
+            tilesim_cli=Path("TileSimCLI"),
+            tilesim_root=Path("."),
+            process_runner=mock.Mock(
+                return_value=server.subprocess.CompletedProcess(
+                    [],
+                    0,
+                    stdout=json.dumps(
+                        trace_package_inspect_report("synthetic-run-package")
+                    ),
+                    stderr="",
+                )
+            ),
+        )
+        with (
+            mock.patch.object(
+                server, "inspect_trace_package", return_value=(candidate, inspected)
+            ),
+            mock.patch.object(
+                server,
+                "materialize_trace_package_inputs",
+                return_value={
+                    "to": "S6",
+                    "trace_package": manifest,
+                    "topology": Path("input-topology.json"),
+                },
+            ),
+        ):
+            status, created, _ = self.create_run(
+                {
+                    "scenario_id": "s1_des_example",
+                    "trace_package_id": "synthetic-run-package",
+                },
+                "trace-package-create-key",
+            )
+        self.assertEqual(status, 202)
+        self.assertEqual(created["input_mode"], "trace_package")
+        metadata = server.read_json_file(
+            server.RUNS_ROOT / created["run_id"] / "run-metadata.json"
+        )
+        self.assertEqual(metadata["trace_package"]["package_id"], "synthetic-run-package")
+        self.assertEqual(metadata["trace_package"]["entry_boundary"], "S1")
+        self.assertEqual(
+            metadata["trace_package"]["trace_provenance"]["source_mode"],
+            "synthetic_trace",
+        )
+        self.assertNotIn("manifest_path", json.dumps(metadata))
+
+    def test_trace_package_run_rejects_input_and_design_space_mixing(self) -> None:
+        mixed_requests = (
+            ({"trace_package_id": "package-a", "overrides": {}}, "/trace_package_id"),
+            (
+                {
+                    "trace_package_id": "package-a",
+                    "custom_inputs": valid_custom_inputs(),
+                },
+                "/trace_package_id",
+            ),
+            (
+                {
+                    "trace_package_id": "package-a",
+                    "design_space_candidates": valid_manifest(),
+                },
+                "/design_space_candidates",
+            ),
+        )
+        for index, (extra, pointer) in enumerate(mixed_requests):
+            status, payload, _ = self.create_run(
+                {"scenario_id": "s1_des_example", **extra},
+                f"trace-package-mixed-{index}",
+            )
+            self.assertEqual(status, 400)
+            self.assertEqual(payload["error"]["field_path"], pointer)
+
+    def test_trace_package_run_rejects_non_synthetic_source_modes(self) -> None:
+        candidate = server.trace_packages.TracePackageCandidate(
+            "real-package", Path("real-package/trace_package.json"), "sha256:" + "b" * 64
+        )
+        inspected = {
+            "package_id": "real-package",
+            "manifest_sha256": candidate.manifest_sha256,
+            "entry_boundary": "S1",
+            "entry_trace_kind": "s1_runtime",
+            "trace_provenance": {
+                "source_mode": "real_trace",
+                "calibration_level": "uncalibrated",
+                "allowed_claim_scope": "exploratory",
+            },
+        }
+        with mock.patch.object(
+            server, "inspect_trace_package", return_value=(candidate, inspected)
+        ):
+            status, payload, _ = self.create_run(
+                {"scenario_id": "s1_des_example", "trace_package_id": "real-package"},
+                "trace-package-real-key",
+            )
+        self.assertEqual(status, 400)
+        self.assertEqual(payload["error"]["code"], "trace_package_source_mode_unavailable")
+
+    def test_trace_package_id_changes_the_idempotency_payload(self) -> None:
+        candidate = server.trace_packages.TracePackageCandidate(
+            "package-a", Path("package-a/trace_package.json"), "sha256:" + "a" * 64
+        )
+        inspected = {
+            **trace_package_inspect_report("package-a"),
+            "manifest_sha256": "sha256:" + "a" * 64,
+            "inspect_status": "valid",
+            "inspect_errors": [],
+            "submission_available": True,
+            "unavailable_reason": None,
+            "artifact_integrity": {
+                "complete": True,
+                "semantic_artifact_count": 6,
+                "semantic_roles": [],
+                "sha256_verified": True,
+                "entry_trace_verified": True,
+            },
+        }
+        with (
+            mock.patch.object(
+                server, "inspect_trace_package", return_value=(candidate, inspected)
+            ),
+            mock.patch.object(
+                server,
+                "materialize_trace_package_inputs",
+                return_value={
+                    "to": "S6",
+                    "trace_package": candidate.manifest_path,
+                    "topology": Path("input-topology.json"),
+                },
+            ),
+        ):
+            first, _, _ = self.create_run(
+                {"scenario_id": "s1_des_example", "trace_package_id": "package-a"},
+                "trace-package-idempotency-key",
+            )
+            second, payload, _ = self.create_run(
+                {"scenario_id": "s1_des_example", "trace_package_id": "package-b"},
+                "trace-package-idempotency-key",
+            )
+        self.assertEqual(first, 202)
+        self.assertEqual(second, 409)
+        self.assertEqual(payload["error"]["code"], "idempotency_payload_mismatch")
+
+    def test_trace_package_execute_command_uses_package_without_trace_or_from(self) -> None:
+        run_id = "run-trace-package-command"
+        run_dir = server.RUNS_ROOT / run_id
+        run_dir.mkdir()
+        metadata = {"run_id": run_id, "status": "running"}
+        server.atomic_write_json(run_dir / "run-metadata.json", metadata)
+        server.runs[run_id] = metadata.copy()
+        scenario = {
+            "to": "S6",
+            "trace_package": Path("controlled-package/trace_package.json"),
+            "topology": Path("input-topology.json"),
+        }
+        commands = []
+
+        def capture(command, **_kwargs):
+            commands.append(command)
+            return server.subprocess.CompletedProcess(
+                command, 7, stdout="", stderr="expected test failure"
+            )
+
+        with mock.patch.object(server.subprocess, "run", side_effect=capture):
+            server.execute_run(run_id, scenario, "des")
+        command = commands[0]
+        self.assertIn("--trace-package", command)
+        self.assertNotIn("--trace", command)
+        self.assertNotIn("--from", command)
+        self.assertEqual(command[command.index("--to") + 1], "S6")
+
+    def test_trace_package_execute_rejects_manifest_changed_after_inspection(self) -> None:
+        run_id = "run-trace-package-changed"
+        run_dir = server.RUNS_ROOT / run_id
+        run_dir.mkdir()
+        manifest = run_dir / "trace_package.json"
+        manifest.write_text('{"package_id":"changed"}', encoding="utf-8")
+        metadata = {"run_id": run_id, "status": "running"}
+        server.atomic_write_json(run_dir / "run-metadata.json", metadata)
+        server.runs[run_id] = metadata.copy()
+        scenario = {
+            "to": "S6",
+            "trace_package": manifest,
+            "trace_package_manifest_sha256": "sha256:" + "0" * 64,
+            "topology": Path("input-topology.json"),
+        }
+        with mock.patch.object(server.subprocess, "run") as process:
+            server.execute_run(run_id, scenario, "des")
+        process.assert_not_called()
+        self.assertEqual(server.runs[run_id]["status"], "failed")
+        self.assertEqual(server.runs[run_id]["failure_code"], "trace_package_changed")
 
     def test_create_run_rejects_an_override_removed_by_runtime_capability(self) -> None:
         capabilities = {

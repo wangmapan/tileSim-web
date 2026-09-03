@@ -19,6 +19,8 @@ const schemas = [
   "design-space-candidates.schema.json",
   "create-run-request.schema.json",
   "experiment-descriptor.schema.json",
+  "trace-package-catalog.schema.json",
+  "trace-package-inspect.schema.json",
 ].map(readSchema);
 const schemaByName = Object.fromEntries(schemas.map((schema) => [path.basename(new URL(schema.$id).pathname), schema]));
 
@@ -29,6 +31,8 @@ for (const schema of schemas) ajv.addSchema(schema);
 const validateCreateRun = ajv.getSchema("https://tilesim.local/contracts/create-run-request.schema.json");
 const validateDescriptor = ajv.getSchema("https://tilesim.local/contracts/experiment-descriptor.schema.json");
 const validateCandidates = ajv.getSchema("https://tilesim.local/contracts/design-space-candidates.schema.json");
+const validateTracePackageCatalog = ajv.getSchema("https://tilesim.local/contracts/trace-package-catalog.schema.json");
+const validateTracePackageInspect = ajv.getSchema("https://tilesim.local/contracts/trace-package-inspect.schema.json");
 const expectValid = (validator, value) => {
   assert.equal(validator(value), true, JSON.stringify(validator.errors));
 };
@@ -95,6 +99,17 @@ const upgradedSource = structuredClone(validCustomRequest);
 upgradedSource.custom_inputs.runtime_trace.trace_provenance.source_mode = "real_trace";
 expectInvalid(validateCreateRun, upgradedSource);
 
+const validTracePackageRequest = {
+  scenario_id: "s1_des_example",
+  trace_package_id: "synthetic-package",
+};
+expectValid(validateCreateRun, validTracePackageRequest);
+for (const field of ["overrides", "custom_inputs", "design_space_candidates"]) {
+  const mixed = structuredClone(validTracePackageRequest);
+  mixed[field] = field === "custom_inputs" ? validCustomRequest.custom_inputs : {};
+  expectInvalid(validateCreateRun, mixed);
+}
+
 const validCandidates = {
   schema_version: "tilesim.design_space.s6_candidates.v1",
   manifest_id: "f8-candidates",
@@ -146,6 +161,40 @@ assert.deepEqual(
   new Set(descriptor.parameter_descriptors.map((field) => field.subsystem)),
   new Set(["S0", "S1", "S6"]),
 );
+assert.equal(descriptor.input_modes.find((item) => item.input_mode === "trace_package").available, true);
+
+const tracePackageItem = {
+  package_id: "synthetic-package",
+  manifest_sha256: `sha256:${"a".repeat(64)}`,
+  inspect_status: "valid",
+  inspect_errors: [],
+  submission_available: true,
+  unavailable_reason: null,
+  artifact_integrity: {
+    complete: true,
+    semantic_artifact_count: 6,
+    semantic_roles: ["request", "batch", "iteration", "tile_execution", "kv_cache", "network_flow"],
+    sha256_verified: true,
+    entry_trace_verified: true,
+  },
+};
+const tracePackageCatalog = {
+  schema_version: "tilesim.bridge.trace_package_catalog.v1",
+  trace_package_schema_identity: "tilesim.trace_package.v1alpha1",
+  schema_set_revision: `sha256:${"1".repeat(64)}`,
+  backend_identity: {},
+  capability: { available: true, reason: null },
+  packages: [tracePackageItem],
+  discovery_errors: [],
+};
+expectValid(validateTracePackageCatalog, tracePackageCatalog);
+expectValid(validateTracePackageInspect, {
+  schema_version: "tilesim.bridge.trace_package_inspect.v1",
+  trace_package_schema_identity: "tilesim.trace_package.v1alpha1",
+  schema_set_revision: tracePackageCatalog.schema_set_revision,
+  backend_identity: {},
+  package: tracePackageItem,
+});
 
 const runOverrides = schemaByName["run-overrides.schema.json"];
 for (const field of descriptor.parameter_descriptors) {
@@ -172,6 +221,8 @@ assert.deepEqual(
 
 const openapi = readJson(path.join(bridgeRoot, "contracts", "openapi.json"));
 assert.equal(openapi.paths["/experiment-schema"].get.operationId, "experimentSchema");
+assert.equal(openapi.paths["/trace-packages"].get.operationId, "tracePackages");
+assert.equal(openapi.paths["/trace-packages/{package_id}/inspect"].post.operationId, "inspectTracePackage");
 for (const field of ["input_modes", "design_space_modes", "gpu_participation_modes"]) {
   assert.ok(openapi.components.schemas.CatalogResponse.required.includes(field));
 }

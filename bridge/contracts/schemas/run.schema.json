@@ -8,13 +8,25 @@
     "run_id": { "type": "string", "pattern": "^run-[A-Za-z0-9._-]+$" },
     "run_name": { "type": ["string", "null"] },
     "status": { "enum": ["preparing", "running", "completed", "failed", "incomplete"] },
-    "input_mode": { "enum": ["controls", "json", "legacy"] },
+    "input_mode": { "enum": ["controls", "json", "trace_package", "legacy"] },
     "created_at": { "type": "string" },
     "finished_at": { "type": "string" },
     "scenario_id": { "type": "string" },
     "fidelity_policy": { "type": "string" },
     "gpu_participation_mode": { "type": "string" },
     "design_space_mode": { "type": "string" },
+    "trace_package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["package_id", "manifest_sha256", "entry_boundary", "entry_trace_kind", "trace_provenance"],
+      "properties": {
+        "package_id": { "type": "string" },
+        "manifest_sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "entry_boundary": { "enum": ["S0", "S1", "S2", "S3", "S4", "S5"] },
+        "entry_trace_kind": { "type": "string" },
+        "trace_provenance": { "type": "object" }
+      }
+    },
     "error": { "type": "string" },
     "failure_code": { "type": "string" },
     "exit_code": { "type": "integer" },
