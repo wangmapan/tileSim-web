@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Activity, Gauge, ShieldCheck, SlidersHorizontal } from "@lucide/vue";
 import type { EvidenceAgentRequest } from "../../../contracts/generated/bridge-contracts";
 import { useI18n } from "../../../i18n";
 
@@ -11,6 +12,12 @@ defineProps<{
 }>();
 const emit = defineEmits<{ "update:modelValue": [taskKind: TaskKind] }>();
 const { isEnglish } = useI18n();
+const icons = {
+  explain_p99: Gauge,
+  explain_tail: Activity,
+  summarize_validation: ShieldCheck,
+  draft_conditional_recommendations: SlidersHorizontal,
+};
 
 const labels: Record<TaskKind, { zh: string; en: string }> = {
   explain_p99: {
@@ -38,7 +45,7 @@ function label(kind: TaskKind) {
 
 <template>
   <fieldset class="evidence-agent-task-picker" :disabled="disabled">
-    <legend>{{ isEnglish ? "2. Choose what you want to learn" : "2. 选择你想了解的内容" }}</legend>
+    <legend>{{ isEnglish ? "Analysis task" : "分析任务" }}</legend>
     <div class="evidence-agent-task-cards">
       <label v-for="kind in supportedTaskKinds" :key="kind" :data-selected="modelValue === kind">
         <input
@@ -49,6 +56,7 @@ function label(kind: TaskKind) {
           @change="emit('update:modelValue', kind)"
         />
         <span>
+          <component :is="icons[kind]" :size="16" :stroke-width="1.5" aria-hidden="true" />
           <strong>{{ label(kind) }}</strong>
         </span>
       </label>

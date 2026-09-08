@@ -1,0 +1,17 @@
+export const shellReviewEnglishCatalog: Readonly<Record<string, string>> = {
+  运行摘要: "Run summary",
+  仿真执行与控制平面: "Simulation execution and control plane",
+  未闭合的证据缺口: "Open evidence gaps",
+  "请求精度 → 实际精度": "Requested fidelity → resolved fidelity",
+  页面帮助: "Page help",
+  证据范围受限: "Limited evidence scope",
+  "真实 Trace 来源": "Real trace source",
+  不代表真实硬件表现: "Not a hardware performance claim",
+  校准与验证范围见技术边界: "Calibration and validation scope in technical boundaries",
+  运行完成: "Run completed",
+  "内置数据，非本地运行": "Built-in data, not a local run",
+  "主要瓶颈 · 后端报告": "Primary bottleneck · backend report",
+  瓶颈归因: "Bottleneck attribution",
+  未提供瓶颈报告: "No bottleneck report",
+  "字段覆盖，非准确率": "Field coverage, not accuracy",
+};

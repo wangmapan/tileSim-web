@@ -1,13 +1,14 @@
 <script setup>
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { FileUp, Languages, Menu } from "@lucide/vue";
-import { navItems, useDashboard } from "../store/dashboard";
+import { useDashboard } from "../store/dashboard";
 import { useI18n } from "../i18n";
 import ThemeSwitcher from "./ThemeSwitcher.vue";
 import AppearanceToggle from "./AppearanceToggle.vue";
 
 const { state, currentTitle, importFiles, notify } = useDashboard();
 const { isEnglish, t, toggleLocale } = useI18n();
+const importInput = ref(null);
 const headerKickers = {
   overview: "实验结果",
   execution: "实验结果",
@@ -22,7 +23,6 @@ const headerKickers = {
   experiment: "实验配置",
 };
 const headerKicker = computed(() => headerKickers[state.view] || "TILESIM");
-const currentDescription = computed(() => navItems.find((item) => item.id === state.view)?.description || "");
 
 async function onImport(event) {
   const files = [...(event.target.files || [])];
@@ -46,10 +46,10 @@ async function onImport(event) {
       <p>{{ t(headerKicker) }}</p>
       <div>
         <h1>{{ state.view === "experiment" ? t("新建实验") : t(currentTitle) }}</h1>
-        <span v-if="currentDescription">{{ t(currentDescription) }}</span>
       </div>
     </div>
     <div class="header-actions">
+      <slot />
       <AppearanceToggle />
       <ThemeSwitcher />
       <button
@@ -62,11 +62,11 @@ async function onImport(event) {
         <Languages :size="16" />
         <span>{{ isEnglish ? "中文" : "EN" }}</span>
       </button>
-      <label class="button button--ghost">
-        <FileUp :size="16" />
+      <button class="button button--ghost" type="button" :aria-label="t('导入报告')" @click="importInput?.click()">
+        <FileUp :size="16" aria-hidden="true" />
         <span class="desktop-label">{{ t("导入报告") }}</span>
-        <input type="file" accept="application/json,.json" multiple @change="onImport" />
-      </label>
+      </button>
+      <input ref="importInput" type="file" accept="application/json,.json" multiple hidden @change="onImport" />
     </div>
   </header>
 </template>

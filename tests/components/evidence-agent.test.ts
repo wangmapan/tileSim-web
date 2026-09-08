@@ -7,12 +7,14 @@ import { nextTick } from "vue";
 import { beforeEach, describe, expect, it } from "vitest";
 import EvidenceAgentPanel from "../../src/features/evidence-agent/components/EvidenceAgentPanel.vue";
 import EvidenceAgentSubmissionLeaseNotice from "../../src/features/evidence-agent/components/EvidenceAgentSubmissionLeaseNotice.vue";
+import EvidenceAgentSubmissionPreview from "../../src/features/evidence-agent/components/EvidenceAgentSubmissionPreview.vue";
 import {
   buildEvidenceAgentRequest,
   evidenceAgentBackendIdentity,
   validateEvidenceAgentResult,
 } from "../../src/features/evidence-agent";
 import { useEvidenceAgentStore } from "../../src/stores/evidence-agent";
+import { setLocale } from "../../src/i18n";
 import {
   createCompletedAgentResponse,
   createEvidenceAgentDescriptor,
@@ -25,6 +27,55 @@ import {
 } from "../fixtures/evidence-agent";
 
 let pinia = createPinia();
+
+it.each([
+  ["real_trace", "结论仍受声明的校准等级和可用范围约束"],
+  ["synthetic_trace", "不构成真实留出验证或真实硬件保真度证据"],
+  ["compatibility_harness_trace", "不是基于真实轨迹的保真度证据"],
+])("keeps %s provenance and fidelity boundaries intact in the concise preview", (sourceMode, boundary) => {
+  const wrapper = mount(EvidenceAgentSubmissionPreview, {
+    props: {
+      requestId: "request-review",
+      citationLocationCount: 0,
+      citationArtifactCount: 0,
+      sourceMode,
+      calibrationLevel: "uncalibrated",
+      allowedClaimScope: "exploration",
+      requestedFidelity: "cycle",
+      resolvedFidelity: "des",
+      executionMode: "partitioned_des",
+      timeoutMs: 30000,
+    },
+  });
+  expect(wrapper.text()).toContain(boundary);
+  expect(wrapper.text()).toContain("0 个精确引用位置，来自 0 份工件");
+  expect(wrapper.get("details").text()).toContain(sourceMode);
+  expect(wrapper.get("details").text()).toContain("requested_fidelitycycle");
+  expect(wrapper.get("details").text()).toContain("resolved_fidelitydes");
+  wrapper.unmount();
+});
+
+it("does not present an unavailable service timeout as a zero-second execution limit", () => {
+  const wrapper = mount(EvidenceAgentSubmissionPreview, {
+    props: {
+      requestId: null,
+      citationLocationCount: 0,
+      citationArtifactCount: 0,
+      sourceMode: "unknown",
+      calibrationLevel: "unknown",
+      allowedClaimScope: "unknown",
+      requestedFidelity: "unknown",
+      resolvedFidelity: "unknown",
+      executionMode: "unknown",
+      timeoutMs: 0,
+    },
+  });
+  expect(wrapper.text()).toContain("服务时限未提供");
+  expect(wrapper.text()).not.toContain("服务上限 0 秒");
+  expect(wrapper.text()).toContain("未选择请求");
+  expect(wrapper.text()).not.toContain("request_not_selected");
+  wrapper.unmount();
+});
 
 function props(configured: boolean) {
   const context = createF9RunContext();
@@ -64,9 +115,21 @@ async function routerPlugin() {
 }
 
 beforeEach(() => {
+  setLocale("zh-CN");
   window.sessionStorage.clear();
   pinia = createPinia();
   setActivePinia(pinia);
+});
+
+it("does not describe evidence readiness as provider availability", async () => {
+  const wrapper = mount(EvidenceAgentPanel, {
+    props: props(false),
+    global: { plugins: [pinia, await routerPlugin()] },
+  });
+  expect(wrapper.get(".evidence-agent-readiness").text()).toContain("证据就绪");
+  expect(wrapper.get(".evidence-agent-unavailable--standalone").text()).toContain("AI 解释当前不可用");
+  expect(wrapper.get(".evidence-agent-submit-row button").attributes("disabled")).toBeDefined();
+  wrapper.unmount();
 });
 
 describe("Evidence Agent submission lease notice", () => {
@@ -145,7 +208,7 @@ describe("F9 evidence Agent presentation", () => {
 
     const preview = wrapper.get(".evidence-agent-submission-preview");
     expect(preview.text()).toContain(f9RequestId);
-    expect(preview.text()).toMatch(/\d+ 个精确引用位置，来自 \d+ 份 artifact/);
+    expect(preview.text()).toMatch(/\d+ 个精确引用位置，来自 \d+ 份工件/);
     expect(preview.text()).toContain("仅为合成证据");
     expect(preview.text()).toContain("服务上限 30 秒");
     await preview.get(":scope > details > summary").trigger("click");
@@ -155,15 +218,17 @@ describe("F9 evidence Agent presentation", () => {
     expect(preview.text()).toContain("partitioned_des");
   });
 
-  it("keeps the three-step form obvious and updates only an untouched suggested question", async () => {
+  it("keeps concise field labels and updates only an untouched suggested question", async () => {
     const wrapper = mount(EvidenceAgentPanel, {
       props: props(true),
       global: { plugins: [pinia, await routerPlugin()] },
     });
 
-    expect(wrapper.get('[data-help-anchor="evidence_agent-request"] > span').text()).toBe("1. 选择要解释的请求");
-    expect(wrapper.get(".evidence-agent-task-picker > legend").text()).toBe("2. 选择你想了解的内容");
-    expect(wrapper.get('[data-help-anchor="evidence_agent-question"] > span').text()).toBe("3. 确认或补充问题");
+    expect(wrapper.get('[data-help-anchor="evidence_agent-request"] > span').text()).toBe("请求");
+    expect(wrapper.get(".evidence-agent-task-picker > legend").text()).toBe("分析任务");
+    expect(wrapper.get('[data-help-anchor="evidence_agent-question"] > span').text()).toBe("问题");
+    expect(wrapper.findAll('.evidence-agent-task-cards svg[aria-hidden="true"]')).toHaveLength(4);
+    expect(wrapper.text()).not.toContain("怎么使用");
     const textarea = wrapper.get("textarea");
     expect(textarea.element.value).toContain("P99 表现");
 
@@ -360,7 +425,9 @@ describe("F9 evidence Agent presentation", () => {
     expect(evidence.attributes("open")).toBeUndefined();
     await evidence.get(":scope > summary").trigger("click");
     const link = evidence.get("a");
-    expect(link.text()).toContain("打开原始证据 1");
+    expect(link.attributes("aria-label")).toContain("打开原始证据 1");
+    expect(link.text()).toContain(artifact.artifact_id);
+    expect(link.text()).toContain(record.json_pointer);
     expect(link.attributes("href")).toContain("evidence_pointer=/request_metrics/0");
     const citationIdentity = evidence.get(".evidence-agent-citation-identity");
     expect(citationIdentity.attributes("open")).toBeUndefined();
@@ -368,6 +435,14 @@ describe("F9 evidence Agent presentation", () => {
     expect(citationIdentity.text()).toContain(artifact.sha256);
     expect(citationIdentity.text()).toContain(record.json_pointer);
     expect(citationIdentity.text()).toContain(`${record.subject.kind} · ${record.subject.id}`);
+    setLocale("en-US");
+    await nextTick();
+    expect(wrapper.get(".evidence-agent-result h2").text()).toBe("Analysis draft");
+    expect(citationIdentity.get("summary").text()).toBe("Citation metadata");
+    expect(link.attributes("aria-label")).toContain("Open source evidence 1");
+    expect(link.text()).toContain(record.json_pointer);
+    expect(JSON.stringify(response)).toBe(responseBeforePresentation);
+    setLocale("zh-CN");
   });
 
   it("shows valid claims and the unfinished boundary together for a partial response", async () => {

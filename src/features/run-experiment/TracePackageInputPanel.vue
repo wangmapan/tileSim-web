@@ -19,6 +19,14 @@ const emit = defineEmits<{
   refresh: [];
 }>();
 const { t } = useI18n();
+const semanticRoleLabels: Record<string, string> = {
+  request: "请求",
+  batch: "批次",
+  iteration: "迭代",
+  tile_execution: "Tile 粒度执行",
+  kv_cache: "KV Cache",
+  network_flow: "网络流量",
+};
 
 const selectedPackage = computed(
   () => props.catalog?.packages.find((item) => item.package_id === props.selectedPackageId) ?? null,
@@ -41,7 +49,7 @@ const selectedPackage = computed(
     <div v-if="status === 'loading'" class="trace-package-state" role="status">
       {{ t("正在发现和检查 Trace package…") }}
     </div>
-    <div v-else-if="status === 'error'" class="service-warning">
+    <div v-else-if="status === 'error'" class="service-warning" role="alert">
       <TriangleAlert :size="18" />
       <div>
         <strong>{{ t("Trace package catalog 加载失败") }}</strong>
@@ -64,69 +72,75 @@ const selectedPackage = computed(
       </small>
     </div>
     <template v-else-if="catalog">
-      <div class="trace-package-list" role="list" :aria-invalid="fieldPath === '/trace_package_id'">
-        <button
-          v-for="item in catalog.packages"
-          :key="item.package_id"
-          type="button"
-          role="listitem"
-          :class="{ selected: item.package_id === selectedPackageId }"
-          @click="emit('select', item.package_id)"
-        >
-          <span>
-            <strong>{{ item.package_id }}</strong>
-            <small>{{ item.producer?.name || t("身份不可用") }} · {{ item.producer?.version || "—" }}</small>
-          </span>
-          <span :class="item.submission_available ? 'available' : 'unavailable'">
-            {{ item.submission_available ? t("可提交") : t("不可提交") }}
-          </span>
-        </button>
-      </div>
+      <ul class="trace-package-list" :aria-label="t('选择 Trace package')">
+        <li v-for="item in catalog.packages" :key="item.package_id">
+          <button
+            type="button"
+            :class="{ selected: item.package_id === selectedPackageId }"
+            :aria-pressed="item.package_id === selectedPackageId"
+            :aria-invalid="fieldPath === '/trace_package_id' && item.package_id === selectedPackageId"
+            @click="emit('select', item.package_id)"
+          >
+            <span>
+              <strong>{{ item.package_id }}</strong>
+              <small>{{ item.producer?.name || t("身份不可用") }} · {{ item.producer?.version || "—" }}</small>
+            </span>
+            <span :class="item.submission_available ? 'available' : 'unavailable'">
+              {{ item.submission_available ? t("可提交") : t("不可提交") }}
+            </span>
+          </button>
+        </li>
+      </ul>
 
       <section v-if="selectedPackage" class="trace-package-detail">
         <header>
           <div>
             <strong>{{ selectedPackage.package_id }}</strong>
-            <small>{{ selectedPackage.inspect_status }}</small>
+            <small>{{ t("检查状态") }} · {{ selectedPackage.inspect_status }}</small>
           </div>
           <button class="button button--secondary" :disabled="inspecting" @click="emit('inspect')">
             <RefreshCw :size="14" :class="{ spin: inspecting }" />{{ t("重新检查") }}
           </button>
         </header>
-        <dl class="experiment-schema-grid">
+        <section class="trace-evidence-section" :aria-label="t('来源与证据边界')">
+          <h3>{{ t("来源与证据边界") }}</h3>
+          <dl class="trace-evidence-fields">
+            <div>
+              <dt>{{ t("来源模式") }}</dt>
+              <dd>{{ selectedPackage.trace_provenance?.source_mode || "—" }}</dd>
+            </div>
+            <div>
+              <dt>{{ t("校准级别") }}</dt>
+              <dd>{{ selectedPackage.trace_provenance?.calibration_level || "—" }}</dd>
+            </div>
+            <div>
+              <dt>{{ t("允许的结论范围") }}</dt>
+              <dd>{{ selectedPackage.trace_provenance?.allowed_claim_scope || "—" }}</dd>
+            </div>
+          </dl>
+        </section>
+        <dl class="trace-identity-fields">
           <div>
-            <dt>producer</dt>
+            <dt>{{ t("生成工具") }} <small>producer</small></dt>
             <dd>{{ selectedPackage.producer?.name || "—" }} / {{ selectedPackage.producer?.version || "—" }}</dd>
           </div>
           <div>
-            <dt>experiment_id</dt>
+            <dt>{{ t("实验标识") }} <small>experiment_id</small></dt>
             <dd>{{ selectedPackage.experiment_id || "—" }}</dd>
           </div>
           <div>
-            <dt>physical_run_id</dt>
+            <dt>{{ t("物理运行标识") }} <small>physical_run_id</small></dt>
             <dd>{{ selectedPackage.physical_run_id || "—" }}</dd>
           </div>
           <div>
-            <dt>boundary</dt>
+            <dt>{{ t("入口边界") }} <small>boundary</small></dt>
             <dd>{{ selectedPackage.entry_boundary || "—" }}</dd>
           </div>
           <div>
-            <dt>trace kind</dt>
+            <dt>{{ t("入口 Trace 类型") }} <small>trace kind</small></dt>
             <dd>{{ selectedPackage.entry_trace_kind || "—" }}</dd>
           </div>
-          <div>
-            <dt>source mode</dt>
-            <dd>{{ selectedPackage.trace_provenance?.source_mode || "—" }}</dd>
-          </div>
-          <div>
-            <dt>calibration level</dt>
-            <dd>{{ selectedPackage.trace_provenance?.calibration_level || "—" }}</dd>
-          </div>
-          <div>
-            <dt>allowed claim scope</dt>
-            <dd>{{ selectedPackage.trace_provenance?.allowed_claim_scope || "—" }}</dd>
-          </div>
-          <div>
+          <div class="trace-manifest-digest">
             <dt>manifest SHA-256</dt>
             <dd>{{ selectedPackage.manifest_sha256 }}</dd>
           </div>
@@ -147,6 +161,16 @@ const selectedPackage = computed(
             </small>
           </p>
         </div>
+        <ul
+          v-if="selectedPackage.artifact_integrity.semantic_roles.length"
+          class="trace-semantic-roles"
+          :aria-label="t('已报告的语义角色')"
+        >
+          <li v-for="role in selectedPackage.artifact_integrity.semantic_roles" :key="role">
+            {{ t(semanticRoleLabels[role] || role) }}
+          </li>
+        </ul>
+        <p class="trace-integrity-scope">{{ t("完整性检查不代表校准或验证通过。") }}</p>
         <p v-if="!selectedPackage.submission_available" class="field-error">
           {{ selectedPackage.unavailable_reason }}；{{ t("首版仅开放 synthetic_trace，不构成校准或留出验证证据。") }}
         </p>

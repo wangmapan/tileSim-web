@@ -23,6 +23,7 @@ export interface BridgeState {
 export interface HistoryState {
   runs: RunListItem[];
   loading: boolean;
+  error: string;
   selected: string[];
   comparisons: Record<string, { artifacts: ReportBundle; input: { runtime_trace: RuntimeTraceInput | null } }>;
   query: string;

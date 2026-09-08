@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   appearanceStorageKey,
   currentAppearance,
+  customColorStorageKey,
+  setCustomColor,
   currentTheme,
   setAppearance,
   setTheme,
@@ -18,6 +20,25 @@ afterEach(() => {
 });
 
 describe("application theme", () => {
+  it("persists custom RGB without changing status or chart colors and clears overrides for presets", () => {
+    expect(setCustomColor("#D05A20")).toBe(true);
+    expect(currentTheme()).toBe("custom");
+    expect(localStorage.getItem(customColorStorageKey)).toBe("#d05a20");
+    expect(localStorage.getItem(themeStorageKey)).toBe("custom");
+    const light = document.documentElement.style.getPropertyValue("--accent");
+    setAppearance("dark");
+    expect(document.documentElement.style.getPropertyValue("--accent")).not.toBe(light);
+    expect(document.documentElement.style.getPropertyValue("--warning")).toBe("");
+    expect(document.documentElement.style.getPropertyValue("--chart-series-1")).toBe("");
+    expect(setCustomColor("invalid")).toBe(false);
+    expect(localStorage.getItem(customColorStorageKey)).toBe("#d05a20");
+    setTheme("blue");
+    expect(document.documentElement.style.getPropertyValue("--accent")).toBe("");
+    expect(document.documentElement.style.getPropertyValue("--on-accent")).toBe("");
+    for (const property of ["--nav", "--nav-soft", "--nav-hover", "--nav-muted", "--header-bg", "--table-header"]) {
+      expect(document.documentElement.style.getPropertyValue(property)).toBe("");
+    }
+  });
   it("uses blue as the default theme and applies the selected theme to the document", () => {
     setTheme("blue");
     expect(currentTheme()).toBe("blue");

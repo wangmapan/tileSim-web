@@ -67,7 +67,9 @@ onMounted(() => initialize(navigationSnapshot()));
   <div class="app-shell">
     <AppSidebar />
     <main class="app-main">
-      <AppHeader />
+      <AppHeader>
+        <PagePrimer v-if="currentGuide" :guide="currentGuide" />
+      </AppHeader>
       <div class="workspace">
         <section v-if="navigationUnavailable" class="navigation-error" role="alert">
           <strong>{{ t("无法载入链接中的运行") }}</strong>
@@ -78,11 +80,8 @@ onMounted(() => initialize(navigationSnapshot()));
           }}</span>
         </section>
         <EvidenceStrip v-if="!['experiment', 'evidence_lab', 'history'].includes(state.view)" />
-        <PagePrimer v-if="currentGuide" :guide="currentGuide" />
         <RouterView v-slot="{ Component, route }">
-          <Transition name="view-fade" mode="out-in">
-            <component :is="showUnsupported ? UnsupportedSchemaView : Component" :key="String(route.name)" />
-          </Transition>
+          <component :is="showUnsupported ? UnsupportedSchemaView : Component" :key="String(route.name)" />
         </RouterView>
       </div>
     </main>

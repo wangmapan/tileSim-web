@@ -77,7 +77,6 @@ export const coreEnglishCatalog: Readonly<Record<string, string>> = {
     "Select any stage to see what it did in this experiment. Memory, device compute, and multi-device coordination are peers.",
   导出完整技术报告: "Export full technical report",
   三个并列资源环节: "Three peer resource stages",
-  当前查看的环节: "Selected stage",
   后端原始说明: "Original backend explanation",
   "执行宿主（S7）": "Execution host (S7)",
   统一时间轴记录: "Unified-timeline records",

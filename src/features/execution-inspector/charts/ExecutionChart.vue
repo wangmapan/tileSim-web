@@ -15,9 +15,13 @@ const host = ref<HTMLDivElement | null>(null);
 let chart: EChartsType | null = null;
 let observer: ResizeObserver | null = null;
 let appearanceObserver: MutationObserver | null = null;
+let disposed = false;
+let pendingFrame: number | null = null;
+let renderPending = false;
+let resizePending = false;
 
 function renderChart() {
-  if (!host.value) return;
+  if (disposed || !host.value) return;
   if (!chart) {
     chart = init(host.value, undefined, { renderer: "svg" });
     chart.on("click", (event) => {
@@ -27,15 +31,31 @@ function renderChart() {
   chart.setOption(chartOption(props.visualization), true);
 }
 
+function scheduleUpdate(render: boolean, resize = false) {
+  if (disposed) return;
+  renderPending ||= render;
+  resizePending ||= resize;
+  if (pendingFrame !== null) return;
+  pendingFrame = requestAnimationFrame(() => {
+    pendingFrame = null;
+    if (disposed) return;
+    if (resizePending) chart?.resize();
+    if (renderPending) renderChart();
+    renderPending = false;
+    resizePending = false;
+  });
+}
+
 onMounted(async () => {
   await nextTick();
+  if (disposed || !host.value) return;
   renderChart();
   if (typeof ResizeObserver !== "undefined" && host.value) {
-    observer = new ResizeObserver(() => chart?.resize());
+    observer = new ResizeObserver(() => scheduleUpdate(false, true));
     observer.observe(host.value);
   }
   if (typeof MutationObserver !== "undefined") {
-    appearanceObserver = new MutationObserver(() => renderChart());
+    appearanceObserver = new MutationObserver(() => scheduleUpdate(true));
     appearanceObserver.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["data-appearance", "data-theme"],
@@ -45,11 +65,14 @@ onMounted(async () => {
 
 watch(
   () => props.visualization,
-  () => renderChart(),
+  () => scheduleUpdate(true),
   { deep: true },
 );
 
 onBeforeUnmount(() => {
+  disposed = true;
+  if (pendingFrame !== null) cancelAnimationFrame(pendingFrame);
+  pendingFrame = null;
   observer?.disconnect();
   appearanceObserver?.disconnect();
   chart?.dispose();

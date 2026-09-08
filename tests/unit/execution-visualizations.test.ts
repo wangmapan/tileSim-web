@@ -131,6 +131,7 @@ describe("chart motion preference", () => {
     vi.stubGlobal("window", { matchMedia: () => ({ matches: true }) });
     const option = chartOption(visualization);
     expect(option.animationDuration).toBe(0);
+    expect(option.animation).toBe(false);
     expect(option.animationDurationUpdate).toBe(0);
   });
 
@@ -138,6 +139,36 @@ describe("chart motion preference", () => {
     vi.stubGlobal("window", { matchMedia: () => ({ matches: false }) });
     const option = chartOption(visualization);
     expect(option.animationDuration).toBe(260);
+    expect(option.animation).toBe(true);
     expect(option.animationDurationUpdate).toBe(260);
+  });
+
+  it("assigns a visible palette to series without explicit colors", () => {
+    const option = chartOption({
+      ...visualization,
+      series: [{ name: "Prompt" }, { name: "Decode" }, { name: "KV" }],
+      columns: ["Prompt", "Decode", "KV"],
+      rows: [{ label: "request", values: [128, 16, 144] }],
+    });
+    expect(option.color).toEqual(["#3376a3", "#357868", "#a8732a"]);
+    expect(option.series).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ itemStyle: expect.objectContaining({ color: "#3376a3" }), data: [128] }),
+        expect.objectContaining({ itemStyle: expect.objectContaining({ color: "#357868" }), data: [16] }),
+        expect.objectContaining({ itemStyle: expect.objectContaining({ color: "#a8732a" }), data: [144] }),
+      ]),
+    );
+  });
+
+  it("keeps explicit series colors and resolves missing colors from theme tokens", () => {
+    vi.stubGlobal("document", { documentElement: {} });
+    vi.stubGlobal("getComputedStyle", () => ({
+      getPropertyValue: (name: string) => (name === "--chart-series-2" ? "#78bda5" : ""),
+    }));
+    const option = chartOption({
+      ...visualization,
+      series: [{ name: "reported", color: "#abcdef" }, { name: "default" }],
+    });
+    expect(option.color).toEqual(["#abcdef", "#78bda5"]);
   });
 });

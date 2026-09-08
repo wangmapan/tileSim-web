@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AlertTriangle, ArrowRight, Braces, ChevronDown, GitBranch, Link2, Network } from "@lucide/vue";
+import { AlertTriangle, Braces, ChevronDown, GitBranch, Link2 } from "@lucide/vue";
 import { computed, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import ArtifactEvidenceLink from "../../../components/ArtifactEvidenceLink.vue";
@@ -9,6 +9,8 @@ import { useI18n } from "../../../i18n";
 import { formatNumber } from "../../../lib/format";
 import { buildRunBoundEvidenceChain } from "../model";
 import type { RunBoundAvailability, RunBoundEvidenceNode } from "../types";
+import PercentileSubjects from "./PercentileSubjects.vue";
+import EvidenceNode from "./EvidenceNode.vue";
 
 const props = defineProps<{
   runId: string | null;
@@ -47,20 +49,6 @@ const peerNodes = computed(
 const outputNodes = computed(
   () => outputSubsystems.map((id) => nodeMap.value.get(id)).filter(Boolean) as RunBoundEvidenceNode[],
 );
-const visibleOutputIdCount = 3;
-const visibleOutputReferenceCount = 2;
-
-function isCurrentPercentileSubject(subject: { memberRequestIds: string[] }) {
-  return Boolean(props.selectedRequestId && subject.memberRequestIds.includes(props.selectedRequestId));
-}
-
-function hiddenOutputItemCount(node: RunBoundEvidenceNode) {
-  return (
-    Math.max(0, node.entityIds.length - visibleOutputIdCount) +
-    Math.max(0, node.references.length - visibleOutputReferenceCount)
-  );
-}
-
 function routeQuery(requestId: string) {
   return { run: props.runId || undefined, evidence_request: requestId };
 }
@@ -130,12 +118,10 @@ function statusLabel(node: { availability: RunBoundAvailability }) {
   >
     <header class="panel-header panel-header--row">
       <div>
-        <p class="section-kicker">REQUEST EVIDENCE CHAIN</p>
-        <h2 id="run-bound-evidence-title">{{ t("请求级跨子系统证据链") }}</h2>
-        <p>{{ t("只使用后端显式 ID；S3、S4、S5 保持并列，缺少契约的跳转会准确降级。") }}</p>
+        <h2 id="run-bound-evidence-title">{{ t("请求证据链") }}</h2>
       </div>
       <label class="run-bound-request-picker" data-help-anchor="attribution-request">
-        <span>{{ t("选择 request_id") }}</span>
+        <span>{{ t("请求") }}</span>
         <select
           :value="selectedRequestId || ''"
           :disabled="!runId || !chain.requestOptions.length"
@@ -143,62 +129,17 @@ function statusLabel(node: { availability: RunBoundAvailability }) {
         >
           <option value="" disabled>{{ t("请选择请求") }}</option>
           <option v-for="option in chain.requestOptions" :key="option.requestId" :value="option.requestId">
-            {{ option.requestId }}{{ option.isTailExplainedEntity ? ` · ${t("S9 解释对象")}` : "" }}
+            {{ option.requestId }}{{ option.isTailExplainedEntity ? ` · ${t("归因报告对象")}` : "" }}
           </option>
         </select>
       </label>
     </header>
 
-    <section v-if="chain.percentileSubjects.length" class="run-bound-percentile-section">
-      <header>
-        <div>
-          <small>PERCENTILE SUBJECTS</small>
-          <strong>{{ t("后端选择的 P99 对象") }}</strong>
-        </div>
-        <p>{{ t("不按延迟排序、数值相等或数组位置推断 request。") }}</p>
-      </header>
-      <div class="run-bound-percentile-grid">
-        <article
-          v-for="subject in chain.percentileSubjects"
-          :key="subject.key"
-          :class="{ 'is-current-request': isCurrentPercentileSubject(subject) }"
-          :aria-current="isCurrentPercentileSubject(subject) ? 'true' : undefined"
-        >
-          <header>
-            <code>{{ subject.metricKind }}</code>
-            <div class="run-bound-percentile-status">
-              <span :class="`availability--${subject.availability}`">{{ subject.semantics }}</span>
-              <span v-if="isCurrentPercentileSubject(subject)" class="current-request-marker">
-                {{ t("当前 request") }}
-              </span>
-            </div>
-          </header>
-          <strong>{{ formatNumber(subject.valuePs) }} ps</strong>
-          <p>{{ t(subject.detail) }}</p>
-          <small>{{ t("选择规则") }} · {{ subject.selectionRule }}</small>
-          <div v-if="subject.memberRequestIds.length" class="run-bound-member-set">
-            <code v-for="member in subject.memberRequestIds" :key="member">{{ member }}</code>
-          </div>
-          <button
-            v-if="
-              subject.semantics === 'single_request' &&
-              subject.selectedRequestId &&
-              subject.availability === 'available'
-            "
-            class="button button--secondary"
-            type="button"
-            @click="chooseExplicitRequest(subject.selectedRequestId)"
-          >
-            {{ t("定位 P99 request") }}
-          </button>
-          <ArtifactEvidenceLink
-            v-if="subject.reference"
-            :source-path="subject.reference.sourcePath"
-            :label="subject.reference.label"
-          />
-        </article>
-      </div>
-    </section>
+    <PercentileSubjects
+      :subjects="chain.percentileSubjects"
+      :selected-request-id="selectedRequestId"
+      @request-selected="chooseExplicitRequest"
+    />
 
     <div v-if="!runId" class="run-bound-message" role="status">
       <AlertTriangle :size="18" />
@@ -234,99 +175,41 @@ function statusLabel(node: { availability: RunBoundAvailability }) {
         </RouterLink>
       </nav>
 
-      <div class="run-bound-flow" :aria-label="t('S1 到 S6 的请求证据链')">
-        <article v-if="nodeMap.get('S1')" class="run-bound-node">
-          <header>
-            <span>S1</span><strong>{{ t(nodeMap.get("S1")!.title) }}</strong>
-          </header>
-          <small :class="`availability--${nodeMap.get('S1')!.availability}`">{{
-            statusLabel(nodeMap.get("S1")!)
-          }}</small>
-          <p>{{ t(nodeMap.get("S1")!.detail) }}</p>
-          <code v-for="id in nodeMap.get('S1')!.entityIds" :key="id">{{ id }}</code>
-          <div class="run-bound-reference-list">
-            <ArtifactEvidenceLink
-              v-for="item in nodeMap.get('S1')!.references"
-              :key="item.sourcePath"
-              :source-path="item.sourcePath"
-              :label="item.label"
-            />
-          </div>
-        </article>
-
-        <ArrowRight class="run-bound-arrow" :size="18" />
-        <section class="run-bound-peer-group">
-          <small>RESOURCE SEMANTICS · PEERS</small>
-          <article v-for="node in peerNodes" :key="node.subsystem" class="run-bound-node">
-            <header>
-              <span>{{ node.subsystem }}</span
-              ><strong>{{ t(node.title) }}</strong>
-            </header>
-            <small :class="`availability--${node.availability}`">{{ statusLabel(node) }}</small>
-            <p>{{ t(node.detail) }}</p>
-            <code v-for="id in node.entityIds" :key="id">{{ id }}</code>
-            <ArtifactEvidenceLink
-              v-for="item in node.references"
-              :key="item.sourcePath"
-              :source-path="item.sourcePath"
-              :label="item.label"
-            />
-          </article>
+      <div class="run-bound-flow" role="region" tabindex="0" :aria-label="t('请求与资源证据关联')">
+        <EvidenceNode
+          v-if="nodeMap.get('S1')"
+          :node="nodeMap.get('S1')!"
+          :status-label="statusLabel(nodeMap.get('S1')!)"
+        />
+        <section class="run-bound-peer-group" :aria-label="t('并列资源语义')">
+          <small>{{ t("并列资源语义") }}</small>
+          <EvidenceNode
+            v-for="node in peerNodes"
+            :key="node.subsystem"
+            :node="node"
+            :status-label="statusLabel(node)"
+          />
         </section>
-        <ArrowRight class="run-bound-arrow" :size="18" />
-
-        <article v-if="nodeMap.get('S6')" class="run-bound-node">
-          <header>
-            <span>S6</span><strong>{{ t(nodeMap.get("S6")!.title) }}</strong>
-          </header>
-          <small :class="`availability--${nodeMap.get('S6')!.availability}`">{{
-            statusLabel(nodeMap.get("S6")!)
-          }}</small>
-          <p>{{ t(nodeMap.get("S6")!.detail) }}</p>
-          <code v-for="id in nodeMap.get('S6')!.entityIds" :key="id">{{ id }}</code>
-          <div class="run-bound-reference-list">
-            <ArtifactEvidenceLink
-              v-for="item in nodeMap.get('S6')!.references"
-              :key="item.sourcePath"
-              :source-path="item.sourcePath"
-              :label="item.label"
-            />
-          </div>
-        </article>
+        <EvidenceNode
+          v-if="nodeMap.get('S6')"
+          :node="nodeMap.get('S6')!"
+          :status-label="statusLabel(nodeMap.get('S6')!)"
+        />
       </div>
 
-      <div class="run-bound-output-grid">
-        <article v-for="node in outputNodes" :key="node.subsystem" class="run-bound-output-node">
-          <Network :size="17" />
-          <div>
-            <header>
-              <span>{{ node.subsystem }}</span
-              ><strong>{{ t(node.title) }}</strong>
-            </header>
-            <small :class="`availability--${node.availability}`">{{ statusLabel(node) }}</small>
-            <p>{{ t(node.detail) }}</p>
-            <code v-for="id in node.entityIds.slice(0, visibleOutputIdCount)" :key="id">{{ id }}</code>
-            <ArtifactEvidenceLink
-              v-for="item in node.references.slice(0, visibleOutputReferenceCount)"
-              :key="item.sourcePath"
-              :source-path="item.sourcePath"
-              :label="item.label"
-            />
-            <details v-if="hiddenOutputItemCount(node)" class="run-bound-output-more">
-              <summary>
-                {{ t("展开完整证据（{count} 项）", { count: hiddenOutputItemCount(node) }) }}
-              </summary>
-              <code v-for="id in node.entityIds.slice(visibleOutputIdCount)" :key="id">{{ id }}</code>
-              <ArtifactEvidenceLink
-                v-for="item in node.references.slice(visibleOutputReferenceCount)"
-                :key="item.sourcePath"
-                :source-path="item.sourcePath"
-                :label="item.label"
-              />
-            </details>
-          </div>
-        </article>
-      </div>
+      <section class="run-bound-output-grid" :aria-label="t('执行与证据记录')">
+        <h3>{{ t("执行与证据记录") }}</h3>
+        <p class="run-bound-output-boundary">
+          {{ t("以下记录不作为延迟因果来源。") }}
+        </p>
+        <EvidenceNode
+          v-for="node in outputNodes"
+          :key="node.subsystem"
+          :node="node"
+          :status-label="statusLabel(node)"
+          output
+        />
+      </section>
 
       <details v-if="chain.gaps.length" class="run-bound-gaps">
         <summary><AlertTriangle :size="16" />{{ t("关联契约与降级详情") }}</summary>

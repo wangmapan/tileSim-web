@@ -6,6 +6,7 @@ export const useHistoryStore = defineStore("history", () => {
   const history = reactive<HistoryState>({
     runs: [],
     loading: false,
+    error: "",
     selected: [],
     comparisons: {},
     query: "",

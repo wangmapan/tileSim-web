@@ -44,7 +44,6 @@
 }
 .execution-flow > * {
   grid-row: 1;
-  animation: flow-item-enter 280ms var(--ease-emphasized) backwards;
 }
 .execution-flow > :nth-child(2) {
   animation-delay: 35ms;
@@ -76,7 +75,7 @@
   min-height: 91px;
   padding: 13px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   color: var(--ink);
   background: var(--panel-strong);
   text-align: left;
@@ -90,8 +89,6 @@
 }
 .flow-node:hover {
   border-color: var(--accent);
-  transform: translateY(-1px);
-  box-shadow: 0 8px 18px color-mix(in srgb, var(--accent) 10%, transparent);
 }
 .flow-node.active {
   border-color: var(--accent);
@@ -110,7 +107,7 @@
 }
 .flow-node > strong {
   overflow: hidden;
-  font: 650 var(--text-base) var(--font-mono);
+  font: 600 var(--text-base) var(--font-sans);
   line-height: 1.25;
   overflow-wrap: anywhere;
   white-space: normal;
@@ -124,71 +121,19 @@
   overflow-wrap: anywhere;
   white-space: normal;
 }
-.execution-current-selection {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 11px;
-  align-items: center;
-  margin: 0 22px 20px;
-  padding: 11px 13px;
-  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--line));
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--accent-soft) 72%, var(--panel-strong));
-}
-.execution-current-selection > span {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 7px;
-  color: #fff;
-  background: var(--accent);
-  font: 700 var(--text-sm) var(--font-mono);
-}
-.execution-current-selection > div {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-.execution-current-selection small {
-  color: var(--muted);
-  font-size: var(--text-xs);
-}
-.execution-current-selection strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.execution-current-selection > .execution-step-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  align-items: center;
-  justify-content: flex-end;
-}
-.execution-step-actions .button {
-  min-height: 32px;
-  padding: 6px 9px;
-  font-size: var(--text-xs);
-}
-.execution-step-actions > span {
-  color: var(--muted);
-  font: 650 var(--text-micro) var(--font-mono);
-}
 .resource-peer-group {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
   padding: 8px;
-  border: 1px dashed #b9c4be;
-  border-radius: 9px;
-  background: var(--surface-muted);
+  border-top: 1px solid var(--line-strong);
+  border-bottom: 1px solid var(--line-strong);
+  background: transparent;
 }
 .resource-peer-group > small {
   grid-column: 1 / -1;
   color: var(--muted);
-  font: 700 var(--text-micro) var(--font-mono);
-  letter-spacing: 0.06em;
+  font: 400 var(--text-micro) var(--font-sans);
 }
 .flow-node--peer {
   min-height: 73px;
@@ -249,7 +194,7 @@
 }
 .layer-detail-header {
   display: grid;
-  grid-template-columns: 46px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 13px;
   align-items: center;
   padding: 22px 23px 17px;
@@ -605,7 +550,7 @@
 .layer-metric-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 7px;
+  gap: 0 14px;
   margin: 0 23px 17px;
 }
 .layer-metric {
@@ -614,10 +559,8 @@
   gap: 5px;
   min-width: 0;
   min-height: 66px;
-  padding: 10px 11px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: var(--surface-inset);
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
 }
 .layer-metric small {
   color: var(--muted);
@@ -625,7 +568,8 @@
 }
 .layer-metric strong {
   color: var(--ink);
-  font: 650 14px var(--font-mono);
+  font: 500 16px var(--font-sans);
+  font-variant-numeric: tabular-nums;
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
@@ -1532,7 +1476,7 @@
     grid-column: 1;
   }
   .layer-detail-header {
-    grid-template-columns: 42px 1fr;
+    grid-template-columns: 1fr;
     padding: 18px 16px 14px;
   }
   .layer-code {
@@ -1540,7 +1484,7 @@
     height: 42px;
   }
   .layer-detail-status {
-    grid-column: 2;
+    grid-column: 1;
     justify-content: flex-start;
   }
   .layer-detail-copy {

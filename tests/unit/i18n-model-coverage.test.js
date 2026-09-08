@@ -6,6 +6,10 @@ import { coreEnglishCatalog } from "../../src/i18n/english-catalog";
 import { evidenceAgentEnglishCatalog } from "../../src/i18n/workstreams/evidence-agent";
 import { guidedHelpEnglishCatalog } from "../../src/i18n/workstreams/guided-help";
 import { visualizationEnglishCatalog } from "../../src/i18n/workstreams/visualization";
+import { workflowReviewEnglishCatalog } from "../../src/i18n/workstreams/workflow-review";
+import { networkReviewEnglishCatalog } from "../../src/i18n/workstreams/network-review";
+import { attributionReviewEnglishCatalog } from "../../src/i18n/workstreams/attribution-review";
+import { workbenchReviewEnglishCatalog } from "../../src/i18n/workstreams/workbench-review";
 
 const modelFiles = ["records.ts", "visualizations.ts"];
 
@@ -14,6 +18,10 @@ const catalogs = {
   evidenceAgent: evidenceAgentEnglishCatalog,
   guidedHelp: guidedHelpEnglishCatalog,
   visualization: visualizationEnglishCatalog,
+  workflowReview: workflowReviewEnglishCatalog,
+  networkReview: networkReviewEnglishCatalog,
+  attributionReview: attributionReviewEnglishCatalog,
+  workbenchReview: workbenchReviewEnglishCatalog,
 };
 
 function chineseStringLiterals(file) {

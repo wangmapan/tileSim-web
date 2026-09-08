@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
-import { mount } from "@vue/test-utils";
-import { beforeEach, describe, expect, it } from "vitest";
+import { enableAutoUnmount, mount } from "@vue/test-utils";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import ExperimentCapabilityPanel from "../../src/features/run-experiment/ExperimentCapabilityPanel.vue";
 import DesignSpaceInputPanel from "../../src/features/run-experiment/DesignSpaceInputPanel.vue";
 import ExperimentInputPanel from "../../src/features/run-experiment/ExperimentInputPanel.vue";
@@ -16,6 +16,7 @@ import { useDashboard } from "../../src/store/dashboard";
 import { fixtureCase } from "../helpers/fixtures";
 
 const { applyBundle } = useDashboard();
+enableAutoUnmount(afterEach);
 
 function formalF7Ref(pointer: string, kind: string, id: string, artifactId = "design-space") {
   const identityKey = {
@@ -294,7 +295,7 @@ describe("Week 5 and Week 6 frontend integration", () => {
     expect(wrapper.text()).toContain("artifact_identity_missing");
   });
 
-  it("renders formal Pareto, artifact-record, uint64 knob, and topology evidence", () => {
+  it("renders formal Pareto, artifact-record, uint64 knob, and topology evidence", async () => {
     const fixture = fixtureCase("synthetic-s1-s6-complete");
     const formal = formalF7UiData();
     const metrics = structuredClone(fixture.reports.metrics);
@@ -325,6 +326,10 @@ describe("Week 5 and Week 6 frontend integration", () => {
 
     const fabricWrapper = mount(FabricView, { global: { stubs: { RouterLink: routerLinkStub } } });
     expect(fabricWrapper.text()).toContain("Topology → metrics domain：正式契约已验证");
+    expect(fabricWrapper.find(".domain-card").exists()).toBe(false);
+    const disclosure = fabricWrapper.get<HTMLDetailsElement>(".fabric-domain-disclosure");
+    disclosure.element.open = true;
+    await disclosure.trigger("toggle");
     expect(fabricWrapper.text()).toContain("scale_up / scale_up");
     expect(fabricWrapper.text()).toContain("gpu-0");
     expect(fabricWrapper.text()).toContain("fabric-0");

@@ -36,24 +36,33 @@ export function chartOption(visualization: LayerVisualization): EChartsCoreOptio
   const line = cssColor("--line-strong", "#cfd7d2");
   const split = cssColor("--line", "#e8ece9");
   const panel = cssColor("--panel-strong", "#ffffff");
-  const axisLabel = { color: muted, fontSize: 11 };
+  const fontFamily = cssColor("--font-sans", "system-ui, sans-serif");
+  const palette = ["#3376a3", "#357868", "#a8732a", "#b35d4f", "#727e8b"].map((fallback, index) =>
+    cssColor(`--chart-series-${index + 1}`, fallback),
+  );
+  const seriesColors = visualization.series.map((series, index) => series.color || palette[index % palette.length]);
+  const axisLabel = { color: muted, fontSize: 12 };
   const axisLine = { lineStyle: { color: line } };
   const splitLine = { lineStyle: { color: split, type: "dashed" as const } };
   const common: EChartsCoreOption = {
+    animation: !prefersReducedMotion(),
     animationDuration,
     animationDurationUpdate: animationDuration,
     // The chart host supplies a localized accessible name and the adjacent field table exposes
     // every plotted value. ECharts' generated SVG description serializes internal bar-layout
     // dimensions and can announce synthetic NaN values for stacked timelines.
     aria: { enabled: false },
-    color: visualization.series.map((series) => series.color).filter((color): color is string => Boolean(color)),
-    textStyle: { fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", color: ink },
+    color: seriesColors.length ? seriesColors : palette,
+    textStyle: { fontFamily, color: ink },
     tooltip: {
       trigger: visualization.kind === "scatter" ? "item" : "axis",
       confine: true,
       backgroundColor: panel,
       borderColor: line,
-      textStyle: { color: ink },
+      borderWidth: 1,
+      padding: [8, 10],
+      extraCssText: "border-radius:4px;box-shadow:none;max-width:100%;white-space:normal;overflow-wrap:anywhere",
+      textStyle: { color: ink, fontFamily, fontSize: 12 },
     },
   };
 
@@ -136,7 +145,7 @@ export function chartOption(visualization: LayerVisualization): EChartsCoreOptio
           type: "bar",
           stack: "stage",
           barMaxWidth: 18,
-          itemStyle: { color: visualization.series[1]?.color || "#3f7868", borderRadius: 3 },
+          itemStyle: { color: seriesColors[1] || palette[1], borderRadius: 3 },
           data: rows.map((row) => row.values[1]),
         },
       ],
@@ -174,7 +183,7 @@ export function chartOption(visualization: LayerVisualization): EChartsCoreOptio
       type: "bar",
       stack: visualization.kind === "stacked-bar" ? "contribution" : undefined,
       barMaxWidth: 18,
-      itemStyle: { color: series.color, borderRadius: visualization.kind === "stacked-bar" ? 0 : 3 },
+      itemStyle: { color: seriesColors[seriesIndex], borderRadius: visualization.kind === "stacked-bar" ? 0 : 3 },
       data: rows.map((row) => row.values[seriesIndex]),
     })),
   };
