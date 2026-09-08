@@ -1,113 +1,82 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { useRouter } from "vue-router";
-import { useI18n } from "../../../i18n";
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { guideFor } from "../catalog";
-import type { GuideId } from "../schema";
-import { closeGuidedHelp, useGuidedHelpState } from "../state";
-import GuidedStepPanel from "./GuidedStepPanel.vue";
+import { routedGuideIds, type GuideId, type HelpAnchor, type RoutedGuideId } from "../schema";
+import { closeGuidedHelp, selectHelpTopic, useGuidedHelpState } from "../state";
 
+const GuidedStepPanel = defineAsyncComponent(() => import("./GuidedStepPanel.vue"));
 const props = defineProps<{ defaultGuideId: GuideId }>();
-const { open, activeGuideId, stepIndex } = useGuidedHelpState();
+const { open, activeGuideId } = useGuidedHelpState();
 const guide = computed(() => guideFor(activeGuideId.value));
-const targetAvailable = ref(false);
-const liveMessage = ref("");
+const availableAnchors = ref<HelpAnchor[]>([]);
+const route = useRoute();
 const router = useRouter();
-const { t } = useI18n();
-let highlighted: HTMLElement | null = null;
-let temporaryTabIndex: HTMLElement | null = null;
 
-function clearTarget() {
-  highlighted?.removeAttribute("data-help-active");
-  highlighted = null;
-  if (temporaryTabIndex) temporaryTabIndex.removeAttribute("tabindex");
-  temporaryTabIndex = null;
+function destination(name: RoutedGuideId) {
+  const query = ["experiment", "history", "evidence_lab"].includes(name)
+    ? {}
+    : {
+        run: route.query.run,
+        evidence_request: route.query.evidence_request,
+      };
+  return { name, query };
 }
+const pageHref = computed(() =>
+  guide.value && (routedGuideIds as readonly string[]).includes(guide.value.id)
+    ? router.resolve(destination(guide.value.id as RoutedGuideId)).href
+    : null,
+);
+const relatedHref = computed(() => (guide.value ? router.resolve(destination(guide.value.next.routeName)).href : ""));
 
-function currentTarget() {
-  const anchor = guide.value?.steps[stepIndex.value]?.anchor;
-  if (!anchor) return null;
-  return document.querySelector<HTMLElement>(`[data-help-anchor="${anchor}"]`);
-}
+let releaseAnchorFocus: (() => void) | undefined;
+onBeforeUnmount(() => releaseAnchorFocus?.());
 
-async function revealTarget() {
+async function locate(anchor: HelpAnchor) {
+  releaseAnchorFocus?.();
+  closeGuidedHelp(false);
   await nextTick();
-  clearTarget();
-  const target = currentTarget();
-  targetAvailable.value = Boolean(target);
-  if (!target || !guide.value) {
-    liveMessage.value = t("此步骤对应的内容在当前页面状态下暂不可见。");
-    return;
-  }
-  highlighted = target;
-  target.setAttribute("data-help-active", "true");
-  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-  target.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "center" });
-  liveMessage.value = t("第 {current} 步：{title}", {
-    current: stepIndex.value + 1,
-    title: guide.value.steps[stepIndex.value]?.title || "",
-  });
-}
-
-function locateTarget() {
-  const target = currentTarget();
+  const target = document.querySelector<HTMLElement>(`[data-help-anchor="${anchor}"]`);
   if (!target) return;
-  if (!target.matches("a[href], button, input, select, textarea, [tabindex]")) {
+  for (let ancestor = target.parentElement; ancestor; ancestor = ancestor.parentElement) {
+    if (ancestor instanceof HTMLDetailsElement) ancestor.open = true;
+  }
+  target.scrollIntoView({ behavior: "auto", block: "center" });
+  const temporaryFocus = !target.matches("a[href], button, input, select, textarea, [tabindex]");
+  if (temporaryFocus) {
     target.setAttribute("tabindex", "-1");
-    temporaryTabIndex = target;
+    const release = () => {
+      target.removeAttribute("tabindex");
+      target.removeEventListener("blur", release);
+      releaseAnchorFocus = undefined;
+    };
+    releaseAnchorFocus = release;
+    target.addEventListener("blur", release, { once: true });
   }
   target.focus({ preventScroll: true });
 }
 
-function previous() {
-  stepIndex.value = Math.max(0, stepIndex.value - 1);
-}
-
-function next() {
+async function navigate(related: boolean) {
   if (!guide.value) return;
-  if (stepIndex.value >= guide.value.steps.length - 1) close();
-  else stepIndex.value += 1;
-}
-
-function close() {
-  clearTarget();
-  closeGuidedHelp();
-}
-
-async function navigate() {
-  if (!guide.value) return;
-  const destination = guide.value.next.routeName;
-  close();
-  await router.push({ name: destination });
-}
-
-function onEscape(event: KeyboardEvent) {
-  if (event.defaultPrevented || event.key !== "Escape" || !open.value) return;
-  event.preventDefault();
-  close();
+  const name = related ? guide.value.next.routeName : (guide.value.id as RoutedGuideId);
+  closeGuidedHelp(false);
+  await router.push(destination(name));
 }
 
 watch(
   () => props.defaultGuideId,
-  (nextGuideId) => {
-    if (open.value && activeGuideId.value !== nextGuideId) close();
+  () => {
+    if (open.value) closeGuidedHelp();
   },
 );
-
-watch([open, activeGuideId, stepIndex], ([isOpen]) => {
-  if (isOpen) void revealTarget();
-  else clearTarget();
-});
-
-watch(open, (isOpen, wasOpen) => {
-  if (!isOpen || wasOpen) return;
-  void nextTick(() => document.querySelector<HTMLButtonElement>(".guided-step-panel__header .icon-button")?.focus());
-});
-
-onMounted(() => window.addEventListener("keydown", onEscape));
-onBeforeUnmount(() => {
-  window.removeEventListener("keydown", onEscape);
-  clearTarget();
+watch([open, activeGuideId], async ([isOpen]) => {
+  if (!isOpen) return;
+  await nextTick();
+  if (!open.value) return;
+  availableAnchors.value =
+    guide.value?.steps
+      .filter((step) => document.querySelector(`[data-help-anchor="${step.anchor}"]`))
+      .map((step) => step.anchor) || [];
 });
 </script>
 
@@ -116,15 +85,14 @@ onBeforeUnmount(() => {
     <GuidedStepPanel
       v-if="open && guide"
       :guide="guide"
-      :step-index="stepIndex"
-      :target-available="targetAvailable"
-      @close="close"
-      @skip="close"
-      @previous="previous"
-      @next="next"
-      @locate="locateTarget"
+      :context-guide-id="defaultGuideId"
+      :available-anchors="availableAnchors"
+      :page-href="pageHref"
+      :related-href="relatedHref"
+      @close="closeGuidedHelp()"
+      @select="selectHelpTopic"
+      @locate="locate"
       @navigate="navigate"
     />
-    <p class="visually-hidden" aria-live="polite" aria-atomic="true">{{ liveMessage }}</p>
   </Teleport>
 </template>

@@ -11,7 +11,6 @@ const { t } = useI18n();
     <summary>
       <span>
         <strong>{{ t("服务版本与模型详情") }}</strong>
-        <small>{{ t("仅在排查问题或复现实验时查看。") }}</small>
       </span>
     </summary>
     <div class="evidence-agent-identity-grid">

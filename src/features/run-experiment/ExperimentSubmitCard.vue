@@ -18,7 +18,7 @@ const { t } = useI18n();
 </script>
 
 <template>
-  <aside class="run-submit-card">
+  <aside class="run-submit-card" :aria-label="t('确认并运行')">
     <p class="section-kicker">RUN EXPERIMENT</p>
     <h2>{{ t("确认并运行") }}</h2>
     <dl>

@@ -31,22 +31,19 @@ function gapLabel(gap: string) {
       <article data-help-anchor="validation-provenance">
         <small>{{ t("数据来源") }}</small
         ><StatusPill :value="evidence.sourceMode" />
-        <p>{{ t("说明输入是真实采集、合成生成还是兼容测试数据。") }}</p>
       </article>
       <article>
         <small>{{ t("校准状态") }}</small
         ><StatusPill :value="evidence.calibration" />
-        <p>{{ t("说明结果是否与真实硬件测量对齐。") }}</p>
       </article>
       <article>
         <small>{{ t("可用范围") }}</small
         ><StatusPill :value="evidence.claimScope" />
-        <p>{{ t("说明这些结果适合探索，还是可以支持更正式的判断。") }}</p>
       </article>
       <article>
         <small>{{ t("证据完整度") }}</small
         ><strong>{{ formatPercent(state.bundle.validation.completeness) }}</strong>
-        <p>{{ t("表示需要的证据字段覆盖了多少，不是准确率。") }}</p>
+        <p>{{ t("字段覆盖，非准确率") }}</p>
       </article>
     </section>
 
@@ -54,8 +51,7 @@ function gapLabel(gap: string) {
       <header>
         <AlertTriangle :size="19" />
         <div>
-          <strong>{{ t("仍需注意") }}</strong>
-          <p>{{ t("下面的问题尚未解决，因此本次结果只能支持有限结论。") }}</p>
+          <strong>{{ t("未闭合的证据缺口") }}</strong>
         </div>
       </header>
       <ul>
@@ -73,9 +69,8 @@ function gapLabel(gap: string) {
     >
       <summary>
         <div>
-          <p class="section-kicker">{{ t("专业详情") }}</p>
           <h2>{{ t("各环节实际使用的模拟精度") }}</h2>
-          <p>{{ t("你选择的精度可能因环节能力而调整；展开后可查看每个环节最终使用的精度。") }}</p>
+          <p>{{ t("请求精度 → 实际精度") }}</p>
         </div>
         <span>{{ t("{count} 个环节", { count: state.bundle.validation.resolution_entries.length }) }}</span>
         <span class="validation-summary-icons"><Layers3 :size="21" /><ChevronDown :size="17" /></span>
@@ -98,9 +93,7 @@ function gapLabel(gap: string) {
     <details class="panel validation-disclosure">
       <summary>
         <div>
-          <p class="section-kicker">{{ t("专业详情") }}</p>
           <h2>{{ t("逐项验证记录") }}</h2>
-          <p>{{ t("按需查看逐项状态、说明和精确证据链接。") }}</p>
         </div>
         <div class="panel-count">
           <ShieldCheck :size="16" />{{ t("{count} 项检查", { count: state.bundle.validation.checks?.length || 0 }) }}

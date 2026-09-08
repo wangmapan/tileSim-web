@@ -2,42 +2,54 @@ import { defineGuide } from "../schema";
 
 export const historyGuide = defineGuide({
   id: "history",
-  title: "从这里打开或对比以前的实验",
-  description: "点击实验名称查看结果；需要比较时，依次选择两个已完成实验。",
-  takeaway: "A/B 对比只比较两次独立运行的已报告结果，缺失字段不会被补成 0。",
+  title: "运行记录",
+  description: "查找和恢复实验上下文，查看运行状态，或选择两次已完成运行进行 A/B 对比。",
+  takeaway:
+    "A/B 对比展示两次独立运行的已报告结果。比较前应确认工作负载、数据来源和实际仿真精度可比，缺失字段不能补为零。",
   steps: [
     {
       id: "runs",
-      title: "先找到目标实验",
-      body: "用名称、运行 ID 和完成状态确认实验；给实验命名可以减少后续误选。",
+      title: "查找运行",
+      body: "运行名称、ID 和状态用于识别实验。名称便于阅读，稳定运行 ID 用于区分报告、输入和证据归属。",
       anchor: "history-runs",
     },
     {
       id: "open",
-      title: "打开一次运行",
-      body: "点击运行名称进入其结果；页面只恢复已验证的报告和输入上下文。",
+      title: "恢复实验上下文",
+      body: "打开运行名称后，页面恢复该运行已验证的报告与输入。加载失败时应保留明确错误，不把失败状态解释为没有结果。",
       anchor: "history-open",
     },
     {
       id: "compare",
-      title: "选择两个实验做 A/B 对比",
-      body: "先选择 A，再选择 B；只有用户开始选择后才显示比较工作区。",
+      title: "A/B 选择",
+      body: "依次选择 A 与 B 建立对照。两者是独立运行；比较工作区展示各自值和已支持的差异，不把两个运行的证据合并为一次实验。",
       anchor: "history-compare",
     },
     {
       id: "interpret",
-      title: "检查比较是否公平",
-      body: "确认负载、来源和 resolved fidelity 可比；0、missing、not covered 与 not applicable 不应混为一项差值。",
+      title: "比较条件",
+      body: "负载、配置、Trace 来源与 resolved fidelity 的差异可能改变指标含义。零值、缺失、未覆盖和不适用应分别解释。",
       anchor: "history-results",
     },
   ],
   terms: [
-    { id: "ab", term: "A/B 对比", definition: "把两次独立运行的同类已报告指标并排比较。" },
-    { id: "binding", term: "运行绑定", definition: "报告、输入、artifact 清单与同一 run ID 的绑定关系。" },
+    {
+      id: "ab",
+      term: "A/B 对比",
+      definition: "把两次独立运行的同类已报告指标并排比较。",
+    },
+    {
+      id: "binding",
+      term: "运行绑定",
+      definition: "报告、输入、artifact 清单与同一 run ID 的绑定关系。",
+    },
   ],
-  next: { label: "下一步：新建对照实验", routeName: "experiment" },
+  next: {
+    label: "新建实验",
+    routeName: "experiment",
+  },
   advanced: {
-    title: "最后再核对身份",
-    body: "复现时再查看 backend identity、schema-set revision、artifact SHA-256 和完整报告；比较层不重算模拟结论。",
+    title: "原始记录与复核",
+    body: "复现与审计需要运行 ID、backend identity、schema-set revision、工件 SHA-256 和原始报告。对比视图不重新执行仿真或改写结论。",
   },
 });

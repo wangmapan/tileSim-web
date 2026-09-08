@@ -29,14 +29,8 @@ const evidenceLimited = computed(
       <AlertTriangle v-if="evidenceLimited" :size="18" />
       <ShieldCheck v-else :size="18" />
       <span>
-        <strong>{{ t(evidenceLimited ? "这是一份探索性结果" : "这份结果具备正式证据来源") }}</strong>
-        <small>{{
-          t(
-            evidenceLimited
-              ? "适合观察趋势和比较方案，不代表真实硬件表现。"
-              : "仍请结合结果可信度页面确认可支持的结论。",
-          )
-        }}</small>
+        <strong>{{ t(evidenceLimited ? "证据范围受限" : "真实 Trace 来源") }}</strong>
+        <small>{{ t(evidenceLimited ? "不代表真实硬件表现" : "校准与验证范围见技术边界") }}</small>
       </span>
     </div>
     <details class="evidence-technical-disclosure">

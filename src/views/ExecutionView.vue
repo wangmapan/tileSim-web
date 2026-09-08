@@ -18,7 +18,6 @@ import StatusPill from "../components/StatusPill.vue";
 import {
   attributionSource,
   buildExecutionResult,
-  executionLayerDetail,
   executionLayerHeadline,
   executionLayerName,
   executionMetricLabel,
@@ -49,13 +48,6 @@ const result = computed(() => buildExecutionResult(state.bundle, state.inputs));
 const layerById = computed(() => new Map(result.value.layers.map((layer) => [layer.id, layer])));
 const selected = computed(() => layerById.value.get(selectedId.value) || result.value.layers[0]);
 const hasResult = computed(() => Boolean(state.bundle.run || state.bundle.metrics || state.bundle.validation));
-const flowSteps: LayerId[][] = [["S0"], ["S1"], ["S2"], ["S3", "S4", "S5"], ["S6"]];
-const currentFlowStep = computed(() => flowSteps.findIndex((step) => step.includes(selectedId.value)));
-
-function moveFlowStep(offset: -1 | 1) {
-  const target = flowSteps[currentFlowStep.value + offset];
-  if (target) selectedId.value = target[0];
-}
 
 const evidenceLabels: Record<string, string> = {
   reported: "有报告记录",
@@ -142,9 +134,7 @@ async function exportStructuredReport() {
     <section class="panel execution-map-panel">
       <header class="panel-header panel-header--row">
         <div>
-          <p class="section-kicker">{{ t("从左到右看请求") }}</p>
           <h2>{{ t("请求执行路线") }}</h2>
-          <p>{{ t("点击任一环节，查看它在本次实验中做了什么。内存、设备计算和多设备协同是并列关系。") }}</p>
         </div>
         <div class="execution-map-actions">
           <div class="panel-count">
@@ -203,40 +193,12 @@ async function exportStructuredReport() {
           <small>{{ friendlyHeadline(layerById.get("S6")) }}</small>
         </button>
       </div>
-      <div class="execution-current-selection" aria-live="polite" data-help-anchor="execution-selection">
-        <span>{{ selected.id }}</span>
-        <div>
-          <small>{{ t("当前查看的环节") }}</small>
-          <strong>{{ executionLayerName(selected.id) }} · {{ selected.id }}</strong>
-        </div>
-        <div class="execution-step-actions" :aria-label="t('逐步查看执行路线')">
-          <button
-            type="button"
-            class="button button--secondary"
-            :disabled="currentFlowStep <= 0"
-            @click="moveFlowStep(-1)"
-          >
-            {{ t("上一步") }}
-          </button>
-          <span>{{ t("第 {current} / {total} 步", { current: currentFlowStep + 1, total: flowSteps.length }) }}</span>
-          <button
-            type="button"
-            class="button button--secondary"
-            :disabled="currentFlowStep >= flowSteps.length - 1"
-            @click="moveFlowStep(1)"
-          >
-            {{ t("下一步") }}
-          </button>
-        </div>
-      </div>
     </section>
 
     <section class="execution-detail-layout">
       <article id="execution-layer-detail" class="panel layer-detail-panel" data-help-anchor="execution-detail">
         <header class="layer-detail-header">
-          <div class="layer-code">{{ selected.id }}</div>
           <div>
-            <small>{{ selected.id }} · {{ t(selected.title) }}</small>
             <h2>{{ executionLayerName(selected.id) }}</h2>
             <p>{{ selected.role }}</p>
           </div>
@@ -245,8 +207,6 @@ async function exportStructuredReport() {
             <StatusPill :value="selected.evidenceState" />
           </div>
         </header>
-
-        <p class="layer-detail-copy">{{ executionLayerDetail(selected.id) }}</p>
 
         <div class="layer-metric-grid" :aria-label="t('本层关键指标')">
           <div v-for="metric in selected.stats" :key="metric.label" class="layer-metric">
@@ -371,7 +331,7 @@ async function exportStructuredReport() {
       <details class="panel stage-panel execution-secondary-disclosure" data-help-anchor="execution-host">
         <summary class="panel-header">
           <div>
-            <p class="section-kicker">{{ t("执行宿主（S7）") }}</p>
+            <p class="section-kicker">{{ t("仿真执行与控制平面") }}</p>
             <h2>{{ t("统一时间轴记录") }}</h2>
             <p>{{ t("这里记录各环节在同一模拟时间线上的开始和结束。") }}</p>
           </div>

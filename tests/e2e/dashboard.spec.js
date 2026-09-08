@@ -1,12 +1,593 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { createHash } from "node:crypto";
+import { mkdir } from "node:fs/promises";
+import path from "node:path";
 import { fixtureCase } from "../helpers/fixtures";
 import { createF8ExperimentDescriptor, f8Capabilities, f8SchemaRevision } from "../fixtures/experiment-descriptor";
 import { createEvidenceAgentDescriptor, f9DescriptorRevision } from "../fixtures/evidence-agent-descriptor";
 
 const runId = "run-fixture-f1";
+
+test("request evidence rows preserve parallel resources and exact binding details", async ({ page }) => {
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  addWeek8Contracts(fixture, "req-0");
+  const failures = await openFixture(page, fixture, "attribution");
+  const panel = page.locator(".run-bound-evidence-panel");
+  await expect(panel.locator(".run-bound-peer-group .run-bound-node header strong")).toHaveText([
+    "KV Cache",
+    "设备执行",
+    "集合通信",
+  ]);
+  await expect(panel.locator(".run-bound-output-boundary")).toHaveText("以下记录不作为延迟因果来源。");
+  const reference = panel.locator('.run-bound-node[data-module="S6"] a').first();
+  const evidence = new URL(await reference.getAttribute("href"), "http://tilesim.local");
+  expect(evidence.searchParams.get("run")).toBe(runId);
+  expect(evidence.searchParams.get("evidence_sha")).toMatch(/^[a-f0-9]{64}$/);
+  expect(evidence.searchParams.get("evidence_pointer")).toBe("/system_summary/phase_fabric_contributions/0");
+  const rule = panel.locator('.run-bound-node[data-module="S6"] .run-bound-binding-rule');
+  await expect(rule).not.toHaveAttribute("open", "");
+  await rule.locator("summary").focus();
+  await page.keyboard.press("Enter");
+  await expect(rule).toHaveAttribute("open", "");
+  await expect(rule).toContainText("phase_id");
+  const output = path.resolve("runtime/visual-review/batch11/after");
+  await mkdir(output, { recursive: true });
+  for (const width of [1440, 1100, 960, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expectNoUnexpectedTextOverflow(page);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    const positions = await panel
+      .locator(".run-bound-peer-group .run-bound-node")
+      .evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().top));
+    expect(Math.max(...positions) - Math.min(...positions)).toBeLessThan(2);
+  }
+  await page.setViewportSize({ width: 1100, height: 900 });
+  await page.getByRole("button", { name: "切换到深色模式", exact: true }).click();
+  await panel.locator(".week8-execution-panel > summary").click();
+  await expect(panel.locator(".week8-execution-panel")).toContainText("partitioned_des");
+  await expect(panel.locator(".week8-execution-panel")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await page.screenshot({ path: path.join(output, "evidence-fixture-1100-dark-expanded.png"), fullPage: true });
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.getByRole("button", { name: "切换到英文", exact: true }).click();
+  await expect(panel.locator('.run-bound-node[data-module="S6"] header strong')).toHaveText("Network request phase");
+  await expectNoUnexpectedTextOverflow(page);
+  expect(failures).toEqual([]);
+});
+
+test("Agent result review keeps claim groups and exact evidence without nested cards", async ({ page }) => {
+  const phase = process.env.TILESIM_AGENT_RESULT_REVIEW === "before" ? "before" : "after";
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  addWeek8Contracts(fixture, "req-0");
+  const failures = await openFixture(page, fixture, "evidence_agent", {
+    evidenceAgentConfigured: true,
+    evidenceAgentHandler: async ({ request }) => {
+      const response = createEvidenceAgentTerminal(request, "completed");
+      const finding = response.claims[0];
+      finding.text = "测试夹具：这一条陈述引用已校验的请求记录。";
+      const limitation = structuredClone(finding);
+      limitation.claim_id = "review-limitation";
+      limitation.claim_kind = "validation_boundary";
+      limitation.text = "测试夹具：合成证据不能替代真实留出验证。";
+      const recommendation = structuredClone(finding);
+      recommendation.claim_id = "review-next-step";
+      recommendation.claim_kind = "conditional_recommendation";
+      recommendation.scope.recommendation_semantics = "conditional_not_executed";
+      recommendation.text = "测试夹具：建议仅供人工评估，未执行配置变更。";
+      response.claims = [recommendation, finding, limitation];
+      return { status: 200, body: response };
+    },
+  });
+  await page.locator('[data-help-anchor="evidence_agent-request"] select').selectOption("req-0");
+  await page.getByRole("button", { name: "生成解释", exact: true }).click();
+  const result = page.locator(".evidence-agent-result");
+  await expect(result.locator(".evidence-agent-claim-text")).toHaveCount(3);
+  expect(
+    await result
+      .locator(".evidence-agent-claims > li")
+      .evaluateAll((items) => items.map((item) => item.dataset.originalIndex)),
+  ).toEqual(["1", "2", "0"]);
+  const output = path.resolve("runtime/visual-review/batch10", phase);
+  await mkdir(output, { recursive: true });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await result.screenshot({ path: path.join(output, "result-fixture-light.png") });
+  const disclosure = result.locator(".evidence-agent-claim-evidence > summary").first();
+  await disclosure.focus();
+  await page.keyboard.press("Enter");
+  const citation = result.locator(".evidence-agent-citations a").first();
+  const target = new URL(await citation.getAttribute("href"), "http://tilesim.local");
+  expect(target.searchParams.get("run")).toBe(runId);
+  expect(target.searchParams.get("evidence_sha")).toMatch(/^[a-f0-9]{64}$/);
+  expect(target.searchParams.get("evidence_pointer")).toMatch(/^\//);
+  await result.locator(".evidence-agent-citation-identity > summary").first().click();
+  await expect(result.locator(".evidence-agent-citation-identity").first()).toContainText(
+    target.searchParams.get("evidence_sha"),
+  );
+  for (const width of [1440, 1100, 960, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expectNoUnexpectedTextOverflow(page);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  }
+  await page.setViewportSize({ width: 1100, height: 900 });
+  await page.getByRole("button", { name: "切换到深色模式" }).click();
+  await result.screenshot({ path: path.join(output, "result-fixture-dark-expanded.png") });
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  if (phase === "after") {
+    await expect(result.locator(".evidence-agent-claims > li").first()).toHaveCSS(
+      "background-color",
+      "rgba(0, 0, 0, 0)",
+    );
+    await expect(result.locator(".evidence-agent-claims > li").first()).toHaveCSS("border-radius", "0px");
+    await expect(result.locator(".section-kicker")).toHaveCount(0);
+  }
+  expect(failures).toEqual([]);
+});
+
+test("P99 table and shared brand stay legible without card styling or inferred navigation", async ({ page }) => {
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  addWeek8Contracts(fixture, "req-0");
+  const failures = await openFixture(page, fixture, "attribution");
+  const panel = page.locator(".percentile-subjects");
+  await expect(panel.locator("tbody .percentile-value")).toHaveText("9,007,199,254,740,993,123");
+  await expect(panel.locator("article")).toHaveCount(0);
+  await expect(panel.locator("tbody tr")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  const request = panel.getByRole("button", { name: "req-0", exact: true });
+  await request.focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/evidence_request=req-0/);
+  const reference = panel.getByRole("link", { name: "原始记录", exact: true });
+  const target = new URL(await reference.getAttribute("href"), "http://tilesim.local");
+  expect(target.searchParams.get("run")).toBe(runId);
+  expect(target.searchParams.get("evidence_pointer")).toBe("/percentile_subjects/0");
+  expect(target.searchParams.get("evidence_sha")).toBe(
+    artifactManifestEntries(fixture).find((entry) => entry.artifact_id === "metrics").sha256,
+  );
+  const summary = panel.locator("summary");
+  await summary.focus();
+  await page.keyboard.press("Enter");
+  await expect(panel.locator("details code").filter({ hasText: "nearest_rank_backend_selected" })).toBeVisible();
+  await page.keyboard.press("Enter");
+  const output = path.resolve("runtime/visual-review/batch9/after");
+  await mkdir(output, { recursive: true });
+  for (const width of [1440, 1100, 960, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    await expect(page.locator(".brand-mark")).not.toHaveCSS("mask-image", "none");
+    await expect(page.locator(".brand-mark")).toHaveCSS("animation-name", "none");
+    await page.screenshot({ path: path.join(output, `attribution-fixture-${width}-light.png`), fullPage: true });
+  }
+  const favicon = await page.locator('link[rel="icon"]').getAttribute("href");
+  expect(favicon).toContain("svg");
+  expect(
+    await page.evaluate(async (href) => {
+      const image = new Image();
+      image.src = href;
+      await image.decode();
+      return image.naturalWidth > 0;
+    }, favicon),
+  ).toBe(true);
+  await page.setViewportSize({ width: 1100, height: 900 });
+  await page.getByRole("button", { name: "切换到英文" }).click();
+  await page.getByRole("button", { name: /Switch to dark/ }).click();
+  await expect(panel.getByRole("heading", { name: "Backend-selected P99 subjects" })).toBeVisible();
+  await expectNoUnexpectedTextOverflow(page);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: path.join(output, "attribution-fixture-1100-dark-en.png"), fullPage: true });
+  expect(failures).toEqual([]);
+});
+
+test("Agent editor keeps task icons, evidence boundaries and submission visible without invoking a provider", async ({
+  page,
+}) => {
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  addWeek8Contracts(fixture, "req-0");
+  const failures = await openFixture(page, fixture, "evidence_agent", { evidenceAgentConfigured: true });
+  const select = page.locator('[data-help-anchor="evidence_agent-request"] select');
+  await select.selectOption("req-0");
+  const submit = page.getByRole("button", { name: "生成解释", exact: true });
+  await expect(submit).toBeEnabled();
+  const output = path.resolve("runtime/visual-review/batch8/after");
+  await mkdir(output, { recursive: true });
+  for (const width of [1440, 1100, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    const bounds = await submit.boundingBox();
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(900);
+    await expect(page.locator('.evidence-agent-task-cards svg[aria-hidden="true"]')).toHaveCount(4);
+    await expect(page.locator(".evidence-agent-submission-preview")).toContainText("仅为合成证据");
+    await expectNoUnexpectedTextOverflow(page);
+    await page.screenshot({ path: path.join(output, `agent-fixture-${width}-light.png`), fullPage: true });
+  }
+  await page.getByRole("button", { name: "切换到英文" }).click();
+  await page.setViewportSize({ width: 1100, height: 900 });
+  const radios = page.locator(".evidence-agent-task-cards input");
+  await radios.first().focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(radios.nth(1)).toBeChecked();
+  await page.getByRole("button", { name: /Switch to dark/ }).click();
+  await expectNoUnexpectedTextOverflow(page);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: path.join(output, "agent-fixture-1100-dark-en.png"), fullPage: true });
+  expect(failures).toEqual([]);
+});
+
+test("workbench keeps bounded real-value previews and accessible analysis paths", async ({ page }) => {
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  addWeek8Contracts(fixture, "req-0");
+  const summary = fixture.reports.metrics.system_summary;
+  const original = summary.fabric_domain_utilization[0];
+  summary.fabric_domain_utilization = Array.from({ length: 40 }, (_, index) => ({
+    ...original,
+    domain_id: `domain-${index}-long-network-resource-identifier`,
+    utilization_ratio: index === 0 ? 0 : 0.67,
+  }));
+  const chartRequests = [];
+  page.on("request", (request) => {
+    if (/ExecutionChart|chart-runtime|chart-renderer/.test(request.url())) chartRequests.push(request.url());
+  });
+  const failures = await openFixture(page, fixture, "overview");
+  await page.setViewportSize({ width: 1100, height: 900 });
+  await expect(page.locator(".overview-domain-list tr")).toHaveCount(6);
+  await expect(page.locator(".overview-domain-list tr").first()).toContainText("0%");
+  await expect(page.locator(".overview-domain-list tr").last()).toContainText("domain-5-");
+  expect(chartRequests).toEqual([]);
+  await page.getByRole("button", { name: "切换到英文" }).click();
+  for (const appearance of ["light", "dark"]) {
+    if (appearance === "dark") await page.getByRole("button", { name: /Switch to dark/ }).click();
+    if (appearance === "dark")
+      await expect(page.locator(".app-header")).toHaveCSS("background-color", "rgb(25, 26, 28)");
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1100);
+    await expect(
+      page.locator(".overview-domain-list tr").first().locator(".utilization-measure__track > span"),
+    ).toHaveCSS("width", "0px");
+  }
+  const network = page.getByRole("button", { name: "Inspect the network", exact: true });
+  await network.focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/fabric\?run=run-fixture-f1/);
+  await expect(page.locator(".fabric-stage")).toBeVisible();
+  await expect(page.locator(".fabric-domain-table tbody tr")).toHaveCount(25);
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await expect(page.locator(".fabric-stage .utilization-measure__track > span")).toHaveCSS("animation-name", "none");
+  expect(failures).toEqual([]);
+});
+
+test("overview keeps a usable first-viewport comparison and keyboard route round trips", async ({ page }) => {
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  addWeek8Contracts(fixture, "req-0");
+  const failures = await openFixture(page, fixture, "overview");
+  for (const width of [1440, 1100, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    const bounds = await page.locator(".overview-domain-list tr").first().boundingBox();
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(900);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  }
+  for (const [label, route] of [
+    ["查看执行过程", "execution"],
+    ["查看性能指标", "metrics"],
+    ["结果可信度", "validation"],
+  ]) {
+    const button = page.locator(".overview-analysis-index").getByRole("button", { name: label, exact: true });
+    await expect(button).toHaveCount(1);
+    await button.focus();
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(new RegExp(`/${route}\\?run=${runId}`));
+    await page.locator(".app-sidebar").getByRole("button", { name: "运行概览", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/overview\\?run=${runId}`));
+  }
+  const summary = page.locator(".hero-technical-summary > summary");
+  await summary.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".hero-technical-summary p")).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".hero-technical-summary p")).not.toBeVisible();
+  expect(failures).toEqual([]);
+});
+
+test("attribution pagination retains exact evidence and keyboard access in English", async ({ page }) => {
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  addWeek8Contracts(fixture, "req-0");
+  const original = fixture.reports.tail.attribution_ranking[0];
+  fixture.reports.tail.attribution_ranking = Array.from({ length: 60 }, (_, index) => ({
+    ...original,
+    attribution_id: `review-${index}`,
+    component_code: `network-wait-${index}`,
+    rank: 60 - index,
+    share: index === 0 ? 0 : 0.25,
+  }));
+  const failures = await openFixture(page, fixture, "attribution");
+  await page.setViewportSize({ width: 1100, height: 900 });
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.getByRole("button", { name: "尾延迟归因", exact: true }).click();
+  await expect(page.locator(".ranking-row")).toHaveCount(25);
+  await expect(page.locator(".rank-bar span").first()).toHaveCSS("width", "0px");
+  const next = page.getByRole("navigation", { name: "贡献项分页" }).getByRole("button", { name: "下一页" });
+  await next.focus();
+  await page.keyboard.press("Enter");
+  const firstRow = page.locator(".ranking-row").first();
+  await expect(firstRow).toContainText("network-wait-25");
+  await expect(firstRow.locator(".rank-index")).toHaveText("35");
+  const evidence = new URL(
+    await firstRow.locator("a.artifact-evidence-link").getAttribute("href"),
+    "http://tilesim.local",
+  );
+  expect(evidence.searchParams.get("evidence_pointer")).toBe("/attribution_ranking/25");
+  expect(evidence.searchParams.get("evidence_artifact")).toBe("tail-cause-chain");
+  expect(evidence.searchParams.get("evidence_sha")).toBe(
+    artifactManifestEntries(fixture).find((entry) => entry.artifact_id === "tail-cause-chain").sha256,
+  );
+  const layout = await page.evaluate(() => ({
+    summaryBottom: document.querySelector(".attribution-primary-summary").getBoundingClientRect().bottom,
+    chartTop: document.querySelector(".visualization-panel").getBoundingClientRect().top,
+  }));
+  expect(layout.summaryBottom).toBeLessThanOrEqual(layout.chartTop);
+  await page.locator(".attribution-cause-disclosure > summary").focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".cause-chain")).toHaveCSS("animation-name", "none");
+  await expect(page.locator(".cause-chain li").first()).toHaveCSS("animation-name", "none");
+  await page.getByRole("button", { name: "切换到英文" }).click();
+  for (const appearance of ["light", "dark"]) {
+    if (appearance === "dark") await page.getByRole("button", { name: /Switch to dark/ }).click();
+    await expect(page.getByRole("navigation", { name: "Contribution pagination" })).toBeVisible();
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1100);
+  }
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.locator(".attribution-audit > summary").click();
+  await expect(page.locator(".attribution-audit-grid")).toHaveCSS("animation-name", "none");
+  expect(failures).toEqual([]);
+});
+
+test("attribution research review captures evidence hierarchy across desktop appearances", async ({ page }) => {
+  test.setTimeout(180000);
+  const phase = process.env.TILESIM_ATTRIBUTION_REVIEW;
+  const output = path.resolve("runtime/visual-review/batch4", phase === "before" ? "before" : "after");
+  if (phase) await mkdir(output, { recursive: true });
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  addWeek8Contracts(fixture, "req-0");
+  const failures = await openFixture(page, fixture, "attribution");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  for (const width of [1100, 1440, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const appearance of ["light", "dark"]) {
+      await page.evaluate((mode) => localStorage.setItem("tilesim-web.appearance.v1", mode), appearance);
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await expect(page.locator(".evidence-strip")).toContainText("synthetic-s1-s6-complete");
+      await page.getByRole("button", { name: /尾延迟归因/ }).click();
+      await expect(page.locator(".execution-chart svg")).toHaveCount(1);
+      await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+      if (phase)
+        await page.screenshot({ path: path.join(output, `attribution-${width}-${appearance}.png`), fullPage: true });
+      if (phase !== "before") {
+        expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      }
+      await page.locator(".attribution-audit > summary").click();
+      await page.locator(".attribution-cause-disclosure > summary").click();
+      await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+      if (phase)
+        await page.screenshot({ path: path.join(output, `details-${width}-${appearance}.png`), fullPage: true });
+      if (phase !== "before") expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    }
+  }
+  expect(failures).toEqual([]);
+});
+
+test("fabric pagination retains exact report pointers and keyboard access in English", async ({ page }) => {
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  addWeek8Contracts(fixture, "req-0");
+  const summary = fixture.reports.metrics.system_summary;
+  const sourceDomain = summary.fabric_domain_utilization[0];
+  const sourceRequest = summary.request_fabric_contributions[0];
+  summary.fabric_domain_utilization = Array.from({ length: 60 }, (_, index) => ({
+    ...sourceDomain,
+    domain_id: `domain-${index}`,
+  }));
+  summary.request_fabric_contributions = Array.from({ length: 60 }, (_, index) => ({
+    ...sourceRequest,
+    request_id: `request-${index}`,
+    dominant_phase_id: undefined,
+  }));
+  delete summary.dominant_fabric_backpressure_domain_id;
+  const failures = await openFixture(page, fixture, "fabric");
+  await page.setViewportSize({ width: 1100, height: 900 });
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await expect(page.locator(".fabric-hotspot-panel")).toContainText("主要通信瓶颈信息不完整");
+  await expect(page.locator(".fabric-domain-table tbody tr")).toHaveCount(25);
+  await expect(page.locator(".fabric-request-table tbody tr")).toHaveCount(25);
+  await expect(page.locator(".domain-card")).toHaveCount(0);
+  const domainNext = page.getByRole("navigation", { name: "通信范围明细分页" }).getByRole("button", { name: "下一页" });
+  await domainNext.focus();
+  await page.keyboard.press("Enter");
+  const domainRow = page.locator(".fabric-domain-table tbody tr").first();
+  await expect(domainRow).toContainText("domain-25");
+  const evidenceUrl = new URL(
+    await domainRow.locator("a.artifact-evidence-link").getAttribute("href"),
+    "http://127.0.0.1:4173",
+  );
+  expect(evidenceUrl.searchParams.get("evidence_pointer")).toBe("/system_summary/fabric_domain_utilization/25");
+  expect(evidenceUrl.searchParams.get("evidence_sha")).toMatch(/^[a-f0-9]{64}$/);
+  const panel = page.locator(".analysis-visualization-stack .visualization-panel").first();
+  await panel.locator(".visualization-data > summary").click();
+  await expect(panel.locator("tbody tr")).toHaveCount(25);
+  await expect(panel.locator(".visualization-table-scroll")).toHaveCSS("animation-name", "none");
+  await panel.locator(".record-pager button").last().click();
+  await expect(panel.locator("tbody tr").first()).toContainText("domain-25");
+  await expect(panel.locator("tbody tr").first()).toContainText("metrics:/system_summary/fabric_domain_utilization/25");
+  await panel.locator(".visualization-data > summary").click();
+  await expect(panel.locator("tbody tr")).toHaveCount(0);
+  await expect(panel.locator(".execution-chart svg")).toHaveCount(1);
+  await page.getByRole("button", { name: "切换到英文" }).click();
+  await expect(page.locator(".fabric-hotspot-panel")).toContainText(
+    "Communication bottleneck information is incomplete",
+  );
+  await expect(page.getByRole("navigation", { name: "Request communication contribution pagination" })).toBeVisible();
+  for (const appearance of ["light", "dark"]) {
+    if (appearance === "dark") await page.getByRole("button", { name: /Switch to dark/ }).click();
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1100);
+  }
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.locator(".fabric-domain-disclosure > summary").click();
+  await expect(page.locator(".domain-grid")).toHaveCSS("animation-name", "none");
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  expect(failures).toEqual([]);
+});
+
+test("fabric review preserves readable evidence across desktop widths and appearances", async ({ page }) => {
+  test.setTimeout(180000);
+  const phase = process.env.TILESIM_FABRIC_REVIEW;
+  const output = path.resolve("runtime/visual-review/batch3", phase === "before" ? "before" : "after");
+  if (phase) await mkdir(output, { recursive: true });
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  addWeek8Contracts(fixture, "req-0");
+  const failures = await openFixture(page, fixture, "fabric");
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  for (const width of [1100, 1440, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const appearance of ["light", "dark"]) {
+      await page.evaluate((mode) => localStorage.setItem("tilesim-web.appearance.v1", mode), appearance);
+      await page.reload({ waitUntil: "networkidle" });
+      await expect(page.locator(".analysis-visualization-stack .execution-chart svg")).toHaveCount(2);
+      if (phase)
+        await page.screenshot({ path: path.join(output, `fabric-${width}-${appearance}.png`), fullPage: true });
+      if (phase !== "before") {
+        await expect(page.locator(".visualization-table-scroll")).toHaveCount(0);
+        await expect(page.locator(".visualization-boundary")).toHaveCount(2);
+        expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      }
+      await page.locator(".fabric-domain-disclosure > summary").click();
+      await expect(page.locator(".domain-card").first()).toBeVisible();
+      if (phase !== "before") await expect(page.locator(".domain-grid")).toHaveCSS("animation-name", "none");
+      if (phase === "after") await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+      if (phase)
+        await page.screenshot({ path: path.join(output, `domains-${width}-${appearance}.png`), fullPage: true });
+      if (phase !== "before") {
+        expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      }
+    }
+  }
+  expect(failures).toEqual([]);
+});
+
+test("workflow review captures history and trace evidence at desktop widths", async ({ page }) => {
+  test.setTimeout(180000);
+  const phase = process.env.TILESIM_WORKFLOW_REVIEW;
+  const output = path.resolve("runtime/visual-review/batch2", phase === "before" ? "before" : "after");
+  if (phase) await mkdir(output, { recursive: true });
+  const failures = await openFixture(page, fixtureCase("synthetic-s1-s6-complete"), "history");
+  await page.route("**/api/runs", (route) =>
+    route.fulfill({
+      json: {
+        runs: ["completed", "running", "failed"].map((status, index) => ({
+          run_id: `${runId}-${index}-long-identity-for-desktop-layout-verification`,
+          run_name: index === 0 ? "网络等待对照实验 · synthetic consistency fixture" : `Fixture ${status}`,
+          status,
+          input_mode: "controls",
+          created_at: "2026-09-01T08:00:00Z",
+          digest: index === 0 ? { end_to_end_latency_us: 29229.1, throughput_requests_per_second: 102.64 } : {},
+        })),
+      },
+    }),
+  );
+  for (const width of [1100, 1440, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const appearance of ["light", "dark"]) {
+      await page.evaluate((mode) => localStorage.setItem("tilesim-web.appearance.v1", mode), appearance);
+      for (const view of ["history", "experiment"]) {
+        await page.goto(`/${view}`, { waitUntil: "networkidle" });
+        if (view === "history") await expect(page.locator(".run-row")).toHaveCount(3);
+        else {
+          await page.getByRole("button", { name: "Trace package", exact: true }).click();
+          await expect(page.locator(".trace-package-detail")).toContainText("synthetic_trace");
+        }
+        if (phase)
+          await page.screenshot({ path: path.join(output, `${view}-${width}-${appearance}.png`), fullPage: true });
+        if (phase !== "before") {
+          expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+          expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+        }
+      }
+    }
+  }
+  expect(failures).toEqual([]);
+});
 const tracePackageManifestSha256 = `sha256:${"a".repeat(64)}`;
+
+test("history refresh exposes pending and retryable error states without hiding previous records", async ({ page }) => {
+  const failures = await openFixture(page, fixtureCase("synthetic-s1-s6-complete"), "history", {
+    expectedHttpStatuses: [503],
+  });
+  await expect(page.locator(".run-row")).toHaveCount(1);
+  let releaseRequest;
+  const pendingRequest = new Promise((resolve) => {
+    releaseRequest = resolve;
+  });
+  let failed = true;
+  let requests = 0;
+  await page.route("**/api/runs", async (route) => {
+    requests += 1;
+    await pendingRequest;
+    await route.fulfill({
+      status: failed ? 503 : 200,
+      json: failed
+        ? { error: { code: "history_review_unavailable", message: "History fixture unavailable", retryable: true } }
+        : { runs: [] },
+    });
+  });
+  await page.getByRole("button", { name: "刷新", exact: true }).click();
+  await expect(page.locator(".history-loading")).toBeVisible();
+  await expect(page.locator(".history-panel")).toHaveAttribute("aria-busy", "true");
+  await expect(page.locator(".run-row")).toHaveCount(1);
+  releaseRequest();
+  await expect(page.locator(".history-notice[role=alert]")).toContainText("保留上次加载的记录");
+  await expect(page.locator(".history-panel")).toHaveAttribute("aria-busy", "false");
+  await expect(page.locator(".run-row")).toHaveCount(1);
+  failed = false;
+  await page.getByRole("button", { name: "刷新", exact: true }).click();
+  await expect(page.locator(".empty-state")).toContainText("尚无运行记录");
+  await expect(page.locator(".history-notice[role=alert]")).toHaveCount(0);
+  expect(requests).toBe(2);
+  expect(failures).toEqual([]);
+});
+
+test("workflow controls remain keyboard accessible in English and both appearances", async ({ page }) => {
+  const failures = await openFixture(page, fixtureCase("synthetic-s1-s6-complete"), "history");
+  await expect(page.locator(".run-row")).toHaveCount(1);
+  await page.getByRole("button", { name: "切换到英文" }).click();
+  await page.setViewportSize({ width: 1100, height: 900 });
+  const search = page.getByRole("searchbox");
+  await expect(search).toHaveAccessibleName(/Search/);
+  await search.fill("no-matching-run");
+  await expect(page.locator(".empty-state")).toContainText("No matching runs");
+  const clearSearch = page.getByRole("button", { name: "Clear search" });
+  await clearSearch.focus();
+  await page.keyboard.press("Enter");
+  await expect(search).toHaveValue("");
+  for (const appearance of ["light", "dark"]) {
+    await page.evaluate((mode) => localStorage.setItem("tilesim-web.appearance.v1", mode), appearance);
+    for (const view of ["history", "experiment"]) {
+      await page.goto(`/${view}`, { waitUntil: "networkidle" });
+      if (view === "experiment") {
+        await page.getByRole("button", { name: "Trace package", exact: true }).click();
+        const packageButton = page.locator(".trace-package-list").getByRole("button", { name: /real-package/ });
+        await packageButton.focus();
+        await page.keyboard.press("Enter");
+        await expect(packageButton).toHaveAttribute("aria-pressed", "true");
+        await expect(page.locator(".trace-evidence-fields")).toContainText("real_trace");
+        await expect(page.locator("button.run-submit")).toBeDisabled();
+        await expect(page.locator(".trace-integrity-scope")).toHaveText(
+          "Integrity checks do not establish calibration or validation.",
+        );
+      }
+      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1100);
+    }
+  }
+  expect(failures).toEqual([]);
+});
 
 function tracePackageItem(packageId, sourceMode, { boundary = "S1", traceKind = "s1_runtime" } = {}) {
   const submissionAvailable = sourceMode === "synthetic_trace";
@@ -841,14 +1422,13 @@ test("synthetic evidence view is stable, accessible, and field-complete", async 
   const browserFailures = await openFixture(page, fixture);
   await expect(page.getByRole("heading", { name: "请求执行路线" })).toBeVisible();
   await expect(page.locator(".flow-node")).toHaveCount(7);
-  await expect(page.locator(".execution-current-selection")).toContainText("S1");
+  await expect(page.locator(".execution-current-selection")).toHaveCount(0);
   await expect(page.locator(".run-bound-evidence-panel")).toHaveCount(0);
   await expect(page.locator(".stage-list li")).toHaveCount(3);
   await expect(page.locator('.visualization-panel[data-chart-kind="bar"] .execution-chart svg')).toBeVisible();
   await page.locator(".flow-node").filter({ hasText: "S5" }).click();
-  await expect(page.locator(".execution-current-selection")).toContainText("S5");
   await expect(page.locator(".flow-node").filter({ hasText: "S5" })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.locator("#execution-layer-detail .layer-code")).toHaveText("S5");
+  await expect(page.locator("#execution-layer-detail h2")).toHaveText("多设备协同");
   await expect(page.locator('.visualization-panel[data-chart-kind="stacked-bar"] .execution-chart svg')).toBeVisible();
   await expect(
     page.locator('.visualization-panel[data-chart-kind="stacked-bar"] .visualization-caption'),
@@ -890,6 +1470,7 @@ test("synthetic evidence view is stable, accessible, and field-complete", async 
 test("desktop routes preserve run deep links and browser history", async ({ page }) => {
   const fixture = fixtureCase("synthetic-s1-s6-complete");
   const browserFailures = await openFixture(page, fixture, "execution");
+  await expect(page.locator(".evidence-strip")).toContainText("synthetic-s1-s6-complete");
   await expect(page).toHaveURL(new RegExp(`/execution\\?run=${runId}$`));
   await page.getByRole("button", { name: /性能指标/ }).click();
   await expect(page).toHaveURL(new RegExp(`/metrics\\?run=${runId}$`));
@@ -918,7 +1499,7 @@ test("F6B request evidence stays run-bound across peer resources and S7-S9 pages
   const browserFailures = await openFixture(page, fixture, "attribution");
 
   const panel = page.locator(".run-bound-evidence-panel");
-  await expect(panel.getByRole("heading", { name: "请求级跨子系统证据链" })).toBeVisible();
+  await expect(panel.getByRole("heading", { name: "请求证据链" })).toBeVisible();
   await expect(panel.locator("select")).toHaveValue(longRequestId);
   await expect.poll(() => new URL(page.url()).searchParams.get("evidence_request")).toBe(longRequestId);
   await expect(panel.locator(".run-bound-peer-group .run-bound-node")).toHaveCount(3);
@@ -957,7 +1538,7 @@ test("F6B request evidence stays run-bound across peer resources and S7-S9 pages
   await expectNoUnexpectedTextOverflow(page);
 
   await page.getByRole("button", { name: "切换到英文" }).click();
-  await expect(page.getByRole("heading", { name: "Request-bound cross-subsystem evidence chain" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Request evidence chain" })).toBeVisible();
   await expectNoUnexpectedTextOverflow(page);
 
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -1109,7 +1690,7 @@ test("Evidence Agent validates citations, terminal states, stale isolation, and 
   await expect(taskRadios.nth(1)).toBeChecked();
   const preview = page.locator(".evidence-agent-submission-preview");
   await expect(preview).toContainText("req-0");
-  await expect(preview).toContainText(/\d+ 个精确引用位置，来自 \d+ 份 artifact/);
+  await expect(preview).toContainText(/\d+ 个精确引用位置，来自 \d+ 份工件/);
   await expect(preview).toContainText("仅为合成证据");
   await expect(preview).toContainText("服务上限 30 秒");
   await preview.locator(":scope > details > summary").click();
@@ -1305,9 +1886,12 @@ test("hash-bound evidence links locate JSON Pointers and survive reload", async 
   await expect(page.locator(".check-row .artifact-evidence-link").first()).toBeVisible();
   await expectNoUnexpectedTextOverflow(page);
   await page.getByRole("button", { name: /慢请求原因/ }).click();
-  await page.getByRole("button", { name: "S9 尾延迟归因" }).click();
+  await page.getByRole("button", { name: "尾延迟归因", exact: true }).click();
   await expect(page.locator(".ranking-row .artifact-evidence-link")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "归因守恒与传播审计" })).toBeVisible();
+  await expect(page.locator(".attribution-audit-grid")).toHaveCount(0);
+  await page.locator(".attribution-audit > summary").focus();
+  await page.keyboard.press("Enter");
   await expect(page.locator(".attribution-audit")).toContainText("partial_attribution");
   await expect(page.locator(".attribution-audit")).toContainText("required_propagation_node_missing_or_unresolved");
   await expectNoUnexpectedTextOverflow(page);
@@ -1339,19 +1923,12 @@ test("analysis charts keep complete tables and bind selected points to the curre
     `ttft_ps: ${fixture.reports.metrics.request_metrics[0].ttft_ps} ps`,
   );
 
-  const marks = panel.locator('svg path[fill]:not([fill="none"])');
-  let selectedMark = null;
-  for (let index = 0; index < (await marks.count()); index += 1) {
-    const candidate = marks.nth(index);
-    const box = await candidate.boundingBox();
-    if (box && box.width > 2 && box.height > 2) {
-      selectedMark = candidate;
-      break;
-    }
-  }
-  expect(selectedMark).not.toBeNull();
+  const endToEndMarks = panel.locator('.execution-chart svg path[fill="#bd6457"]');
+  await expect(endToEndMarks).toHaveCount(fixture.reports.metrics.request_metrics.length + 1);
+  const selectedMark = endToEndMarks.first();
+  await expect.poll(async () => (await selectedMark.boundingBox())?.width || 0).toBeGreaterThan(100);
   await selectedMark.scrollIntoViewIfNeeded();
-  await selectedMark.click({ force: true });
+  await selectedMark.click();
   const selectedLink = panel.locator(".visualization-selection a.artifact-evidence-link").first();
   await expect(selectedLink).toBeVisible();
   const target = new URL(await selectedLink.getAttribute("href"), "http://tilesim.local");
@@ -1380,7 +1957,7 @@ test("S0-S6 attribution chart and S7-S9 output records remain visibly partitione
     { attribution_id: "output-s9", rank: 4, subsystem: "S9", component_code: "output", score_ps: 1, share: 0.1 },
   );
   const browserFailures = await openFixture(page, fixture, "attribution");
-  await page.getByRole("button", { name: "S9 尾延迟归因" }).click();
+  await page.getByRole("button", { name: "尾延迟归因", exact: true }).click();
   const causalPanel = page.locator(".visualization-panel").filter({ hasText: "S0–S6 延迟贡献" });
   await causalPanel.locator(".visualization-data > summary").click();
   await expect(causalPanel.locator(".visualization-table-scroll tbody tr")).toHaveCount(1);
@@ -1455,6 +2032,9 @@ test("F7 formal contract exposes Pareto, artifact-record, knob, and topology evi
 
   await page.goto(`/fabric?run=${runId}`);
   await expect(page.locator(".fabric-topology-gap")).toContainText("正式契约已验证");
+  await expect(page.locator(".domain-card")).toHaveCount(0);
+  await page.locator(".fabric-domain-disclosure > summary").focus();
+  await page.keyboard.press("Enter");
   await expect(page.locator(".domain-topology-contract")).toContainText("gpu-0");
   const topologyTarget = await page
     .locator(".domain-topology-contract a.artifact-evidence-link")
@@ -1549,10 +2129,10 @@ test("light blue theme is the desktop default and the theme choice survives relo
   await expect(page.locator("html")).toHaveAttribute("data-theme", "blue");
   await expect(page.locator("html")).toHaveAttribute("data-appearance", "light");
   await expect(page.getByRole("button", { name: "切换到深色模式" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "选择界面主题，当前：晴空蓝" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "设置主题颜色" })).toBeVisible();
   expect(
     await page.locator("html").evaluate((element) => getComputedStyle(element).getPropertyValue("--canvas").trim()),
-  ).toBe("#f8fbff");
+  ).toBe("#ffffff");
   await expect(page.locator(".capability-panel")).toBeVisible();
   await expectNoUnexpectedTextOverflow(page);
 
@@ -1570,27 +2150,28 @@ test("light blue theme is the desktop default and the theme choice survives relo
   expect(spacing.gridInset).toBeGreaterThanOrEqual(24);
   expect(spacing.identityInset).toBeGreaterThanOrEqual(24);
 
-  await page.getByRole("button", { name: "选择界面主题，当前：晴空蓝" }).click();
-  const themeList = page.getByRole("listbox", { name: "选择界面主题" });
-  await expect(themeList).toBeVisible();
-  await expect(themeList.getByRole("option")).toHaveCount(4);
-  await expect(themeList.getByRole("option").first()).toBeFocused();
-  await page.keyboard.press("ArrowDown");
-  await expect(themeList.getByRole("option").nth(1)).toBeFocused();
+  await page.getByRole("button", { name: "设置主题颜色" }).click();
+  const themePanel = page.getByRole("dialog", { name: "主题颜色", exact: true });
+  await expect(themePanel).toBeVisible();
+  await expect(themePanel.getByRole("option")).toHaveCount(0);
+  await expect(themePanel.getByRole("listbox")).toHaveCount(0);
+  await expect(themePanel.getByRole("textbox", { name: "HEX 颜色" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(themePanel.getByRole("spinbutton", { name: "红色（R）" })).toBeFocused();
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("button", { name: "选择界面主题，当前：晴空蓝" })).toBeFocused();
-  await page.getByRole("button", { name: "选择界面主题，当前：晴空蓝" }).click();
-  await themeList.getByRole("option", { name: /经典深绿/ }).click();
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "classic");
-  await expect(page.getByRole("button", { name: "选择界面主题，当前：经典深绿" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "设置主题颜色" })).toBeFocused();
+  await page.getByRole("button", { name: "设置主题颜色" }).click();
+  await themePanel.getByRole("textbox", { name: "HEX 颜色" }).fill("#27695a");
+  await themePanel.getByRole("button", { name: "应用自定义颜色" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "custom");
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "classic");
-
-  await page.getByRole("button", { name: "选择界面主题，当前：经典深绿" }).click();
-  await page.getByRole("option", { name: /薄荷青/ }).click();
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "mint");
-  await page.getByRole("button", { name: "选择界面主题，当前：薄荷青" }).click();
-  await page.getByRole("option", { name: /晴空蓝/ }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "custom");
+  await page.getByRole("button", { name: "设置主题颜色" }).click();
+  await expect(themePanel.getByRole("textbox", { name: "HEX 颜色" })).toHaveValue("#27695a");
+  await themePanel.getByRole("textbox", { name: "HEX 颜色" }).fill("#397f75");
+  await themePanel.getByRole("button", { name: "应用自定义颜色" }).click();
+  await page.getByRole("button", { name: "设置主题颜色" }).click();
+  await themePanel.getByRole("button", { name: "重置颜色" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "blue");
   expect(browserFailures).toEqual([]);
 });
@@ -1684,7 +2265,7 @@ test("Trace package mode exposes inspected provenance without promoting syntheti
   await expectNoUnexpectedTextOverflow(page);
 
   await page.locator("button.run-submit").click();
-  await expect(page.getByRole("heading", { name: /运行结果已就绪|运行已完成，证据范围受限/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "运行摘要", exact: true })).toBeVisible();
   expect(submittedRequests).toHaveLength(1);
   expect(submittedRequests[0].request.trace_package_id).toBe("synthetic-package");
   expect(submittedRequests[0].request).not.toHaveProperty("overrides");
@@ -1704,21 +2285,23 @@ test("dark appearance preserves palette, chart readability, accessibility, and d
   await expect(page.locator("html")).toHaveAttribute("data-appearance", "dark");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "blue");
   await expect(page.getByRole("button", { name: "切换到浅色模式" })).toBeVisible();
+  await expect(page.locator('.execution-chart svg path[fill="#70b9e2"]').first()).toBeVisible();
   expect(
     await page.locator("html").evaluate((element) => getComputedStyle(element).getPropertyValue("--canvas").trim()),
-  ).toBe("#09111a");
+  ).toBe("#191a1c");
   await expect
     .poll(() =>
       page.locator(".execution-chart svg text").evaluateAll((items) => items.map((item) => item.getAttribute("fill"))),
     )
-    .toContain("#91a5b4");
+    .toContain("#9b9fa5");
 
-  await page.getByRole("button", { name: /选择界面主题/ }).click();
-  await page.getByRole("option", { name: /薄荷青/ }).click();
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "mint");
+  await page.getByRole("button", { name: "设置主题颜色" }).click();
+  await page.getByRole("textbox", { name: "HEX 颜色" }).fill("#397f75");
+  await page.getByRole("button", { name: "应用自定义颜色" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "custom");
   await expect(page.locator("html")).toHaveAttribute("data-appearance", "dark");
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "mint");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "custom");
   await expect(page.locator("html")).toHaveAttribute("data-appearance", "dark");
 
   await page.getByRole("button", { name: "切换到英文" }).click();
@@ -1761,11 +2344,11 @@ test("desktop motion is restrained and reduced-motion removes decorative transit
       animationIterationCount: style.animationIterationCount,
     };
   });
-  expect(defaultMotion.animationName).toBe("flow-item-enter");
+  expect(defaultMotion.animationName).toBe("none");
   expect(parseFloat(defaultMotion.animationDuration)).toBeLessThanOrEqual(0.4);
   expect(defaultMotion.animationIterationCount).toBe("1");
   await flowNode.hover();
-  await expect.poll(() => flowNode.evaluate((element) => getComputedStyle(element).transform)).not.toBe("none");
+  await expect.poll(() => flowNode.evaluate((element) => getComputedStyle(element).transform)).toBe("none");
 
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.reload({ waitUntil: "domcontentloaded" });
@@ -1791,8 +2374,8 @@ test("desktop motion is restrained and reduced-motion removes decorative transit
       .evaluate((element) => parseFloat(getComputedStyle(element).animationDuration)),
   ).toBeLessThanOrEqual(0.001);
 
-  await page.getByRole("button", { name: /选择界面主题/ }).click();
-  const themeList = page.getByRole("listbox", { name: "选择界面主题" });
+  await page.getByRole("button", { name: "设置主题颜色" }).click();
+  const themeList = page.getByRole("dialog", { name: "主题颜色", exact: true });
   await expect(themeList).toBeVisible();
   expect(
     await themeList.evaluate((element) =>
@@ -1883,7 +2466,9 @@ test("held-out provenance is retained without a synthetic warning", async ({ pag
 test("boundary metrics remain unavailable rather than becoming zero", async ({ page }) => {
   const boundary = fixtureCase("boundary-expected-absence");
   const boundaryFailures = await openFixture(page, boundary, "metrics");
-  await expect(page.getByText("不适用").first()).toBeVisible();
+  const unavailableMetrics = page.locator('[data-help-anchor="metrics-summary"] .stat-card strong');
+  await expect(unavailableMetrics).toHaveText(["不适用", "不适用", "不适用", "不适用"]);
+  for (const metric of await unavailableMetrics.all()) await expect(metric).toBeVisible();
   await expect(page.getByText("0/0 请求完成")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
     await page.evaluate(() => document.documentElement.clientWidth),
@@ -1902,7 +2487,7 @@ test("legacy bundles remain readable without invented optional artifacts", async
   expect(legacyFailures).toEqual([]);
 });
 
-test("guided help is keyboard-complete, bilingual, accessible, and reduced-motion safe", async ({ page }) => {
+test("help documentation is keyboard-complete, bilingual, accessible, and reduced-motion safe", async ({ page }) => {
   const fixture = fixtureCase("synthetic-s1-s6-complete");
   const browserFailures = await openFixture(page, fixture, "overview");
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -1912,55 +2497,80 @@ test("guided help is keyboard-complete, bilingual, accessible, and reduced-motio
       window.__guidedHelpScrollBehaviors.push(options?.behavior || "auto");
     };
   });
-
-  const start = page.getByRole("button", { name: "开始逐步指引" });
+  const start = page.getByRole("button", { name: "页面帮助", exact: true });
   await start.focus();
   await page.keyboard.press("Enter");
-  const panel = page.locator(".guided-step-panel");
+  const panel = page.locator("dialog.help-documentation");
   await expect(panel).toBeVisible();
-  await expect(panel.locator("ol > li")).toHaveCount(4);
-  await expect(panel.locator('[aria-current="step"]')).toContainText("确认运行状态");
-  await expect(page.locator('[data-help-anchor="overview-status"]')).toHaveAttribute("data-help-active", "true");
-  await expect(panel.getByRole("button", { name: "关闭指引" })).toBeFocused();
-  expect(await page.evaluate(() => window.__guidedHelpScrollBehaviors)).toContain("auto");
-
-  const next = panel.getByRole("button", { name: "下一步", exact: true });
-  await next.focus();
-  await page.keyboard.press("Enter");
-  await expect(panel.locator('[aria-current="step"]')).toContainText("查看四个关键数字");
-
-  const glossary = panel.getByRole("button", { name: /术语解释/ });
-  await glossary.focus();
-  await page.keyboard.press("Enter");
-  await expect(glossary).toHaveAttribute("aria-expanded", "true");
-  await page.keyboard.press("Escape");
-  await expect(glossary).toHaveAttribute("aria-expanded", "false");
-  await expect(glossary).toBeFocused();
-  await expect(panel).toBeVisible();
-
-  const results = await new AxeBuilder({ page }).analyze();
-  expect(results.violations).toEqual([]);
+  await expect(panel.locator("[data-guide-id]")).toHaveCount(13);
+  await expect(panel.getByRole("button", { name: "关闭帮助" })).toBeFocused();
+  expect(await page.evaluate(() => window.__guidedHelpScrollBehaviors)).toEqual([]);
+  await expect(page.locator("[data-help-active]")).toHaveCount(0);
+  await page.keyboard.press("Shift+Tab");
+  expect(await panel.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+  const originalUrl = page.url();
+  for (const id of [
+    "overview",
+    "experiment",
+    "history",
+    "execution",
+    "metrics",
+    "fabric",
+    "attribution",
+    "design_space",
+    "validation",
+    "evidence_agent",
+    "evidence_lab",
+    "raw_evidence",
+    "unsupported_schema",
+  ]) {
+    await panel.locator('[data-guide-id="' + id + '"]').click();
+    await expect(panel.locator('[aria-current="page"]')).toHaveAttribute("data-guide-id", id);
+    await expect(panel.getByRole("heading", { name: "适用范围与证据边界", exact: true })).toBeAttached();
+    expect(page.url()).toBe(originalUrl);
+    if (id !== "overview") await expect(panel.locator(".help-documentation-locate")).toHaveCount(0);
+  }
+  const search = panel.getByRole("searchbox");
+  await search.fill("no-such-topic");
+  await expect(panel.getByRole("status")).toContainText("没有匹配");
+  await search.fill("TTFT");
+  await expect(panel.locator('[data-guide-id="metrics"]')).toBeVisible();
+  await search.fill("");
+  await panel.locator('[data-guide-id="overview"]').click();
+  await panel.getByRole("button", { name: "术语与定义", exact: true }).click();
+  expect(await page.evaluate(() => window.__guidedHelpScrollBehaviors)).toEqual(["auto"]);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await expectNoUnexpectedTextOverflow(page);
-
   await page.keyboard.press("Escape");
   await expect(panel).toHaveCount(0);
   await expect(start).toBeFocused();
+  await start.click();
+  await panel.locator(".help-documentation-locate").first().click();
+  await expect(panel).toHaveCount(0);
+  await expect(page.locator('[data-help-anchor="overview-status"]')).toBeFocused();
   await page.getByRole("button", { name: "切换到英文" }).click();
-  await expect(page.getByRole("button", { name: "Start step-by-step guide" })).toBeVisible();
-  await expect(page.locator(".key-takeaway")).toContainText("Key takeaway");
+  await page.getByRole("button", { name: "Page help", exact: true }).click();
+  await expect(panel).toHaveAttribute("lang", "en");
+  await expect(panel.getByRole("heading", { name: "Terms and definitions", exact: true })).toBeAttached();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   expect(browserFailures).toEqual([]);
 });
 
 test("raw and unsupported evidence guides remain available at fail-closed boundaries", async ({ page }) => {
   const fixture = fixtureCase("unknown-run-schema");
   const browserFailures = await openFixture(page, fixture);
-  await expect(page.locator(".page-primer")).toContainText("这个报告版本暂时不能安全地结构化展示");
+  await expect(page.getByRole("alert")).toContainText("结构化视图尚未适配该报告版本");
+  await page.getByRole("button", { name: "页面帮助", exact: true }).click();
+  const panel = page.locator("dialog.help-documentation");
+  await expect(panel.getByRole("heading", { name: "报告兼容性", exact: true })).toBeVisible();
+  await expect(panel).toContainText("Schema");
+  await page.keyboard.press("Escape");
   await page.locator(".json-artifact-panel > summary").click();
-  await page.getByRole("button", { name: "查看原始证据指引" }).click();
-  const panel = page.locator(".guided-step-panel");
-  await expect(panel).toContainText("原始证据查看器用于复核");
-  await expect(panel.locator("ol > li")).toHaveCount(4);
-  await expect(page.locator('[data-help-anchor="raw_evidence-open"]')).toHaveAttribute("data-help-active", "true");
+  await page.getByRole("button", { name: "原始证据帮助", exact: true }).click();
+  await expect(panel.getByRole("heading", { name: "原始证据", exact: true })).toBeVisible();
+  await expect(panel).toContainText("uint64");
+  await expect(panel.locator("[data-guide-id]")).toHaveCount(13);
+  await expect(page.locator("[data-help-active]")).toHaveCount(0);
   await expectNoUnexpectedTextOverflow(page);
   expect(browserFailures).toEqual([]);
 });

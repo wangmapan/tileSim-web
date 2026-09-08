@@ -1,7 +1,7 @@
 html[data-appearance="dark"] {
-  --canvas: #09111a;
-  --panel: #111c27;
-  --panel-strong: #162330;
+  --canvas: #10151b;
+  --panel: #182029;
+  --panel-strong: #202a35;
   --ink: #edf4f8;
   --ink-soft: #c4d1da;
   --muted: #91a5b4;
@@ -11,6 +11,11 @@ html[data-appearance="dark"] {
   --accent-hover: #91cae9;
   --accent-soft: #173247;
   --blue: #70b9e2;
+  --chart-series-1: #70b9e2;
+  --chart-series-2: #78bda5;
+  --chart-series-3: #d7ab69;
+  --chart-series-4: #e09a8c;
+  --chart-series-5: #9aa8b6;
   --warning: #e1a760;
   --warning-soft: #362718;
   --warning-ink: #f0bd7d;
@@ -54,6 +59,32 @@ html[data-appearance="dark"] {
   --editor-bg: #071019;
   --editor-border: #345064;
   --editor-text: #dceaf2;
+}
+
+:root[data-appearance="dark"][data-theme] {
+  --canvas: #191a1c;
+  --panel: #191a1c;
+  --panel-strong: #222427;
+  --ink: #e7e8ea;
+  --ink-soft: #c3c5c9;
+  --muted: #9b9fa5;
+  --line: #303236;
+  --line-strong: #484c52;
+  --surface-subtle: #1d1f22;
+  --surface-muted: #222427;
+  --surface-inset: #161719;
+  --control-bg: #202225;
+  --table-header: #202225;
+  --nav: #141517;
+  --nav-soft: #2b2d31;
+  --nav-text: #e7e8ea;
+  --nav-text-soft: #bfc2c7;
+  --nav-muted: #92979e;
+  --nav-border: #3b3e44;
+  --nav-button: #25272b;
+  --nav-button-hover: #303338;
+  --nav-hover: #232529;
+  --nav-card-border: #303236;
 }
 
 html[data-appearance="dark"][data-theme="cloud"] {
@@ -113,14 +144,11 @@ html[data-appearance="dark"][data-theme="classic"] {
 }
 
 html[data-appearance="dark"] body {
-  background:
-    radial-gradient(circle at 78% -12%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 36rem),
-    var(--canvas);
+  background: var(--canvas);
 }
 
 html[data-appearance="dark"] .button--primary,
 html[data-appearance="dark"] .layer-code,
-html[data-appearance="dark"] .execution-current-selection > span,
 html[data-appearance="dark"] .layer-attribution-list > li > span {
   color: #07131b;
 }
@@ -140,24 +168,6 @@ html[data-appearance="dark"] input::placeholder,
 html[data-appearance="dark"] textarea::placeholder {
   color: var(--muted);
   opacity: 0.84;
-}
-
-html[data-appearance="dark"] .theme-swatch {
-  border-color: var(--line-strong);
-  background: #101a23;
-}
-html[data-appearance="dark"] .theme-swatch i:nth-child(3) {
-  border-color: #344958;
-  background: #172430;
-}
-html[data-appearance="dark"] .theme-swatch--cloud {
-  background: #151b20;
-}
-html[data-appearance="dark"] .theme-swatch--mint {
-  background: #0b1c18;
-}
-html[data-appearance="dark"] .theme-swatch--classic {
-  background: #0c1512;
 }
 
 html[data-appearance="dark"] .demo-notice,

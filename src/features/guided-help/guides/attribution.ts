@@ -2,47 +2,59 @@ import { defineGuide } from "../schema";
 
 export const attributionGuide = defineGuide({
   id: "attribution",
-  title: "这里回答“为什么这个请求更慢”",
-  description: "选择一个请求后，沿后端报告中的证据查看各环节贡献；页面不会自行推断因果。",
-  takeaway: "只把 S0–S6 的明确归因项放进 latency causal ranking；S7、S8、S9 不是延迟原因。",
+  title: "慢请求原因",
+  description: "关联请求、资源与网络证据，查看后端报告给出的延迟贡献、原因链和归因审计。",
+  takeaway:
+    "延迟因果排名只包含目标系统的已报告原因。统一仿真执行、校准验证和指标输出记录保留为审计证据，不作为延迟来源。",
   steps: [
     {
       id: "request",
-      title: "先选择一个请求",
-      body: "请求选择会在指标、归因、执行和 AI 解释之间共享；没有稳定 request ID 时不会拼接证据。",
+      title: "请求上下文",
+      body: "请求选择使用稳定 request ID，并在支持请求证据的分析页面之间保留。没有明确身份关联时，页面不按时间接近或文本相似度拼接证据。",
       anchor: "attribution-request",
     },
     {
       id: "chain",
-      title: "沿跨子系统证据链核对",
-      body: "S3/S4/S5 必须作为并列资源证据阅读，不能从时间接近或文本相似度推断连接。",
+      title: "跨模块证据链",
+      body: "请求证据连接运行时、并列资源操作和网络阶段。KV Cache、设备与集合通信保持并列；已绑定、部分证据、缺失和引用无效是不同状态。",
       anchor: "attribution-chain",
     },
     {
       id: "ranking",
-      title: "切换到尾延迟归因",
-      body: "点击 S9 尾延迟归因，再阅读后端报告给出的主导原因排名和占比。",
+      title: "贡献排名",
+      body: "尾延迟归因保留报告顺序、排名与占比。占比条使用固定范围，不重新归一化；报告没有给出的贡献项不会补入排名。",
       anchor: "attribution-ranking",
     },
     {
       id: "audit",
-      title: "按需打开归因审计",
-      body: "只有在复核结论时才查看稳定 ID、可用性原因和原始证据链接。",
+      title: "归因审计",
+      body: "审计用于检查守恒、传播和引用完整性。守恒通过不代表传播链完整，报告置信度也不等于真实系统预测准确率。",
       anchor: "attribution-audit",
     },
   ],
   terms: [
     {
       id: "causal-ranking",
-      term: "causal ranking",
-      definition: "后端报告给出的延迟原因排序，不包含执行宿主和输出子系统。",
+      term: "延迟因果排名",
+      definition: "后端报告给出的延迟原因排序，不包含仿真控制平面与结果输出记录。",
     },
-    { id: "share", term: "贡献占比", definition: "报告归给某项原因的相对份额；不能由前端重新聚合。" },
-    { id: "cause-chain", term: "cause chain", definition: "用稳定实体 ID 和证据引用串联的原因链。" },
+    {
+      id: "share",
+      term: "贡献占比",
+      definition: "报告归给某项原因的相对份额；不能由前端重新聚合。",
+    },
+    {
+      id: "cause-chain",
+      term: "cause chain",
+      definition: "用稳定实体 ID 和证据引用串联的原因链。",
+    },
   ],
-  next: { label: "下一步：核对结果可信度", routeName: "validation" },
+  next: {
+    label: "结果可信度",
+    routeName: "validation",
+  },
   advanced: {
-    title: "最后再看归因契约",
-    body: "审计时再核对 subject、artifact、Schema、SHA-256 与 Pointer；S7/S8/S9 只作为执行、验证和输出证据，不进入 causal ranking。",
+    title: "原始记录与复核",
+    body: "原始证据通过运行 ID、工件、Schema、SHA-256 和 JSON Pointer 定位。原因链是报告提供的解释，不能单独替代真实系统因果实验。",
   },
 });

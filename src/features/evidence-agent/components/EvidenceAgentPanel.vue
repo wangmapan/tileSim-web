@@ -152,7 +152,7 @@ const snapshotReadiness = computed(() => {
     };
   }
   if (!props.selectedRequestId) {
-    return { state: "select" as const, title: "请选择一个 request", detail: "选择后才能把问题绑定到具体请求。" };
+    return { state: "select" as const, title: "请选择请求", detail: "选择后才能把问题绑定到具体请求。" };
   }
   return {
     state: "ready" as const,
@@ -301,15 +301,7 @@ async function submit() {
     <section class="panel evidence-agent-compose">
       <header class="panel-header">
         <div>
-          <p class="section-kicker">{{ isEnglish ? "HOW TO USE" : "怎么使用" }}</p>
-          <h2>{{ isEnglish ? "Use AI to understand a completed request" : "让 AI 帮你看懂一次已完成的请求" }}</h2>
-          <p>
-            {{
-              isEnglish
-                ? "Choose a request and what you want to learn, review the suggested question, then generate the explanation."
-                : "选择一个请求和你想了解的内容，确认推荐问题后生成解释。"
-            }}
-          </p>
+          <h2>{{ isEnglish ? "Request evidence analysis" : "请求证据分析" }}</h2>
         </div>
         <div class="panel-count">
           <ShieldCheck :size="16" />{{
@@ -324,8 +316,10 @@ async function submit() {
         <ShieldCheck v-if="snapshotReady" :size="20" />
         <CircleSlash2 v-else :size="20" />
         <span>
-          <strong>{{ t(snapshotReadiness.title) }}</strong>
-          <small>{{ t(snapshotReadiness.detail) }}</small>
+          <strong>{{
+            snapshotReady ? (isEnglish ? "Evidence ready" : "证据就绪") : t(snapshotReadiness.title)
+          }}</strong>
+          <small v-if="!['ready', 'select'].includes(snapshotReadiness.state)">{{ t(snapshotReadiness.detail) }}</small>
         </span>
         <RouterLink
           v-if="snapshotReadiness.state === 'missing' || snapshotReadiness.state === 'unavailable'"
@@ -337,7 +331,7 @@ async function submit() {
       </div>
       <div class="evidence-agent-form">
         <label data-help-anchor="evidence_agent-request">
-          <span>{{ isEnglish ? "1. Choose the request to explain" : "1. 选择要解释的请求" }}</span>
+          <span>{{ isEnglish ? "Request" : "请求" }}</span>
           <select :value="selectedRequestId || ''" :disabled="!runId" @change="chooseRequest">
             <option value="" disabled>{{ t("请选择请求") }}</option>
             <option v-for="option in chain.requestOptions" :key="option.requestId" :value="option.requestId">
@@ -351,18 +345,13 @@ async function submit() {
           :disabled="!capabilityAvailable"
         />
         <label class="evidence-agent-question" data-help-anchor="evidence_agent-question">
-          <span>{{ isEnglish ? "3. Review or refine the question" : "3. 确认或补充问题" }}</span>
+          <span>{{ isEnglish ? "Question" : "问题" }}</span>
           <textarea
             ref="questionInput"
             v-model="question"
             :maxlength="descriptor?.limits.maximum_question_characters || 4000"
             :disabled="!capabilityAvailable"
           ></textarea>
-          <small class="evidence-agent-question-hint">{{
-            isEnglish
-              ? "Keep the suggested question if it already matches what you need."
-              : "推荐问题可以直接使用；有特别关注的内容再修改。"
-          }}</small>
         </label>
         <EvidenceAgentSubmissionPreview
           :request-id="selectedRequestId"
@@ -380,7 +369,7 @@ async function submit() {
           <p>
             {{ t("生成的解释不会改动原始实验结果。") }}
           </p>
-          <button class="button" :disabled="!canSubmit" @click="submit">
+          <button class="button button--primary" :disabled="!canSubmit" @click="submit">
             <Send :size="16" />{{ agentState === "submitting" ? t("正在生成…") : t("生成解释") }}
           </button>
         </div>
@@ -398,6 +387,13 @@ async function submit() {
       </div>
     </section>
 
+    <EvidenceAgentResultPanel
+      v-if="agentResult"
+      :agent-state="agentState"
+      :agent-result="agentResult"
+      data-help-anchor="evidence_agent-result"
+    />
+
     <EvidenceAgentServiceDetails v-if="descriptorStatus === 'supported' && descriptor" :descriptor="descriptor" />
 
     <EvidenceAgentContractPolicy
@@ -405,13 +401,6 @@ async function submit() {
       :descriptor="descriptor"
       :policy="descriptorPolicy"
       :api-manifest="apiManifest"
-    />
-
-    <EvidenceAgentResultPanel
-      v-if="agentResult"
-      :agent-state="agentState"
-      :agent-result="agentResult"
-      data-help-anchor="evidence_agent-result"
     />
   </div>
 </template>

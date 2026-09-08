@@ -13,11 +13,19 @@ export function openGuidedHelp(guideId: GuideId, trigger?: HTMLElement | null) {
   open.value = true;
 }
 
-export function closeGuidedHelp() {
+export function selectHelpTopic(guideId: GuideId) {
+  activeGuideId.value = guideId;
+  stepIndex.value = 0;
+}
+
+export function closeGuidedHelp(restoreFocus = true) {
   open.value = false;
   const target = returnFocus;
   returnFocus = null;
-  void nextTick(() => target?.focus());
+  if (restoreFocus)
+    void nextTick(() => {
+      if (target?.isConnected) target.focus();
+    });
 }
 
 export function useGuidedHelpState() {

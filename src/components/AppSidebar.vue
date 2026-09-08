@@ -16,6 +16,7 @@ import {
 import { computed } from "vue";
 import { navItems, useDashboard } from "../store/dashboard";
 import { useI18n } from "../i18n";
+import BrandMark from "./ui/BrandMark.vue";
 
 const { state, setView, checkBridge } = useDashboard();
 const { t } = useI18n();
@@ -64,8 +65,8 @@ const bridgeDetail = computed(() => {
 <template>
   <aside class="app-sidebar" :class="{ 'is-open': state.mobileNavOpen }">
     <div class="sidebar-brand">
-      <div class="brand-glyph" aria-hidden="true"><span></span><span></span><span></span></div>
-      <div>
+      <BrandMark />
+      <div class="brand-wordmark">
         <strong>TileSim</strong><small>{{ t("仿真实验台") }}</small>
       </div>
       <button class="icon-button mobile-only" :aria-label="t('关闭导航')" @click="state.mobileNavOpen = false">
@@ -86,6 +87,7 @@ const bridgeDetail = computed(() => {
           :key="item.id"
           class="nav-link"
           :class="{ active: state.view === item.id }"
+          :aria-current="state.view === item.id ? 'page' : undefined"
           :title="t(item.description)"
           @click="setView(item.id)"
         >

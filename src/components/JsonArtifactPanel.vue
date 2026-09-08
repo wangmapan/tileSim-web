@@ -365,7 +365,7 @@ onBeforeUnmount(releaseCurrentArtifact);
       <span>{{ t("按需加载") }}</span>
     </summary>
     <div class="json-artifact-body">
-      <GuidedHelpTrigger guide-id="raw_evidence" label="查看原始证据指引" />
+      <GuidedHelpTrigger guide-id="raw_evidence" label="原始证据帮助" />
       <header>
         <label data-help-anchor="raw_evidence-artifact">
           <small>{{ t("选择工件") }}</small>

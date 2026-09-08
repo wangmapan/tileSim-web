@@ -1,8 +1,12 @@
 /** @vitest-environment jsdom */
 
-import { flushPromises, mount } from "@vue/test-utils";
-import { describe, expect, it } from "vitest";
+import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
+import { afterEach, describe, expect, it } from "vitest";
+import { defineComponent, h, onMounted, onUnmounted } from "vue";
 import ExecutionVisualizationPanel from "../../src/features/execution-inspector/components/ExecutionVisualizationPanel.vue";
+import type { LayerVisualization } from "../../src/features/execution-inspector/model/types";
+
+enableAutoUnmount(afterEach);
 
 describe("execution visualization panel", () => {
   it("does not initialize a chart for unavailable data", () => {
@@ -120,6 +124,10 @@ describe("execution visualization panel", () => {
 
     expect(wrapper.find(".visualization-reading-protocol").exists()).toBe(false);
     expect(wrapper.get(".visualization-caption").text()).toBe("直接显示报告值。");
+    expect(wrapper.findAll(".visualization-table-scroll tbody tr")).toHaveLength(0);
+    const disclosure = wrapper.get<HTMLDetailsElement>(".visualization-data");
+    disclosure.element.open = true;
+    await disclosure.trigger("toggle");
     expect(wrapper.findAll(".visualization-table-scroll tbody tr")).toHaveLength(2);
     expect(wrapper.text()).toContain("end_to_end_latency_ps: 0 ps");
     wrapper.findComponent({ name: "AsyncComponentWrapper" }).vm.$emit("rowSelected", 0);
@@ -128,5 +136,79 @@ describe("execution visualization panel", () => {
     expect(wrapper.find('.visualization-selection [data-source-path="metrics:/request_metrics/0"]').exists()).toBe(
       true,
     );
+  });
+
+  it("pages exact field values only while expanded without remounting the chart", async () => {
+    let mounts = 0;
+    let disposals = 0;
+    const chartProbe = defineComponent({
+      setup() {
+        onMounted(() => {
+          mounts += 1;
+        });
+        onUnmounted(() => {
+          disposals += 1;
+        });
+        return () => h("div", { class: "chart-probe" });
+      },
+    });
+    const visualization: LayerVisualization = {
+      id: "paged-evidence",
+      kind: "bar",
+      title: "请求比较",
+      description: "报告原值",
+      question: "",
+      firstLook: "",
+      boundary: "不补造数据。",
+      rationale: "",
+      unit: "µs",
+      sourcePaths: ["metrics:/request_metrics"],
+      derivation: "identity",
+      columns: ["值"],
+      rawColumns: ["exact_ps"],
+      rawUnit: "ps",
+      series: [{ name: "值" }],
+      rows: Array.from({ length: 60 }, (_, index) => ({
+        label: `request-${index}`,
+        values: [index === 0 ? 0 : null],
+        rawValues: [index === 50 ? "9007199254740993" : "0"],
+        sourcePath: `metrics:/request_metrics/${index}`,
+        status: index === 59 ? "reported" : undefined,
+      })),
+    };
+    const wrapper = mount(ExecutionVisualizationPanel, {
+      props: { visualization, showBoundary: true },
+      global: { stubs: { ExecutionChart: chartProbe, ArtifactEvidenceLink: true } },
+    });
+    await flushPromises();
+    expect(mounts).toBe(1);
+    expect(wrapper.find(".visualization-table-scroll").exists()).toBe(false);
+    expect(wrapper.get(".visualization-boundary").text()).toContain("不补造数据");
+    const disclosure = wrapper.get<HTMLDetailsElement>(".visualization-data");
+    disclosure.element.open = true;
+    await disclosure.trigger("toggle");
+    expect(wrapper.findAll("tbody tr")).toHaveLength(25);
+    expect(wrapper.findAll("tbody tr")[0].text()).toContain("0");
+    expect(wrapper.get("thead").text()).toContain("报告状态");
+    await wrapper.get(".record-pager button:last-child").trigger("click");
+    expect(wrapper.findAll("tbody tr")[0].text()).toContain("request-25");
+    await wrapper.get(".record-pager button:last-child").trigger("click");
+    expect(wrapper.findAll("tbody tr")).toHaveLength(10);
+    expect(wrapper.findAll("tbody tr")[0].text()).toContain("9007199254740993");
+    expect(wrapper.findAll("tbody tr")[0].text()).toContain("metrics:/request_metrics/50");
+    wrapper.findComponent(chartProbe).vm.$emit("rowSelected", 0);
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find(".visualization-selection").exists()).toBe(true);
+    await wrapper.setProps({ visualization: { ...visualization, rows: visualization.rows.slice(0, 2) } });
+    expect(wrapper.find(".visualization-selection").exists()).toBe(false);
+    expect(wrapper.findAll("tbody tr")).toHaveLength(2);
+    expect(wrapper.find(".record-pager").exists()).toBe(false);
+    disclosure.element.open = false;
+    await disclosure.trigger("toggle");
+    expect(wrapper.find(".visualization-table-scroll").exists()).toBe(false);
+    expect(mounts).toBe(1);
+    expect(disposals).toBe(0);
+    wrapper.unmount();
+    expect(disposals).toBe(1);
   });
 });

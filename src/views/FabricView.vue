@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { Activity, ChevronDown, Network, ShieldCheck, Target, Waves } from "@lucide/vue";
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import ArtifactEvidenceLink from "../components/ArtifactEvidenceLink.vue";
 import EmptyState from "../components/EmptyState.vue";
-import StatCard from "../components/StatCard.vue";
+import UtilizationMeasure from "../components/ui/UtilizationMeasure.vue";
+import "../styles/workbench.css";
+import RecordPager from "../components/ui/RecordPager.vue";
+import { useRecordPage } from "../components/ui/useRecordPage";
 import { buildFabricAnalysis } from "../features/f7-analysis";
 import { buildFabricCompositionVisualizations, ExecutionVisualizationPanel } from "../features/execution-inspector";
 import { formatNumber, formatPercent, statusLabel } from "../lib/format";
@@ -18,6 +21,21 @@ const analysis = computed(() =>
 const systemSummary = computed(() => analysis.value.summary);
 const domains = computed(() => analysis.value.domains);
 const requests = computed(() => analysis.value.requests);
+const { page: requestPage, pages: requestPages, visibleRecords: visibleRequests } = useRecordPage(requests);
+const { page: domainPage, pages: domainPages, visibleRecords: visibleDomains } = useRecordPage(domains);
+const domainsOpen = ref(false);
+const hasReportedHotspot = computed(() =>
+  Boolean(
+    systemSummary.value?.dominant_fabric_backpressure_domain_id?.trim() &&
+    systemSummary.value?.dominant_fabric_backpressure_kind?.trim(),
+  ),
+);
+watch(
+  () => state.bundle.metrics,
+  () => {
+    domainsOpen.value = false;
+  },
+);
 const compositionVisualizations = computed(() => buildFabricCompositionVisualizations(state.bundle.metrics));
 
 function utilizationWidth(value: number | undefined) {
@@ -33,60 +51,73 @@ function utilizationWidth(value: number | undefined) {
     action-label="新建实验"
     action-to="/experiment"
   />
-  <div v-else class="view-stack">
-    <section class="stat-grid stat-grid--three" data-help-anchor="fabric-summary">
-      <StatCard
-        :label="t('通信资源占用')"
-        :value="formatPercent(systemSummary?.fabric_utilization_ratio)"
-        :hint="t('所有活跃通信范围的总体占用')"
-        accent
-      />
-      <StatCard
-        :label="t('最长通信等待')"
-        :value="`${formatNumber(systemSummary?.max_fabric_backpressure_delay_us)} µs`"
-        :hint="t('当前观测窗口')"
-      />
-      <StatCard
-        :label="t('通信范围数量')"
-        :value="formatNumber(domains.length, 0)"
-        :hint="t('本次实验涉及的通信范围')"
-      />
+  <div v-else class="view-stack fabric-view">
+    <section class="analysis-stage fabric-stage">
+      <div class="analysis-stage__primary fabric-summary" data-help-anchor="fabric-summary">
+        <p class="section-kicker">{{ t("网络观测") }}</p>
+        <h2>{{ t("最长通信等待") }}</h2>
+        <div class="hero-measure">
+          <div>
+            <strong>{{ formatNumber(systemSummary.max_fabric_backpressure_delay_us) }}</strong
+            ><small>µs</small>
+          </div>
+          <span>{{ t("当前观测窗口") }}</span>
+        </div>
+        <dl class="fabric-stage__support">
+          <div>
+            <dt>{{ t("通信资源占用") }}</dt>
+            <dd>
+              <UtilizationMeasure
+                :value="systemSummary.fabric_utilization_ratio"
+                :text="formatPercent(systemSummary.fabric_utilization_ratio)"
+              />
+              <small>{{ t("所有活跃通信范围的总体占用") }}</small>
+            </dd>
+          </div>
+          <div>
+            <dt>{{ t("通信范围数量") }}</dt>
+            <dd>
+              {{ formatNumber(domains.length, 0) }}
+              <small>{{ t("本次实验涉及的通信范围") }}</small>
+            </dd>
+          </div>
+        </dl>
+      </div>
+      <article class="analysis-stage__secondary fabric-hotspot-panel" data-help-anchor="fabric-hotspot">
+        <header class="panel-header panel-header--row">
+          <div>
+            <h2>{{ t(hasReportedHotspot ? "当前主要通信瓶颈" : "主要通信瓶颈信息不完整") }}</h2>
+            <p v-if="!hasReportedHotspot">{{ t("主导域或延迟类型未报告；请查看逐域指标，不按利用率猜测瓶颈。") }}</p>
+          </div>
+          <ArtifactEvidenceLink source-path="metrics:/system_summary" />
+        </header>
+        <dl class="fabric-hotspot-grid">
+          <div>
+            <dt><Target :size="14" />{{ t("主导域") }}</dt>
+            <dd>{{ systemSummary?.dominant_fabric_backpressure_domain_id || t("缺失") }}</dd>
+          </div>
+          <div>
+            <dt>{{ t("主导延迟") }}</dt>
+            <dd>{{ statusLabel(systemSummary?.dominant_fabric_backpressure_kind) }}</dd>
+          </div>
+          <div>
+            <dt>{{ t("背压事件") }}</dt>
+            <dd>{{ formatNumber(systemSummary?.fabric_backpressure_event_count, 0) }}</dd>
+          </div>
+          <div>
+            <dt>{{ t("观测窗口") }}</dt>
+            <dd>{{ formatNumber(systemSummary?.fabric_observation_window_ps) }} ps</dd>
+          </div>
+        </dl>
+      </article>
     </section>
-
-    <article class="panel fabric-hotspot-panel" data-help-anchor="fabric-hotspot">
-      <header class="panel-header panel-header--row">
-        <div>
-          <p class="section-kicker">{{ t("本次重点") }}</p>
-          <h2>{{ t("当前主要通信瓶颈") }}</h2>
-          <p>{{ t("后端报告指出，下面的网络域和等待类型最值得优先检查；页面不会自行猜测原因。") }}</p>
-        </div>
-        <ArtifactEvidenceLink source-path="metrics:/system_summary" />
-      </header>
-      <dl class="fabric-hotspot-grid">
-        <div>
-          <dt><Target :size="14" />{{ t("主导域") }}</dt>
-          <dd>{{ systemSummary?.dominant_fabric_backpressure_domain_id || t("缺失") }}</dd>
-        </div>
-        <div>
-          <dt>{{ t("主导延迟") }}</dt>
-          <dd>{{ statusLabel(systemSummary?.dominant_fabric_backpressure_kind) }}</dd>
-        </div>
-        <div>
-          <dt>{{ t("背压事件") }}</dt>
-          <dd>{{ formatNumber(systemSummary?.fabric_backpressure_event_count, 0) }}</dd>
-        </div>
-        <div>
-          <dt>{{ t("观测窗口") }}</dt>
-          <dd>{{ formatNumber(systemSummary?.fabric_observation_window_ps) }} ps</dd>
-        </div>
-      </dl>
-    </article>
 
     <section class="analysis-visualization-stack" :aria-label="t('通信时间构成图')">
       <ExecutionVisualizationPanel
         v-for="visualization in compositionVisualizations"
         :key="visualization.id"
         :visualization="visualization"
+        show-boundary
       />
     </section>
 
@@ -116,7 +147,13 @@ function utilizationWidth(value: number | undefined) {
       </dl>
     </details>
 
-    <details v-if="domains.length" class="panel fabric-domain-disclosure" data-help-anchor="fabric-domains">
+    <details
+      v-if="domains.length"
+      class="panel fabric-domain-disclosure"
+      data-help-anchor="fabric-domains"
+      :open="domainsOpen"
+      @toggle="domainsOpen = ($event.target as HTMLDetailsElement).open"
+    >
       <summary>
         <div>
           <small>{{ t("专业详情") }}</small>
@@ -125,9 +162,9 @@ function utilizationWidth(value: number | undefined) {
         <span>{{ t("{count} 个范围", { count: domains.length }) }}</span>
         <ChevronDown :size="17" />
       </summary>
-      <section class="domain-grid">
+      <section v-if="domainsOpen" class="domain-grid">
         <article
-          v-for="(domain, domainIndex) in domains"
+          v-for="(domain, domainIndex) in visibleDomains"
           :key="`${domain.domain_id}-${domainIndex}`"
           class="domain-card"
         >
@@ -191,6 +228,7 @@ function utilizationWidth(value: number | undefined) {
           <small v-else class="domain-topology-status">topology: {{ domain.topologyAvailability }}</small>
         </article>
       </section>
+      <RecordPager v-if="domainsOpen" v-model:page="domainPage" :pages="domainPages" :label="t('通信范围详情分页')" />
     </details>
 
     <article class="panel">
@@ -201,8 +239,8 @@ function utilizationWidth(value: number | undefined) {
           <p>{{ t("利用率描述模拟 Fabric 的占用，不等同于真实集群链路计数器。") }}</p>
         </div>
       </header>
-      <div class="table-wrap">
-        <table>
+      <div class="table-wrap fabric-table-scroll" role="region" :aria-label="t('通信范围明细')" tabindex="0">
+        <table class="fabric-domain-table">
           <thead>
             <tr>
               <th>{{ t("域") }}</th>
@@ -211,10 +249,11 @@ function utilizationWidth(value: number | undefined) {
               <th class="numeric">{{ t("队列延迟") }}</th>
               <th class="numeric">{{ t("拥塞延迟") }}</th>
               <th class="numeric">{{ t("运行时间") }}</th>
+              <th>{{ t("证据") }}</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(domain, domainIndex) in domains" :key="`${domain.domain_id}-${domainIndex}`">
+            <tr v-for="(domain, domainIndex) in visibleDomains" :key="`${domain.domain_id}-${domainIndex}`">
               <td>
                 <strong>{{ domain.domain_id }}</strong>
               </td>
@@ -223,16 +262,23 @@ function utilizationWidth(value: number | undefined) {
               <td class="numeric">{{ formatNumber(domain.queue_delay_us) }} µs</td>
               <td class="numeric">{{ formatNumber(domain.congestion_delay_us) }} µs</td>
               <td class="numeric">{{ formatNumber(domain.runtime_us) }} µs</td>
+              <td>
+                <ArtifactEvidenceLink
+                  v-if="domain.evidence.sourcePath"
+                  :source-path="domain.evidence.sourcePath"
+                /><small v-else>{{ domain.availability }}</small>
+              </td>
             </tr>
           </tbody>
         </table>
       </div>
+      <RecordPager v-model:page="domainPage" :pages="domainPages" :label="t('通信范围明细分页')" />
     </article>
 
     <article class="panel" data-help-anchor="fabric-requests">
       <header class="panel-header panel-header--row">
         <div>
-          <p class="section-kicker">REQUEST / DOMINANT PHASE</p>
+          <p class="section-kicker">{{ t("请求与主导阶段") }}</p>
           <h2>{{ t("请求级 Fabric contribution") }}</h2>
           <p>
             {{ t("按后端报告顺序展示 request；dominant phase 只通过 request_id 和 phase_id 的唯一稳定匹配连接。") }}
@@ -240,7 +286,13 @@ function utilizationWidth(value: number | undefined) {
         </div>
         <div class="panel-count">{{ requests.length }} requests</div>
       </header>
-      <div v-if="requests.length" class="table-wrap">
+      <div
+        v-if="requests.length"
+        class="table-wrap fabric-table-scroll"
+        role="region"
+        :aria-label="t('请求级 Fabric contribution')"
+        tabindex="0"
+      >
         <table class="fabric-request-table">
           <thead>
             <tr>
@@ -255,7 +307,7 @@ function utilizationWidth(value: number | undefined) {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(request, requestIndex) in requests" :key="`${request.request_id}-${requestIndex}`">
+            <tr v-for="(request, requestIndex) in visibleRequests" :key="`${request.request_id}-${requestIndex}`">
               <td>
                 <code>{{ request.request_id || t("缺失") }}</code>
               </td>
@@ -291,6 +343,7 @@ function utilizationWidth(value: number | undefined) {
         </table>
       </div>
       <p v-else class="panel-empty-copy">{{ t("没有 request_fabric_contributions") }}</p>
+      <RecordPager v-model:page="requestPage" :pages="requestPages" :label="t('请求通信贡献分页')" />
     </article>
 
     <section

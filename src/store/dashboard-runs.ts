@@ -19,10 +19,12 @@ export function createDashboardRunCoordinator({ applyBundle, setView }: Dashboar
   async function loadHistory({ quiet = false, refresh = false }: { quiet?: boolean; refresh?: boolean } = {}) {
     if (!state.bridge.connected) return;
     state.history.loading = true;
+    state.history.error = "";
     try {
       const payload = await fetchRunHistory(queryContext(), { refresh });
       state.history.runs = payload.runs || [];
     } catch (error) {
+      state.history.error = errorMessage(error);
       if (!quiet) session.notify(t("读取运行记录失败：{message}", { message: errorMessage(error) }), "danger");
     } finally {
       state.history.loading = false;

@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { mount } from "@vue/test-utils";
+import { mount, flushPromises } from "@vue/test-utils";
 import { defineComponent, nextTick } from "vue";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,85 +12,128 @@ import {
   TermHelp,
   openGuidedHelp,
 } from "../../src/features/guided-help";
+import { routedGuideIds } from "../../src/features/guided-help/schema";
 import { setLocale } from "../../src/i18n";
 
 const router = createRouter({
   history: createMemoryHistory(),
-  routes: [
-    { path: "/overview", name: "overview", component: { template: "<div />" } },
-    { path: "/execution", name: "execution", component: { template: "<div />" } },
-  ],
+  routes: routedGuideIds.map((name) => ({ path: "/" + name, name, component: { template: "<div />" } })),
 });
+const Harness = defineComponent({
+  components: { GuidedHelpHost, PagePrimer },
+  setup: () => ({ guide: guideRegistry.overview }),
+  template:
+    '<PagePrimer :guide="guide" /><details><section data-help-anchor="overview-status">status</section></details><GuidedHelpHost default-guide-id="overview" />',
+});
+const wrappers: ReturnType<typeof mount>[] = [];
+async function openDocument() {
+  const wrapper = mount(Harness, { attachTo: document.body, global: { plugins: [router] } });
+  wrappers.push(wrapper);
+  const trigger = wrapper.get(".page-primer-trigger");
+  await trigger.trigger("click");
+  await vi.dynamicImportSettled();
+  await flushPromises();
+  return { wrapper, trigger, panel: document.querySelector("dialog")! };
+}
 
 beforeEach(async () => {
   localStorage.clear();
   setLocale("zh-CN");
   closeGuidedHelp();
   document.body.innerHTML = "";
-  Object.defineProperty(window, "matchMedia", {
-    configurable: true,
-    value: vi.fn(() => ({ matches: false })),
-  });
+  document.body.style.overflow = "auto";
   HTMLElement.prototype.scrollIntoView = vi.fn();
-  await router.push({ name: "overview" });
+  HTMLDialogElement.prototype.showModal = function () {
+    this.setAttribute("open", "");
+  };
+  HTMLDialogElement.prototype.close = function () {
+    this.removeAttribute("open");
+  };
+  await router.push({
+    name: "overview",
+    query: { run: "run-9007199254740993", evidence_request: "req/0", evidence_pointer: "/old" },
+  });
   await router.isReady();
 });
-
-afterEach(() => {
+afterEach(async () => {
   closeGuidedHelp();
+  for (const wrapper of wrappers.splice(0)) wrapper.unmount();
+  await nextTick();
 });
 
-describe("guided help components", () => {
-  it("renders plain-language purpose and a text-labeled key takeaway", () => {
-    const wrapper = mount(PagePrimer, { props: { guide: guideRegistry.overview } });
-    expect(wrapper.text()).toContain(guideRegistry.overview.title);
-    expect(wrapper.text()).toContain("重点：");
-    expect(wrapper.get("button").text()).toContain("开始逐步指引");
+describe("help documentation", () => {
+  it("opens directly from one opt-in button and restores focus and scrolling on cancel", async () => {
+    const { trigger, panel } = await openDocument();
+    expect(trigger.text()).toBe("页面帮助");
+    expect(trigger.attributes("aria-haspopup")).toBe("dialog");
+    expect(trigger.attributes("aria-expanded")).toBe("true");
+    expect(panel.open).toBe(true);
+    expect(panel.querySelectorAll("[data-guide-id]")).toHaveLength(13);
+    for (const section of guideRegistry.overview.steps) expect(panel.textContent).toContain(section.body);
+    expect(panel.textContent).toContain("术语与定义");
+    expect(panel.textContent).toContain("适用范围与证据边界");
+    expect(document.body.style.overflow).toBe("hidden");
+    expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
+    expect(document.querySelector("[data-help-active]")).toBeNull();
+    panel.dispatchEvent(new Event("cancel", { cancelable: true }));
+    await nextTick();
+    await nextTick();
+    expect(document.querySelector("dialog")).toBeNull();
+    expect(document.activeElement).toBe(trigger.element);
+    expect(document.body.style.overflow).toBe("auto");
   });
-
-  it("uses an ordered step list, aria-current, live updates, and restores focus on Escape", async () => {
-    const Harness = defineComponent({
-      components: { GuidedHelpHost },
-      setup() {
-        function start(event: MouseEvent) {
-          openGuidedHelp("overview", event.currentTarget as HTMLElement);
-        }
-        return { start };
-      },
-      template: `
-        <button id="guide-opener" type="button" @click="start">open</button>
-        <section data-help-anchor="overview-status">status</section>
-        <GuidedHelpHost default-guide-id="overview" />
-      `,
-    });
-    const wrapper = mount(Harness, { attachTo: document.body, global: { plugins: [router] } });
-    const opener = wrapper.get("#guide-opener");
-    await opener.trigger("click");
+  it("searches and changes topics without navigating or exposing unavailable anchors", async () => {
+    const { panel } = await openDocument();
+    const initial = router.currentRoute.value.fullPath;
+    const search = panel.querySelector("input")!;
+    search.value = "没有这个主题";
+    search.dispatchEvent(new Event("input"));
+    await nextTick();
+    expect(panel.querySelector('[role="status"]')?.textContent).toContain("没有匹配");
+    search.value = "";
+    search.dispatchEvent(new Event("input"));
+    await nextTick();
+    (panel.querySelector('[data-guide-id="validation"]') as HTMLElement).click();
     await nextTick();
     await nextTick();
-
-    const panel = document.querySelector(".guided-step-panel");
-    expect(panel).not.toBeNull();
-    expect(panel?.querySelector("ol")).not.toBeNull();
-    expect(panel?.querySelector('[aria-current="step"]')?.textContent).toContain("确认运行状态");
-    expect(document.querySelector('[data-help-anchor="overview-status"]')?.getAttribute("data-help-active")).toBe(
-      "true",
-    );
-    expect(document.querySelector('[aria-live="polite"]')?.textContent).toContain("第 1 步");
-
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(panel.querySelector("h1")?.textContent).toBe("结果可信度");
+    expect(panel.querySelector('[aria-current="page"]')?.textContent).toContain("结果可信度");
+    expect(panel.querySelectorAll(".help-documentation-locate")).toHaveLength(0);
+    expect(router.currentRoute.value.fullPath).toBe(initial);
+    const link = panel.querySelector(".help-documentation-related a")!;
+    expect(link.getAttribute("href")).toContain("run=run-9007199254740993");
+    expect(link.getAttribute("href")).toContain("evidence_request=req/0");
+    expect(link.getAttribute("href")).not.toContain("evidence_pointer");
+  });
+  it("locates only existing sections on explicit request and opens their disclosure", async () => {
+    const { panel } = await openDocument();
+    expect(panel.querySelectorAll(".help-documentation-locate")).toHaveLength(1);
+    (panel.querySelector(".help-documentation-locate") as HTMLElement).click();
     await nextTick();
-    expect(document.querySelector(".guided-step-panel")).toBeNull();
-    expect(document.activeElement).toBe(opener.element);
+    await nextTick();
+    expect(document.querySelector("dialog")).toBeNull();
+    expect(document.querySelector("details")?.open).toBe(true);
+    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({ behavior: "auto", block: "center" });
+    expect(document.activeElement).toBe(document.querySelector('[data-help-anchor="overview-status"]'));
+  });
+  it("leaves no dialog or scroll lock after unmount or rapid cancellation", async () => {
+    const { wrapper } = await openDocument();
     wrapper.unmount();
+    expect(document.body.style.overflow).toBe("auto");
+    expect(document.querySelector("dialog")).toBeNull();
+    openGuidedHelp("overview");
+    closeGuidedHelp();
+    await vi.dynamicImportSettled();
+    await flushPromises();
+    expect(document.querySelector("dialog")).toBeNull();
   });
-
-  it("exposes expandable terminology with aria state and closes it with Escape", async () => {
+  it("retains accessible standalone terminology disclosures", async () => {
     const wrapper = mount(TermHelp, {
       props: { label: "术语解释", count: 2 },
       slots: { default: "<p>TTFT definition</p>" },
       attachTo: document.body,
     });
+    wrappers.push(wrapper);
     const trigger = wrapper.get("button");
     expect(trigger.attributes("aria-expanded")).toBe("false");
     expect(trigger.attributes("aria-controls")).toBeTruthy();

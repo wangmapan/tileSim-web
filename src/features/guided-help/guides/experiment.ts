@@ -2,32 +2,32 @@ import { defineGuide } from "../schema";
 
 export const experimentGuide = defineGuide({
   id: "experiment",
-  title: "先从一个可复现的小实验开始",
-  description: "按顺序填写必需参数，确认预览后再运行；不确定时可以保留默认值。",
-  takeaway: "先确认数据来源、请求精度和最终可用精度，再提交实验。",
+  title: "新建实验",
+  description: "配置工作负载、Trace package、运行时和网络参数，检查仿真能力与请求预览后提交实验。",
+  takeaway: "输入来源与仿真精度是独立维度。合成轨迹和兼容性辅助轨迹不能因采用更高精度后端而升级为真实测量证据。",
   steps: [
     {
       id: "identity",
-      title: "给实验命名并选择场景",
-      body: "名称用于稍后在运行记录中查找；场景决定可用字段和默认值。",
+      title: "实验名称与场景",
+      body: "实验名称用于运行记录中的识别。场景决定可配置字段、默认值和适用条件；切换场景后应重新检查参数预览。",
       anchor: "experiment-identity",
     },
     {
       id: "inputs",
-      title: "按顺序检查输入",
-      body: "先确认工作负载和 trace 来源，再检查运行时与网络配置；不熟悉的字段可以保留 descriptor 提供的默认值。",
+      title: "输入与 Trace package",
+      body: "输入包括工作负载、运行时和网络配置。使用 Trace package 时，应核对来源模式、校准级别、观测与推断字段以及允许声明范围。网络流轨迹描述通信需求，不代表模拟网络已经执行的路径或拥塞状态。",
       anchor: "experiment-inputs",
     },
     {
       id: "fidelity",
-      title: "分开看请求精度和最终精度",
-      body: "requested fidelity 是你提出的目标，resolved fidelity 是各环节实际可执行的精度，两者可能不同。",
+      title: "仿真精度与能力",
+      body: "requested fidelity 表示请求精度，resolved fidelity 表示实际采用的精度。Analytical、DES、Cycle 的可用范围以服务能力和各环节的执行配置为准。",
       anchor: "experiment-capabilities",
     },
     {
       id: "preview",
-      title: "运行前核对预览",
-      body: "确认必填项、适用性和输入来源无误后再运行；错误会指向稳定字段，而不是由帮助层改写请求。",
+      title: "预览、校验与提交",
+      body: "提交前核对必填字段、单位、输入来源及实际执行范围。校验错误指向对应字段；帮助文档不会修改参数、补全缺失证据或代为提交实验。",
       anchor: "experiment-submit",
     },
   ],
@@ -43,9 +43,12 @@ export const experimentGuide = defineGuide({
       definition: "它们是仿真精度层级；Cycle 只适用于真实实现的热点细化，不代表全栈都达到周期级。",
     },
   ],
-  next: { label: "下一步：运行完成后查看概览", routeName: "overview" },
+  next: {
+    label: "运行概览",
+    routeName: "overview",
+  },
   advanced: {
-    title: "最后再看字段契约",
-    body: "排查提交问题时再查看 field_id、request JSON Pointer、Schema identity 与 capability；这些信息不会改变 Provider 或 Bridge 行为。",
+    title: "原始记录与复核",
+    body: "字段契约中的 field_id、JSON Pointer、Schema identity 和 capability 用于复现请求及排查校验问题。保留提交时的配置和输入身份。",
   },
 });

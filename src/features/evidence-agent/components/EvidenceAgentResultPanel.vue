@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Braces, CircleSlash2 } from "@lucide/vue";
+import { CircleSlash2 } from "@lucide/vue";
 import { computed, nextTick, onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 import type { EvidenceAgentUiState, ValidatedEvidenceAgentResult } from "../../../entities/evidence-agent";
@@ -62,7 +62,7 @@ function groupLabel(groupId: EvidenceAgentClaimGroupId) {
 }
 
 function emptyGroupLabel() {
-  return isEnglish.value ? "No atomic claim in this category." : "当前没有此类 atomic claim。";
+  return isEnglish.value ? "No content returned in this category." : "未返回此类内容。";
 }
 
 function evidenceLabel(count: number) {
@@ -96,14 +96,19 @@ onMounted(async () => {
 <template>
   <section
     class="panel evidence-agent-result"
-    :aria-label="t('Agent 独立草稿')"
+    :aria-label="isEnglish ? 'Analysis draft' : '分析草稿'"
     data-help-anchor="evidence_agent-result"
   >
     <header class="panel-header">
       <div>
-        <p class="section-kicker">ATOMIC CLAIMS · USER CONFIRMATION REQUIRED</p>
-        <h2 ref="resultHeading" tabindex="-1">{{ t("Agent 独立草稿") }}</h2>
-        <p>{{ t("每条事实单独验证引用；结果不会覆盖 deterministic report。") }}</p>
+        <h2 ref="resultHeading" tabindex="-1">{{ isEnglish ? "Analysis draft" : "分析草稿" }}</h2>
+        <p>
+          {{
+            isEnglish
+              ? "Requires human review; the original simulation report is unchanged."
+              : "内容需人工复核；不会修改原始仿真报告。"
+          }}
+        </p>
       </div>
       <span class="evidence-agent-state" :data-state="agentState">{{
         t(evidenceAgentStatusLabels[agentState] || agentState)
@@ -111,7 +116,7 @@ onMounted(async () => {
     </header>
 
     <details v-if="agentState !== 'stale'" class="evidence-agent-result-identity">
-      <summary>{{ t("专业详情") }}</summary>
+      <summary>{{ isEnglish ? "Run and model identity" : "运行与模型标识" }}</summary>
       <dl>
         <div>
           <dt>request_id</dt>
@@ -204,19 +209,25 @@ onMounted(async () => {
           >
             <p class="evidence-agent-claim-text">{{ entry.claim.text }}</p>
             <details v-if="entry.claim.citations.length" class="evidence-agent-claim-evidence">
-              <summary><Braces :size="14" />{{ evidenceLabel(entry.claim.citations.length) }}</summary>
+              <summary>{{ evidenceLabel(entry.claim.citations.length) }}</summary>
               <ol class="evidence-agent-citations">
                 <li
                   v-for="(citation, citationIndex) in entry.claim.citations"
                   :key="`${citation.artifact_id}:${citation.json_pointer}:${citation.subject.kind}:${citation.subject.id}`"
                 >
-                  <RouterLink :to="citationRoute(citation)">
-                    <Braces :size="14" />{{
-                      isEnglish ? `Open source evidence ${citationIndex + 1}` : `打开原始证据 ${citationIndex + 1}`
-                    }}
+                  <RouterLink
+                    :to="citationRoute(citation)"
+                    :aria-label="
+                      isEnglish
+                        ? `Open source evidence ${citationIndex + 1}: ${citation.artifact_id}`
+                        : `打开原始证据 ${citationIndex + 1}：${citation.artifact_id}`
+                    "
+                  >
+                    <span>{{ citation.artifact_id }}</span>
+                    <code>{{ citation.json_pointer || t("根 Pointer") }}</code>
                   </RouterLink>
                   <details class="evidence-agent-citation-identity">
-                    <summary>{{ t("专业详情") }}</summary>
+                    <summary>{{ isEnglish ? "Citation metadata" : "引用元数据" }}</summary>
                     <dl>
                       <div>
                         <dt>artifact_id</dt>
@@ -269,7 +280,7 @@ onMounted(async () => {
               </ol>
             </details>
             <details class="evidence-agent-claim-identity">
-              <summary>{{ t("专业详情") }}</summary>
+              <summary>{{ isEnglish ? "Claim metadata" : "陈述元数据" }}</summary>
               <dl>
                 <div>
                   <dt>claim_id</dt>

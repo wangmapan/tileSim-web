@@ -2,43 +2,59 @@ import { defineGuide } from "../schema";
 
 export const executionGuide = defineGuide({
   id: "execution",
-  title: "这里展示一次请求经过了哪些环节",
-  description: "从输入、调度和执行计划，进入并列资源语义，再汇合到网络；专业记录按需展开。",
-  takeaway: "S3、S4、S5 是并列资源环节；S7 只负责把执行放在同一时间轴上。",
+  title: "执行过程",
+  description: "查看请求、运行时、执行语义、资源操作与网络活动在统一仿真时间轴上的组织及对应报告。",
+  takeaway:
+    "KV Cache、设备性能和集合通信是并列资源语义。仿真执行与控制平面管理时间和状态推进，不是第六个目标系统层，也不是延迟因果来源。",
   steps: [
     {
       id: "flow",
-      title: "从左到右阅读执行路线",
-      body: "先看 S0 → S1 → S2，再看并列的 S3/S4/S5，最后看 S6；不要把三个资源环节读成顺序链。",
+      title: "执行结构",
+      body: "工作负载与请求进入推理引擎和服务运行时，由执行语义建模形成执行片段，再关联 KV Cache、设备和集合通信等资源操作。通信需求汇入网络与硬件资源模型。",
       anchor: "execution-flow",
     },
     {
       id: "select",
-      title: "点击一个环节",
-      body: "选择节点后，下方只显示该环节在当前运行中的指标、状态和可视化。",
-      anchor: "execution-selection",
+      title: "环节选择",
+      body: "选择执行结构中的环节，可查看当前运行已报告的指标、记录与可视化。不同环节的可用字段取决于报告覆盖范围。",
+      anchor: "execution-flow",
     },
     {
       id: "detail",
-      title: "先读指标，再看记录",
-      body: "先读已报告的关键指标；结构化记录和字段边界只在需要追踪时展开。",
+      title: "指标与执行记录",
+      body: "摘要指标用于定位等待和通信开销；结构化记录提供时间、稳定标识与依赖关系。网络完成或反压可通过资源操作与执行依赖影响运行时推进和请求指标。",
       anchor: "execution-detail",
     },
     {
       id: "host",
-      title: "按需查看 S7 执行宿主",
-      body: "S7 记录各环节在统一模拟时间轴上的开始和结束，不是新的业务层，也不进入延迟因果排名。",
+      title: "仿真执行与控制平面",
+      body: "执行详情记录统一时间轴上的状态推进。Analytical、DES、Cycle 是精度后端，不是业务层；Tile 是建模粒度，不是独立系统层或生命周期对象。",
       anchor: "execution-host",
     },
   ],
   terms: [
-    { id: "kv", term: "KV 缓存（S3）", definition: "保存生成过程中注意力所需的键值状态，属于内存语义。" },
-    { id: "collective", term: "集合通信（S5）", definition: "多个设备协同完成的广播、归约等通信语义。" },
-    { id: "host", term: "执行宿主（S7）", definition: "让多个子系统共享同一模拟时间轴的执行环境。" },
+    {
+      id: "kv",
+      term: "KV Cache",
+      definition: "保存注意力计算所需的键值状态。物理块、驻留和数据就绪属于资源语义。",
+    },
+    {
+      id: "collective",
+      term: "集合通信",
+      definition: "多个设备参与的归约、广播等通信语义，与缓存及设备性能建模并列。",
+    },
+    {
+      id: "host",
+      term: "仿真执行与控制平面",
+      definition: "管理统一时间轴、状态提交、等待与反馈以及精度后端。",
+    },
   ],
-  next: { label: "下一步：查看性能指标", routeName: "metrics" },
+  next: {
+    label: "性能指标",
+    routeName: "metrics",
+  },
   advanced: {
-    title: "最后再看实现证据",
-    body: "只有审计时才需要 Schema、字段来源、SHA-256、Pointer、结构化记录和完整 JSON；帮助层不会把关联证据升级成 canonical trace。",
+    title: "原始记录与复核",
+    body: "复核执行记录时核对 Schema、字段来源、SHA-256 和 JSON Pointer。关联记录只支持其已声明的证据范围，不自动构成真实系统执行轨迹。",
   },
 });
