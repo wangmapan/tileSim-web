@@ -31,7 +31,14 @@ export const createRunRequestSchema = {
       $ref: "custom-run-inputs.schema.json",
     },
     design_space_candidates: {
-      $ref: "design-space-candidates.schema.json",
+      oneOf: [
+        {
+          $ref: "design-space-candidates.schema.json",
+        },
+        {
+          $ref: "design-space-candidates-v2.schema.json",
+        },
+      ],
     },
     trace_package_id: {
       type: "string",
@@ -95,6 +102,8 @@ export const experimentDescriptorSchema = {
     "gpu_participation_modes",
     "input_modes",
     "design_space_modes",
+    "design_space_candidate_schema_options",
+    "default_design_space_candidate_schema_identity",
     "source_mode_options",
     "parameter_groups",
     "subsystem_parameter_coverage",
@@ -182,6 +191,17 @@ export const experimentDescriptorSchema = {
     },
     design_space_modes: {
       $ref: "#/$defs/designSpaceOptions",
+    },
+    design_space_candidate_schema_options: {
+      type: "array",
+      minItems: 2,
+      maxItems: 2,
+      items: {
+        $ref: "#/$defs/designSpaceCandidateSchemaOption",
+      },
+    },
+    default_design_space_candidate_schema_identity: {
+      const: "tilesim.design_space.s6_candidates.v1",
     },
     source_mode_options: {
       type: "array",
@@ -387,6 +407,25 @@ export const experimentDescriptorSchema = {
         },
       },
     },
+    designSpaceCandidateSchemaOption: {
+      type: "object",
+      additionalProperties: false,
+      required: ["schema_identity", "available", "unavailable_reason", "default_when_omitted"],
+      properties: {
+        schema_identity: {
+          enum: ["tilesim.design_space.s6_candidates.v1", "tilesim.design_space.s6_candidates.v2"],
+        },
+        available: {
+          const: true,
+        },
+        unavailable_reason: {
+          type: "null",
+        },
+        default_when_omitted: {
+          type: "boolean",
+        },
+      },
+    },
     parameterDescriptor: {
       type: "object",
       additionalProperties: false,
@@ -509,7 +548,7 @@ export const designSpaceCandidatesSchema = {
   title: "Strict S6-only design-space candidate manifest",
   type: "object",
   additionalProperties: false,
-  required: ["schema_version", "manifest_id", "source_mode", "calibration_level", "allowed_claim_scope", "candidates"],
+  required: ["manifest_id", "source_mode", "calibration_level", "allowed_claim_scope", "candidates"],
   properties: {
     schema_version: {
       const: "tilesim.design_space.s6_candidates.v1",
@@ -578,6 +617,115 @@ export const designSpaceCandidatesSchema = {
           oversubscription_factor: {
             type: "number",
             minimum: 0.000001,
+            maximum: 1000000,
+          },
+          request_count: {
+            type: "integer",
+            minimum: 1,
+            maximum: 100000,
+          },
+          message_bytes: {
+            type: "integer",
+            minimum: 1,
+            maximum: 9007199254740991,
+          },
+          release_interval_ps: {
+            type: "integer",
+            minimum: 0,
+            maximum: 9007199254740991,
+          },
+          uncertainty_score: {
+            type: "number",
+            minimum: 0,
+            maximum: 1,
+          },
+          tail_risk: {
+            type: "boolean",
+          },
+          promotion_hint: {
+            type: "string",
+            maxLength: 160,
+          },
+          source_id: {
+            type: "string",
+            minLength: 1,
+            maxLength: 512,
+          },
+        },
+      },
+    },
+  },
+} as const;
+export const designSpaceCandidatesV2Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: "https://tilesim.local/contracts/design-space-candidates-v2.schema.json",
+  "x-tilesim-schema-identity": "tilesim.design_space.s6_candidates.v2",
+  title: "Strict S6-only design-space candidate manifest v2",
+  type: "object",
+  additionalProperties: false,
+  required: ["schema_version", "manifest_id", "source_mode", "calibration_level", "allowed_claim_scope", "candidates"],
+  properties: {
+    schema_version: {
+      const: "tilesim.design_space.s6_candidates.v2",
+    },
+    manifest_id: {
+      type: "string",
+      minLength: 1,
+      maxLength: 160,
+    },
+    source_mode: {
+      const: "synthetic_trace",
+    },
+    calibration_level: {
+      const: "uncalibrated",
+    },
+    allowed_claim_scope: {
+      const: "exploratory",
+    },
+    candidates: {
+      type: "array",
+      minItems: 1,
+      maxItems: 256,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "candidate_id",
+          "name",
+          "bandwidth_gbps",
+          "latency_us",
+          "oversubscription_factor",
+          "request_count",
+          "message_bytes",
+          "release_interval_ps",
+          "uncertainty_score",
+          "tail_risk",
+          "source_id",
+        ],
+        properties: {
+          candidate_id: {
+            type: "string",
+            minLength: 1,
+            maxLength: 512,
+          },
+          name: {
+            type: "string",
+            minLength: 1,
+            maxLength: 512,
+          },
+          bandwidth_gbps: {
+            type: "number",
+            minimum: 0.000001,
+            maximum: 100000,
+          },
+          latency_us: {
+            type: "number",
+            minimum: 0,
+            maximum: 1000000,
+          },
+          oversubscription_factor: {
+            type: "number",
+            minimum: 1,
             maximum: 1000000,
           },
           request_count: {

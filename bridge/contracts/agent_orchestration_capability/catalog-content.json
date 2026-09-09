@@ -1,0 +1,744 @@
+{
+  "contract_package_revision": "sha256:1fa372e1fc4eafe5b819aedd29f258732b8a53fab6b9559e964f6ee1164a4fe3",
+  "parameter_descriptor_schema_identity": "tilesim.bridge.agent_orchestration_parameter_descriptor.v1",
+  "parameter_descriptor_schema_revision": "sha256:838b23942c1946f3857faf730449a19df4aa07c13d91d7e7db11bf690f6d8194",
+  "parameter_descriptor_schema_digest": "sha256:838b23942c1946f3857faf730449a19df4aa07c13d91d7e7db11bf690f6d8194",
+  "parameter_descriptors": [
+    {
+      "field_id": "s0.workload.message_size_multiplier",
+      "owner_module": "工作负载抽象与负载描述语言模块",
+      "value_type": "number",
+      "canonical_unit": "ratio",
+      "accepted_units": ["ratio"],
+      "constraints": {
+        "minimum": "0.25",
+        "maximum": "8.0"
+      },
+      "applicability": {
+        "status": "available",
+        "conditions": ["scenario=s1_des_example", "input_mode=controls"]
+      },
+      "request_identity": "tilesim.bridge.create_run_request.v1",
+      "request_json_pointer": "/overrides/workload/message_size_multiplier",
+      "lowering_stage": "Bridge materialize_inputs -> input-runtime-trace message_size_bytes -> 后端通信 demand",
+      "execution_evidence": [
+        {
+          "repository": "D:/tileSim",
+          "revision": "7e5a8c6a5cf738bd24608b440a61b62dee8d1881",
+          "path": "tests/test_week4_cumulative_flow.cpp",
+          "test_case": "larger-message differential",
+          "evidence_class": "synthetic_deterministic_execution",
+          "artifact_pointers": [
+            "input-runtime-trace.json:/requests/*/message_size_bytes",
+            "execution-envelope.json:/end_time_ps",
+            "metrics.json:/request_metrics"
+          ]
+        }
+      ],
+      "capability_state": {
+        "described": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "accepted": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "validated": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "lowered": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "executed": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "observable": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "calibrated": {
+          "state": "denied",
+          "reason_code": "calibration_missing"
+        },
+        "held_out_validated": {
+          "state": "denied",
+          "reason_code": "held_out_validation_missing"
+        },
+        "agent_exposed": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        }
+      },
+      "reason_codes": ["execution_closure_proven", "calibration_missing", "held_out_validation_missing"],
+      "claim_scope_ceiling": ["exploration", "synthetic_consistency"],
+      "resolved_fidelity": "mixed"
+    },
+    {
+      "field_id": "s1.runtime.batch_scheduler",
+      "owner_module": "推理引擎与服务运行时模块",
+      "value_type": "enum",
+      "canonical_unit": "scheduler_policy",
+      "accepted_units": ["scheduler_policy"],
+      "constraints": {
+        "enum": ["fifo", "decode_priority", "fabric_backpressure_aware"]
+      },
+      "applicability": {
+        "status": "available",
+        "conditions": ["scenario=s1_des_example", "input_mode=controls"]
+      },
+      "request_identity": "tilesim.bridge.create_run_request.v1",
+      "request_json_pointer": "/overrides/runtime/batch_scheduler",
+      "lowering_stage": "Bridge runtime policy -> RuntimeBatchLowering deterministic planner",
+      "execution_evidence": [
+        {
+          "repository": "D:/tileSim",
+          "revision": "7e5a8c6a5cf738bd24608b440a61b62dee8d1881",
+          "path": "tests/test_runtime_batch_lowering.cpp",
+          "test_case": "fifo versus decode-priority ordering",
+          "evidence_class": "synthetic_deterministic_execution",
+          "artifact_pointers": [
+            "input-runtime-trace.json:/policy/batch_scheduler",
+            "execution-envelope.json:/stages",
+            "metrics.json:/request_metrics"
+          ]
+        }
+      ],
+      "capability_state": {
+        "described": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "accepted": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "validated": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "lowered": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "executed": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "observable": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "calibrated": {
+          "state": "denied",
+          "reason_code": "calibration_missing"
+        },
+        "held_out_validated": {
+          "state": "denied",
+          "reason_code": "held_out_validation_missing"
+        },
+        "agent_exposed": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        }
+      },
+      "reason_codes": ["execution_closure_proven", "calibration_missing", "held_out_validation_missing"],
+      "claim_scope_ceiling": ["exploration", "synthetic_consistency"],
+      "resolved_fidelity": "mixed"
+    },
+    {
+      "field_id": "s1.runtime.max_batch_size",
+      "owner_module": "推理引擎与服务运行时模块",
+      "value_type": "integer",
+      "canonical_unit": "requests_per_batch",
+      "accepted_units": ["requests_per_batch"],
+      "constraints": {
+        "minimum": "1",
+        "maximum": "64",
+        "step": "1"
+      },
+      "applicability": {
+        "status": "available",
+        "conditions": ["scenario=s1_des_example", "input_mode=controls"]
+      },
+      "request_identity": "tilesim.bridge.create_run_request.v1",
+      "request_json_pointer": "/overrides/runtime/max_batch_size",
+      "lowering_stage": "Bridge runtime policy -> RuntimeBatchLowering batch membership",
+      "execution_evidence": [
+        {
+          "repository": "D:/tileSim",
+          "revision": "7e5a8c6a5cf738bd24608b440a61b62dee8d1881",
+          "path": "tests/test_runtime_batch_lowering.cpp",
+          "test_case": "multi-request batch membership",
+          "evidence_class": "synthetic_deterministic_execution",
+          "artifact_pointers": [
+            "input-runtime-trace.json:/policy/max_batch_size",
+            "execution-envelope.json:/runtime_event_count",
+            "metrics.json:/request_metrics"
+          ]
+        }
+      ],
+      "capability_state": {
+        "described": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "accepted": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "validated": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "lowered": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "executed": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "observable": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "calibrated": {
+          "state": "denied",
+          "reason_code": "calibration_missing"
+        },
+        "held_out_validated": {
+          "state": "denied",
+          "reason_code": "held_out_validation_missing"
+        },
+        "agent_exposed": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        }
+      },
+      "reason_codes": ["execution_closure_proven", "calibration_missing", "held_out_validation_missing"],
+      "claim_scope_ceiling": ["exploration", "synthetic_consistency"],
+      "resolved_fidelity": "mixed"
+    },
+    {
+      "field_id": "s1.runtime.kv_capacity_tokens",
+      "owner_module": "推理引擎与服务运行时模块",
+      "value_type": "integer",
+      "canonical_unit": "tokens",
+      "accepted_units": ["tokens"],
+      "constraints": {
+        "minimum": "256",
+        "maximum": "1000000",
+        "step": "1"
+      },
+      "applicability": {
+        "status": "conditional",
+        "conditions": ["scenario=s1_des_example", "input_mode=controls", "logical_admission_only", "GAP-KV-001"]
+      },
+      "request_identity": "tilesim.bridge.create_run_request.v1",
+      "request_json_pointer": "/overrides/runtime/kv_capacity_tokens",
+      "lowering_stage": "Bridge runtime policy -> RuntimeBatchLowering logical KV admission state",
+      "execution_evidence": [
+        {
+          "repository": "D:/tileSim",
+          "revision": "7e5a8c6a5cf738bd24608b440a61b62dee8d1881",
+          "path": "tests/test_runtime_batch_lowering.cpp",
+          "test_case": "KV pressure and admission cases",
+          "evidence_class": "synthetic_deterministic_execution",
+          "artifact_pointers": [
+            "input-runtime-trace.json:/policy/kv_capacity_tokens",
+            "execution-envelope.json:/stages",
+            "validation.json:/checks"
+          ]
+        }
+      ],
+      "capability_state": {
+        "described": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "accepted": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "validated": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "lowered": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "executed": {
+          "state": "affirmed",
+          "reason_code": "gap_kv_001_logical_admission_only"
+        },
+        "observable": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "calibrated": {
+          "state": "denied",
+          "reason_code": "calibration_missing"
+        },
+        "held_out_validated": {
+          "state": "denied",
+          "reason_code": "held_out_validation_missing"
+        },
+        "agent_exposed": {
+          "state": "affirmed",
+          "reason_code": "gap_kv_001_logical_admission_only"
+        }
+      },
+      "reason_codes": ["gap_kv_001_logical_admission_only", "calibration_missing", "held_out_validation_missing"],
+      "claim_scope_ceiling": ["exploration", "synthetic_consistency"],
+      "resolved_fidelity": "mixed"
+    },
+    {
+      "field_id": "s6.fabric.scale_up_bandwidth_gbps",
+      "owner_module": "网络与硬件资源模块",
+      "value_type": "number",
+      "canonical_unit": "Gbps",
+      "accepted_units": ["Gbps"],
+      "constraints": {
+        "minimum": "25",
+        "maximum": "2000"
+      },
+      "applicability": {
+        "status": "available",
+        "conditions": ["scenario=s1_des_example", "input_mode=controls"]
+      },
+      "request_identity": "tilesim.bridge.create_run_request.v1",
+      "request_json_pointer": "/overrides/fabric/scale_up_bandwidth_gbps",
+      "lowering_stage": "Bridge topology binding -> scale-up network DES serialization",
+      "execution_evidence": [
+        {
+          "repository": "D:/tileSim",
+          "revision": "7e5a8c6a5cf738bd24608b440a61b62dee8d1881",
+          "path": "tests/test_week4_cumulative_flow.cpp",
+          "test_case": "lower-bandwidth differential",
+          "evidence_class": "synthetic_deterministic_execution",
+          "artifact_pointers": [
+            "input-topology.json:/topology/module_bindings/*/override_params/bandwidth_gbps",
+            "run-result.json:Fabric timeline",
+            "metrics.json:/system_summary/fabric_domain_utilization"
+          ]
+        }
+      ],
+      "capability_state": {
+        "described": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "accepted": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "validated": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "lowered": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "executed": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "observable": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "calibrated": {
+          "state": "denied",
+          "reason_code": "calibration_missing"
+        },
+        "held_out_validated": {
+          "state": "denied",
+          "reason_code": "held_out_validation_missing"
+        },
+        "agent_exposed": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        }
+      },
+      "reason_codes": ["execution_closure_proven", "calibration_missing", "held_out_validation_missing"],
+      "claim_scope_ceiling": ["exploration", "synthetic_consistency"],
+      "resolved_fidelity": "DES"
+    },
+    {
+      "field_id": "s6.fabric.scale_up_latency_us",
+      "owner_module": "网络与硬件资源模块",
+      "value_type": "number",
+      "canonical_unit": "us",
+      "accepted_units": ["us"],
+      "constraints": {
+        "minimum": "0.05",
+        "maximum": "100"
+      },
+      "applicability": {
+        "status": "available",
+        "conditions": ["scenario=s1_des_example", "input_mode=controls"]
+      },
+      "request_identity": "tilesim.bridge.create_run_request.v1",
+      "request_json_pointer": "/overrides/fabric/scale_up_latency_us",
+      "lowering_stage": "Bridge topology binding -> scale-up network DES service latency",
+      "execution_evidence": [
+        {
+          "repository": "D:/tileSim",
+          "revision": "7e5a8c6a5cf738bd24608b440a61b62dee8d1881",
+          "path": "tests/test_week4_cumulative_flow.cpp",
+          "test_case": "higher-latency differential",
+          "evidence_class": "synthetic_deterministic_execution",
+          "artifact_pointers": [
+            "input-topology.json:/topology/module_bindings/*/override_params/latency_us",
+            "run-result.json:Fabric timeline",
+            "metrics.json:/end_to_end_latency_distribution"
+          ]
+        }
+      ],
+      "capability_state": {
+        "described": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "accepted": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "validated": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "lowered": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "executed": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "observable": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "calibrated": {
+          "state": "denied",
+          "reason_code": "calibration_missing"
+        },
+        "held_out_validated": {
+          "state": "denied",
+          "reason_code": "held_out_validation_missing"
+        },
+        "agent_exposed": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        }
+      },
+      "reason_codes": ["execution_closure_proven", "calibration_missing", "held_out_validation_missing"],
+      "claim_scope_ceiling": ["exploration", "synthetic_consistency"],
+      "resolved_fidelity": "DES"
+    },
+    {
+      "field_id": "s6.fabric.scale_out_bandwidth_gbps",
+      "owner_module": "网络与硬件资源模块",
+      "value_type": "number",
+      "canonical_unit": "Gbps",
+      "accepted_units": ["Gbps"],
+      "constraints": {
+        "minimum": "10",
+        "maximum": "2000"
+      },
+      "applicability": {
+        "status": "available",
+        "conditions": ["scenario=s1_des_example", "input_mode=controls", "resolved_fidelity=Analytical"]
+      },
+      "request_identity": "tilesim.bridge.create_run_request.v1",
+      "request_json_pointer": "/overrides/fabric/scale_out_bandwidth_gbps",
+      "lowering_stage": "Bridge topology binding -> default generic_scale_out_analytical exchange",
+      "execution_evidence": [
+        {
+          "repository": "D:/tileSim",
+          "revision": "7e5a8c6a5cf738bd24608b440a61b62dee8d1881",
+          "path": "tests/test_modular_fabric.cpp",
+          "test_case": "scale-out analytical module execution",
+          "evidence_class": "synthetic_deterministic_execution",
+          "artifact_pointers": [
+            "input-topology.json:/topology/module_bindings/*/override_params/bandwidth_gbps",
+            "run-result.json:scale_out Fabric timeline",
+            "metrics.json:/system_summary/fabric_domain_utilization"
+          ]
+        }
+      ],
+      "capability_state": {
+        "described": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "accepted": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "validated": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "lowered": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "executed": {
+          "state": "affirmed",
+          "reason_code": "resolved_scale_out_analytical"
+        },
+        "observable": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "calibrated": {
+          "state": "denied",
+          "reason_code": "calibration_missing"
+        },
+        "held_out_validated": {
+          "state": "denied",
+          "reason_code": "held_out_validation_missing"
+        },
+        "agent_exposed": {
+          "state": "affirmed",
+          "reason_code": "resolved_scale_out_analytical"
+        }
+      },
+      "reason_codes": [
+        "execution_closure_proven",
+        "resolved_scale_out_analytical",
+        "calibration_missing",
+        "held_out_validation_missing"
+      ],
+      "claim_scope_ceiling": ["exploration", "synthetic_consistency"],
+      "resolved_fidelity": "Analytical"
+    },
+    {
+      "field_id": "s6.fabric.scale_out_latency_us",
+      "owner_module": "网络与硬件资源模块",
+      "value_type": "number",
+      "canonical_unit": "us",
+      "accepted_units": ["us"],
+      "constraints": {
+        "minimum": "0.1",
+        "maximum": "500"
+      },
+      "applicability": {
+        "status": "available",
+        "conditions": ["scenario=s1_des_example", "input_mode=controls", "resolved_fidelity=Analytical"]
+      },
+      "request_identity": "tilesim.bridge.create_run_request.v1",
+      "request_json_pointer": "/overrides/fabric/scale_out_latency_us",
+      "lowering_stage": "Bridge topology binding -> default generic_scale_out_analytical exchange",
+      "execution_evidence": [
+        {
+          "repository": "D:/tileSim",
+          "revision": "7e5a8c6a5cf738bd24608b440a61b62dee8d1881",
+          "path": "tests/test_modular_fabric.cpp",
+          "test_case": "scale-out analytical module execution",
+          "evidence_class": "synthetic_deterministic_execution",
+          "artifact_pointers": [
+            "input-topology.json:/topology/module_bindings/*/override_params/latency_us",
+            "run-result.json:scale_out Fabric timeline",
+            "metrics.json:/end_to_end_latency_distribution"
+          ]
+        }
+      ],
+      "capability_state": {
+        "described": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "accepted": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "validated": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "lowered": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "executed": {
+          "state": "affirmed",
+          "reason_code": "resolved_scale_out_analytical"
+        },
+        "observable": {
+          "state": "affirmed",
+          "reason_code": "execution_closure_proven"
+        },
+        "calibrated": {
+          "state": "denied",
+          "reason_code": "calibration_missing"
+        },
+        "held_out_validated": {
+          "state": "denied",
+          "reason_code": "held_out_validation_missing"
+        },
+        "agent_exposed": {
+          "state": "affirmed",
+          "reason_code": "resolved_scale_out_analytical"
+        }
+      },
+      "reason_codes": [
+        "execution_closure_proven",
+        "resolved_scale_out_analytical",
+        "calibration_missing",
+        "held_out_validation_missing"
+      ],
+      "claim_scope_ceiling": ["exploration", "synthetic_consistency"],
+      "resolved_fidelity": "Analytical"
+    }
+  ],
+  "profile_families": [
+    {
+      "family": "model",
+      "schema_identity": "tilesim.bridge.agent_orchestration_model_profile.v1",
+      "schema_revision": "sha256:e06ad8cc9519785452d8658606ee11d46b2366d4325f6b2499083e482b3d4bd4",
+      "schema_digest": "sha256:e06ad8cc9519785452d8658606ee11d46b2366d4325f6b2499083e482b3d4bd4",
+      "schema_status": "published",
+      "actual_profile_count": 0,
+      "data_status": "profile_missing",
+      "runtime_availability": "unavailable",
+      "reason_codes": ["profile_missing"],
+      "calibration_status": "calibration_missing",
+      "held_out_validation_status": "held_out_validation_missing"
+    },
+    {
+      "family": "engine",
+      "schema_identity": "tilesim.bridge.agent_orchestration_engine_profile.v1",
+      "schema_revision": "sha256:8d778f13edcc0fa8a2fac0c1414955ac4cd66477a03584a82d6daf5663cb49db",
+      "schema_digest": "sha256:8d778f13edcc0fa8a2fac0c1414955ac4cd66477a03584a82d6daf5663cb49db",
+      "schema_status": "published",
+      "actual_profile_count": 0,
+      "data_status": "conditional",
+      "runtime_availability": "unavailable",
+      "reason_codes": [
+        "profile_missing",
+        "minimal_engine_profiles_not_catalog_published",
+        "create_run_engine_selection_not_exposed"
+      ],
+      "calibration_status": "calibration_missing",
+      "held_out_validation_status": "held_out_validation_missing"
+    },
+    {
+      "family": "device",
+      "schema_identity": "tilesim.bridge.agent_orchestration_device_profile.v1",
+      "schema_revision": "sha256:354ca8377a64ec1b53c196b505cc156ae1d1d25cc7baf94fc0d8b984ea122c96",
+      "schema_digest": "sha256:354ca8377a64ec1b53c196b505cc156ae1d1d25cc7baf94fc0d8b984ea122c96",
+      "schema_status": "published",
+      "actual_profile_count": 0,
+      "data_status": "profile_missing",
+      "runtime_availability": "unavailable",
+      "reason_codes": ["profile_missing", "calibration_missing"],
+      "calibration_status": "calibration_missing",
+      "held_out_validation_status": "held_out_validation_missing"
+    },
+    {
+      "family": "topology",
+      "schema_identity": "tilesim.bridge.agent_orchestration_topology_profile.v1",
+      "schema_revision": "sha256:2acb2127e3eb93d82438a32972526c75d12b6bb0eebc8cb003d691fa237b0458",
+      "schema_digest": "sha256:2acb2127e3eb93d82438a32972526c75d12b6bb0eebc8cb003d691fa237b0458",
+      "schema_status": "published",
+      "actual_profile_count": 0,
+      "data_status": "profile_missing",
+      "runtime_availability": "unavailable",
+      "reason_codes": ["profile_missing", "calibration_missing"],
+      "calibration_status": "calibration_missing",
+      "held_out_validation_status": "held_out_validation_missing"
+    },
+    {
+      "family": "workload",
+      "schema_identity": "tilesim.bridge.agent_orchestration_workload_profile.v1",
+      "schema_revision": "sha256:ab4517a4d7ba52fe7c2b80f00e0a8b0083468bc0ba88125a15f525ef0e63f836",
+      "schema_digest": "sha256:ab4517a4d7ba52fe7c2b80f00e0a8b0083468bc0ba88125a15f525ef0e63f836",
+      "schema_status": "published",
+      "actual_profile_count": 0,
+      "data_status": "profile_missing",
+      "runtime_availability": "unavailable",
+      "reason_codes": ["profile_missing"],
+      "calibration_status": "calibration_missing",
+      "held_out_validation_status": "held_out_validation_missing"
+    }
+  ],
+  "profile_records": {
+    "model": [],
+    "engine": [],
+    "device": [],
+    "topology": [],
+    "workload": []
+  },
+  "agent_exposed_field_ids": [
+    "s0.workload.message_size_multiplier",
+    "s1.runtime.batch_scheduler",
+    "s1.runtime.max_batch_size",
+    "s1.runtime.kv_capacity_tokens",
+    "s6.fabric.scale_up_bandwidth_gbps",
+    "s6.fabric.scale_up_latency_us",
+    "s6.fabric.scale_out_bandwidth_gbps",
+    "s6.fabric.scale_out_latency_us"
+  ],
+  "claim_scope_ceiling": ["exploration", "synthetic_consistency"],
+  "schema_identity": "tilesim.bridge.agent_orchestration_capability_catalog.v1",
+  "publication_status": "published",
+  "catalog_id": "tilesim.agent-orchestration.capability-catalog",
+  "not_exposed_capabilities": [
+    {
+      "capability_id": "model_selection",
+      "state": "not_exposed",
+      "reason_code": "not_exposed_to_agent"
+    },
+    {
+      "capability_id": "device_selection",
+      "state": "not_exposed",
+      "reason_code": "not_exposed_to_agent"
+    },
+    {
+      "capability_id": "engine_selection",
+      "state": "not_exposed",
+      "reason_code": "not_exposed_to_agent"
+    },
+    {
+      "capability_id": "tensor_parallel_degree",
+      "state": "not_exposed",
+      "reason_code": "not_exposed_to_agent"
+    },
+    {
+      "capability_id": "pipeline_parallel_degree",
+      "state": "not_exposed",
+      "reason_code": "not_exposed_to_agent"
+    },
+    {
+      "capability_id": "expert_parallel_degree",
+      "state": "not_exposed",
+      "reason_code": "not_exposed_to_agent"
+    },
+    {
+      "capability_id": "physical_kv_policy",
+      "state": "not_exposed",
+      "reason_code": "not_exposed_to_agent"
+    },
+    {
+      "capability_id": "collective_algorithm",
+      "state": "not_exposed",
+      "reason_code": "not_exposed_to_agent"
+    },
+    {
+      "capability_id": "slo",
+      "state": "not_exposed",
+      "reason_code": "not_exposed_to_agent"
+    }
+  ],
+  "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+  "catalog_digest": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b"
+}

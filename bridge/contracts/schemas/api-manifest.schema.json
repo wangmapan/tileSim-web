@@ -14,6 +14,7 @@
     "experiment_descriptor",
     "trace_packages",
     "evidence_agent",
+    "agent_orchestration_capability",
     "run_creation",
     "run_events",
     "endpoints"
@@ -94,6 +95,51 @@
         "structured_report_schema_identity": { "const": "tilesim.web.structured-performance-report.v2" },
         "idempotency_header": { "const": "Idempotency-Key" },
         "execution_mode": { "const": "synchronous_terminal" }
+      }
+    },
+    "agent_orchestration_capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "endpoint",
+        "snapshot_schema_identity",
+        "catalog_schema_identity",
+        "parameter_descriptor_schema_identity",
+        "profile_schema_identities",
+        "catalog_revision",
+        "contract_package_revision"
+      ],
+      "properties": {
+        "endpoint": { "const": "GET /api/agent/orchestration-capabilities" },
+        "snapshot_schema_identity": {
+          "const": "tilesim.bridge.agent_orchestration_capability_snapshot.v1"
+        },
+        "catalog_schema_identity": {
+          "const": "tilesim.bridge.agent_orchestration_capability_catalog.v1"
+        },
+        "parameter_descriptor_schema_identity": {
+          "const": "tilesim.bridge.agent_orchestration_parameter_descriptor.v1"
+        },
+        "profile_schema_identities": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "tilesim.bridge.agent_orchestration_model_profile.v1",
+              "tilesim.bridge.agent_orchestration_engine_profile.v1",
+              "tilesim.bridge.agent_orchestration_device_profile.v1",
+              "tilesim.bridge.agent_orchestration_topology_profile.v1",
+              "tilesim.bridge.agent_orchestration_workload_profile.v1"
+            ]
+          }
+        },
+        "catalog_revision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "contract_package_revision": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
       }
     },
     "run_creation": {

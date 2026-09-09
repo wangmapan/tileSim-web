@@ -106,11 +106,11 @@ describe("F8 experiment schema adapter", () => {
       runtimeJson: "",
       topologyJson: "",
       designSpaceJson: JSON.stringify({
-        schema_version: "tilesim.design_space.s6_candidates.v1",
+        schema_version: "tilesim.design_space.s6_candidates.v2",
         manifest_id: "manifest-1",
         source_mode: "synthetic_trace",
         calibration_level: "uncalibrated",
-        allowed_claim_scope: "synthetic_consistency_only",
+        allowed_claim_scope: "exploratory",
         unsupported: true,
         candidates: [],
       }),
@@ -118,6 +118,109 @@ describe("F8 experiment schema adapter", () => {
 
     expect(preview.request).toBeNull();
     expect(preview.error?.fieldPath).toBe("/design_space_candidates/unsupported");
+  });
+
+  it("rejects backend-incompatible design-space provenance at the exact field", () => {
+    const surface = formalSurface();
+    const form = createExperimentForm(surface);
+    const preview = buildExperimentRequestPreview({
+      form,
+      mode: "controls",
+      surface,
+      runtimeJson: "",
+      topologyJson: "",
+      designSpaceJson: JSON.stringify({
+        schema_version: "tilesim.design_space.s6_candidates.v2",
+        manifest_id: "manifest-1",
+        source_mode: "synthetic_trace",
+        calibration_level: "uncalibrated",
+        allowed_claim_scope: "exploratory_s6_only",
+        candidates: [
+          {
+            candidate_id: "candidate-1",
+            name: "candidate-1",
+            bandwidth_gbps: 100,
+            latency_us: 1,
+            oversubscription_factor: 1,
+            request_count: 1,
+            message_bytes: 1024,
+            release_interval_ps: 0,
+            uncertainty_score: 0,
+            tail_risk: false,
+            source_id: "fixture",
+          },
+        ],
+      }),
+    });
+
+    expect(preview.request).toBeNull();
+    expect(preview.error?.fieldPath).toBe("/design_space_candidates/allowed_claim_scope");
+  });
+
+  it("preserves v1 risk-aware uniqueness and rejects metadata-only duplicates in v2", () => {
+    const surface = formalSurface();
+    const form = createExperimentForm(surface);
+    const candidate = {
+      candidate_id: "candidate-1",
+      name: "candidate-1",
+      bandwidth_gbps: 100,
+      latency_us: 1,
+      oversubscription_factor: 1,
+      request_count: 1,
+      message_bytes: 1024,
+      release_interval_ps: 0,
+      uncertainty_score: 0,
+      tail_risk: false,
+      source_id: "fixture-1",
+    };
+    const manifest = {
+      schema_version: "tilesim.design_space.s6_candidates.v1",
+      manifest_id: "manifest-1",
+      source_mode: "synthetic_trace",
+      calibration_level: "partially_calibrated",
+      allowed_claim_scope: "exploratory_s6_only",
+      candidates: [
+        { ...candidate, oversubscription_factor: 0.5 },
+        {
+          ...candidate,
+          candidate_id: "candidate-2",
+          name: "candidate-2",
+          oversubscription_factor: 0.5,
+          uncertainty_score: 0.9,
+          tail_risk: true,
+          source_id: "fixture-2",
+        },
+      ],
+    };
+    const legacyPreview = buildExperimentRequestPreview({
+      form,
+      mode: "controls",
+      surface,
+      runtimeJson: "",
+      topologyJson: "",
+      designSpaceJson: JSON.stringify(manifest),
+    });
+    expect(legacyPreview.error).toBeNull();
+
+    const strictPreview = buildExperimentRequestPreview({
+      form,
+      mode: "controls",
+      surface,
+      runtimeJson: "",
+      topologyJson: "",
+      designSpaceJson: JSON.stringify({
+        ...manifest,
+        schema_version: "tilesim.design_space.s6_candidates.v2",
+        calibration_level: "uncalibrated",
+        allowed_claim_scope: "exploratory",
+        candidates: manifest.candidates.map((item) => ({
+          ...item,
+          oversubscription_factor: 1,
+        })),
+      }),
+    });
+    expect(strictPreview.request).toBeNull();
+    expect(strictPreview.error?.fieldPath).toBe("/design_space_candidates/candidates/1");
   });
 
   it("intersects advertised options with the generated create-run schema", () => {
@@ -182,7 +285,7 @@ describe("F8 experiment schema adapter", () => {
         manifest_id: "manifest-1",
         source_mode: "synthetic_trace",
         calibration_level: "uncalibrated",
-        allowed_claim_scope: "synthetic_consistency_only",
+        allowed_claim_scope: "exploratory",
         candidates: [
           {
             candidate_id: "candidate-1",

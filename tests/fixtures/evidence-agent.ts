@@ -215,6 +215,21 @@ export const f9ApiManifest: ApiManifestResponse = {
     idempotency_header: "Idempotency-Key",
     execution_mode: "synchronous_terminal",
   },
+  agent_orchestration_capability: {
+    endpoint: "GET /api/agent/orchestration-capabilities",
+    snapshot_schema_identity: "tilesim.bridge.agent_orchestration_capability_snapshot.v1",
+    catalog_schema_identity: "tilesim.bridge.agent_orchestration_capability_catalog.v1",
+    parameter_descriptor_schema_identity: "tilesim.bridge.agent_orchestration_parameter_descriptor.v1",
+    profile_schema_identities: [
+      "tilesim.bridge.agent_orchestration_model_profile.v1",
+      "tilesim.bridge.agent_orchestration_engine_profile.v1",
+      "tilesim.bridge.agent_orchestration_device_profile.v1",
+      "tilesim.bridge.agent_orchestration_topology_profile.v1",
+      "tilesim.bridge.agent_orchestration_workload_profile.v1",
+    ],
+    catalog_revision: "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+    contract_package_revision: "sha256:1fa372e1fc4eafe5b819aedd29f258732b8a53fab6b9559e964f6ee1164a4fe3",
+  },
   run_creation: {
     idempotency_header: "Idempotency-Key",
     idempotency_required: true,

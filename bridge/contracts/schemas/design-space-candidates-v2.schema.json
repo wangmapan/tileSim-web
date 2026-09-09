@@ -1,25 +1,24 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://tilesim.local/contracts/design-space-candidates.schema.json",
-  "x-tilesim-schema-identity": "tilesim.design_space.s6_candidates.v1",
-  "title": "Strict S6-only design-space candidate manifest",
+  "$id": "https://tilesim.local/contracts/design-space-candidates-v2.schema.json",
+  "x-tilesim-schema-identity": "tilesim.design_space.s6_candidates.v2",
+  "title": "Strict S6-only design-space candidate manifest v2",
   "type": "object",
   "additionalProperties": false,
-  "required": ["manifest_id", "source_mode", "calibration_level", "allowed_claim_scope", "candidates"],
+  "required": [
+    "schema_version",
+    "manifest_id",
+    "source_mode",
+    "calibration_level",
+    "allowed_claim_scope",
+    "candidates"
+  ],
   "properties": {
-    "schema_version": { "const": "tilesim.design_space.s6_candidates.v1" },
+    "schema_version": { "const": "tilesim.design_space.s6_candidates.v2" },
     "manifest_id": { "type": "string", "minLength": 1, "maxLength": 160 },
     "source_mode": { "const": "synthetic_trace" },
-    "calibration_level": { "enum": ["uncalibrated", "partially_calibrated"] },
-    "allowed_claim_scope": {
-      "enum": [
-        "exploratory",
-        "exploratory_s6_only",
-        "synthetic_consistency",
-        "synthetic_consistency_only",
-        "workflow_consistency_only"
-      ]
-    },
+    "calibration_level": { "const": "uncalibrated" },
+    "allowed_claim_scope": { "const": "exploratory" },
     "candidates": {
       "type": "array",
       "minItems": 1,
@@ -45,7 +44,7 @@
           "name": { "type": "string", "minLength": 1, "maxLength": 512 },
           "bandwidth_gbps": { "type": "number", "minimum": 0.000001, "maximum": 100000 },
           "latency_us": { "type": "number", "minimum": 0, "maximum": 1000000 },
-          "oversubscription_factor": { "type": "number", "minimum": 0.000001, "maximum": 1000000 },
+          "oversubscription_factor": { "type": "number", "minimum": 1, "maximum": 1000000 },
           "request_count": { "type": "integer", "minimum": 1, "maximum": 100000 },
           "message_bytes": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
           "release_interval_ps": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },

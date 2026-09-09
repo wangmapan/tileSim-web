@@ -1,6 +1,7 @@
 import type {
   ApiManifestResponse as VersionedApiManifestResponse,
   ApiRun,
+  AgentOrchestrationCapabilitySnapshotResponse,
   ArtifactManifestEntry as GeneratedArtifactManifestEntry,
   ArtifactManifestResponse as GeneratedArtifactManifestResponse,
   CapabilitiesResponse,
@@ -23,6 +24,7 @@ import type {
 
 export type {
   ApiRun,
+  AgentOrchestrationCapabilitySnapshotResponse,
   CapabilitiesResponse,
   CatalogResponse,
   CreateRunRequest,

@@ -17,6 +17,7 @@ const schemas = [
   "topology-request-input.schema.json",
   "custom-run-inputs.schema.json",
   "design-space-candidates.schema.json",
+  "design-space-candidates-v2.schema.json",
   "create-run-request.schema.json",
   "experiment-descriptor.schema.json",
   "trace-package-catalog.schema.json",
@@ -31,6 +32,7 @@ for (const schema of schemas) ajv.addSchema(schema);
 const validateCreateRun = ajv.getSchema("https://tilesim.local/contracts/create-run-request.schema.json");
 const validateDescriptor = ajv.getSchema("https://tilesim.local/contracts/experiment-descriptor.schema.json");
 const validateCandidates = ajv.getSchema("https://tilesim.local/contracts/design-space-candidates.schema.json");
+const validateCandidatesV2 = ajv.getSchema("https://tilesim.local/contracts/design-space-candidates-v2.schema.json");
 const validateTracePackageCatalog = ajv.getSchema("https://tilesim.local/contracts/trace-package-catalog.schema.json");
 const validateTracePackageInspect = ajv.getSchema("https://tilesim.local/contracts/trace-package-inspect.schema.json");
 const expectValid = (validator, value) => {
@@ -133,12 +135,39 @@ const validCandidates = {
   ],
 };
 expectValid(validateCandidates, validCandidates);
+const legacyCalibration = structuredClone(validCandidates);
+legacyCalibration.calibration_level = "partially_calibrated";
+expectValid(validateCandidates, legacyCalibration);
+const legacyOversubscription = structuredClone(validCandidates);
+legacyOversubscription.candidates[0].oversubscription_factor = 0.5;
+expectValid(validateCandidates, legacyOversubscription);
+const omittedLegacyIdentity = structuredClone(validCandidates);
+delete omittedLegacyIdentity.schema_version;
+expectValid(validateCandidates, omittedLegacyIdentity);
 const realCandidates = structuredClone(validCandidates);
 realCandidates.source_mode = "real_trace";
 expectInvalid(validateCandidates, realCandidates);
 const upgradedCalibration = structuredClone(validCandidates);
 upgradedCalibration.calibration_level = "held_out_validated";
 expectInvalid(validateCandidates, upgradedCalibration);
+
+const validCandidatesV2 = structuredClone(validCandidates);
+validCandidatesV2.schema_version = "tilesim.design_space.s6_candidates.v2";
+validCandidatesV2.allowed_claim_scope = "exploratory";
+expectValid(validateCandidatesV2, validCandidatesV2);
+expectValid(validateCreateRun, {
+  scenario_id: "s1_des_example",
+  design_space_candidates: validCandidatesV2,
+});
+const rejectedLegacyAsV2 = structuredClone(validCandidatesV2);
+rejectedLegacyAsV2.calibration_level = "partially_calibrated";
+expectInvalid(validateCandidatesV2, rejectedLegacyAsV2);
+rejectedLegacyAsV2.calibration_level = "uncalibrated";
+rejectedLegacyAsV2.allowed_claim_scope = "exploratory_s6_only";
+expectInvalid(validateCandidatesV2, rejectedLegacyAsV2);
+rejectedLegacyAsV2.allowed_claim_scope = "exploratory";
+rejectedLegacyAsV2.candidates[0].oversubscription_factor = 0.5;
+expectInvalid(validateCandidatesV2, rejectedLegacyAsV2);
 
 const python = process.env.PYTHON || "python";
 const descriptorProcess = spawnSync(

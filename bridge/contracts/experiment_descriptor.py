@@ -10,6 +10,9 @@ from typing import Any
 
 EXPERIMENT_DESCRIPTOR_SCHEMA_IDENTITY = "tilesim.bridge.experiment_descriptor.v1"
 CREATE_RUN_SCHEMA_IDENTITY = "tilesim.bridge.create_run_request.v1"
+DESIGN_SPACE_CANDIDATES_SCHEMA_V1 = "tilesim.design_space.s6_candidates.v1"
+DESIGN_SPACE_CANDIDATES_SCHEMA_V2 = "tilesim.design_space.s6_candidates.v2"
+DEFAULT_DESIGN_SPACE_CANDIDATES_SCHEMA_IDENTITY = DESIGN_SPACE_CANDIDATES_SCHEMA_V1
 DESCRIPTOR_ID = "f8-s0-s1-s6-controlled-run-surface"
 
 SCENARIO_OPTIONS = (
@@ -77,12 +80,27 @@ DESIGN_SPACE_MODES = (
     },
 )
 
+DESIGN_SPACE_CANDIDATE_SCHEMA_OPTIONS = (
+    {
+        "schema_identity": DESIGN_SPACE_CANDIDATES_SCHEMA_V1,
+        "available": True,
+        "unavailable_reason": None,
+        "default_when_omitted": True,
+    },
+    {
+        "schema_identity": DESIGN_SPACE_CANDIDATES_SCHEMA_V2,
+        "available": True,
+        "unavailable_reason": None,
+        "default_when_omitted": False,
+    },
+)
+
 SOURCE_MODE_OPTIONS = (
     {
         "source_mode": "synthetic_trace",
         "available": True,
         "unavailable_reason": None,
-        "allowed_claim_scope": "synthetic_consistency_and_exploratory_s6_only",
+        "allowed_claim_scope": "synthetic_consistency_and_exploratory",
         "calibration_requirement": "not_required_for_consistency_only",
         "applicable_input_modes": ["controls", "json", "trace_package"],
         "capability_predicate": None,
@@ -332,6 +350,10 @@ def _descriptor_revision_payload() -> dict[str, Any]:
         "gpu_participation_modes": GPU_PARTICIPATION_MODES,
         "input_modes": INPUT_MODES,
         "design_space_modes": DESIGN_SPACE_MODES,
+        "design_space_candidate_schema_options": DESIGN_SPACE_CANDIDATE_SCHEMA_OPTIONS,
+        "default_design_space_candidate_schema_identity": (
+            DEFAULT_DESIGN_SPACE_CANDIDATES_SCHEMA_IDENTITY
+        ),
         "source_mode_options": SOURCE_MODE_OPTIONS,
         "parameter_groups": PARAMETER_GROUPS,
         "subsystem_parameter_coverage": SUBSYSTEM_PARAMETER_COVERAGE,
@@ -362,6 +384,12 @@ def build_experiment_descriptor(schema_set_revision: str, capabilities: dict) ->
         "gpu_participation_modes": [dict(option) for option in GPU_PARTICIPATION_MODES],
         "input_modes": [dict(option) for option in INPUT_MODES],
         "design_space_modes": [dict(option) for option in DESIGN_SPACE_MODES],
+        "design_space_candidate_schema_options": [
+            dict(option) for option in DESIGN_SPACE_CANDIDATE_SCHEMA_OPTIONS
+        ],
+        "default_design_space_candidate_schema_identity": (
+            DEFAULT_DESIGN_SPACE_CANDIDATES_SCHEMA_IDENTITY
+        ),
         "source_mode_options": [dict(option) for option in SOURCE_MODE_OPTIONS],
         "parameter_groups": [dict(group) for group in PARAMETER_GROUPS],
         "subsystem_parameter_coverage": [dict(item) for item in SUBSYSTEM_PARAMETER_COVERAGE],

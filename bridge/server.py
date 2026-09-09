@@ -28,13 +28,16 @@ from infra import identity
 from repositories import runs as run_repository
 from services import execution
 from services import evidence_agent as evidence_agent_service
+from services import capability_catalog
 from services import trace_packages
 from services import week7
 from providers import evidence_agent as evidence_agent_provider_contract
 
 from contracts import evidence_agent
+from contracts.agent_orchestration_capability import load_catalog
 from contracts.experiment_descriptor import (
     DESIGN_SPACE_MODES,
+    DESCRIPTOR_REVISION,
     GPU_PARTICIPATION_MODES,
     INPUT_MODES,
     PARAMETER_DEFINITIONS,
@@ -124,6 +127,9 @@ JSON_ARTIFACT_DEFINITIONS = CONTRACT_METADATA["artifacts"]
 RUN_CREATION_CONTRACT = CONTRACT_METADATA["run_creation"]
 RUN_EVENT_CONTRACT = CONTRACT_METADATA["run_events"]
 EVIDENCE_AGENT_CONTRACT = CONTRACT_METADATA["evidence_agent"]
+AGENT_ORCHESTRATION_CAPABILITY_CONTRACT = CONTRACT_METADATA[
+    "agent_orchestration_capability"
+]
 TRACE_PACKAGE_CONTRACT = CONTRACT_METADATA["trace_packages"]
 SCHEMA_SET_REVISION = "sha256:" + hashlib.sha256(
     json.dumps(
@@ -171,6 +177,33 @@ def runtime_capabilities() -> dict:
     return identity.runtime_capabilities(TILESIM_CLI)
 
 
+def agent_orchestration_capability_release_metadata() -> dict:
+    catalog = load_catalog()
+    release = deployment_manifest()
+    web_source_revision = identity.git_value(WEB_ROOT, "rev-parse", "HEAD")
+    web_build_revision = (
+        os.environ.get("TILESIM_WEB_BUILD_REVISION")
+        or release.get("web_source_revision")
+        or web_source_revision
+    )
+    backend = backend_identity()
+    return {
+        "web_source_revision": web_source_revision,
+        "web_build_revision": web_build_revision,
+        "backend_revision": backend["source_revision"],
+        "schema_set_revision": SCHEMA_SET_REVISION,
+        "experiment_descriptor_revision": DESCRIPTOR_REVISION,
+        "catalog_revision": catalog["catalog_revision"],
+        "contract_package_revision": catalog["contract_package_revision"],
+    }
+
+
+def agent_orchestration_capability_snapshot() -> dict:
+    return capability_catalog.build_capability_snapshot(
+        agent_orchestration_capability_release_metadata()
+    )
+
+
 def now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -205,6 +238,7 @@ def write_error(
     *,
     field_path: str | None = None,
     retryable: bool | None = None,
+    nested_schema_identity: str | None = None,
 ) -> None:
     return responses.write_error(
         handler,
@@ -216,6 +250,7 @@ def write_error(
         schema_set_revision=SCHEMA_SET_REVISION,
         field_path=field_path,
         retryable=retryable,
+        nested_schema_identity=nested_schema_identity,
     )
 
 
@@ -232,6 +267,9 @@ def api_manifest() -> dict:
         run_creation_contract=RUN_CREATION_CONTRACT,
         run_event_contract=RUN_EVENT_CONTRACT,
         evidence_agent_contract=EVIDENCE_AGENT_CONTRACT,
+        agent_orchestration_capability_contract=(
+            AGENT_ORCHESTRATION_CAPABILITY_CONTRACT
+        ),
         trace_package_contract=TRACE_PACKAGE_CONTRACT,
     )
 
@@ -569,6 +607,18 @@ class BridgeHandler(SimpleHTTPRequestHandler):
                     SCHEMA_SET_REVISION, evidence_agent_provider.capability()
                 ),
             )
+        if path == "/api/agent/orchestration-capabilities":
+            try:
+                snapshot = agent_orchestration_capability_snapshot()
+            except (RuntimeError, ValueError):
+                return write_error(
+                    self,
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                    "agent_orchestration_capability_snapshot_unavailable",
+                    "The Agent orchestration capability snapshot release binding is unavailable.",
+                    retryable=False,
+                )
+            return write_json(self, HTTPStatus.OK, snapshot)
         if path == "/api/week7/evidence-map":
             return self.run_week7_operation("evidence_map")
         parts = path.strip("/").split("/")
@@ -724,6 +774,9 @@ class BridgeHandler(SimpleHTTPRequestHandler):
             overrides = command.overrides
             custom_inputs = command.custom_inputs
             design_space_candidates = command.design_space_candidates
+            design_space_candidate_schema_identity = (
+                command.design_space_candidate_schema_identity
+            )
             trace_package_id = command.trace_package_id
         except (ValueError, json.JSONDecodeError) as error:
             validation = request_validation_error(error)
@@ -734,6 +787,7 @@ class BridgeHandler(SimpleHTTPRequestHandler):
                 str(validation),
                 field_path=validation.field_path,
                 retryable=False,
+                nested_schema_identity=validation.nested_schema_identity,
             )
 
         if not (TILESIM_CLI.is_file() and os.access(TILESIM_CLI, os.X_OK)):
@@ -825,6 +879,9 @@ class BridgeHandler(SimpleHTTPRequestHandler):
                             else "external_manifest"
                             if design_space_candidates is not None
                             else "built_in_synthetic"
+                        ),
+                        "design_space_candidate_schema_identity": (
+                            design_space_candidate_schema_identity
                         ),
                         "idempotency_key": idempotency_key,
                         "request_payload_sha256": payload_digest,

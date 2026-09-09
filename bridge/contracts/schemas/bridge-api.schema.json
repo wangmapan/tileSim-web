@@ -30,6 +30,9 @@
     "evidenceAgentDescriptor": { "$ref": "evidence-agent-descriptor.schema.json" },
     "evidenceAgentRequest": { "$ref": "evidence-agent-request.schema.json" },
     "evidenceAgentResponse": { "$ref": "evidence-agent-response.schema.json" },
-    "evidenceAgentCitation": { "$ref": "evidence-agent-citation.schema.json" }
+    "evidenceAgentCitation": { "$ref": "evidence-agent-citation.schema.json" },
+    "agentOrchestrationCapabilitySnapshot": {
+      "$ref": "../agent_orchestration_capability/schemas/capability-snapshot.schema.json"
+    }
   }
 }

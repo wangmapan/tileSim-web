@@ -1,6 +1,7 @@
 // Generated from bridge/contracts/openapi.json. Do not edit by hand.
 
 import type {
+  AgentOrchestrationCapabilitySnapshotResponse,
   ApiManifestResponse,
   ApiRun,
   ArtifactManifestResponse,
@@ -38,6 +39,7 @@ export const bridgePaths = {
   tracePackages: () => "/trace-packages",
   inspectTracePackage: (packageId: string) => `/trace-packages/${encodeURIComponent(packageId)}/inspect`,
   evidenceAgentCapabilities: () => "/agent/evidence-capabilities",
+  agentOrchestrationCapabilities: () => "/agent/orchestration-capabilities",
   week7EvidenceMap: () => "/week7/evidence-map",
   runWeek7CalibrationExample: () => "/week7/calibration-example",
   runWeek7OrchestrationExample: () => "/week7/orchestration-example",
@@ -89,6 +91,13 @@ export class GeneratedBridgeClient {
 
   evidenceAgentCapabilities(): Promise<EvidenceAgentDescriptorResponse> {
     return this.transport.request<EvidenceAgentDescriptorResponse>(bridgePaths.evidenceAgentCapabilities(), {});
+  }
+
+  agentOrchestrationCapabilities(): Promise<AgentOrchestrationCapabilitySnapshotResponse> {
+    return this.transport.request<AgentOrchestrationCapabilitySnapshotResponse>(
+      bridgePaths.agentOrchestrationCapabilities(),
+      {},
+    );
   }
 
   week7EvidenceMap(): Promise<Week7EvidenceMapResponse> {

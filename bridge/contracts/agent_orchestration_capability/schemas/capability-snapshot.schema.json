@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/agent-orchestration-capability/v1/capability-snapshot.schema.json",
+  "x-tilesim-contract-status": "published",
+  "x-tilesim-schema-identity": "tilesim.bridge.agent_orchestration_capability_snapshot.v1",
+  "title": "AgentOrchestrationCapabilitySnapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_identity",
+    "publication_status",
+    "snapshot_id",
+    "snapshot_revision",
+    "snapshot_digest",
+    "canonicalization_identity",
+    "catalog",
+    "release_binding",
+    "drift_policy"
+  ],
+  "properties": {
+    "schema_identity": {
+      "const": "tilesim.bridge.agent_orchestration_capability_snapshot.v1"
+    },
+    "publication_status": { "const": "published" },
+    "snapshot_id": { "$ref": "common.schema.json#/$defs/stableId" },
+    "snapshot_revision": { "$ref": "common.schema.json#/$defs/sha256" },
+    "snapshot_digest": { "$ref": "common.schema.json#/$defs/sha256" },
+    "canonicalization_identity": {
+      "const": "tilesim.bridge.canonical_json.v1"
+    },
+    "catalog": { "$ref": "capability-catalog.schema.json" },
+    "release_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "web_source_identity",
+        "web_source_revision",
+        "web_build_revision",
+        "backend_identity",
+        "backend_revision",
+        "schema_set_revision",
+        "experiment_descriptor_identity",
+        "experiment_descriptor_revision",
+        "create_run_identity",
+        "catalog_revision",
+        "contract_package_revision",
+        "nested_design_space_identities",
+        "default_nested_design_space_identity"
+      ],
+      "properties": {
+        "web_source_identity": { "const": "tilesim.web.git" },
+        "web_source_revision": {
+          "$ref": "common.schema.json#/$defs/gitRevision"
+        },
+        "web_build_revision": {
+          "$ref": "common.schema.json#/$defs/gitRevision"
+        },
+        "backend_identity": { "const": "tilesim.backend.git" },
+        "backend_revision": { "$ref": "common.schema.json#/$defs/gitRevision" },
+        "schema_set_revision": { "$ref": "common.schema.json#/$defs/sha256" },
+        "experiment_descriptor_identity": {
+          "const": "tilesim.bridge.experiment_descriptor.v1"
+        },
+        "experiment_descriptor_revision": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "create_run_identity": {
+          "const": "tilesim.bridge.create_run_request.v1"
+        },
+        "catalog_revision": { "$ref": "common.schema.json#/$defs/sha256" },
+        "contract_package_revision": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "nested_design_space_identities": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [
+            { "const": "tilesim.design_space.s6_candidates.v1" },
+            { "const": "tilesim.design_space.s6_candidates.v2" }
+          ]
+        },
+        "default_nested_design_space_identity": {
+          "enum": ["tilesim.design_space.s6_candidates.v1", "tilesim.design_space.s6_candidates.v2"]
+        }
+      }
+    },
+    "drift_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["release_binding_mismatch", "catalog_revision_mismatch", "unknown_identity_or_status"],
+      "properties": {
+        "release_binding_mismatch": { "const": "fail_closed" },
+        "catalog_revision_mismatch": { "const": "fail_closed" },
+        "unknown_identity_or_status": { "const": "fail_closed" }
+      }
+    }
+  }
+}

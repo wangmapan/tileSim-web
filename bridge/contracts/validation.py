@@ -7,6 +7,9 @@ import math
 import re
 
 from .experiment_descriptor import (
+    DEFAULT_DESIGN_SPACE_CANDIDATES_SCHEMA_IDENTITY,
+    DESIGN_SPACE_CANDIDATES_SCHEMA_V1,
+    DESIGN_SPACE_CANDIDATES_SCHEMA_V2,
     PARAMETER_BY_SECTION_KEY,
     PARAMETER_DEFINITIONS,
     ParameterDefinition,
@@ -16,15 +19,23 @@ from .experiment_descriptor import (
 MAX_CUSTOM_INPUT_BYTES = 1_000_000
 MAX_DESIGN_SPACE_CANDIDATES = 256
 MAX_DESIGN_SPACE_TRANSFERS = 100_000
+DESIGN_SPACE_DES_PROMOTION_UNCERTAINTY_THRESHOLD = 0.70
 MAX_EXACT_JSON_INTEGER = 9_007_199_254_740_991
 
 SCHEDULERS = set(PARAMETER_BY_SECTION_KEY[("runtime", "batch_scheduler")].enum_values)
 
 
 class RequestValidationError(ValueError):
-    def __init__(self, message: str, field_path: str = "/") -> None:
+    def __init__(
+        self,
+        message: str,
+        field_path: str = "/",
+        *,
+        nested_schema_identity: str | None = None,
+    ) -> None:
         super().__init__(message)
         self.field_path = field_path
+        self.nested_schema_identity = nested_schema_identity
 
 
 def pointer_for_label(label: str) -> str:
@@ -661,10 +672,58 @@ def validate_custom_inputs(value: object) -> dict:
     return {"runtime_trace": trace, "topology": topology}
 
 
-def validate_design_space_candidates(value: object) -> dict:
-    """Validate the strict S6-only candidate manifest before materializing it."""
+def validate_design_space_candidates(
+    value: object,
+    *,
+    des_promotion_enabled: bool = True,
+) -> dict:
+    """Validate a versioned S6-only manifest and return its explicit identity."""
     if not isinstance(value, dict):
         raise ValueError("design_space_candidates must be a JSON object.")
+    schema_identity = value.get(
+        "schema_version",
+        DEFAULT_DESIGN_SPACE_CANDIDATES_SCHEMA_IDENTITY,
+    )
+    if not isinstance(schema_identity, str) or schema_identity not in {
+        DESIGN_SPACE_CANDIDATES_SCHEMA_V1,
+        DESIGN_SPACE_CANDIDATES_SCHEMA_V2,
+    }:
+        raise RequestValidationError(
+            "design-space schema_version is not supported.",
+            "/design_space_candidates/schema_version",
+            nested_schema_identity=(
+                schema_identity if isinstance(schema_identity, str) else None
+            ),
+        )
+
+    manifest = value
+    if "schema_version" not in value:
+        manifest = {**value, "schema_version": schema_identity}
+
+    try:
+        return _validate_design_space_candidates_version(
+            manifest,
+            schema_identity=schema_identity,
+            des_promotion_enabled=des_promotion_enabled,
+        )
+    except ValueError as error:
+        validation = request_validation_error(error, "/design_space_candidates")
+        if validation.nested_schema_identity == schema_identity:
+            raise
+        raise RequestValidationError(
+            str(validation),
+            validation.field_path,
+            nested_schema_identity=schema_identity,
+        ) from error
+
+
+def _validate_design_space_candidates_version(
+    value: dict,
+    *,
+    schema_identity: str,
+    des_promotion_enabled: bool,
+) -> dict:
+    is_v2 = schema_identity == DESIGN_SPACE_CANDIDATES_SCHEMA_V2
     root_fields = {
         "schema_version",
         "manifest_id",
@@ -677,10 +736,11 @@ def validate_design_space_candidates(value: object) -> dict:
         raise ValueError(f"Unsupported design-space manifest field: {', '.join(sorted(unknown))}.")
     if missing := root_fields - set(value):
         raise ValueError(f"Missing design-space manifest field: {', '.join(sorted(missing))}.")
-    if value["schema_version"] != "tilesim.design_space.s6_candidates.v1":
+    if value["schema_version"] != schema_identity:
         raise RequestValidationError(
             "design-space schema_version is not supported.",
             "/design_space_candidates/schema_version",
+            nested_schema_identity=schema_identity,
         )
     if not isinstance(value["manifest_id"], str) or not 1 <= len(value["manifest_id"]) <= 160:
         raise ValueError("design-space manifest_id must contain 1 to 160 characters.")
@@ -689,21 +749,23 @@ def validate_design_space_candidates(value: object) -> dict:
             "design-space source_mode is not exposed by the controlled web run surface.",
             "/design_space_candidates/source_mode",
         )
-    if value["calibration_level"] not in {
+    calibration_levels = {"uncalibrated"} if is_v2 else {
         "uncalibrated",
         "partially_calibrated",
-    }:
+    }
+    if value["calibration_level"] not in calibration_levels:
         raise RequestValidationError(
             "design-space calibration_level is not supported.",
             "/design_space_candidates/calibration_level",
         )
-    if value["allowed_claim_scope"] not in {
+    allowed_claim_scopes = {"exploratory"} if is_v2 else {
         "exploratory",
         "exploratory_s6_only",
         "synthetic_consistency",
         "synthetic_consistency_only",
         "workflow_consistency_only",
-    }:
+    }
+    if value["allowed_claim_scope"] not in allowed_claim_scopes:
         raise RequestValidationError(
             "design-space allowed_claim_scope is not valid for synthetic provenance.",
             "/design_space_candidates/allowed_claim_scope",
@@ -730,6 +792,8 @@ def validate_design_space_candidates(value: object) -> dict:
     allowed_candidate_fields = required_candidate_fields | {"promotion_hint"}
     candidate_ids: set[str] = set()
     canonical_inputs: set[tuple] = set()
+    promoted_transfer_count = 0
+    top_k_transfer_reserve = 0
     total_transfers = 0
     for index, candidate in enumerate(candidates):
         prefix = f"design_space_candidates.candidates[{index}]"
@@ -752,7 +816,10 @@ def validate_design_space_candidates(value: object) -> dict:
         bandwidth = bounded_number(candidate["bandwidth_gbps"], f"{prefix}.bandwidth_gbps", 0.000001, 100_000)
         latency = bounded_number(candidate["latency_us"], f"{prefix}.latency_us", 0, 1_000_000)
         oversubscription = bounded_number(
-            candidate["oversubscription_factor"], f"{prefix}.oversubscription_factor", 0.000001, 1_000_000
+            candidate["oversubscription_factor"],
+            f"{prefix}.oversubscription_factor",
+            1 if is_v2 else 0.000001,
+            1_000_000,
         )
         request_count = bounded_number(
             candidate["request_count"], f"{prefix}.request_count", 1, MAX_DESIGN_SPACE_TRANSFERS, integer=True
@@ -782,10 +849,27 @@ def validate_design_space_candidates(value: object) -> dict:
             request_count,
             message_bytes,
             release_interval,
-            uncertainty,
-            candidate["tail_risk"],
         )
+        if not is_v2:
+            canonical += (uncertainty, candidate["tail_risk"])
         if canonical in canonical_inputs:
             raise ValueError("design-space canonical candidate inputs must be unique.")
         canonical_inputs.add(canonical)
+        if is_v2:
+            if (
+                uncertainty >= DESIGN_SPACE_DES_PROMOTION_UNCERTAINTY_THRESHOLD
+                or candidate["tail_risk"]
+            ):
+                promoted_transfer_count += request_count
+            else:
+                top_k_transfer_reserve = max(top_k_transfer_reserve, request_count)
+    if (
+        is_v2
+        and des_promotion_enabled
+        and total_transfers + promoted_transfer_count + top_k_transfer_reserve
+        > MAX_DESIGN_SPACE_TRANSFERS
+    ):
+        raise ValueError(
+            "design-space candidates exceed the bounded aggregate Analytical and promoted DES transfer execution budget."
+        )
     return value

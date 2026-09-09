@@ -16,6 +16,8 @@
     "gpu_participation_modes",
     "input_modes",
     "design_space_modes",
+    "design_space_candidate_schema_options",
+    "default_design_space_candidate_schema_identity",
     "source_mode_options",
     "parameter_groups",
     "subsystem_parameter_coverage",
@@ -60,6 +62,15 @@
     "gpu_participation_modes": { "$ref": "#/$defs/gpuOptions" },
     "input_modes": { "$ref": "#/$defs/inputOptions" },
     "design_space_modes": { "$ref": "#/$defs/designSpaceOptions" },
+    "design_space_candidate_schema_options": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": { "$ref": "#/$defs/designSpaceCandidateSchemaOption" }
+    },
+    "default_design_space_candidate_schema_identity": {
+      "const": "tilesim.design_space.s6_candidates.v1"
+    },
     "source_mode_options": {
       "type": "array",
       "minItems": 3,
@@ -184,6 +195,19 @@
           "available": { "type": "boolean" },
           "unavailable_reason": { "type": ["string", "null"] }
         }
+      }
+    },
+    "designSpaceCandidateSchemaOption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_identity", "available", "unavailable_reason", "default_when_omitted"],
+      "properties": {
+        "schema_identity": {
+          "enum": ["tilesim.design_space.s6_candidates.v1", "tilesim.design_space.s6_candidates.v2"]
+        },
+        "available": { "const": true },
+        "unavailable_reason": { "type": "null" },
+        "default_when_omitted": { "type": "boolean" }
       }
     },
     "parameterDescriptor": {

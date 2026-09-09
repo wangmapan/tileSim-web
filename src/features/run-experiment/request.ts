@@ -3,6 +3,7 @@ import { createRunRequestSchema } from "../../contracts/generated/create-run-sch
 import {
   createRunRequest as validateCreateRunRequest,
   designSpaceCandidates as validateDesignSpaceCandidates,
+  designSpaceCandidatesV2 as validateDesignSpaceCandidatesV2,
 } from "../../contracts/generated/experiment-validators.js";
 import { expectedParameterPointers } from "./parameter-contract";
 import {
@@ -106,6 +107,73 @@ function validationPointer(validator: unknown, root = ""): string {
   return `${root}${first?.instancePath || ""}${property ? `/${property}` : ""}` || root;
 }
 
+const maxDesignSpaceTransfers = 100_000;
+const desPromotionUncertaintyThreshold = 0.7;
+
+function validateDesignSpaceCandidateSemantics(
+  designSpace: UnknownRecord,
+  desPromotionEnabled: boolean,
+  strictV2: boolean,
+): void {
+  const candidates = designSpace.candidates as UnknownRecord[];
+  const candidateIds = new Set<string>();
+  const executionInputs = new Set<string>();
+  let totalTransfers = 0;
+  let promotedTransfers = 0;
+  let topKTransferReserve = 0;
+
+  for (const [index, candidate] of candidates.entries()) {
+    const pointer = `/design_space_candidates/candidates/${index}`;
+    const candidateId = candidate.candidate_id as string;
+    if (candidateIds.has(candidateId)) {
+      throw new ExperimentRequestError("Design-space candidate IDs must be unique.", `${pointer}/candidate_id`);
+    }
+    candidateIds.add(candidateId);
+
+    const canonicalExecutionInput = JSON.stringify([
+      candidate.bandwidth_gbps,
+      candidate.latency_us,
+      candidate.oversubscription_factor,
+      candidate.request_count,
+      candidate.message_bytes,
+      candidate.release_interval_ps,
+      ...(strictV2 ? [] : [candidate.uncertainty_score, candidate.tail_risk]),
+    ]);
+    if (executionInputs.has(canonicalExecutionInput)) {
+      throw new ExperimentRequestError(
+        "Design-space execution inputs must be unique; risk metadata alone does not create a new candidate.",
+        pointer,
+      );
+    }
+    executionInputs.add(canonicalExecutionInput);
+
+    const requestCount = candidate.request_count as number;
+    totalTransfers += requestCount;
+    if ((candidate.uncertainty_score as number) >= desPromotionUncertaintyThreshold || candidate.tail_risk === true) {
+      promotedTransfers += requestCount;
+    } else {
+      topKTransferReserve = Math.max(topKTransferReserve, requestCount);
+    }
+  }
+
+  if (totalTransfers > maxDesignSpaceTransfers) {
+    throw new ExperimentRequestError(
+      `Design-space candidates exceed the ${maxDesignSpaceTransfers.toLocaleString()} transfer screening budget.`,
+      "/design_space_candidates/candidates",
+    );
+  }
+  if (
+    strictV2 &&
+    desPromotionEnabled &&
+    totalTransfers + promotedTransfers + topKTransferReserve > maxDesignSpaceTransfers
+  ) {
+    throw new ExperimentRequestError(
+      `Design-space candidates exceed the ${maxDesignSpaceTransfers.toLocaleString()} aggregate Analytical and promoted DES transfer budget.`,
+      "/design_space_candidates/candidates",
+    );
+  }
+}
+
 export function buildExperimentRequest(options: BuildExperimentRequestOptions): CreateRunRequest {
   const { form, mode, surface } = options;
   if (!surface.canSubmit || surface.contractStatus === "contract_error") {
@@ -161,12 +229,33 @@ export function buildExperimentRequest(options: BuildExperimentRequestOptions): 
       "/design_space_candidates",
       "Design-space candidate manifest",
     );
-    if (!validateDesignSpaceCandidates(designSpace)) {
+    const nestedIdentity =
+      typeof designSpace.schema_version === "string"
+        ? designSpace.schema_version
+        : "tilesim.design_space.s6_candidates.v1";
+    const nestedValidator =
+      nestedIdentity === "tilesim.design_space.s6_candidates.v1"
+        ? validateDesignSpaceCandidates
+        : nestedIdentity === "tilesim.design_space.s6_candidates.v2"
+          ? validateDesignSpaceCandidatesV2
+          : null;
+    if (!nestedValidator) {
       throw new ExperimentRequestError(
-        "Design-space candidate manifest does not match tilesim.design_space.s6_candidates.v1.",
-        validationPointer(validateDesignSpaceCandidates, "/design_space_candidates"),
+        "Unsupported design-space candidate schema identity.",
+        "/design_space_candidates/schema_version",
       );
     }
+    if (!nestedValidator(designSpace)) {
+      throw new ExperimentRequestError(
+        `Design-space candidate manifest does not match ${nestedIdentity}.`,
+        validationPointer(nestedValidator, "/design_space_candidates"),
+      );
+    }
+    validateDesignSpaceCandidateSemantics(
+      designSpace,
+      form.fidelity_policy === "des",
+      nestedIdentity === "tilesim.design_space.s6_candidates.v2",
+    );
     request.design_space_candidates = designSpace;
   }
   if (!validateCreateRunRequest(request)) {

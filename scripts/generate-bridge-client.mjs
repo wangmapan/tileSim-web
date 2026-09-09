@@ -11,16 +11,25 @@ const schemaPath = resolve(root, "bridge/contracts/schemas/bridge-api.schema.jso
 const createRunSchemaPath = resolve(root, "bridge/contracts/schemas/create-run-request.schema.json");
 const experimentDescriptorSchemaPath = resolve(root, "bridge/contracts/schemas/experiment-descriptor.schema.json");
 const designSpaceCandidatesSchemaPath = resolve(root, "bridge/contracts/schemas/design-space-candidates.schema.json");
+const designSpaceCandidatesV2SchemaPath = resolve(
+  root,
+  "bridge/contracts/schemas/design-space-candidates-v2.schema.json",
+);
 const schemaDirectory = dirname(schemaPath);
 const typesOutputPath = resolve(root, "src/contracts/generated/bridge-contracts.ts");
 const clientOutputPath = resolve(root, "src/contracts/generated/bridge-client.ts");
 const createRunSchemaOutputPath = resolve(root, "src/contracts/generated/create-run-schema.ts");
 const experimentValidatorsOutputPath = resolve(root, "src/contracts/generated/experiment-validators.js");
+const agentOrchestrationCapabilityValidatorsOutputPath = resolve(
+  root,
+  "src/contracts/generated/agent-orchestration-capability-validators.js",
+);
 const evidenceAgentValidatorsOutputPath = resolve(root, "src/contracts/generated/evidence-agent-validators.js");
 const openapi = JSON.parse(await readFile(openapiPath, "utf8"));
 const createRunSchema = JSON.parse(await readFile(createRunSchemaPath, "utf8"));
 const experimentDescriptorSchema = JSON.parse(await readFile(experimentDescriptorSchemaPath, "utf8"));
 const designSpaceCandidatesSchema = JSON.parse(await readFile(designSpaceCandidatesSchemaPath, "utf8"));
+const designSpaceCandidatesV2Schema = JSON.parse(await readFile(designSpaceCandidatesV2SchemaPath, "utf8"));
 const prettierConfig = (await resolveConfig(clientOutputPath)) ?? {};
 const compileOptions = {
   bannerComment: "",
@@ -41,6 +50,7 @@ const inlineTypeNames = [
   "Week7CalibrationResponse",
   "Week7OrchestrationResponse",
   "EvidenceAgentDescriptorResponse",
+  "AgentOrchestrationCapabilitySnapshotResponse",
 ];
 const inlineTypes = [];
 function schemaForStandaloneCompile(value) {
@@ -50,7 +60,9 @@ function schemaForStandaloneCompile(value) {
     Object.entries(value).map(([key, child]) => [
       key,
       key === "$ref" && typeof child === "string"
-        ? child.replace(/^\.\/schemas\//, "")
+        ? child
+            .replace(/^\.\/schemas\//, "")
+            .replace(/^\.\/agent_orchestration_capability\//, "../agent_orchestration_capability/")
         : schemaForStandaloneCompile(child),
     ]),
   );
@@ -169,6 +181,7 @@ const createRunSchemaSource = `// Generated from the F8 Bridge JSON Schemas. Do 
 export const createRunRequestSchema = ${JSON.stringify(createRunSchema, null, 2)} as const;
 export const experimentDescriptorSchema = ${JSON.stringify(experimentDescriptorSchema, null, 2)} as const;
 export const designSpaceCandidatesSchema = ${JSON.stringify(designSpaceCandidatesSchema, null, 2)} as const;
+export const designSpaceCandidatesV2Schema = ${JSON.stringify(designSpaceCandidatesV2Schema, null, 2)} as const;
 `;
 const nextCreateRunSchema = await format(createRunSchemaSource, {
   ...prettierConfig,
@@ -182,6 +195,7 @@ const f8SchemaNames = [
   "runtime-trace-input.schema.json",
   "topology-request-input.schema.json",
   "design-space-candidates.schema.json",
+  "design-space-candidates-v2.schema.json",
   "experiment-descriptor.schema.json",
 ];
 const f8Schemas = await Promise.all(
@@ -193,6 +207,7 @@ const validatorIds = {
   createRunRequest: createRunSchema.$id,
   experimentDescriptor: experimentDescriptorSchema.$id,
   designSpaceCandidates: designSpaceCandidatesSchema.$id,
+  designSpaceCandidatesV2: designSpaceCandidatesV2Schema.$id,
 };
 for (const schemaId of Object.values(validatorIds)) {
   if (!ajv.getSchema(schemaId)) throw new Error(`Unable to compile F8 schema: ${schemaId}`);
@@ -239,6 +254,53 @@ const nextEvidenceAgentValidators = await format(`${evidenceAgentValidatorBanner
   filepath: evidenceAgentValidatorsOutputPath,
 });
 
+const agentOrchestrationCapabilitySchemaNames = [
+  "common.schema.json",
+  "parameter-descriptor.schema.json",
+  "model-profile.schema.json",
+  "engine-profile.schema.json",
+  "device-profile.schema.json",
+  "topology-profile.schema.json",
+  "workload-profile.schema.json",
+  "capability-catalog.schema.json",
+  "capability-snapshot.schema.json",
+];
+const agentOrchestrationCapabilitySchemaDirectory = resolve(
+  root,
+  "bridge/contracts/agent_orchestration_capability/schemas",
+);
+const agentOrchestrationCapabilitySchemas = await Promise.all(
+  agentOrchestrationCapabilitySchemaNames.map(async (name) =>
+    JSON.parse(await readFile(resolve(agentOrchestrationCapabilitySchemaDirectory, name), "utf8")),
+  ),
+);
+const agentOrchestrationCapabilityAjv = new Ajv2020({
+  allErrors: true,
+  strict: false,
+  code: { source: true, esm: true },
+});
+for (const schema of agentOrchestrationCapabilitySchemas) {
+  agentOrchestrationCapabilityAjv.addSchema(schema);
+}
+const agentOrchestrationCapabilityValidatorIds = {
+  agentOrchestrationCapabilityCatalog: agentOrchestrationCapabilitySchemas[7].$id,
+  agentOrchestrationCapabilitySnapshot: agentOrchestrationCapabilitySchemas[8].$id,
+};
+const agentOrchestrationCapabilityValidatorBanner =
+  "// Generated Ajv standalone Agent orchestration capability validators. Do not edit by hand.\n" +
+  "/* eslint-disable @typescript-eslint/no-unused-vars */\n";
+const agentOrchestrationCapabilityValidatorSource = standaloneCode(
+  agentOrchestrationCapabilityAjv,
+  agentOrchestrationCapabilityValidatorIds,
+).replace(/const (\w+) = require\(("[^"]+")\)\.default;/g, "import $1 from $2;");
+const nextAgentOrchestrationCapabilityValidators = await format(
+  `${agentOrchestrationCapabilityValidatorBanner}${agentOrchestrationCapabilityValidatorSource}`,
+  {
+    ...prettierConfig,
+    filepath: agentOrchestrationCapabilityValidatorsOutputPath,
+  },
+);
+
 function hasGeneratedDrift(current, generated) {
   return current.replaceAll("\r\n", "\n") !== generated.replaceAll("\r\n", "\n");
 }
@@ -249,12 +311,17 @@ if (process.argv.includes("--check")) {
   let currentCreateRunSchema = "";
   let currentExperimentValidators = "";
   let currentEvidenceAgentValidators = "";
+  let currentAgentOrchestrationCapabilityValidators = "";
   try {
     currentTypes = await readFile(typesOutputPath, "utf8");
     currentClient = await readFile(clientOutputPath, "utf8");
     currentCreateRunSchema = await readFile(createRunSchemaOutputPath, "utf8");
     currentExperimentValidators = await readFile(experimentValidatorsOutputPath, "utf8");
     currentEvidenceAgentValidators = await readFile(evidenceAgentValidatorsOutputPath, "utf8");
+    currentAgentOrchestrationCapabilityValidators = await readFile(
+      agentOrchestrationCapabilityValidatorsOutputPath,
+      "utf8",
+    );
   } catch {
     // Missing output is reported as drift below.
   }
@@ -263,7 +330,8 @@ if (process.argv.includes("--check")) {
     hasGeneratedDrift(currentClient, nextClient) ||
     hasGeneratedDrift(currentCreateRunSchema, nextCreateRunSchema) ||
     hasGeneratedDrift(currentExperimentValidators, nextExperimentValidators) ||
-    hasGeneratedDrift(currentEvidenceAgentValidators, nextEvidenceAgentValidators)
+    hasGeneratedDrift(currentEvidenceAgentValidators, nextEvidenceAgentValidators) ||
+    hasGeneratedDrift(currentAgentOrchestrationCapabilityValidators, nextAgentOrchestrationCapabilityValidators)
   ) {
     process.stderr.write("Generated Bridge client is stale. Run pnpm contracts:generate.\n");
     process.exitCode = 1;
@@ -275,9 +343,11 @@ if (process.argv.includes("--check")) {
   await writeFile(createRunSchemaOutputPath, nextCreateRunSchema, "utf8");
   await writeFile(experimentValidatorsOutputPath, nextExperimentValidators, "utf8");
   await writeFile(evidenceAgentValidatorsOutputPath, nextEvidenceAgentValidators, "utf8");
+  await writeFile(agentOrchestrationCapabilityValidatorsOutputPath, nextAgentOrchestrationCapabilityValidators, "utf8");
   process.stdout.write(`Generated ${typesOutputPath}\n`);
   process.stdout.write(`Generated ${clientOutputPath}\n`);
   process.stdout.write(`Generated ${createRunSchemaOutputPath}\n`);
   process.stdout.write(`Generated ${experimentValidatorsOutputPath}\n`);
   process.stdout.write(`Generated ${evidenceAgentValidatorsOutputPath}\n`);
+  process.stdout.write(`Generated ${agentOrchestrationCapabilityValidatorsOutputPath}\n`);
 }

@@ -9,7 +9,7 @@ export type CreateRunRequest = {
   run_name?: string | null;
   overrides?: TileSimControlledS0S1S6RunOverrides;
   custom_inputs?: ControlledCustomInputsForTheHostedS1ToS6Path;
-  design_space_candidates?: StrictS6OnlyDesignSpaceCandidateManifest;
+  design_space_candidates?: StrictS6OnlyDesignSpaceCandidateManifest | StrictS6OnlyDesignSpaceCandidateManifestV2;
   trace_package_id?: string;
 };
 export type GpuOptions = {
@@ -148,6 +148,7 @@ export interface BridgeApiContracts {
   evidenceAgentRequest?: EvidenceAgentRequest;
   evidenceAgentResponse?: EvidenceAgentResponse;
   evidenceAgentCitation?: EvidenceAgentCitation;
+  agentOrchestrationCapabilitySnapshot?: AgentOrchestrationCapabilitySnapshot;
 }
 export interface ApiManifestResponse {
   schema_version: "tilesim.bridge.manifest.v1";
@@ -188,6 +189,55 @@ export interface ApiManifestResponse {
     idempotency_header: "Idempotency-Key";
     execution_mode: "synchronous_terminal";
   };
+  agent_orchestration_capability: {
+    endpoint: "GET /api/agent/orchestration-capabilities";
+    snapshot_schema_identity: "tilesim.bridge.agent_orchestration_capability_snapshot.v1";
+    catalog_schema_identity: "tilesim.bridge.agent_orchestration_capability_catalog.v1";
+    parameter_descriptor_schema_identity: "tilesim.bridge.agent_orchestration_parameter_descriptor.v1";
+    /**
+     * @minItems 5
+     * @maxItems 5
+     */
+    profile_schema_identities: [
+      (
+        | "tilesim.bridge.agent_orchestration_model_profile.v1"
+        | "tilesim.bridge.agent_orchestration_engine_profile.v1"
+        | "tilesim.bridge.agent_orchestration_device_profile.v1"
+        | "tilesim.bridge.agent_orchestration_topology_profile.v1"
+        | "tilesim.bridge.agent_orchestration_workload_profile.v1"
+      ),
+      (
+        | "tilesim.bridge.agent_orchestration_model_profile.v1"
+        | "tilesim.bridge.agent_orchestration_engine_profile.v1"
+        | "tilesim.bridge.agent_orchestration_device_profile.v1"
+        | "tilesim.bridge.agent_orchestration_topology_profile.v1"
+        | "tilesim.bridge.agent_orchestration_workload_profile.v1"
+      ),
+      (
+        | "tilesim.bridge.agent_orchestration_model_profile.v1"
+        | "tilesim.bridge.agent_orchestration_engine_profile.v1"
+        | "tilesim.bridge.agent_orchestration_device_profile.v1"
+        | "tilesim.bridge.agent_orchestration_topology_profile.v1"
+        | "tilesim.bridge.agent_orchestration_workload_profile.v1"
+      ),
+      (
+        | "tilesim.bridge.agent_orchestration_model_profile.v1"
+        | "tilesim.bridge.agent_orchestration_engine_profile.v1"
+        | "tilesim.bridge.agent_orchestration_device_profile.v1"
+        | "tilesim.bridge.agent_orchestration_topology_profile.v1"
+        | "tilesim.bridge.agent_orchestration_workload_profile.v1"
+      ),
+      (
+        | "tilesim.bridge.agent_orchestration_model_profile.v1"
+        | "tilesim.bridge.agent_orchestration_engine_profile.v1"
+        | "tilesim.bridge.agent_orchestration_device_profile.v1"
+        | "tilesim.bridge.agent_orchestration_topology_profile.v1"
+        | "tilesim.bridge.agent_orchestration_workload_profile.v1"
+      ),
+    ];
+    catalog_revision: string;
+    contract_package_revision: string;
+  };
   run_creation: {
     idempotency_header: "Idempotency-Key";
     idempotency_required: true;
@@ -213,6 +263,7 @@ export interface ErrorResponse {
     code: string;
     message: string;
     field_path: string | null;
+    nested_schema_identity?: string;
     retryable: boolean;
   };
   request_id: string;
@@ -440,7 +491,7 @@ export interface StringMap {
   [k: string]: string | number | boolean;
 }
 export interface StrictS6OnlyDesignSpaceCandidateManifest {
-  schema_version: "tilesim.design_space.s6_candidates.v1";
+  schema_version?: "tilesim.design_space.s6_candidates.v1";
   manifest_id: string;
   source_mode: "synthetic_trace";
   calibration_level: "uncalibrated" | "partially_calibrated";
@@ -450,6 +501,47 @@ export interface StrictS6OnlyDesignSpaceCandidateManifest {
     | "synthetic_consistency"
     | "synthetic_consistency_only"
     | "workflow_consistency_only";
+  /**
+   * @minItems 1
+   * @maxItems 256
+   */
+  candidates: [
+    {
+      candidate_id: string;
+      name: string;
+      bandwidth_gbps: number;
+      latency_us: number;
+      oversubscription_factor: number;
+      request_count: number;
+      message_bytes: number;
+      release_interval_ps: number;
+      uncertainty_score: number;
+      tail_risk: boolean;
+      promotion_hint?: string;
+      source_id: string;
+    },
+    ...{
+      candidate_id: string;
+      name: string;
+      bandwidth_gbps: number;
+      latency_us: number;
+      oversubscription_factor: number;
+      request_count: number;
+      message_bytes: number;
+      release_interval_ps: number;
+      uncertainty_score: number;
+      tail_risk: boolean;
+      promotion_hint?: string;
+      source_id: string;
+    }[],
+  ];
+}
+export interface StrictS6OnlyDesignSpaceCandidateManifestV2 {
+  schema_version: "tilesim.design_space.s6_candidates.v2";
+  manifest_id: string;
+  source_mode: "synthetic_trace";
+  calibration_level: "uncalibrated";
+  allowed_claim_scope: "exploratory";
   /**
    * @minItems 1
    * @maxItems 256
@@ -507,6 +599,12 @@ export interface ExperimentDescriptorResponse {
   gpu_participation_modes: GpuOptions;
   input_modes: InputOptions;
   design_space_modes: DesignSpaceOptions;
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  design_space_candidate_schema_options: [DesignSpaceCandidateSchemaOption, DesignSpaceCandidateSchemaOption];
+  default_design_space_candidate_schema_identity: "tilesim.design_space.s6_candidates.v1";
   /**
    * @minItems 3
    * @maxItems 3
@@ -615,6 +713,12 @@ export interface CapabilityPredicate {
   operator: "equals" | "contains";
   expected_value: string | boolean;
   evaluated_available: boolean;
+}
+export interface DesignSpaceCandidateSchemaOption {
+  schema_identity: "tilesim.design_space.s6_candidates.v1" | "tilesim.design_space.s6_candidates.v2";
+  available: true;
+  unavailable_reason: null;
+  default_when_omitted: boolean;
 }
 export interface ParameterDescriptor {
   field_id: string;
@@ -1557,6 +1661,288 @@ export interface Refusal {
   detail: string;
   retryable: boolean;
 }
+export interface AgentOrchestrationCapabilitySnapshot {
+  schema_identity: "tilesim.bridge.agent_orchestration_capability_snapshot.v1";
+  publication_status: "published";
+  snapshot_id: string;
+  snapshot_revision: string;
+  snapshot_digest: string;
+  canonicalization_identity: "tilesim.bridge.canonical_json.v1";
+  catalog: AgentOrchestrationCapabilityCatalog;
+  release_binding: {
+    web_source_identity: "tilesim.web.git";
+    web_source_revision: string;
+    web_build_revision: string;
+    backend_identity: "tilesim.backend.git";
+    backend_revision: string;
+    schema_set_revision: string;
+    experiment_descriptor_identity: "tilesim.bridge.experiment_descriptor.v1";
+    experiment_descriptor_revision: string;
+    create_run_identity: "tilesim.bridge.create_run_request.v1";
+    catalog_revision: string;
+    contract_package_revision: string;
+    /**
+     * @minItems 2
+     * @maxItems 2
+     */
+    nested_design_space_identities: [unknown, unknown];
+    default_nested_design_space_identity:
+      "tilesim.design_space.s6_candidates.v1" | "tilesim.design_space.s6_candidates.v2";
+  };
+  drift_policy: {
+    release_binding_mismatch: "fail_closed";
+    catalog_revision_mismatch: "fail_closed";
+    unknown_identity_or_status: "fail_closed";
+  };
+}
+export interface AgentOrchestrationCapabilityCatalog {
+  schema_identity: "tilesim.bridge.agent_orchestration_capability_catalog.v1";
+  publication_status: "published";
+  catalog_id: string;
+  catalog_revision: string;
+  catalog_digest: string;
+  contract_package_revision: string;
+  parameter_descriptor_schema_identity: "tilesim.bridge.agent_orchestration_parameter_descriptor.v1";
+  parameter_descriptor_schema_revision: string;
+  parameter_descriptor_schema_digest: string;
+  /**
+   * @minItems 8
+   * @maxItems 8
+   */
+  parameter_descriptors: [
+    AgentOrchestrationParameterDescriptor,
+    AgentOrchestrationParameterDescriptor,
+    AgentOrchestrationParameterDescriptor,
+    AgentOrchestrationParameterDescriptor,
+    AgentOrchestrationParameterDescriptor,
+    AgentOrchestrationParameterDescriptor,
+    AgentOrchestrationParameterDescriptor,
+    AgentOrchestrationParameterDescriptor,
+  ];
+  /**
+   * @minItems 5
+   * @maxItems 5
+   */
+  profile_families: [
+    ProfileAvailability,
+    ProfileAvailability,
+    ProfileAvailability,
+    ProfileAvailability,
+    ProfileAvailability,
+  ];
+  profile_records: {
+    /**
+     * @maxItems 0
+     */
+    model: [];
+    /**
+     * @maxItems 0
+     */
+    engine: [];
+    /**
+     * @maxItems 0
+     */
+    device: [];
+    /**
+     * @maxItems 0
+     */
+    topology: [];
+    /**
+     * @maxItems 0
+     */
+    workload: [];
+  };
+  /**
+   * @minItems 8
+   * @maxItems 8
+   */
+  agent_exposed_field_ids: [string, string, string, string, string, string, string, string];
+  /**
+   * @minItems 9
+   * @maxItems 9
+   */
+  not_exposed_capabilities: [
+    NotExposedCapability,
+    NotExposedCapability,
+    NotExposedCapability,
+    NotExposedCapability,
+    NotExposedCapability,
+    NotExposedCapability,
+    NotExposedCapability,
+    NotExposedCapability,
+    NotExposedCapability,
+  ];
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  claim_scope_ceiling: [unknown, unknown];
+}
+export interface AgentOrchestrationParameterDescriptor {
+  field_id: string;
+  owner_module:
+    | "工作负载抽象与负载描述语言模块"
+    | "推理引擎与服务运行时模块"
+    | "执行语义建模模块"
+    | "KV Cache 建模模块"
+    | "设备性能建模模块"
+    | "集合通信语义模块"
+    | "网络与硬件资源模块"
+    | "统一仿真内核模块"
+    | "场景与探索编排模块"
+    | "校准验证与指标归因模块"
+    | "基于 Agent 的仿真编排模块";
+  value_type: "number" | "integer" | "enum";
+  canonical_unit: string;
+  /**
+   * @minItems 1
+   */
+  accepted_units: [string, ...string[]];
+  constraints: {
+    minimum?: string;
+    maximum?: string;
+    step?: string;
+    /**
+     * @minItems 1
+     */
+    enum?: [string, ...string[]];
+  };
+  applicability: {
+    status: "available" | "conditional";
+    /**
+     * @minItems 1
+     */
+    conditions: [string, ...string[]];
+  };
+  request_identity: "tilesim.bridge.create_run_request.v1";
+  request_json_pointer: string;
+  lowering_stage: string;
+  /**
+   * @minItems 1
+   */
+  execution_evidence: [EvidenceReference, ...EvidenceReference[]];
+  capability_state: {
+    described: CapabilityDimension;
+    accepted: CapabilityDimension;
+    validated: CapabilityDimension;
+    lowered: CapabilityDimension;
+    executed: CapabilityDimension;
+    observable: CapabilityDimension;
+    calibrated: CapabilityDimension;
+    held_out_validated: CapabilityDimension;
+    agent_exposed: CapabilityDimension;
+  };
+  /**
+   * @minItems 1
+   */
+  reason_codes: [
+    (
+      | "execution_closure_proven"
+      | "gap_kv_001_logical_admission_only"
+      | "profile_missing"
+      | "minimal_engine_profiles_not_catalog_published"
+      | "create_run_engine_selection_not_exposed"
+      | "calibration_missing"
+      | "held_out_validation_missing"
+      | "not_exposed_to_agent"
+      | "resolved_scale_out_analytical"
+    ),
+    ...(
+      | "execution_closure_proven"
+      | "gap_kv_001_logical_admission_only"
+      | "profile_missing"
+      | "minimal_engine_profiles_not_catalog_published"
+      | "create_run_engine_selection_not_exposed"
+      | "calibration_missing"
+      | "held_out_validation_missing"
+      | "not_exposed_to_agent"
+      | "resolved_scale_out_analytical"
+    )[],
+  ];
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  claim_scope_ceiling: [unknown, unknown];
+  resolved_fidelity: "Analytical" | "DES" | "mixed";
+}
+export interface EvidenceReference {
+  repository: "D:/tileSim" | "D:/tileSim-web";
+  revision: string;
+  path: string;
+  test_case: string;
+  evidence_class: "contract" | "lowering" | "synthetic_deterministic_execution" | "artifact_observation";
+  /**
+   * @minItems 1
+   */
+  artifact_pointers: [string, ...string[]];
+}
+export interface CapabilityDimension {
+  state: "affirmed" | "denied";
+  reason_code:
+    | "execution_closure_proven"
+    | "gap_kv_001_logical_admission_only"
+    | "profile_missing"
+    | "minimal_engine_profiles_not_catalog_published"
+    | "create_run_engine_selection_not_exposed"
+    | "calibration_missing"
+    | "held_out_validation_missing"
+    | "not_exposed_to_agent"
+    | "resolved_scale_out_analytical";
+}
+export interface ProfileAvailability {
+  family: "model" | "engine" | "device" | "topology" | "workload";
+  schema_identity: string;
+  schema_revision: string;
+  schema_digest: string;
+  schema_status: "published";
+  actual_profile_count: 0;
+  data_status: "profile_missing" | "conditional";
+  runtime_availability: "unavailable";
+  /**
+   * @minItems 1
+   */
+  reason_codes: [
+    (
+      | "execution_closure_proven"
+      | "gap_kv_001_logical_admission_only"
+      | "profile_missing"
+      | "minimal_engine_profiles_not_catalog_published"
+      | "create_run_engine_selection_not_exposed"
+      | "calibration_missing"
+      | "held_out_validation_missing"
+      | "not_exposed_to_agent"
+      | "resolved_scale_out_analytical"
+    ),
+    ...(
+      | "execution_closure_proven"
+      | "gap_kv_001_logical_admission_only"
+      | "profile_missing"
+      | "minimal_engine_profiles_not_catalog_published"
+      | "create_run_engine_selection_not_exposed"
+      | "calibration_missing"
+      | "held_out_validation_missing"
+      | "not_exposed_to_agent"
+      | "resolved_scale_out_analytical"
+    )[],
+  ];
+  calibration_status: "calibration_missing";
+  held_out_validation_status: "held_out_validation_missing";
+}
+export interface NotExposedCapability {
+  capability_id:
+    | "model_selection"
+    | "device_selection"
+    | "engine_selection"
+    | "tensor_parallel_degree"
+    | "pipeline_parallel_degree"
+    | "expert_parallel_degree"
+    | "physical_kv_policy"
+    | "collective_algorithm"
+    | "slo";
+  state: "not_exposed";
+  reason_code: "not_exposed_to_agent";
+}
 
 export interface HealthResponse {
   versions_match?: boolean;
@@ -1884,6 +2270,289 @@ export interface TerminalRecoveryPolicy {
     [k: string]: unknown;
   };
   provider_reinvocation: "forbidden";
+}
+
+export interface AgentOrchestrationCapabilitySnapshotResponse {
+  schema_identity: "tilesim.bridge.agent_orchestration_capability_snapshot.v1";
+  publication_status: "published";
+  snapshot_id: string;
+  snapshot_revision: string;
+  snapshot_digest: string;
+  canonicalization_identity: "tilesim.bridge.canonical_json.v1";
+  catalog: AgentOrchestrationCapabilityCatalog;
+  release_binding: {
+    web_source_identity: "tilesim.web.git";
+    web_source_revision: string;
+    web_build_revision: string;
+    backend_identity: "tilesim.backend.git";
+    backend_revision: string;
+    schema_set_revision: string;
+    experiment_descriptor_identity: "tilesim.bridge.experiment_descriptor.v1";
+    experiment_descriptor_revision: string;
+    create_run_identity: "tilesim.bridge.create_run_request.v1";
+    catalog_revision: string;
+    contract_package_revision: string;
+    /**
+     * @minItems 2
+     * @maxItems 2
+     */
+    nested_design_space_identities: [unknown, unknown];
+    default_nested_design_space_identity:
+      "tilesim.design_space.s6_candidates.v1" | "tilesim.design_space.s6_candidates.v2";
+  };
+  drift_policy: {
+    release_binding_mismatch: "fail_closed";
+    catalog_revision_mismatch: "fail_closed";
+    unknown_identity_or_status: "fail_closed";
+  };
+}
+export interface AgentOrchestrationCapabilityCatalog {
+  schema_identity: "tilesim.bridge.agent_orchestration_capability_catalog.v1";
+  publication_status: "published";
+  catalog_id: string;
+  catalog_revision: string;
+  catalog_digest: string;
+  contract_package_revision: string;
+  parameter_descriptor_schema_identity: "tilesim.bridge.agent_orchestration_parameter_descriptor.v1";
+  parameter_descriptor_schema_revision: string;
+  parameter_descriptor_schema_digest: string;
+  /**
+   * @minItems 8
+   * @maxItems 8
+   */
+  parameter_descriptors: [
+    AgentOrchestrationParameterDescriptor,
+    AgentOrchestrationParameterDescriptor,
+    AgentOrchestrationParameterDescriptor,
+    AgentOrchestrationParameterDescriptor,
+    AgentOrchestrationParameterDescriptor,
+    AgentOrchestrationParameterDescriptor,
+    AgentOrchestrationParameterDescriptor,
+    AgentOrchestrationParameterDescriptor,
+  ];
+  /**
+   * @minItems 5
+   * @maxItems 5
+   */
+  profile_families: [
+    ProfileAvailability,
+    ProfileAvailability,
+    ProfileAvailability,
+    ProfileAvailability,
+    ProfileAvailability,
+  ];
+  profile_records: {
+    /**
+     * @maxItems 0
+     */
+    model: [];
+    /**
+     * @maxItems 0
+     */
+    engine: [];
+    /**
+     * @maxItems 0
+     */
+    device: [];
+    /**
+     * @maxItems 0
+     */
+    topology: [];
+    /**
+     * @maxItems 0
+     */
+    workload: [];
+  };
+  /**
+   * @minItems 8
+   * @maxItems 8
+   */
+  agent_exposed_field_ids: [string, string, string, string, string, string, string, string];
+  /**
+   * @minItems 9
+   * @maxItems 9
+   */
+  not_exposed_capabilities: [
+    NotExposedCapability,
+    NotExposedCapability,
+    NotExposedCapability,
+    NotExposedCapability,
+    NotExposedCapability,
+    NotExposedCapability,
+    NotExposedCapability,
+    NotExposedCapability,
+    NotExposedCapability,
+  ];
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  claim_scope_ceiling: [unknown, unknown];
+}
+export interface AgentOrchestrationParameterDescriptor {
+  field_id: string;
+  owner_module:
+    | "工作负载抽象与负载描述语言模块"
+    | "推理引擎与服务运行时模块"
+    | "执行语义建模模块"
+    | "KV Cache 建模模块"
+    | "设备性能建模模块"
+    | "集合通信语义模块"
+    | "网络与硬件资源模块"
+    | "统一仿真内核模块"
+    | "场景与探索编排模块"
+    | "校准验证与指标归因模块"
+    | "基于 Agent 的仿真编排模块";
+  value_type: "number" | "integer" | "enum";
+  canonical_unit: string;
+  /**
+   * @minItems 1
+   */
+  accepted_units: [string, ...string[]];
+  constraints: {
+    minimum?: string;
+    maximum?: string;
+    step?: string;
+    /**
+     * @minItems 1
+     */
+    enum?: [string, ...string[]];
+  };
+  applicability: {
+    status: "available" | "conditional";
+    /**
+     * @minItems 1
+     */
+    conditions: [string, ...string[]];
+  };
+  request_identity: "tilesim.bridge.create_run_request.v1";
+  request_json_pointer: string;
+  lowering_stage: string;
+  /**
+   * @minItems 1
+   */
+  execution_evidence: [EvidenceReference, ...EvidenceReference[]];
+  capability_state: {
+    described: CapabilityDimension;
+    accepted: CapabilityDimension;
+    validated: CapabilityDimension;
+    lowered: CapabilityDimension;
+    executed: CapabilityDimension;
+    observable: CapabilityDimension;
+    calibrated: CapabilityDimension;
+    held_out_validated: CapabilityDimension;
+    agent_exposed: CapabilityDimension;
+  };
+  /**
+   * @minItems 1
+   */
+  reason_codes: [
+    (
+      | "execution_closure_proven"
+      | "gap_kv_001_logical_admission_only"
+      | "profile_missing"
+      | "minimal_engine_profiles_not_catalog_published"
+      | "create_run_engine_selection_not_exposed"
+      | "calibration_missing"
+      | "held_out_validation_missing"
+      | "not_exposed_to_agent"
+      | "resolved_scale_out_analytical"
+    ),
+    ...(
+      | "execution_closure_proven"
+      | "gap_kv_001_logical_admission_only"
+      | "profile_missing"
+      | "minimal_engine_profiles_not_catalog_published"
+      | "create_run_engine_selection_not_exposed"
+      | "calibration_missing"
+      | "held_out_validation_missing"
+      | "not_exposed_to_agent"
+      | "resolved_scale_out_analytical"
+    )[],
+  ];
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  claim_scope_ceiling: [unknown, unknown];
+  resolved_fidelity: "Analytical" | "DES" | "mixed";
+}
+export interface EvidenceReference {
+  repository: "D:/tileSim" | "D:/tileSim-web";
+  revision: string;
+  path: string;
+  test_case: string;
+  evidence_class: "contract" | "lowering" | "synthetic_deterministic_execution" | "artifact_observation";
+  /**
+   * @minItems 1
+   */
+  artifact_pointers: [string, ...string[]];
+}
+export interface CapabilityDimension {
+  state: "affirmed" | "denied";
+  reason_code:
+    | "execution_closure_proven"
+    | "gap_kv_001_logical_admission_only"
+    | "profile_missing"
+    | "minimal_engine_profiles_not_catalog_published"
+    | "create_run_engine_selection_not_exposed"
+    | "calibration_missing"
+    | "held_out_validation_missing"
+    | "not_exposed_to_agent"
+    | "resolved_scale_out_analytical";
+}
+export interface ProfileAvailability {
+  family: "model" | "engine" | "device" | "topology" | "workload";
+  schema_identity: string;
+  schema_revision: string;
+  schema_digest: string;
+  schema_status: "published";
+  actual_profile_count: 0;
+  data_status: "profile_missing" | "conditional";
+  runtime_availability: "unavailable";
+  /**
+   * @minItems 1
+   */
+  reason_codes: [
+    (
+      | "execution_closure_proven"
+      | "gap_kv_001_logical_admission_only"
+      | "profile_missing"
+      | "minimal_engine_profiles_not_catalog_published"
+      | "create_run_engine_selection_not_exposed"
+      | "calibration_missing"
+      | "held_out_validation_missing"
+      | "not_exposed_to_agent"
+      | "resolved_scale_out_analytical"
+    ),
+    ...(
+      | "execution_closure_proven"
+      | "gap_kv_001_logical_admission_only"
+      | "profile_missing"
+      | "minimal_engine_profiles_not_catalog_published"
+      | "create_run_engine_selection_not_exposed"
+      | "calibration_missing"
+      | "held_out_validation_missing"
+      | "not_exposed_to_agent"
+      | "resolved_scale_out_analytical"
+    )[],
+  ];
+  calibration_status: "calibration_missing";
+  held_out_validation_status: "held_out_validation_missing";
+}
+export interface NotExposedCapability {
+  capability_id:
+    | "model_selection"
+    | "device_selection"
+    | "engine_selection"
+    | "tensor_parallel_degree"
+    | "pipeline_parallel_degree"
+    | "expert_parallel_degree"
+    | "physical_kv_policy"
+    | "collective_algorithm"
+    | "slo";
+  state: "not_exposed";
+  reason_code: "not_exposed_to_agent";
 }
 
 export type CreateRunResponse = ApiRun & { idempotent_replay: boolean };

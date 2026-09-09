@@ -1,0 +1,227 @@
+{
+  "fixture_identity": "tilesim.fixture.phase0c.f8_dual_version_compatibility.v1",
+  "fixture_status": "fixture_only",
+  "top_level_create_run_identity": "tilesim.bridge.create_run_request.v1",
+  "nested_contract": {
+    "v1": "tilesim.design_space.s6_candidates.v1",
+    "v2": "tilesim.design_space.s6_candidates.v2",
+    "default_when_omitted": "tilesim.design_space.s6_candidates.v1",
+    "default_rule": "fixed_default_never_payload_inference"
+  },
+  "base_candidate": {
+    "candidate_id": "candidate-a",
+    "name": "Candidate A",
+    "bandwidth_gbps": 400,
+    "latency_us": 1,
+    "oversubscription_factor": 1,
+    "request_count": 8,
+    "message_bytes": 1048576,
+    "release_interval_ps": 100000,
+    "uncertainty_score": 0.2,
+    "tail_risk": false,
+    "source_id": "phase0c#candidate-a"
+  },
+  "legacy_cases": [
+    {
+      "case_id": "P0C-OLD-V1-PARTIAL-CALIBRATION",
+      "owner": "phase0c_f8_dual_version",
+      "blocking": true,
+      "mutation": { "pointer": "/calibration_level", "value": "partially_calibrated" },
+      "old_head": "accept",
+      "new_v1": "accept",
+      "new_v2": "reject"
+    },
+    {
+      "case_id": "P0C-OLD-V1-CLAIM-SCOPE",
+      "owner": "phase0c_f8_dual_version",
+      "blocking": true,
+      "mutation": { "pointer": "/allowed_claim_scope", "value": "exploratory_s6_only" },
+      "old_head": "accept",
+      "new_v1": "accept",
+      "new_v2": "reject"
+    },
+    {
+      "case_id": "P0C-OLD-V1-OVERSUBSCRIPTION",
+      "owner": "phase0c_f8_dual_version",
+      "blocking": true,
+      "mutation": { "pointer": "/candidates/0/oversubscription_factor", "value": 0.5 },
+      "old_head": "accept",
+      "new_v1": "accept",
+      "new_v2": "reject"
+    },
+    {
+      "case_id": "P0C-OLD-V1-RISK-DISTINCTNESS",
+      "owner": "phase0c_f8_dual_version",
+      "blocking": true,
+      "mutation": { "operation": "append_risk_distinct_candidate" },
+      "old_head": "accept",
+      "new_v1": "accept",
+      "new_v2": "reject"
+    },
+    {
+      "case_id": "P0C-OLD-V1-NO-DES-AGGREGATE-BUDGET",
+      "owner": "phase0c_f8_dual_version",
+      "blocking": true,
+      "mutation": { "operation": "promoted_request_count", "value": 50001 },
+      "fidelity_policy": "des",
+      "old_head": "accept",
+      "new_v1": "accept",
+      "new_v2": "reject"
+    }
+  ],
+  "strict_v2_cases": [
+    {
+      "case_id": "P0C-V2-VALID-STRICT",
+      "owner": "phase0c_f8_dual_version",
+      "blocking": true,
+      "mutation": null,
+      "expected": "accept"
+    },
+    {
+      "case_id": "P0C-V2-PARTIAL-CALIBRATION-REJECT",
+      "owner": "phase0c_f8_dual_version",
+      "blocking": true,
+      "mutation": { "pointer": "/calibration_level", "value": "partially_calibrated" },
+      "expected": "reject"
+    },
+    {
+      "case_id": "P0C-V2-LEGACY-CLAIM-SCOPE-REJECT",
+      "owner": "phase0c_f8_dual_version",
+      "blocking": true,
+      "mutation": { "pointer": "/allowed_claim_scope", "value": "synthetic_consistency_only" },
+      "expected": "reject"
+    },
+    {
+      "case_id": "P0C-V2-LOW-OVERSUBSCRIPTION-REJECT",
+      "owner": "phase0c_f8_dual_version",
+      "blocking": true,
+      "mutation": { "pointer": "/candidates/0/oversubscription_factor", "value": 0.999999 },
+      "expected": "reject"
+    },
+    {
+      "case_id": "P0C-V2-SIX-INPUT-DUPLICATE-REJECT",
+      "owner": "phase0c_f8_dual_version",
+      "blocking": true,
+      "mutation": { "operation": "append_risk_distinct_candidate" },
+      "expected": "reject"
+    },
+    {
+      "case_id": "P0C-V2-DES-AGGREGATE-BUDGET-REJECT",
+      "owner": "phase0c_f8_dual_version",
+      "blocking": true,
+      "mutation": { "operation": "promoted_request_count", "value": 50001 },
+      "fidelity_policy": "des",
+      "expected": "reject"
+    },
+    {
+      "case_id": "P0C-V2-DEFAULT-FIDELITY-NO-DES-BUDGET",
+      "owner": "phase0c_f8_dual_version",
+      "blocking": true,
+      "mutation": { "operation": "promoted_request_count", "value": 50001 },
+      "fidelity_policy": "default",
+      "expected": "accept"
+    }
+  ],
+  "routing_cases": [
+    {
+      "case_id": "P0C-ROUTE-OMITTED-IDENTITY-TO-V1",
+      "owner": "phase0c_f8_dual_version",
+      "blocking": true,
+      "identity": null,
+      "legacy_payload": true,
+      "expected_identity": "tilesim.design_space.s6_candidates.v1",
+      "expected": "accept"
+    },
+    {
+      "case_id": "P0C-ROUTE-OMITTED-STRICT-SHAPE-STILL-V1",
+      "owner": "phase0c_f8_dual_version",
+      "blocking": true,
+      "identity": null,
+      "legacy_payload": false,
+      "expected_identity": "tilesim.design_space.s6_candidates.v1",
+      "expected": "accept"
+    },
+    {
+      "case_id": "P0C-NEW-V2-TO-OLD-SERVER-REJECT",
+      "owner": "phase0c_f8_dual_version",
+      "blocking": true,
+      "identity": "tilesim.design_space.s6_candidates.v2",
+      "server": "old_head",
+      "expected": "reject_unknown_identity_no_downgrade"
+    },
+    {
+      "case_id": "P0C-UNKNOWN-NESTED-IDENTITY",
+      "owner": "phase0c_f8_dual_version",
+      "blocking": true,
+      "identity": "tilesim.design_space.s6_candidates.v999",
+      "expected": "reject_unknown_identity"
+    },
+    {
+      "case_id": "P0C-UNKNOWN-DESCRIPTOR-REVISION",
+      "owner": "phase0c_integration",
+      "blocking": true,
+      "revision": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "expected": "reject_unknown_revision"
+    }
+  ],
+  "idempotency_cases": [
+    {
+      "case_id": "P0C-IDEMPOTENCY-SAME-KEY-SAME-EXACT",
+      "owner": "phase0c_f8_dual_version",
+      "blocking": true,
+      "first_version": "v1",
+      "second_version": "v1",
+      "second_change": null,
+      "expected": "exact_replay"
+    },
+    {
+      "case_id": "P0C-IDEMPOTENCY-SAME-KEY-DIFFERENT-FIELD",
+      "owner": "phase0c_f8_dual_version",
+      "blocking": true,
+      "first_version": "v1",
+      "second_version": "v1",
+      "second_change": { "pointer": "/run_name", "value": "different" },
+      "expected": "409_idempotency_payload_mismatch"
+    },
+    {
+      "case_id": "P0C-IDEMPOTENCY-SAME-KEY-VERSION-ONLY-DIFFERENT",
+      "owner": "phase0c_f8_dual_version",
+      "blocking": true,
+      "first_version": "v1",
+      "second_version": "v2",
+      "second_change": null,
+      "expected": "409_idempotency_payload_mismatch"
+    },
+    {
+      "case_id": "P0C-IDEMPOTENCY-RETAINED-V1-RESTORE",
+      "owner": "phase0c_f8_dual_version",
+      "blocking": true,
+      "first_version": "v1",
+      "retained": true,
+      "restart_under_new_server": true,
+      "expected": "exact_replay_with_v1_identity"
+    },
+    {
+      "case_id": "P0C-IDEMPOTENCY-NEW-KEY-OLD-V1",
+      "owner": "phase0c_f8_dual_version",
+      "blocking": true,
+      "first_version": "v1",
+      "new_key": true,
+      "legacy_payload": true,
+      "expected": "new_run_validated_as_v1"
+    }
+  ],
+  "publication_invariants": {
+    "descriptor_version_set": ["tilesim.design_space.s6_candidates.v1", "tilesim.design_space.s6_candidates.v2"],
+    "schema_version_set": ["tilesim.design_space.s6_candidates.v1", "tilesim.design_space.s6_candidates.v2"],
+    "generated_version_set": ["tilesim.design_space.s6_candidates.v1", "tilesim.design_space.s6_candidates.v2"],
+    "default_version": "tilesim.design_space.s6_candidates.v1",
+    "fixture_known_descriptor_revision": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "top_level_create_run_identity": "tilesim.bridge.create_run_request.v1",
+    "legacy_fixture_must_remain": {
+      "calibration_level": "partially_calibrated",
+      "allowed_claim_scope": "exploratory_s6_only",
+      "oversubscription_factor": 0.5
+    }
+  }
+}

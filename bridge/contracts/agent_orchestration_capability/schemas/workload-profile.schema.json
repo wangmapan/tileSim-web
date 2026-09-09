@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/agent-orchestration-capability/v1/workload-profile.schema.json",
+  "x-tilesim-contract-status": "published",
+  "x-tilesim-schema-identity": "tilesim.bridge.agent_orchestration_workload_profile.v1",
+  "title": "AgentOrchestrationWorkloadProfile",
+  "allOf": [
+    { "$ref": "common.schema.json#/$defs/profileEnvelope" },
+    {
+      "properties": {
+        "schema_identity": {
+          "const": "tilesim.bridge.agent_orchestration_workload_profile.v1"
+        },
+        "profile_family": { "const": "workload" },
+        "facts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["task_scenario", "request_shape", "arrival_process", "trace_provenance", "allowed_overrides"],
+          "properties": {
+            "task_scenario": {},
+            "request_shape": {},
+            "arrival_process": {},
+            "trace_provenance": {},
+            "allowed_overrides": {}
+          }
+        }
+      }
+    }
+  ],
+  "unevaluatedProperties": false
+}

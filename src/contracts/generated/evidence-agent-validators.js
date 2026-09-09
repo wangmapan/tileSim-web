@@ -10090,6 +10090,7 @@ const schema53 = {
         code: { type: "string", minLength: 1 },
         message: { type: "string" },
         field_path: { type: ["string", "null"] },
+        nested_schema_identity: { type: "string", minLength: 1 },
         retryable: { type: "boolean" },
       },
     },
@@ -10253,7 +10254,13 @@ function validate30(
           errors++;
         }
         for (const key1 in data1) {
-          if (!(key1 === "code" || key1 === "message" || key1 === "field_path" || key1 === "retryable")) {
+          if (!(
+            key1 === "code" ||
+            key1 === "message" ||
+            key1 === "field_path" ||
+            key1 === "nested_schema_identity" ||
+            key1 === "retryable"
+          )) {
             const err9 = {
               instancePath: instancePath + "/error",
               schemaPath: "#/properties/error/additionalProperties",
@@ -10338,9 +10345,43 @@ function validate30(
             errors++;
           }
         }
+        if (data1.nested_schema_identity !== undefined) {
+          let data5 = data1.nested_schema_identity;
+          if (typeof data5 === "string") {
+            if (func2(data5) < 1) {
+              const err14 = {
+                instancePath: instancePath + "/error/nested_schema_identity",
+                schemaPath: "#/properties/error/properties/nested_schema_identity/minLength",
+                keyword: "minLength",
+                params: { limit: 1 },
+                message: "must NOT have fewer than 1 characters",
+              };
+              if (vErrors === null) {
+                vErrors = [err14];
+              } else {
+                vErrors.push(err14);
+              }
+              errors++;
+            }
+          } else {
+            const err15 = {
+              instancePath: instancePath + "/error/nested_schema_identity",
+              schemaPath: "#/properties/error/properties/nested_schema_identity/type",
+              keyword: "type",
+              params: { type: "string" },
+              message: "must be string",
+            };
+            if (vErrors === null) {
+              vErrors = [err15];
+            } else {
+              vErrors.push(err15);
+            }
+            errors++;
+          }
+        }
         if (data1.retryable !== undefined) {
           if (typeof data1.retryable !== "boolean") {
-            const err14 = {
+            const err16 = {
               instancePath: instancePath + "/error/retryable",
               schemaPath: "#/properties/error/properties/retryable/type",
               keyword: "type",
@@ -10348,54 +10389,20 @@ function validate30(
               message: "must be boolean",
             };
             if (vErrors === null) {
-              vErrors = [err14];
+              vErrors = [err16];
             } else {
-              vErrors.push(err14);
+              vErrors.push(err16);
             }
             errors++;
           }
         }
       } else {
-        const err15 = {
+        const err17 = {
           instancePath: instancePath + "/error",
           schemaPath: "#/properties/error/type",
           keyword: "type",
           params: { type: "object" },
           message: "must be object",
-        };
-        if (vErrors === null) {
-          vErrors = [err15];
-        } else {
-          vErrors.push(err15);
-        }
-        errors++;
-      }
-    }
-    if (data.request_id !== undefined) {
-      let data6 = data.request_id;
-      if (typeof data6 === "string") {
-        if (func2(data6) < 1) {
-          const err16 = {
-            instancePath: instancePath + "/request_id",
-            schemaPath: "#/properties/request_id/minLength",
-            keyword: "minLength",
-            params: { limit: 1 },
-            message: "must NOT have fewer than 1 characters",
-          };
-          if (vErrors === null) {
-            vErrors = [err16];
-          } else {
-            vErrors.push(err16);
-          }
-          errors++;
-        }
-      } else {
-        const err17 = {
-          instancePath: instancePath + "/request_id",
-          schemaPath: "#/properties/request_id/type",
-          keyword: "type",
-          params: { type: "string" },
-          message: "must be string",
         };
         if (vErrors === null) {
           vErrors = [err17];
@@ -10405,8 +10412,42 @@ function validate30(
         errors++;
       }
     }
+    if (data.request_id !== undefined) {
+      let data7 = data.request_id;
+      if (typeof data7 === "string") {
+        if (func2(data7) < 1) {
+          const err18 = {
+            instancePath: instancePath + "/request_id",
+            schemaPath: "#/properties/request_id/minLength",
+            keyword: "minLength",
+            params: { limit: 1 },
+            message: "must NOT have fewer than 1 characters",
+          };
+          if (vErrors === null) {
+            vErrors = [err18];
+          } else {
+            vErrors.push(err18);
+          }
+          errors++;
+        }
+      } else {
+        const err19 = {
+          instancePath: instancePath + "/request_id",
+          schemaPath: "#/properties/request_id/type",
+          keyword: "type",
+          params: { type: "string" },
+          message: "must be string",
+        };
+        if (vErrors === null) {
+          vErrors = [err19];
+        } else {
+          vErrors.push(err19);
+        }
+        errors++;
+      }
+    }
   } else {
-    const err18 = {
+    const err20 = {
       instancePath,
       schemaPath: "#/type",
       keyword: "type",
@@ -10414,9 +10455,9 @@ function validate30(
       message: "must be object",
     };
     if (vErrors === null) {
-      vErrors = [err18];
+      vErrors = [err20];
     } else {
-      vErrors.push(err18);
+      vErrors.push(err20);
     }
     errors++;
   }

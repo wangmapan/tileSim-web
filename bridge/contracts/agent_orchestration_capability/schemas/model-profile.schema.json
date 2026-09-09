@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/agent-orchestration-capability/v1/model-profile.schema.json",
+  "x-tilesim-contract-status": "published",
+  "x-tilesim-schema-identity": "tilesim.bridge.agent_orchestration_model_profile.v1",
+  "title": "AgentOrchestrationModelProfile",
+  "allOf": [
+    { "$ref": "common.schema.json#/$defs/profileEnvelope" },
+    {
+      "properties": {
+        "schema_identity": {
+          "const": "tilesim.bridge.agent_orchestration_model_profile.v1"
+        },
+        "profile_family": { "const": "model" },
+        "facts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["architecture", "layer_count", "hidden_size", "expert_structure", "tensor_layout"],
+          "properties": {
+            "architecture": {},
+            "layer_count": {},
+            "hidden_size": {},
+            "expert_structure": {},
+            "tensor_layout": {}
+          }
+        }
+      }
+    }
+  ],
+  "unevaluatedProperties": false
+}

@@ -23,6 +23,7 @@ class ValidatedRunRequest:
     overrides: dict
     custom_inputs: dict | None
     design_space_candidates: dict | None
+    design_space_candidate_schema_identity: str | None
     trace_package_id: str | None
 
 
@@ -102,7 +103,10 @@ def validate_run_request(
         )
         custom_inputs = validate_custom_inputs(request["custom_inputs"]) if has_custom_inputs else None
         design_space_candidates = (
-            validate_design_space_candidates(request["design_space_candidates"])
+            validate_design_space_candidates(
+                request["design_space_candidates"],
+                des_promotion_enabled=fidelity_policy == "des",
+            )
             if "design_space_candidates" in request
             else None
         )
@@ -124,5 +128,10 @@ def validate_run_request(
         overrides=overrides,
         custom_inputs=custom_inputs,
         design_space_candidates=design_space_candidates,
+        design_space_candidate_schema_identity=(
+            design_space_candidates["schema_version"]
+            if design_space_candidates is not None
+            else None
+        ),
         trace_package_id=trace_package_id if has_trace_package else None,
     )

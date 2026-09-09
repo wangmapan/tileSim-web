@@ -86,6 +86,7 @@ def write_error(
     schema_set_revision: str,
     field_path: str | None = None,
     retryable: bool | None = None,
+    nested_schema_identity: str | None = None,
 ) -> None:
     return write_json(
         handler,
@@ -97,6 +98,11 @@ def write_error(
                 "message": message,
                 "field_path": field_path,
                 "retryable": status >= 500 if retryable is None else retryable,
+                **(
+                    {"nested_schema_identity": nested_schema_identity}
+                    if nested_schema_identity is not None
+                    else {}
+                ),
             },
             "request_id": request_id_for(handler),
         },
@@ -118,6 +124,7 @@ def api_manifest(
     run_creation_contract: dict,
     run_event_contract: dict,
     evidence_agent_contract: dict,
+    agent_orchestration_capability_contract: dict,
     trace_package_contract: dict,
 ) -> dict:
     endpoints = {}
@@ -137,6 +144,7 @@ def api_manifest(
         "run_creation": run_creation_contract,
         "run_events": run_event_contract,
         "evidence_agent": evidence_agent_contract,
+        "agent_orchestration_capability": agent_orchestration_capability_contract,
         "trace_packages": trace_package_contract,
         "endpoints": endpoints,
     }

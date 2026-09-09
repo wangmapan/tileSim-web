@@ -244,12 +244,27 @@ export function createF8ExperimentDescriptor(): ExperimentDescriptorResponse {
       { design_space_mode: "built_in_synthetic", available: true, unavailable_reason: null },
       { design_space_mode: "strict_s6_manifest", available: true, unavailable_reason: null },
     ],
+    design_space_candidate_schema_options: [
+      {
+        schema_identity: "tilesim.design_space.s6_candidates.v1",
+        available: true,
+        unavailable_reason: null,
+        default_when_omitted: true,
+      },
+      {
+        schema_identity: "tilesim.design_space.s6_candidates.v2",
+        available: true,
+        unavailable_reason: null,
+        default_when_omitted: false,
+      },
+    ],
+    default_design_space_candidate_schema_identity: "tilesim.design_space.s6_candidates.v1",
     source_mode_options: [
       {
         source_mode: "synthetic_trace",
         available: true,
         unavailable_reason: null,
-        allowed_claim_scope: "synthetic_consistency_and_exploratory_s6_only",
+        allowed_claim_scope: "synthetic_consistency_and_exploratory",
         calibration_requirement: "not_required_for_consistency_only",
         applicable_input_modes: ["controls", "json", "trace_package"],
         capability_predicate: null,

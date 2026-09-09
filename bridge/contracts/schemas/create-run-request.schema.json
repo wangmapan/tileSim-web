@@ -13,7 +13,9 @@
     "run_name": { "type": ["string", "null"], "maxLength": 80 },
     "overrides": { "$ref": "run-overrides.schema.json" },
     "custom_inputs": { "$ref": "custom-run-inputs.schema.json" },
-    "design_space_candidates": { "$ref": "design-space-candidates.schema.json" },
+    "design_space_candidates": {
+      "oneOf": [{ "$ref": "design-space-candidates.schema.json" }, { "$ref": "design-space-candidates-v2.schema.json" }]
+    },
     "trace_package_id": {
       "type": "string",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"

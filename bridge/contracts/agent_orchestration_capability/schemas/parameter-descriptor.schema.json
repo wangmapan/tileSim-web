@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/agent-orchestration-capability/v1/parameter-descriptor.schema.json",
+  "x-tilesim-contract-status": "published",
+  "x-tilesim-schema-identity": "tilesim.bridge.agent_orchestration_parameter_descriptor.v1",
+  "title": "AgentOrchestrationParameterDescriptor",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "field_id",
+    "owner_module",
+    "value_type",
+    "canonical_unit",
+    "accepted_units",
+    "constraints",
+    "applicability",
+    "request_identity",
+    "request_json_pointer",
+    "lowering_stage",
+    "execution_evidence",
+    "capability_state",
+    "reason_codes",
+    "claim_scope_ceiling",
+    "resolved_fidelity"
+  ],
+  "properties": {
+    "field_id": { "$ref": "common.schema.json#/$defs/stableId" },
+    "owner_module": { "$ref": "common.schema.json#/$defs/ownerModule" },
+    "value_type": { "enum": ["number", "integer", "enum"] },
+    "canonical_unit": { "$ref": "common.schema.json#/$defs/stableId" },
+    "accepted_units": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "common.schema.json#/$defs/stableId" },
+      "uniqueItems": true
+    },
+    "constraints": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "minimum": { "type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)?$" },
+        "maximum": { "type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)?$" },
+        "step": { "type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)?$" },
+        "enum": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "common.schema.json#/$defs/stableId" },
+          "uniqueItems": true
+        }
+      }
+    },
+    "applicability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "conditions"],
+      "properties": {
+        "status": { "enum": ["available", "conditional"] },
+        "conditions": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
+      }
+    },
+    "request_identity": { "const": "tilesim.bridge.create_run_request.v1" },
+    "request_json_pointer": { "type": "string", "pattern": "^/" },
+    "lowering_stage": { "type": "string", "minLength": 1 },
+    "execution_evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "common.schema.json#/$defs/evidenceReference" }
+    },
+    "capability_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "described",
+        "accepted",
+        "validated",
+        "lowered",
+        "executed",
+        "observable",
+        "calibrated",
+        "held_out_validated",
+        "agent_exposed"
+      ],
+      "properties": {
+        "described": {
+          "$ref": "common.schema.json#/$defs/capabilityDimension"
+        },
+        "accepted": { "$ref": "common.schema.json#/$defs/capabilityDimension" },
+        "validated": {
+          "$ref": "common.schema.json#/$defs/capabilityDimension"
+        },
+        "lowered": { "$ref": "common.schema.json#/$defs/capabilityDimension" },
+        "executed": { "$ref": "common.schema.json#/$defs/capabilityDimension" },
+        "observable": {
+          "$ref": "common.schema.json#/$defs/capabilityDimension"
+        },
+        "calibrated": {
+          "$ref": "common.schema.json#/$defs/capabilityDimension"
+        },
+        "held_out_validated": {
+          "$ref": "common.schema.json#/$defs/capabilityDimension"
+        },
+        "agent_exposed": {
+          "$ref": "common.schema.json#/$defs/capabilityDimension"
+        }
+      }
+    },
+    "reason_codes": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "common.schema.json#/$defs/reasonCode" },
+      "uniqueItems": true
+    },
+    "claim_scope_ceiling": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [{ "const": "exploration" }, { "const": "synthetic_consistency" }]
+    },
+    "resolved_fidelity": { "enum": ["Analytical", "DES", "mixed"] }
+  }
+}

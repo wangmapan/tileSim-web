@@ -279,7 +279,7 @@ def valid_manifest() -> dict:
         "manifest_id": "web-test",
         "source_mode": "synthetic_trace",
         "calibration_level": "uncalibrated",
-        "allowed_claim_scope": "exploratory_s6_only",
+        "allowed_claim_scope": "exploratory",
         "candidates": [
             {
                 "candidate_id": "candidate-a",
@@ -297,6 +297,13 @@ def valid_manifest() -> dict:
             }
         ],
     }
+
+
+def valid_manifest_v2() -> dict:
+    manifest = valid_manifest()
+    manifest["schema_version"] = "tilesim.design_space.s6_candidates.v2"
+    manifest["allowed_claim_scope"] = "exploratory"
+    return manifest
 
 
 def valid_custom_inputs() -> dict:
@@ -595,6 +602,38 @@ class DesignSpaceBridgeTest(unittest.TestCase):
         manifest = valid_manifest()
         self.assertIs(server.validate_design_space_candidates(manifest), manifest)
 
+    def test_design_space_v1_preserves_legacy_payload_semantics(self) -> None:
+        manifest = valid_manifest()
+        manifest["calibration_level"] = "partially_calibrated"
+        manifest["allowed_claim_scope"] = "workflow_consistency_only"
+        manifest["candidates"][0]["oversubscription_factor"] = 0.5
+        duplicate = dict(manifest["candidates"][0])
+        duplicate["candidate_id"] = "candidate-b"
+        duplicate["source_id"] = "bridge-test#candidate-b"
+        duplicate["uncertainty_score"] = 0.9
+        duplicate["tail_risk"] = True
+        manifest["candidates"].append(duplicate)
+
+        self.assertIs(server.validate_design_space_candidates(manifest), manifest)
+
+    def test_design_space_missing_identity_defaults_to_v1(self) -> None:
+        manifest = valid_manifest()
+        del manifest["schema_version"]
+        validated = server.validate_design_space_candidates(manifest)
+
+        self.assertIsNot(validated, manifest)
+        self.assertNotIn("schema_version", manifest)
+        self.assertEqual(
+            validated["schema_version"],
+            "tilesim.design_space.s6_candidates.v1",
+        )
+
+    def test_design_space_v1_does_not_apply_v2_des_aggregate_budget(self) -> None:
+        manifest = valid_manifest()
+        manifest["candidates"][0]["request_count"] = 50_001
+        manifest["candidates"][0]["uncertainty_score"] = 0.7
+        self.assertIs(server.validate_design_space_candidates(manifest), manifest)
+
     def test_strict_manifest_rejects_unknown_fields(self) -> None:
         manifest = valid_manifest()
         manifest["candidates"][0]["runtime_scheduler"] = "must-not-be-ignored"
@@ -602,13 +641,73 @@ class DesignSpaceBridgeTest(unittest.TestCase):
             server.validate_design_space_candidates(manifest)
 
     def test_strict_manifest_rejects_duplicate_execution_inputs(self) -> None:
-        manifest = valid_manifest()
+        manifest = valid_manifest_v2()
         duplicate = dict(manifest["candidates"][0])
         duplicate["candidate_id"] = "candidate-b"
         duplicate["source_id"] = "bridge-test#candidate-b"
+        duplicate["uncertainty_score"] = 0.9
+        duplicate["tail_risk"] = True
         manifest["candidates"].append(duplicate)
         with self.assertRaisesRegex(ValueError, "canonical candidate inputs"):
             server.validate_design_space_candidates(manifest)
+
+    def test_strict_manifest_rejects_backend_incompatible_provenance(self) -> None:
+        manifest = valid_manifest_v2()
+        manifest["allowed_claim_scope"] = "exploratory_s6_only"
+        with self.assertRaises(server.RequestValidationError) as raised:
+            server.validate_design_space_candidates(manifest)
+        self.assertEqual(
+            raised.exception.field_path,
+            "/design_space_candidates/allowed_claim_scope",
+        )
+
+        manifest = valid_manifest_v2()
+        manifest["calibration_level"] = "partially_calibrated"
+        with self.assertRaises(server.RequestValidationError) as raised:
+            server.validate_design_space_candidates(manifest)
+        self.assertEqual(
+            raised.exception.field_path,
+            "/design_space_candidates/calibration_level",
+        )
+
+    def test_strict_manifest_enforces_des_promotion_transfer_budget(self) -> None:
+        manifest = valid_manifest_v2()
+        manifest["candidates"][0]["request_count"] = 50_001
+        manifest["candidates"][0]["uncertainty_score"] = 0.7
+        with self.assertRaisesRegex(ValueError, "promoted DES transfer execution budget"):
+            server.validate_design_space_candidates(manifest)
+
+        self.assertIs(
+            server.validate_design_space_candidates(manifest, des_promotion_enabled=False),
+            manifest,
+        )
+
+    def test_design_space_v2_enforces_strict_provenance_and_oversubscription(self) -> None:
+        valid = valid_manifest_v2()
+        self.assertIs(server.validate_design_space_candidates(valid), valid)
+
+        manifest = valid_manifest_v2()
+        manifest["candidates"][0]["oversubscription_factor"] = 0.5
+        with self.assertRaises(server.RequestValidationError) as raised:
+            server.validate_design_space_candidates(manifest)
+        self.assertEqual(
+            raised.exception.nested_schema_identity,
+            "tilesim.design_space.s6_candidates.v2",
+        )
+
+    def test_design_space_unknown_identity_fails_closed(self) -> None:
+        manifest = valid_manifest_v2()
+        manifest["schema_version"] = "tilesim.design_space.s6_candidates.v999"
+        with self.assertRaises(server.RequestValidationError) as raised:
+            server.validate_design_space_candidates(manifest)
+        self.assertEqual(
+            raised.exception.field_path,
+            "/design_space_candidates/schema_version",
+        )
+        self.assertEqual(
+            raised.exception.nested_schema_identity,
+            "tilesim.design_space.s6_candidates.v999",
+        )
 
     def test_non_finite_numbers_fail_closed(self) -> None:
         self.assertFalse(server.is_number(math.nan))
@@ -663,6 +762,56 @@ class F8ExperimentDescriptorContractTest(unittest.TestCase):
             self.assertEqual(coverage[subsystem]["status"], "not_exposed")
             self.assertEqual(coverage[subsystem]["parameter_field_ids"], [])
 
+    def test_descriptor_explicitly_lists_both_nested_versions_and_v1_default(self) -> None:
+        descriptor = server.build_experiment_descriptor(
+            server.SCHEMA_SET_REVISION,
+            self.capabilities(),
+        )
+        self.assertEqual(
+            descriptor["default_design_space_candidate_schema_identity"],
+            "tilesim.design_space.s6_candidates.v1",
+        )
+        self.assertEqual(
+            descriptor["design_space_candidate_schema_options"],
+            [
+                {
+                    "schema_identity": "tilesim.design_space.s6_candidates.v1",
+                    "available": True,
+                    "unavailable_reason": None,
+                    "default_when_omitted": True,
+                },
+                {
+                    "schema_identity": "tilesim.design_space.s6_candidates.v2",
+                    "available": True,
+                    "unavailable_reason": None,
+                    "default_when_omitted": False,
+                },
+            ],
+        )
+
+    def test_run_request_preserves_actual_nested_identity(self) -> None:
+        for manifest, expected_identity in (
+            (valid_manifest(), "tilesim.design_space.s6_candidates.v1"),
+            (valid_manifest_v2(), "tilesim.design_space.s6_candidates.v2"),
+        ):
+            command = server.validate_run_request(
+                {
+                    "scenario_id": "s1_des_example",
+                    "design_space_candidates": manifest,
+                },
+                scenario_ids={"s1_des_example"},
+                fidelity_policies={"default", "des"},
+                gpu_participation_modes={"gpu_free"},
+            )
+            self.assertEqual(
+                command.design_space_candidate_schema_identity,
+                expected_identity,
+            )
+            self.assertEqual(
+                command.design_space_candidates["schema_version"],
+                expected_identity,
+            )
+
     def test_descriptor_range_and_enum_are_the_validation_definitions(self) -> None:
         descriptor = server.build_experiment_descriptor(
             server.SCHEMA_SET_REVISION,
@@ -678,6 +827,97 @@ class F8ExperimentDescriptorContractTest(unittest.TestCase):
             self.assertEqual(field["minimum"], definition.minimum)
             self.assertEqual(field["maximum"], definition.maximum)
             self.assertEqual(field["integer_only"], definition.integer_only)
+
+    def test_all_formal_parameter_pointers_lower_to_runtime_owned_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            trace_path = root / "source-runtime-trace.json"
+            topology_path = root / "source-topology.json"
+            trace_path.write_text(
+                json.dumps(
+                    {
+                        "policy": {
+                            "batch_scheduler": "decode_priority",
+                            "max_batch_size": 2,
+                            "kv_capacity_tokens": 4096,
+                        },
+                        "requests": [
+                            {"request_id": "request-a", "message_size_bytes": 1000},
+                            {"request_id": "request-b", "message_size_bytes": 2000},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            topology_path.write_text(
+                json.dumps(
+                    {
+                        "topology": {
+                            "module_bindings": [
+                                {
+                                    "module_name": "generic_scale_up_des",
+                                    "module_kind": "scale_up",
+                                    "override_params": {"queue_factor": 0.15},
+                                },
+                                {
+                                    "module_name": "generic_scale_out_analytical",
+                                    "module_kind": "scale_out",
+                                    "override_params": {"oversubscription_factor": 1.5},
+                                },
+                            ],
+                            "domains": [],
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            run_dir = root / "run-phase0-lowering"
+            run_dir.mkdir()
+
+            materialized = server.materialize_inputs(
+                run_dir,
+                {
+                    "from": "S1",
+                    "to": "S6",
+                    "trace": trace_path,
+                    "topology": topology_path,
+                },
+                {
+                    "workload": {"message_size_multiplier": 0.5},
+                    "runtime": {
+                        "batch_scheduler": "fifo",
+                        "max_batch_size": 8,
+                        "kv_capacity_tokens": 8192,
+                    },
+                    "fabric": {
+                        "scale_up_bandwidth_gbps": 800,
+                        "scale_up_latency_us": 0.4,
+                        "scale_out_bandwidth_gbps": 400,
+                        "scale_out_latency_us": 2.0,
+                    },
+                },
+            )
+
+            runtime_trace = json.loads(materialized["trace"].read_text(encoding="utf-8"))
+            self.assertEqual(runtime_trace["policy"]["batch_scheduler"], "fifo")
+            self.assertEqual(runtime_trace["policy"]["max_batch_size"], 8)
+            self.assertEqual(runtime_trace["policy"]["kv_capacity_tokens"], 8192)
+            self.assertEqual(
+                [request["message_size_bytes"] for request in runtime_trace["requests"]],
+                [500, 1000],
+            )
+
+            topology = json.loads(materialized["topology"].read_text(encoding="utf-8"))
+            bindings = {
+                binding["module_kind"]: binding["override_params"]
+                for binding in topology["topology"]["module_bindings"]
+            }
+            self.assertEqual(bindings["scale_up"]["bandwidth_gbps"], 800)
+            self.assertEqual(bindings["scale_up"]["latency_us"], 0.4)
+            self.assertEqual(bindings["scale_up"]["queue_factor"], 0.15)
+            self.assertEqual(bindings["scale_out"]["bandwidth_gbps"], 400)
+            self.assertEqual(bindings["scale_out"]["latency_us"], 2.0)
+            self.assertEqual(bindings["scale_out"]["oversubscription_factor"], 1.5)
 
     def test_unsupported_parameter_capability_fails_at_exact_pointer(self) -> None:
         capabilities = self.capabilities()
@@ -922,6 +1162,81 @@ class BridgeApiContractTest(unittest.TestCase):
         self.assertEqual(
             headers["X-TileSim-Schema-Set-Revision"],
             manifest["schema_set_revision"],
+        )
+
+    def test_manifest_and_endpoint_publish_validated_agent_orchestration_snapshot(self) -> None:
+        catalog = server.load_catalog()
+        release = {
+            "web_source_revision": "a" * 40,
+            "web_build_revision": "a" * 40,
+            "backend_revision": "b" * 40,
+            "schema_set_revision": server.SCHEMA_SET_REVISION,
+            "experiment_descriptor_revision": server.DESCRIPTOR_REVISION,
+            "catalog_revision": catalog["catalog_revision"],
+            "contract_package_revision": catalog["contract_package_revision"],
+        }
+        with mock.patch.object(
+            server,
+            "agent_orchestration_capability_release_metadata",
+            return_value=release,
+        ):
+            status, snapshot, headers = self.request(
+                "/api/agent/orchestration-capabilities"
+            )
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            snapshot["schema_identity"],
+            "tilesim.bridge.agent_orchestration_capability_snapshot.v1",
+        )
+        self.assertEqual(
+            snapshot["release_binding"]["schema_set_revision"],
+            server.SCHEMA_SET_REVISION,
+        )
+        self.assertEqual(
+            snapshot["release_binding"]["default_nested_design_space_identity"],
+            "tilesim.design_space.s6_candidates.v1",
+        )
+        self.assertEqual(len(snapshot["catalog"]["agent_exposed_field_ids"]), 8)
+        self.assertTrue(
+            all(
+                family["actual_profile_count"] == 0
+                for family in snapshot["catalog"]["profile_families"]
+            )
+        )
+        self.assertEqual(
+            headers["X-TileSim-Schema-Set-Revision"],
+            server.SCHEMA_SET_REVISION,
+        )
+
+        status, manifest, _ = self.request("/api/manifest")
+        self.assertEqual(status, 200)
+        advertised = manifest["agent_orchestration_capability"]
+        self.assertEqual(
+            advertised["endpoint"],
+            "GET /api/agent/orchestration-capabilities",
+        )
+        self.assertEqual(
+            advertised["catalog_revision"],
+            snapshot["catalog"]["catalog_revision"],
+        )
+        self.assertEqual(
+            manifest["endpoints"]["agentOrchestrationCapabilities"],
+            "GET /api/agent/orchestration-capabilities",
+        )
+
+    def test_agent_orchestration_snapshot_release_drift_fails_closed(self) -> None:
+        with mock.patch.object(
+            server,
+            "agent_orchestration_capability_release_metadata",
+            return_value={"schema_set_revision": server.SCHEMA_SET_REVISION},
+        ):
+            status, error, _ = self.request(
+                "/api/agent/orchestration-capabilities"
+            )
+        self.assertEqual(status, 503)
+        self.assertEqual(
+            error["error"]["code"],
+            "agent_orchestration_capability_snapshot_unavailable",
         )
 
     def test_catalog_and_capabilities_publish_stable_run_surface_types(self) -> None:
@@ -1232,6 +1547,54 @@ class BridgeApiContractTest(unittest.TestCase):
         self.assertEqual(status, 409)
         self.assertEqual(payload["error"]["code"], "idempotency_payload_mismatch")
         self.assertEqual(payload["error"]["field_path"], "/headers/Idempotency-Key")
+
+    def test_run_creation_persists_actual_nested_identity_and_reports_it_on_error(self) -> None:
+        manifest = valid_manifest_v2()
+        status, created, _ = self.create_run(
+            {
+                "scenario_id": "s1_des_example",
+                "design_space_candidates": manifest,
+            },
+            "nested-v2-create-key",
+        )
+        self.assertEqual(status, 202)
+        metadata = server.read_json_file(
+            server.RUNS_ROOT / created["run_id"] / "run-metadata.json"
+        )
+        self.assertEqual(
+            metadata["design_space_candidate_schema_identity"],
+            "tilesim.design_space.s6_candidates.v2",
+        )
+
+        invalid = valid_manifest_v2()
+        invalid["calibration_level"] = "partially_calibrated"
+        status, error, _ = self.create_run(
+            {
+                "scenario_id": "s1_des_example",
+                "design_space_candidates": invalid,
+            },
+            "nested-v2-invalid-key",
+        )
+        self.assertEqual(status, 400)
+        self.assertEqual(
+            error["error"]["nested_schema_identity"],
+            "tilesim.design_space.s6_candidates.v2",
+        )
+
+    def test_nested_version_only_change_is_an_idempotency_mismatch(self) -> None:
+        request_v1 = {
+            "scenario_id": "s1_des_example",
+            "design_space_candidates": valid_manifest(),
+        }
+        request_v2 = {
+            **request_v1,
+            "design_space_candidates": valid_manifest_v2(),
+        }
+        first, _, _ = self.create_run(request_v1, "nested-version-only-key")
+        second, error, _ = self.create_run(request_v2, "nested-version-only-key")
+        self.assertEqual(first, 202)
+        self.assertEqual(second, 409)
+        self.assertEqual(error["error"]["code"], "idempotency_payload_mismatch")
 
     def test_idempotency_survives_an_in_memory_state_reset(self) -> None:
         request = {"scenario_id": "s1_des_example"}

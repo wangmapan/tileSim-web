@@ -15,6 +15,7 @@
         "code": { "type": "string", "minLength": 1 },
         "message": { "type": "string" },
         "field_path": { "type": ["string", "null"] },
+        "nested_schema_identity": { "type": "string", "minLength": 1 },
         "retryable": { "type": "boolean" }
       }
     },

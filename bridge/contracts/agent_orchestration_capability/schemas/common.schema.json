@@ -1,0 +1,184 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/agent-orchestration-capability/v1/common.schema.json",
+  "x-tilesim-contract-status": "published",
+  "$defs": {
+    "stableId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,191}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "gitRevision": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "ownerModule": {
+      "enum": [
+        "工作负载抽象与负载描述语言模块",
+        "推理引擎与服务运行时模块",
+        "执行语义建模模块",
+        "KV Cache 建模模块",
+        "设备性能建模模块",
+        "集合通信语义模块",
+        "网络与硬件资源模块",
+        "统一仿真内核模块",
+        "场景与探索编排模块",
+        "校准验证与指标归因模块",
+        "基于 Agent 的仿真编排模块"
+      ]
+    },
+    "reasonCode": {
+      "enum": [
+        "execution_closure_proven",
+        "gap_kv_001_logical_admission_only",
+        "profile_missing",
+        "minimal_engine_profiles_not_catalog_published",
+        "create_run_engine_selection_not_exposed",
+        "calibration_missing",
+        "held_out_validation_missing",
+        "not_exposed_to_agent",
+        "resolved_scale_out_analytical"
+      ]
+    },
+    "capabilityDimension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "reason_code"],
+      "properties": {
+        "state": { "enum": ["affirmed", "denied"] },
+        "reason_code": { "$ref": "#/$defs/reasonCode" }
+      }
+    },
+    "evidenceReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "revision", "path", "test_case", "evidence_class", "artifact_pointers"],
+      "properties": {
+        "repository": { "enum": ["D:/tileSim", "D:/tileSim-web"] },
+        "revision": { "$ref": "#/$defs/gitRevision" },
+        "path": { "type": "string", "minLength": 1 },
+        "test_case": { "type": "string", "minLength": 1 },
+        "evidence_class": {
+          "enum": ["contract", "lowering", "synthetic_deterministic_execution", "artifact_observation"]
+        },
+        "artifact_pointers": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
+      }
+    },
+    "profileAvailability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "schema_identity",
+        "schema_revision",
+        "schema_digest",
+        "schema_status",
+        "actual_profile_count",
+        "data_status",
+        "runtime_availability",
+        "reason_codes",
+        "calibration_status",
+        "held_out_validation_status"
+      ],
+      "properties": {
+        "family": {
+          "enum": ["model", "engine", "device", "topology", "workload"]
+        },
+        "schema_identity": { "$ref": "#/$defs/stableId" },
+        "schema_revision": { "$ref": "#/$defs/sha256" },
+        "schema_digest": { "$ref": "#/$defs/sha256" },
+        "schema_status": { "const": "published" },
+        "actual_profile_count": { "const": 0 },
+        "data_status": { "enum": ["profile_missing", "conditional"] },
+        "runtime_availability": { "const": "unavailable" },
+        "reason_codes": {
+          "type": "array",
+          "minItems": 1,
+          "contains": { "const": "profile_missing" },
+          "items": { "$ref": "#/$defs/reasonCode" },
+          "uniqueItems": true
+        },
+        "calibration_status": { "const": "calibration_missing" },
+        "held_out_validation_status": { "const": "held_out_validation_missing" }
+      }
+    },
+    "profileEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_identity",
+        "profile_family",
+        "profile_id",
+        "profile_revision",
+        "canonical_digest",
+        "profile_status",
+        "owner_module",
+        "source_mode",
+        "allowed_claim_scope",
+        "calibration_status",
+        "held_out_validation_status",
+        "facts"
+      ],
+      "properties": {
+        "schema_identity": { "$ref": "#/$defs/stableId" },
+        "profile_family": {
+          "enum": ["model", "engine", "device", "topology", "workload"]
+        },
+        "profile_id": { "$ref": "#/$defs/stableId" },
+        "profile_revision": { "$ref": "#/$defs/sha256" },
+        "canonical_digest": { "$ref": "#/$defs/sha256" },
+        "profile_status": {
+          "enum": ["available", "conditional", "unavailable"]
+        },
+        "owner_module": { "$ref": "#/$defs/ownerModule" },
+        "source_mode": {
+          "enum": ["real_trace", "synthetic_trace", "compatibility_harness_trace", "reviewed_registry"]
+        },
+        "allowed_claim_scope": {
+          "enum": [
+            "exploration",
+            "synthetic_consistency",
+            "limited_extrapolation",
+            "similar_regime_conditional_prediction",
+            "real_calibrated_validation"
+          ]
+        },
+        "calibration_status": { "enum": ["calibration_missing", "available"] },
+        "held_out_validation_status": {
+          "enum": ["held_out_validation_missing", "available"]
+        },
+        "facts": { "type": "object", "minProperties": 1 }
+      }
+    },
+    "notExposedCapability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["capability_id", "state", "reason_code"],
+      "properties": {
+        "capability_id": {
+          "enum": [
+            "model_selection",
+            "device_selection",
+            "engine_selection",
+            "tensor_parallel_degree",
+            "pipeline_parallel_degree",
+            "expert_parallel_degree",
+            "physical_kv_policy",
+            "collective_algorithm",
+            "slo"
+          ]
+        },
+        "state": { "const": "not_exposed" },
+        "reason_code": { "const": "not_exposed_to_agent" }
+      }
+    }
+  }
+}

@@ -4,9 +4,12 @@ import { computed } from "vue";
 import { useI18n } from "../../i18n";
 
 const designSpaceJson = defineModel({ type: String, required: true });
-defineProps({ fieldPath: { type: String, default: "" } });
+const props = defineProps({ fieldPath: { type: String, default: "" } });
 defineEmits(["load-json-file"]);
 const { t } = useI18n();
+const hasDesignSpaceError = computed(
+  () => props.fieldPath === "/design_space_candidates" || props.fieldPath.startsWith("/design_space_candidates/"),
+);
 
 const manifestSummary = computed(() => {
   if (!designSpaceJson.value.trim()) return { mode: "built_in", candidateCount: 3, transferCount: null, error: "" };
@@ -53,8 +56,8 @@ const manifestSummary = computed(() => {
       <textarea
         v-model="designSpaceJson"
         spellcheck="false"
-        :aria-invalid="fieldPath === '/design_space_candidates'"
-        :placeholder="t('可选：tilesim.design_space.s6_candidates.v1')"
+        :aria-invalid="hasDesignSpaceError"
+        :placeholder="t('可选：tilesim.design_space.s6_candidates.v1 或 v2')"
       ></textarea>
       <div class="design-manifest-summary" aria-live="polite">
         <div>
@@ -81,6 +84,13 @@ const manifestSummary = computed(() => {
         {{
           t(
             "仅支持 S6 bandwidth、latency、oversubscription、request/message 和 release interval；S1/S3/S4/S5 变量保持 unresolved_not_executed。",
+          )
+        }}
+      </p>
+      <p class="field-help">
+        {{
+          t(
+            "v1 保留历史兼容语义；v2 要求 source_mode=synthetic_trace、calibration_level=uncalibrated、allowed_claim_scope=exploratory。",
           )
         }}
       </p>
