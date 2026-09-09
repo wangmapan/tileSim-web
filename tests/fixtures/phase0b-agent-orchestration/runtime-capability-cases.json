@@ -1,0 +1,204 @@
+{
+  "case_identity": "tilesim.fixture.agent_orchestration.phase0b.runtime_capability_cases.v1",
+  "snapshot_mutations": [
+    {
+      "id": "base-fixture-valid",
+      "expected": "accept"
+    },
+    {
+      "id": "agent-exposed-without-executed",
+      "mutation": {
+        "operation": "set",
+        "pointer": "/candidate_projection/parameter_descriptors/0/capability_state/executed",
+        "value": "denied"
+      },
+      "expected": "agent_exposed_without_execution_closure"
+    },
+    {
+      "id": "calibration-upgrade-forbidden",
+      "mutation": {
+        "operation": "set",
+        "pointer": "/candidate_projection/parameter_descriptors/0/capability_state/calibrated",
+        "value": "affirmed"
+      },
+      "expected": "unsupported_calibration_upgrade"
+    },
+    {
+      "id": "scale-out-fidelity-overclaim",
+      "mutation": {
+        "operation": "set",
+        "pointer": "/candidate_projection/parameter_descriptors/6/resolved_fidelity",
+        "value": "DES"
+      },
+      "expected": "scale_out_fidelity_overclaim"
+    },
+    {
+      "id": "profile-data-fabricated",
+      "mutation": {
+        "operation": "set",
+        "pointer": "/candidate_projection/profile_families/0/actual_profile_count",
+        "value": 1
+      },
+      "expected": "profile_data_must_remain_empty"
+    },
+    {
+      "id": "unknown-activation-status",
+      "mutation": {
+        "operation": "set",
+        "pointer": "/candidate_projection/activation_status",
+        "value": "maybe"
+      },
+      "expected": "unknown_status_fail_closed"
+    },
+    {
+      "id": "unknown-snapshot-identity",
+      "mutation": {
+        "operation": "set",
+        "pointer": "/candidate_projection/snapshot_identity",
+        "value": "tilesim.bridge.unknown.v9"
+      },
+      "expected": "unknown_identity_fail_closed"
+    },
+    {
+      "id": "credential-member-forbidden",
+      "mutation": {
+        "operation": "set",
+        "pointer": "/candidate_projection/credential",
+        "value": "redacted"
+      },
+      "expected": "security_projection_forbidden_member"
+    },
+    {
+      "id": "claims-member-forbidden",
+      "mutation": {
+        "operation": "set",
+        "pointer": "/candidate_projection/claims",
+        "value": []
+      },
+      "expected": "security_projection_forbidden_member"
+    }
+  ],
+  "binding_cases": [
+    {
+      "id": "matching-binding",
+      "member": "backend_revision",
+      "value": "09c22c0efff890253a1eacf403c2979f56fd9ba6",
+      "expected": "source_target_unavailable"
+    },
+    {
+      "id": "dirty-runtime-schema-is-not-source-target",
+      "member": "schema_set_revision",
+      "value": "sha256:2214c4eae8361bc46fce52163832eb0ba9b9438692c2ff147cbd1b56a2df2af8",
+      "expected": "schema_set_revision_mismatch"
+    },
+    {
+      "id": "dirty-runtime-descriptor-is-not-source-target",
+      "member": "experiment_descriptor_revision",
+      "value": "sha256:1ef962150e0cfa19d27116a3176f23881f7a790cd23b8ef4ebaf3e7885aef4f1",
+      "expected": "experiment_descriptor_revision_mismatch"
+    },
+    {
+      "id": "backend-drift",
+      "member": "backend_revision",
+      "value": "0000000000000000000000000000000000000000",
+      "expected": "backend_revision_mismatch"
+    },
+    {
+      "id": "schema-drift",
+      "member": "schema_set_revision",
+      "value": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "expected": "schema_set_revision_mismatch"
+    },
+    {
+      "id": "descriptor-drift",
+      "member": "experiment_descriptor_revision",
+      "value": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "expected": "experiment_descriptor_revision_mismatch"
+    },
+    {
+      "id": "catalog-drift",
+      "member": "catalog_revision",
+      "value": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "expected": "catalog_revision_mismatch"
+    },
+    {
+      "id": "unknown-binding-member",
+      "member": "future_revision",
+      "value": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "expected": "unknown_identity_or_status"
+    },
+    {
+      "id": "malformed-backend-revision",
+      "member": "backend_revision",
+      "value": "latest",
+      "expected": "unknown_identity_or_status"
+    },
+    {
+      "id": "malformed-catalog-revision",
+      "member": "catalog_revision",
+      "value": "sha256:future",
+      "expected": "unknown_identity_or_status"
+    }
+  ],
+  "capability_queries": [
+    { "id": "current-field-without-profiles", "capability": "s1.runtime.max_batch_size", "expected": "available" },
+    {
+      "id": "conditional-kv-without-profiles",
+      "capability": "s1.runtime.kv_capacity_tokens",
+      "expected": "conditional"
+    },
+    { "id": "model-selection-blocked", "capability": "model_selection", "expected": "profile_missing" },
+    { "id": "device-selection-blocked", "capability": "device_selection", "expected": "profile_missing" },
+    { "id": "engine-selection-blocked", "capability": "engine_selection", "expected": "profile_missing" },
+    { "id": "parallelism-blocked", "capability": "tp_pp_ep", "expected": "profile_missing" },
+    { "id": "unknown-capability", "capability": "future_magic", "expected": "unknown_identity_or_status" }
+  ],
+  "uint64_cases": [
+    { "id": "zero-string", "value": "0", "expected": "0" },
+    { "id": "max-string", "value": "18446744073709551615", "expected": "18446744073709551615" },
+    { "id": "overflow-string", "value": "18446744073709551616", "expected": "uint64_overflow" },
+    { "id": "unsafe-number", "value": 9007199254740992, "expected": "uint64_decimal_string_required" },
+    { "id": "leading-zero", "value": "01", "expected": "uint64_decimal_string_required" }
+  ],
+  "canonical_cases": [
+    {
+      "id": "unicode-code-point-order-and-lossless-uint64",
+      "value": {
+        "😀": "astral",
+        "": "bmp",
+        "a": [3, "汉字"],
+        "bytes": "18446744073709551615"
+      },
+      "integer_json_pointers": ["/bytes"],
+      "expected_canonical_json": "{\"a\":[3,\"汉字\"],\"bytes\":18446744073709551615,\"\":\"bmp\",\"😀\":\"astral\"}",
+      "expected_sha256": "sha256:d2572b15491b90bd42379bace3fca4e60cb7a74d95be27f637b1d8aadca20cb4"
+    },
+    {
+      "id": "array-order-preserved",
+      "value": { "z": 0, "items": ["workload", "topology", "device", "engine", "model"] },
+      "integer_json_pointers": [],
+      "expected_canonical_json": "{\"items\":[\"workload\",\"topology\",\"device\",\"engine\",\"model\"],\"z\":0}",
+      "expected_sha256": "sha256:bc3aef017e7da0c2c3cff534d8a3085e096191b25d8970053801834ece2f75cb"
+    },
+    {
+      "id": "binary-float-rejected",
+      "value": { "ratio": 1.5 },
+      "integer_json_pointers": [],
+      "expected_error": "binary_float_forbidden"
+    }
+  ],
+  "expected_dor": {
+    "status": "blocked",
+    "blocking_reasons": [
+      "formal_capability_contract_not_published",
+      "immutable_snapshot_unavailable",
+      "generated_types_missing",
+      "runtime_validator_missing",
+      "profile_schemas_not_formally_published",
+      "f8_breaking_change_reuses_v1_identity",
+      "f8_named_owner_handoff_not_verified",
+      "git_reproducible_target_revision_missing",
+      "cross_artifact_revision_coherence_not_proven"
+    ]
+  }
+}

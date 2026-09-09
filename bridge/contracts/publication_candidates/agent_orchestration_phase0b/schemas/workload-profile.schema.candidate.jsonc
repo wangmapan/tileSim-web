@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/publication-candidates/agent-orchestration-phase0b/workload-profile.schema.json",
+  "x-tilesim-contract-status": "publication_candidate",
+  "x-tilesim-schema-identity": "tilesim.bridge.agent_orchestration_workload_profile.v1",
+  "title": "AgentOrchestrationWorkloadProfile",
+  "allOf": [
+    {
+      "$ref": "common.schema.json#/$defs/profileEnvelope"
+    },
+    {
+      "type": "object",
+      "required": [
+        "task_scenario_identity",
+        "task_scenario_revision",
+        "request_count",
+        "prompt_length_distribution",
+        "decode_length_distribution",
+        "arrival_process",
+        "arrival_rate",
+        "burst",
+        "concurrency",
+        "model_constraints",
+        "engine_constraints",
+        "session_prefix_cache_reuse",
+        "trace_source",
+        "generation_method",
+        "calibration_level",
+        "allowed_claim_scope",
+        "scaling_policy",
+        "seed",
+        "reproducibility_fields",
+        "allowed_overrides"
+      ],
+      "properties": {
+        "schema_identity": {
+          "const": "tilesim.bridge.agent_orchestration_workload_profile.v1"
+        },
+        "profile_family": {
+          "const": "workload"
+        },
+        "task_scenario_identity": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "task_scenario_revision": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "request_count": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "prompt_length_distribution": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "decode_length_distribution": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "arrival_process": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "arrival_rate": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "burst": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "concurrency": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "model_constraints": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "engine_constraints": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "session_prefix_cache_reuse": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "trace_source": {
+          "enum": [
+            "real_trace",
+            "synthetic_trace",
+            "compatibility_harness_trace"
+          ]
+        },
+        "generation_method": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "calibration_level": {
+          "enum": ["uncalibrated", "calibrated", "held_out_validated"]
+        },
+        "allowed_claim_scope": {
+          "enum": [
+            "exploration",
+            "synthetic_consistency",
+            "limited_extrapolation",
+            "similar_regime_conditional_prediction",
+            "real_calibrated_validation"
+          ]
+        },
+        "scaling_policy": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "seed": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "reproducibility_fields": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "allowed_overrides": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        }
+      }
+    }
+  ],
+  "unevaluatedProperties": false
+}

@@ -1,0 +1,289 @@
+{
+  "schema_version": "tilesim.fixture.agent_orchestration.phase0.eval_cases.v0",
+  "publication_status": "proposed_non_published_fixture",
+  "dataset_split_policy": "case IDs are frozen; test and held_out_adversarial cases must not tune the oracle",
+  "cases": [
+    { "id": "valid-proposal-snapshot", "split": "validation", "action": "validate_snapshot", "expected": "accepted" },
+    {
+      "id": "unknown-snapshot-field",
+      "split": "test",
+      "action": "validate_snapshot",
+      "mutation": { "operation": "set", "pointer": "/catalog/unknown_field", "value": true },
+      "expected_code": "unknown_property"
+    },
+    {
+      "id": "unknown-field",
+      "split": "test",
+      "action": "resolve_field",
+      "query": "unknown.parameter",
+      "expected_code": "unknown_field"
+    },
+    {
+      "id": "unknown-profile",
+      "split": "test",
+      "action": "resolve_profile",
+      "query": "unknown.profile",
+      "expected_code": "unknown_profile"
+    },
+    {
+      "id": "ambiguous-field-alias",
+      "split": "held_out_adversarial",
+      "action": "resolve_field",
+      "query": "batch limit",
+      "mutation": {
+        "operation": "append",
+        "pointer": "/catalog/parameter_descriptors/1/aliases",
+        "value": "batch limit"
+      },
+      "expected_code": "ambiguous_alias"
+    },
+    {
+      "id": "ambiguous-profile-alias",
+      "split": "held_out_adversarial",
+      "action": "resolve_profile",
+      "query": "shared profile",
+      "mutation": { "operation": "append", "pointer": "/catalog/profiles/0/aliases", "value": "shared profile" },
+      "second_mutation": { "operation": "append", "pointer": "/catalog/profiles/1/aliases", "value": "shared profile" },
+      "expected_code": "ambiguous_alias"
+    },
+    {
+      "id": "profile-expired",
+      "split": "test",
+      "action": "validate_snapshot",
+      "mutation": {
+        "operation": "set",
+        "pointer": "/catalog/profiles/0/lifecycle/expires_at",
+        "value": "2026-01-01T00:00:00Z"
+      },
+      "expected_code": "profile_expired"
+    },
+    {
+      "id": "profile-revoked",
+      "split": "test",
+      "action": "validate_snapshot",
+      "mutation": { "operation": "set", "pointer": "/catalog/profiles/0/lifecycle/state", "value": "revoked" },
+      "expected_code": "profile_revoked"
+    },
+    {
+      "id": "profile-revision-drift",
+      "split": "test",
+      "action": "resolve_combination",
+      "mutation": {
+        "operation": "set",
+        "pointer": "/catalog/combination/profile_refs/0/revision",
+        "value": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      },
+      "expected_code": "profile_revision_mismatch"
+    },
+    {
+      "id": "catalog-revision-drift",
+      "split": "test",
+      "action": "validate_binding",
+      "query": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "expected_code": "catalog_revision_mismatch"
+    },
+    {
+      "id": "missing-profile-source",
+      "split": "test",
+      "action": "validate_snapshot",
+      "mutation": { "operation": "delete", "pointer": "/catalog/profiles/0/source" },
+      "expected_code": "profile_source_missing"
+    },
+    {
+      "id": "missing-valid-regime",
+      "split": "test",
+      "action": "validate_snapshot",
+      "mutation": { "operation": "delete", "pointer": "/catalog/profiles/0/valid_regime" },
+      "expected_code": "valid_regime_missing"
+    },
+    {
+      "id": "calibration-self-claim",
+      "split": "held_out_adversarial",
+      "action": "validate_snapshot",
+      "mutation": { "operation": "set", "pointer": "/catalog/profiles/0/calibration/state", "value": "calibrated" },
+      "expected_code": "calibration_receipt_missing"
+    },
+    {
+      "id": "held-out-self-claim",
+      "split": "held_out_adversarial",
+      "action": "validate_snapshot",
+      "mutation": {
+        "operation": "set",
+        "pointer": "/catalog/profiles/0/held_out_validation/state",
+        "value": "validated"
+      },
+      "expected_code": "held_out_receipt_missing"
+    },
+    {
+      "id": "uint64-maximum",
+      "split": "validation",
+      "action": "validate_value",
+      "field": "s4.device.memory_capacity_bytes",
+      "input_value": "18446744073709551615",
+      "input_unit": "byte",
+      "expected": "accepted"
+    },
+    {
+      "id": "uint64-overflow",
+      "split": "test",
+      "action": "validate_value",
+      "field": "s4.device.memory_capacity_bytes",
+      "input_value": "18446744073709551616",
+      "input_unit": "byte",
+      "expected_code": "value_above_maximum"
+    },
+    {
+      "id": "uint64-unsafe-json-number",
+      "split": "held_out_adversarial",
+      "action": "validate_value",
+      "field": "s4.device.memory_capacity_bytes",
+      "input_value": 9007199254740992,
+      "input_unit": "byte",
+      "expected_code": "uint64_lossless_string_required"
+    },
+    {
+      "id": "unit-conversion-mbps",
+      "split": "validation",
+      "action": "validate_value",
+      "field": "s6.fabric.scale_up_bandwidth_gbps",
+      "input_value": "200000",
+      "input_unit": "Mbps",
+      "expected": "accepted",
+      "expected_canonical": "200"
+    },
+    {
+      "id": "unknown-unit",
+      "split": "test",
+      "action": "validate_value",
+      "field": "s6.fabric.scale_up_bandwidth_gbps",
+      "input_value": "200",
+      "input_unit": "GBps",
+      "expected_code": "unit_unsupported"
+    },
+    {
+      "id": "minimum-boundary",
+      "split": "validation",
+      "action": "validate_value",
+      "field": "s6.fabric.scale_up_bandwidth_gbps",
+      "input_value": "25",
+      "input_unit": "Gbps",
+      "expected": "accepted",
+      "expected_canonical": "25"
+    },
+    {
+      "id": "below-minimum",
+      "split": "test",
+      "action": "validate_value",
+      "field": "s6.fabric.scale_up_bandwidth_gbps",
+      "input_value": "24.999",
+      "input_unit": "Gbps",
+      "expected_code": "value_below_minimum"
+    },
+    {
+      "id": "maximum-boundary",
+      "split": "validation",
+      "action": "validate_value",
+      "field": "s6.fabric.scale_up_bandwidth_gbps",
+      "input_value": "2000",
+      "input_unit": "Gbps",
+      "expected": "accepted",
+      "expected_canonical": "2000"
+    },
+    {
+      "id": "above-maximum",
+      "split": "test",
+      "action": "validate_value",
+      "field": "s6.fabric.scale_up_bandwidth_gbps",
+      "input_value": "2001",
+      "input_unit": "Gbps",
+      "expected_code": "value_above_maximum"
+    },
+    {
+      "id": "integer-step-conflict",
+      "split": "test",
+      "action": "validate_value",
+      "field": "s1.runtime.max_batch_size",
+      "input_value": "1.5",
+      "input_unit": "requests_per_batch",
+      "expected_code": "integer_required"
+    },
+    {
+      "id": "valid-profile-combination",
+      "split": "validation",
+      "action": "resolve_combination",
+      "expected": "accepted"
+    },
+    {
+      "id": "cycle-combination-conflict",
+      "split": "test",
+      "action": "resolve_combination",
+      "mutation": { "operation": "set", "pointer": "/catalog/combination/requested_fidelity", "value": "Cycle" },
+      "expected_code": "combination_unsupported"
+    },
+    {
+      "id": "gpu-mode-combination-conflict",
+      "split": "test",
+      "action": "resolve_combination",
+      "mutation": {
+        "operation": "set",
+        "pointer": "/catalog/combination/gpu_participation_mode",
+        "value": "gpu_in_loop"
+      },
+      "expected_code": "combination_unsupported"
+    },
+    {
+      "id": "source-mode-combination-conflict",
+      "split": "test",
+      "action": "resolve_combination",
+      "mutation": { "operation": "set", "pointer": "/catalog/combination/source_mode", "value": "real_trace" },
+      "expected_code": "combination_unsupported"
+    },
+    {
+      "id": "synthetic-claim-upgrade",
+      "split": "held_out_adversarial",
+      "action": "resolve_combination",
+      "mutation": {
+        "operation": "set",
+        "pointer": "/catalog/combination/allowed_claim_scope",
+        "value": "held_out_validation"
+      },
+      "expected_code": "claim_scope_upgrade_forbidden"
+    },
+    {
+      "id": "unexecuted-agent-exposed",
+      "split": "held_out_adversarial",
+      "action": "validate_snapshot",
+      "mutation": {
+        "operation": "set",
+        "pointer": "/catalog/parameter_descriptors/2/status/agent_exposed",
+        "value": true
+      },
+      "expected_code": "agent_exposed_without_execution"
+    },
+    {
+      "id": "executed-without-evidence",
+      "split": "test",
+      "action": "validate_snapshot",
+      "mutation": { "operation": "set", "pointer": "/catalog/parameter_descriptors/0/evidence_outputs", "value": [] },
+      "expected_code": "execution_evidence_missing"
+    },
+    {
+      "id": "unknown-support-state",
+      "split": "held_out_adversarial",
+      "action": "validate_snapshot",
+      "mutation": {
+        "operation": "set",
+        "pointer": "/catalog/parameter_descriptors/0/support/state",
+        "value": "probably_supported"
+      },
+      "expected_code": "support_state_unknown"
+    },
+    {
+      "id": "secret-agent-exposed",
+      "split": "held_out_adversarial",
+      "action": "validate_snapshot",
+      "mutation": { "operation": "set", "pointer": "/catalog/parameter_descriptors/0/sensitivity", "value": "secret" },
+      "expected_code": "secret_agent_exposure_forbidden"
+    }
+  ]
+}

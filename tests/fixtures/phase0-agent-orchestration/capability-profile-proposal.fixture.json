@@ -1,0 +1,451 @@
+{
+  "schema_version": "tilesim.fixture.agent_orchestration.phase0.capability_profile_proposal.v0",
+  "publication_status": "proposed_non_published_fixture",
+  "fixture_revision": "sha256:3746055dd197a21879c601eea2f75a58cee87f426f013dc1adad23dbf1ea1dfe",
+  "evaluated_at": "2026-09-06T12:00:00Z",
+  "runtime_bindings": {
+    "schema_set_revision": "sha256:eb6c0dc921faa53789c053dfef99b82d1a5eb0499cb244e364178eab43e7095c",
+    "experiment_descriptor_identity": "tilesim.bridge.experiment_descriptor.v1",
+    "experiment_descriptor_revision": "sha256:de97e5fe0aae2ae1c5ffeeda7a0a56fd23c6a56aa28c3746eead00d89c68d059",
+    "create_run_schema_identity": "tilesim.bridge.create_run_request.v1",
+    "evidence_descriptor_identity": "tilesim.bridge.evidence_agent_descriptor.v2",
+    "evidence_descriptor_revision": "sha256:5f78ed33e20c131f672af53368c5ca950f41d63fd2e8f5301757d1f42debe357",
+    "evidence_request_identity": "tilesim.bridge.evidence_agent_request.v1",
+    "evidence_response_identity": "tilesim.bridge.evidence_agent_response.v1",
+    "evidence_citation_identity": "tilesim.bridge.evidence_agent_citation.v1",
+    "evidence_snapshot_identity": "tilesim.bridge.evidence_snapshot_reference.v1"
+  },
+  "catalog": {
+    "catalog_id": "phase0-eval-independent-proposal",
+    "catalog_revision": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "policy_revision": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "parameter_descriptors": [
+      {
+        "field_id": "s1.runtime.max_batch_size",
+        "aliases": ["max batch size", "batch limit", "最大批大小"],
+        "owner_module": "推理引擎与服务运行时模块",
+        "value_type": "int",
+        "canonical_unit": "requests_per_batch",
+        "accepted_units": [
+          {
+            "unit": "requests_per_batch",
+            "numerator": "1",
+            "denominator": "1"
+          }
+        ],
+        "constraints": {
+          "minimum": "1",
+          "maximum": "64",
+          "step": "1"
+        },
+        "request_target": {
+          "schema_identity": "tilesim.bridge.create_run_request.v1",
+          "json_pointer": "/overrides/runtime/max_batch_size"
+        },
+        "lowering": {
+          "status": "lowered",
+          "stage": "Bridge override -> runtime trace policy",
+          "execution_evidence_refs": [
+            "D:/tileSim-web/bridge/contracts/experiment_descriptor.py#PARAMETER_DEFINITIONS",
+            "D:/tileSim-web/bridge/test_f8_schemas.mjs#descriptor-to-run-overrides"
+          ]
+        },
+        "evidence_outputs": [
+          {
+            "artifact_kind": "execution_envelope",
+            "field_reference": "runtime policy and batch execution evidence"
+          }
+        ],
+        "status": {
+          "described": true,
+          "accepted": true,
+          "validated": true,
+          "lowered": true,
+          "executed": true,
+          "observable": true,
+          "calibrated": false,
+          "held_out_validated": false,
+          "ui_exposed": true,
+          "agent_exposed": true
+        },
+        "support": {
+          "state": "available",
+          "reason_code": "none"
+        },
+        "sensitivity": "public",
+        "lifecycle": {
+          "state": "active",
+          "introduced_at": "2026-09-06T00:00:00Z",
+          "expires_at": null,
+          "deprecated_at": null
+        },
+        "source": {
+          "kind": "runtime_contract",
+          "identity": "tilesim.bridge.experiment_descriptor.v1",
+          "revision": "sha256:de97e5fe0aae2ae1c5ffeeda7a0a56fd23c6a56aa28c3746eead00d89c68d059"
+        },
+        "valid_regime": {
+          "scenarios": ["s1_des_example"],
+          "requested_fidelity": ["DES"],
+          "gpu_participation_modes": ["gpu_free"],
+          "source_modes": ["synthetic_trace"]
+        }
+      },
+      {
+        "field_id": "s6.fabric.scale_up_bandwidth_gbps",
+        "aliases": ["scale up bandwidth", "纵向扩展网络带宽", "fabric bandwidth"],
+        "owner_module": "网络与硬件资源模块",
+        "value_type": "decimal",
+        "canonical_unit": "Gbps",
+        "accepted_units": [
+          {
+            "unit": "Gbps",
+            "numerator": "1",
+            "denominator": "1"
+          },
+          {
+            "unit": "Mbps",
+            "numerator": "1",
+            "denominator": "1000"
+          },
+          {
+            "unit": "bps",
+            "numerator": "1",
+            "denominator": "1000000000"
+          }
+        ],
+        "constraints": {
+          "minimum": "25",
+          "maximum": "2000",
+          "step": null
+        },
+        "request_target": {
+          "schema_identity": "tilesim.bridge.create_run_request.v1",
+          "json_pointer": "/overrides/fabric/scale_up_bandwidth_gbps"
+        },
+        "lowering": {
+          "status": "lowered",
+          "stage": "Bridge override -> topology binding -> 网络与硬件资源模块",
+          "execution_evidence_refs": [
+            "D:/tileSim-web/bridge/contracts/experiment_descriptor.py#PARAMETER_DEFINITIONS",
+            "D:/tileSim/tests/test_fabric_registry.cpp"
+          ]
+        },
+        "evidence_outputs": [
+          {
+            "artifact_kind": "metrics_report",
+            "field_reference": "network timing and contention outputs"
+          }
+        ],
+        "status": {
+          "described": true,
+          "accepted": true,
+          "validated": true,
+          "lowered": true,
+          "executed": true,
+          "observable": true,
+          "calibrated": false,
+          "held_out_validated": false,
+          "ui_exposed": true,
+          "agent_exposed": true
+        },
+        "support": {
+          "state": "available",
+          "reason_code": "none"
+        },
+        "sensitivity": "public",
+        "lifecycle": {
+          "state": "active",
+          "introduced_at": "2026-09-06T00:00:00Z",
+          "expires_at": null,
+          "deprecated_at": null
+        },
+        "source": {
+          "kind": "runtime_contract",
+          "identity": "tilesim.bridge.experiment_descriptor.v1",
+          "revision": "sha256:de97e5fe0aae2ae1c5ffeeda7a0a56fd23c6a56aa28c3746eead00d89c68d059"
+        },
+        "valid_regime": {
+          "scenarios": ["s1_des_example"],
+          "requested_fidelity": ["DES"],
+          "gpu_participation_modes": ["gpu_free"],
+          "source_modes": ["synthetic_trace"]
+        }
+      },
+      {
+        "field_id": "s4.device.memory_capacity_bytes",
+        "aliases": ["device memory bytes", "设备显存字节"],
+        "owner_module": "设备性能建模模块",
+        "value_type": "uint64",
+        "canonical_unit": "byte",
+        "accepted_units": [
+          {
+            "unit": "byte",
+            "numerator": "1",
+            "denominator": "1"
+          }
+        ],
+        "constraints": {
+          "minimum": "0",
+          "maximum": "18446744073709551615",
+          "step": "1"
+        },
+        "request_target": null,
+        "lowering": {
+          "status": "missing",
+          "stage": null,
+          "execution_evidence_refs": []
+        },
+        "evidence_outputs": [],
+        "status": {
+          "described": true,
+          "accepted": false,
+          "validated": true,
+          "lowered": false,
+          "executed": false,
+          "observable": false,
+          "calibrated": false,
+          "held_out_validated": false,
+          "ui_exposed": false,
+          "agent_exposed": false
+        },
+        "support": {
+          "state": "unresolved_not_executed",
+          "reason_code": "execution_evidence_missing"
+        },
+        "sensitivity": "public",
+        "lifecycle": {
+          "state": "active",
+          "introduced_at": "2026-09-06T00:00:00Z",
+          "expires_at": null,
+          "deprecated_at": null
+        },
+        "source": {
+          "kind": "backend_type",
+          "identity": "tilesim.platform.contracts.v1",
+          "revision": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+        },
+        "valid_regime": {
+          "scenarios": ["evaluation_only"],
+          "requested_fidelity": ["Analytical", "DES"],
+          "gpu_participation_modes": ["gpu_free"],
+          "source_modes": ["synthetic_trace"]
+        }
+      }
+    ],
+    "profiles": [
+      {
+        "profile_id": "eval.model.dense-small.v1",
+        "family": "model",
+        "revision": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "aliases": ["dense small eval model"],
+        "owner_module": "工作负载抽象与负载描述语言模块",
+        "lifecycle": {
+          "state": "active",
+          "expires_at": "2027-01-01T00:00:00Z"
+        },
+        "source": {
+          "kind": "reviewed_fixture",
+          "identity": "phase0-eval-model-source",
+          "revision": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "valid_regime": {
+          "scenarios": ["s1_des_example"],
+          "requested_fidelity": ["DES"],
+          "gpu_participation_modes": ["gpu_free"],
+          "source_modes": ["synthetic_trace"]
+        },
+        "calibration": {
+          "state": "uncalibrated",
+          "receipt": null
+        },
+        "held_out_validation": {
+          "state": "unavailable",
+          "receipt": null
+        },
+        "facts": {
+          "architecture": "dense",
+          "layer_count": 2,
+          "hidden_size": 128,
+          "supported_dtypes": ["fp16"],
+          "field_provenance": "modelled_fixture_only"
+        }
+      },
+      {
+        "profile_id": "eval.engine.vllm-semantic.v1",
+        "family": "engine",
+        "revision": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+        "aliases": ["vllm eval semantic"],
+        "owner_module": "推理引擎与服务运行时模块",
+        "lifecycle": {
+          "state": "active",
+          "expires_at": "2027-01-01T00:00:00Z"
+        },
+        "source": {
+          "kind": "backend_registry",
+          "identity": "vllm.0.6.semantic.v1",
+          "revision": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "valid_regime": {
+          "scenarios": ["s1_des_example"],
+          "requested_fidelity": ["DES"],
+          "gpu_participation_modes": ["gpu_free"],
+          "source_modes": ["synthetic_trace"]
+        },
+        "calibration": {
+          "state": "uncalibrated",
+          "receipt": null
+        },
+        "held_out_validation": {
+          "state": "unavailable",
+          "receipt": null
+        },
+        "facts": {
+          "semantic_version": "vllm.0.6.semantic.v1",
+          "supported_features": ["continuous_batching", "chunked_prefill"],
+          "unsupported_features": ["speculative_decode"]
+        }
+      },
+      {
+        "profile_id": "eval.device.generic-unmodeled.v1",
+        "family": "device",
+        "revision": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+        "aliases": ["generic eval device"],
+        "owner_module": "设备性能建模模块",
+        "lifecycle": {
+          "state": "active",
+          "expires_at": "2027-01-01T00:00:00Z"
+        },
+        "source": {
+          "kind": "reviewed_fixture",
+          "identity": "phase0-eval-device-source",
+          "revision": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        },
+        "valid_regime": {
+          "scenarios": ["s1_des_example"],
+          "requested_fidelity": ["DES"],
+          "gpu_participation_modes": ["gpu_free"],
+          "source_modes": ["synthetic_trace"]
+        },
+        "calibration": {
+          "state": "uncalibrated",
+          "receipt": null
+        },
+        "held_out_validation": {
+          "state": "unavailable",
+          "receipt": null
+        },
+        "facts": {
+          "device_kind": "generic_fixture",
+          "timing_model": "unmodeled",
+          "claim_scope": "synthetic_consistency_only"
+        }
+      },
+      {
+        "profile_id": "eval.topology.two-endpoint.v1",
+        "family": "topology",
+        "revision": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+        "aliases": ["two endpoint eval topology"],
+        "owner_module": "网络与硬件资源模块",
+        "lifecycle": {
+          "state": "active",
+          "expires_at": "2027-01-01T00:00:00Z"
+        },
+        "source": {
+          "kind": "reviewed_fixture",
+          "identity": "phase0-eval-topology-source",
+          "revision": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        },
+        "valid_regime": {
+          "scenarios": ["s1_des_example"],
+          "requested_fidelity": ["DES"],
+          "gpu_participation_modes": ["gpu_free"],
+          "source_modes": ["synthetic_trace"]
+        },
+        "calibration": {
+          "state": "uncalibrated",
+          "receipt": null
+        },
+        "held_out_validation": {
+          "state": "unavailable",
+          "receipt": null
+        },
+        "facts": {
+          "endpoint_count": 2,
+          "network_domains": ["scale_up"],
+          "flow_control": "fixture_declared"
+        }
+      },
+      {
+        "profile_id": "eval.workload.synthetic-burst.v1",
+        "family": "workload",
+        "revision": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+        "aliases": ["synthetic burst eval workload"],
+        "owner_module": "工作负载抽象与负载描述语言模块",
+        "lifecycle": {
+          "state": "active",
+          "expires_at": "2027-01-01T00:00:00Z"
+        },
+        "source": {
+          "kind": "synthetic_fixture",
+          "identity": "phase0-eval-workload-source",
+          "revision": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        },
+        "valid_regime": {
+          "scenarios": ["s1_des_example"],
+          "requested_fidelity": ["DES"],
+          "gpu_participation_modes": ["gpu_free"],
+          "source_modes": ["synthetic_trace"]
+        },
+        "calibration": {
+          "state": "uncalibrated",
+          "receipt": null
+        },
+        "held_out_validation": {
+          "state": "unavailable",
+          "receipt": null
+        },
+        "facts": {
+          "arrival_process": "bounded_burst_fixture",
+          "request_count": 4,
+          "seed": "17",
+          "allowed_claim_scope": "synthetic_consistency_only"
+        }
+      }
+    ],
+    "combination": {
+      "profile_refs": [
+        {
+          "family": "model",
+          "profile_id": "eval.model.dense-small.v1",
+          "revision": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+        },
+        {
+          "family": "engine",
+          "profile_id": "eval.engine.vllm-semantic.v1",
+          "revision": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+        },
+        {
+          "family": "device",
+          "profile_id": "eval.device.generic-unmodeled.v1",
+          "revision": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+        },
+        {
+          "family": "topology",
+          "profile_id": "eval.topology.two-endpoint.v1",
+          "revision": "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+        },
+        {
+          "family": "workload",
+          "profile_id": "eval.workload.synthetic-burst.v1",
+          "revision": "sha256:8888888888888888888888888888888888888888888888888888888888888888"
+        }
+      ],
+      "scenario": "s1_des_example",
+      "requested_fidelity": "DES",
+      "gpu_participation_mode": "gpu_free",
+      "source_mode": "synthetic_trace",
+      "allowed_claim_scope": "synthetic_consistency_only"
+    }
+  }
+}

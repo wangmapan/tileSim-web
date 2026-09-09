@@ -1,0 +1,299 @@
+{
+  "fixture_identity": "tilesim.fixture.agent_orchestration.phase0b.runtime_capability_snapshot.v1",
+  "fixture_status": "fixture_only",
+  "fixture_revision": "sha256:a0f80ae800a2dee52f0dd1b5dfbcc684174582892616ca8ffaf33749d4bffaf5",
+  "evaluated_at": "2026-09-08T20:00:00+08:00",
+  "evidence_scope": {
+    "source_mode": "synthetic_trace",
+    "check_class": "synthetic_consistency",
+    "calibration_status": "calibration_missing",
+    "held_out_validation_status": "held_out_validation_missing",
+    "claim_scope_ceiling": ["exploration", "synthetic_consistency"]
+  },
+  "expected_binding": {
+    "binding_status": "compatibility_baseline",
+    "backend_identity": "tilesim.backend.git",
+    "backend_revision": "09c22c0efff890253a1eacf403c2979f56fd9ba6",
+    "schema_set_revision": "sha256:eb6c0dc921faa53789c053dfef99b82d1a5eb0499cb244e364178eab43e7095c",
+    "experiment_descriptor_identity": "tilesim.bridge.experiment_descriptor.v1",
+    "experiment_descriptor_revision": "sha256:de97e5fe0aae2ae1c5ffeeda7a0a56fd23c6a56aa28c3746eead00d89c68d059",
+    "create_run_identity": "tilesim.bridge.create_run_request.v1",
+    "catalog_identity": "tilesim.bridge.agent_orchestration_capability_catalog.v1",
+    "catalog_revision": "sha256:dd8954774ce812c29a2915cc8acab2e3c0d82d32347bfbfd04fffa40c15b9fa5"
+  },
+  "source_target_state": {
+    "status": "target_pending",
+    "runtime_availability": "unavailable",
+    "reason_codes": ["source_target_revision_pending", "binding_compatibility_review_pending"]
+  },
+  "observed_non_target_runtime_binding": {
+    "status": "not_publishable",
+    "reason_code": "binding_compatibility_review_pending",
+    "binding": {
+      "backend_identity": "tilesim.backend.git",
+      "backend_revision": "09c22c0efff890253a1eacf403c2979f56fd9ba6",
+      "schema_set_revision": "sha256:2214c4eae8361bc46fce52163832eb0ba9b9438692c2ff147cbd1b56a2df2af8",
+      "experiment_descriptor_identity": "tilesim.bridge.experiment_descriptor.v1",
+      "experiment_descriptor_revision": "sha256:1ef962150e0cfa19d27116a3176f23881f7a790cd23b8ef4ebaf3e7885aef4f1",
+      "create_run_identity": "tilesim.bridge.create_run_request.v1"
+    }
+  },
+  "candidate_projection": {
+    "snapshot_identity": "tilesim.bridge.agent_orchestration_capability_snapshot.v1",
+    "publication_status": "publication_candidate",
+    "activation_status": "unavailable",
+    "parameter_descriptors": [
+      {
+        "field_id": "s0.workload.message_size_multiplier",
+        "request_identity": "tilesim.bridge.create_run_request.v1",
+        "request_json_pointer": "/overrides/workload/message_size_multiplier",
+        "applicability_status": "available",
+        "resolved_fidelity": "mixed",
+        "execution_evidence": "tests/test_week4_cumulative_flow.cpp:larger-message differential",
+        "capability_state": {
+          "described": "affirmed",
+          "accepted": "affirmed",
+          "validated": "affirmed",
+          "lowered": "affirmed",
+          "executed": "affirmed",
+          "observable": "affirmed",
+          "calibrated": "denied",
+          "held_out_validated": "denied",
+          "agent_exposed": "affirmed"
+        },
+        "reason_codes": ["execution_closure_proven", "calibration_missing", "held_out_validation_missing"],
+        "claim_scope_ceiling": ["exploration", "synthetic_consistency"]
+      },
+      {
+        "field_id": "s1.runtime.batch_scheduler",
+        "request_identity": "tilesim.bridge.create_run_request.v1",
+        "request_json_pointer": "/overrides/runtime/batch_scheduler",
+        "applicability_status": "available",
+        "resolved_fidelity": "mixed",
+        "execution_evidence": "tests/test_runtime_batch_lowering.cpp:fifo versus decode-priority ordering",
+        "capability_state": {
+          "described": "affirmed",
+          "accepted": "affirmed",
+          "validated": "affirmed",
+          "lowered": "affirmed",
+          "executed": "affirmed",
+          "observable": "affirmed",
+          "calibrated": "denied",
+          "held_out_validated": "denied",
+          "agent_exposed": "affirmed"
+        },
+        "reason_codes": ["execution_closure_proven", "calibration_missing", "held_out_validation_missing"],
+        "claim_scope_ceiling": ["exploration", "synthetic_consistency"]
+      },
+      {
+        "field_id": "s1.runtime.max_batch_size",
+        "request_identity": "tilesim.bridge.create_run_request.v1",
+        "request_json_pointer": "/overrides/runtime/max_batch_size",
+        "applicability_status": "available",
+        "resolved_fidelity": "mixed",
+        "execution_evidence": "tests/test_runtime_batch_lowering.cpp:multi-request batch membership",
+        "capability_state": {
+          "described": "affirmed",
+          "accepted": "affirmed",
+          "validated": "affirmed",
+          "lowered": "affirmed",
+          "executed": "affirmed",
+          "observable": "affirmed",
+          "calibrated": "denied",
+          "held_out_validated": "denied",
+          "agent_exposed": "affirmed"
+        },
+        "reason_codes": ["execution_closure_proven", "calibration_missing", "held_out_validation_missing"],
+        "claim_scope_ceiling": ["exploration", "synthetic_consistency"]
+      },
+      {
+        "field_id": "s1.runtime.kv_capacity_tokens",
+        "request_identity": "tilesim.bridge.create_run_request.v1",
+        "request_json_pointer": "/overrides/runtime/kv_capacity_tokens",
+        "applicability_status": "conditional",
+        "resolved_fidelity": "mixed",
+        "execution_evidence": "tests/test_runtime_batch_lowering.cpp:KV pressure and admission cases",
+        "capability_state": {
+          "described": "affirmed",
+          "accepted": "affirmed",
+          "validated": "affirmed",
+          "lowered": "affirmed",
+          "executed": "affirmed",
+          "observable": "affirmed",
+          "calibrated": "denied",
+          "held_out_validated": "denied",
+          "agent_exposed": "affirmed"
+        },
+        "reason_codes": ["gap_kv_001_logical_admission_only", "calibration_missing", "held_out_validation_missing"],
+        "claim_scope_ceiling": ["exploration", "synthetic_consistency"]
+      },
+      {
+        "field_id": "s6.fabric.scale_up_bandwidth_gbps",
+        "request_identity": "tilesim.bridge.create_run_request.v1",
+        "request_json_pointer": "/overrides/fabric/scale_up_bandwidth_gbps",
+        "applicability_status": "available",
+        "resolved_fidelity": "DES",
+        "execution_evidence": "tests/test_week4_cumulative_flow.cpp:lower-bandwidth differential",
+        "capability_state": {
+          "described": "affirmed",
+          "accepted": "affirmed",
+          "validated": "affirmed",
+          "lowered": "affirmed",
+          "executed": "affirmed",
+          "observable": "affirmed",
+          "calibrated": "denied",
+          "held_out_validated": "denied",
+          "agent_exposed": "affirmed"
+        },
+        "reason_codes": ["execution_closure_proven", "calibration_missing", "held_out_validation_missing"],
+        "claim_scope_ceiling": ["exploration", "synthetic_consistency"]
+      },
+      {
+        "field_id": "s6.fabric.scale_up_latency_us",
+        "request_identity": "tilesim.bridge.create_run_request.v1",
+        "request_json_pointer": "/overrides/fabric/scale_up_latency_us",
+        "applicability_status": "available",
+        "resolved_fidelity": "DES",
+        "execution_evidence": "tests/test_week4_cumulative_flow.cpp:higher-latency differential",
+        "capability_state": {
+          "described": "affirmed",
+          "accepted": "affirmed",
+          "validated": "affirmed",
+          "lowered": "affirmed",
+          "executed": "affirmed",
+          "observable": "affirmed",
+          "calibrated": "denied",
+          "held_out_validated": "denied",
+          "agent_exposed": "affirmed"
+        },
+        "reason_codes": ["execution_closure_proven", "calibration_missing", "held_out_validation_missing"],
+        "claim_scope_ceiling": ["exploration", "synthetic_consistency"]
+      },
+      {
+        "field_id": "s6.fabric.scale_out_bandwidth_gbps",
+        "request_identity": "tilesim.bridge.create_run_request.v1",
+        "request_json_pointer": "/overrides/fabric/scale_out_bandwidth_gbps",
+        "applicability_status": "available",
+        "resolved_fidelity": "Analytical",
+        "execution_evidence": "tests/test_modular_fabric.cpp:scale-out analytical module execution",
+        "capability_state": {
+          "described": "affirmed",
+          "accepted": "affirmed",
+          "validated": "affirmed",
+          "lowered": "affirmed",
+          "executed": "affirmed",
+          "observable": "affirmed",
+          "calibrated": "denied",
+          "held_out_validated": "denied",
+          "agent_exposed": "affirmed"
+        },
+        "reason_codes": [
+          "execution_closure_proven",
+          "resolved_scale_out_analytical",
+          "calibration_missing",
+          "held_out_validation_missing"
+        ],
+        "claim_scope_ceiling": ["exploration", "synthetic_consistency"]
+      },
+      {
+        "field_id": "s6.fabric.scale_out_latency_us",
+        "request_identity": "tilesim.bridge.create_run_request.v1",
+        "request_json_pointer": "/overrides/fabric/scale_out_latency_us",
+        "applicability_status": "available",
+        "resolved_fidelity": "Analytical",
+        "execution_evidence": "tests/test_modular_fabric.cpp:scale-out analytical module execution",
+        "capability_state": {
+          "described": "affirmed",
+          "accepted": "affirmed",
+          "validated": "affirmed",
+          "lowered": "affirmed",
+          "executed": "affirmed",
+          "observable": "affirmed",
+          "calibrated": "denied",
+          "held_out_validated": "denied",
+          "agent_exposed": "affirmed"
+        },
+        "reason_codes": [
+          "execution_closure_proven",
+          "resolved_scale_out_analytical",
+          "calibration_missing",
+          "held_out_validation_missing"
+        ],
+        "claim_scope_ceiling": ["exploration", "synthetic_consistency"]
+      }
+    ],
+    "profile_families": [
+      {
+        "family": "model",
+        "schema_identity": "tilesim.bridge.agent_orchestration_model_profile.v1",
+        "schema_status": "publication_candidate",
+        "actual_profile_count": 0,
+        "data_status": "profile_missing",
+        "runtime_availability": "unavailable"
+      },
+      {
+        "family": "engine",
+        "schema_identity": "tilesim.bridge.agent_orchestration_engine_profile.v1",
+        "schema_status": "publication_candidate",
+        "actual_profile_count": 0,
+        "data_status": "conditional",
+        "runtime_availability": "unavailable"
+      },
+      {
+        "family": "device",
+        "schema_identity": "tilesim.bridge.agent_orchestration_device_profile.v1",
+        "schema_status": "publication_candidate",
+        "actual_profile_count": 0,
+        "data_status": "profile_missing",
+        "runtime_availability": "unavailable"
+      },
+      {
+        "family": "topology",
+        "schema_identity": "tilesim.bridge.agent_orchestration_topology_profile.v1",
+        "schema_status": "publication_candidate",
+        "actual_profile_count": 0,
+        "data_status": "profile_missing",
+        "runtime_availability": "unavailable"
+      },
+      {
+        "family": "workload",
+        "schema_identity": "tilesim.bridge.agent_orchestration_workload_profile.v1",
+        "schema_status": "publication_candidate",
+        "actual_profile_count": 0,
+        "data_status": "profile_missing",
+        "runtime_availability": "unavailable"
+      }
+    ],
+    "blocked_capabilities": [
+      { "capability": "model_selection", "required_profile_family": "model", "state": "not_exposed" },
+      { "capability": "device_selection", "required_profile_family": "device", "state": "not_exposed" },
+      { "capability": "engine_selection", "required_profile_family": "engine", "state": "not_exposed" },
+      { "capability": "tp_pp_ep", "required_profile_family": "topology", "state": "not_exposed" },
+      { "capability": "physical_kv_policy", "required_profile_family": "device", "state": "not_exposed" },
+      { "capability": "collective_algorithm", "required_profile_family": "topology", "state": "not_exposed" },
+      { "capability": "slo", "required_profile_family": "workload", "state": "not_exposed" }
+    ]
+  },
+  "drift_policy": {
+    "backend_revision_mismatch": "fail_closed",
+    "schema_set_revision_mismatch": "fail_closed",
+    "experiment_descriptor_revision_mismatch": "fail_closed",
+    "catalog_revision_mismatch": "fail_closed",
+    "unknown_identity_or_status": "fail_closed"
+  },
+  "dor_gate_inputs": {
+    "formal_capability_contract": "publication_candidate",
+    "bridge_immutable_snapshot": "unavailable",
+    "generated_types": "missing",
+    "runtime_validator": "missing",
+    "eight_field_execution_closure": "affirmed",
+    "five_profile_schema_publication": "publication_candidate",
+    "profile_missing_representation": "affirmed",
+    "excluded_domains_not_exposed": "affirmed",
+    "f8_contract_compatibility": "breaking_under_reused_v1_identity",
+    "f8_named_owner_handoff": "not_verified",
+    "git_reproducible_target_revision": "missing",
+    "cross_artifact_revision_coherence": "not_proven",
+    "fixture_development_independent_of_5173": "affirmed"
+  }
+}

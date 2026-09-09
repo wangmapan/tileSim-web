@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/publication-candidates/agent-orchestration-phase0b/engine-profile.schema.json",
+  "x-tilesim-contract-status": "publication_candidate",
+  "x-tilesim-schema-identity": "tilesim.bridge.agent_orchestration_engine_profile.v1",
+  "title": "AgentOrchestrationEngineProfile",
+  "allOf": [
+    {
+      "$ref": "common.schema.json#/$defs/profileEnvelope"
+    },
+    {
+      "type": "object",
+      "required": [
+        "engine_family",
+        "software_version_range",
+        "semantic_profile_identity",
+        "semantic_profile_revision",
+        "triggers",
+        "owned_state",
+        "ordered_decisions",
+        "tie_breaking",
+        "batching",
+        "prefill_decode",
+        "preemption",
+        "prefix_kv_interaction",
+        "feature_support",
+        "output_events",
+        "adjacent_module_interfaces",
+        "trace_replay_support",
+        "dynamic_state_machine_support"
+      ],
+      "properties": {
+        "schema_identity": {
+          "const": "tilesim.bridge.agent_orchestration_engine_profile.v1"
+        },
+        "profile_family": {
+          "const": "engine"
+        },
+        "engine_family": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "software_version_range": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "semantic_profile_identity": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "semantic_profile_revision": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "triggers": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "owned_state": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "ordered_decisions": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "tie_breaking": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "batching": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "prefill_decode": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "preemption": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "prefix_kv_interaction": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "feature_support": {
+          "type": "object",
+          "required": [
+            "tp",
+            "pp",
+            "ep",
+            "moe",
+            "disaggregation",
+            "speculative_decode"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "tp": {
+              "$ref": "common.schema.json#/$defs/supportState"
+            },
+            "pp": {
+              "$ref": "common.schema.json#/$defs/supportState"
+            },
+            "ep": {
+              "$ref": "common.schema.json#/$defs/supportState"
+            },
+            "moe": {
+              "$ref": "common.schema.json#/$defs/supportState"
+            },
+            "disaggregation": {
+              "$ref": "common.schema.json#/$defs/supportState"
+            },
+            "speculative_decode": {
+              "$ref": "common.schema.json#/$defs/supportState"
+            }
+          }
+        },
+        "output_events": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "adjacent_module_interfaces": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "trace_replay_support": {
+          "$ref": "common.schema.json#/$defs/supportState"
+        },
+        "dynamic_state_machine_support": {
+          "$ref": "common.schema.json#/$defs/supportState"
+        }
+      }
+    }
+  ],
+  "unevaluatedProperties": false
+}
