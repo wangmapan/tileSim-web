@@ -263,7 +263,7 @@ function pythonJsonDigest(rawDocuments) {
     "encoded=json.dumps(value,sort_keys=True,separators=(',',':')).encode('utf-8')",
     "print('sha256:'+hashlib.sha256(encoded).hexdigest())",
   ].join(";");
-  const result = spawnSync("python", ["-c", program], {
+  const result = spawnSync("python", ["-X", "utf8", "-c", program], {
     input: JSON.stringify(rawDocuments),
     encoding: "utf8",
     stdio: ["pipe", "pipe", "pipe"],
@@ -281,7 +281,7 @@ function committedDescriptorRevision(repository, revision) {
     "exec(compile(source,'experiment_descriptor.py','exec'),namespace)",
     "print(namespace['DESCRIPTOR_REVISION'])",
   ].join(";");
-  const result = spawnSync("python", ["-c", program], {
+  const result = spawnSync("python", ["-X", "utf8", "-c", program], {
     input: JSON.stringify(source),
     encoding: "utf8",
     stdio: ["pipe", "pipe", "pipe"],
@@ -325,7 +325,7 @@ function buildCommittedSnapshot(extractedRoot, releaseMetadata) {
     "from contracts.agent_orchestration_capability.contract import build_snapshot",
     "print(json.dumps(build_snapshot(json.load(sys.stdin)),sort_keys=True,separators=(',',':'))) ",
   ].join(";");
-  const result = spawnSync("python", ["-c", program], {
+  const result = spawnSync("python", ["-X", "utf8", "-c", program], {
     cwd: join(extractedRoot, "bridge"),
     input: JSON.stringify(releaseMetadata),
     encoding: "utf8",

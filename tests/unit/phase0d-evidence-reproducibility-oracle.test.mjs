@@ -11,6 +11,7 @@ import {
   evidenceAnchors,
   validateCatalogEvidence,
   validateEvidenceReference,
+  verifyCommittedWebRelease,
 } from "../oracles/phase0d-evidence-reproducibility.mjs";
 
 const webRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -156,4 +157,24 @@ test("current catalog reports only the three known dirty-only 09c22c0 references
     );
     assert.equal(result.verified.length, 8);
   }
+});
+
+test("committed release closure uses UTF-8 for cross-runtime digest checks", () => {
+  const catalog = JSON.parse(readFileSync(catalogPath, "utf8"));
+  const backendRevisions = new Set(
+    catalog.parameter_descriptors.flatMap((descriptor) =>
+      descriptor.execution_evidence.map((evidence) => evidence.revision),
+    ),
+  );
+  assert.equal(backendRevisions.size, 1);
+  const webRevision = git(webRoot, "rev-parse", "HEAD");
+  const result = verifyCommittedWebRelease({
+    webRepository: webRoot,
+    webRevision,
+    backendRepository: backendRoot,
+    backendRevision: [...backendRevisions][0],
+    checkGenerated: false,
+  });
+  assert.equal(result.web_revision, webRevision);
+  assert.equal(result.verified_evidence_count, 8);
 });
