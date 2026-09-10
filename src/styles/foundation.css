@@ -512,6 +512,13 @@ summary:focus-visible {
   margin-left: var(--sidebar-width);
   min-width: 0;
 }
+@media (min-width: 1600px) {
+  .app-shell[data-agent-copilot-state="open"] .app-main,
+  .app-shell[data-agent-copilot-state="expanded"] .app-main,
+  .app-shell[data-agent-copilot-state="collapsed"] .app-main {
+    margin-right: var(--agent-copilot-dock-width, 0px);
+  }
+}
 .app-header {
   position: sticky;
   z-index: 20;

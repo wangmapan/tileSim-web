@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/proposals/agent-orchestration-phase0/workload-profile.schema.json",
+  "x-tilesim-contract-status": "proposal_only",
+  "x-tilesim-schema-identity": "tilesim.proposal.agent_orchestration.workload_profile.v1alpha1",
+  "title": "Phase0WorkloadProfileProposal",
+  "allOf": [
+    {
+      "$ref": "profile-common.schema.json#/$defs/profileEnvelope"
+    },
+    {
+      "type": "object",
+      "required": [
+        "task_scenario_identity",
+        "task_scenario_revision",
+        "request_count",
+        "prompt_length_distribution",
+        "decode_length_distribution",
+        "arrival_process",
+        "arrival_rate",
+        "burst",
+        "concurrency",
+        "model_constraints",
+        "engine_constraints",
+        "session_prefix_cache_reuse",
+        "trace_source",
+        "generation_method",
+        "calibration_level",
+        "allowed_claim_scope",
+        "scaling_policy",
+        "seed",
+        "reproducibility_fields",
+        "allowed_overrides"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "tilesim.proposal.agent_orchestration.workload_profile.v1alpha1"
+        },
+        "profile_family": {
+          "const": "workload"
+        },
+        "task_scenario_identity": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "task_scenario_revision": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "request_count": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "prompt_length_distribution": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "decode_length_distribution": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "arrival_process": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "arrival_rate": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "burst": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "concurrency": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "model_constraints": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "engine_constraints": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "session_prefix_cache_reuse": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "trace_source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "source_mode",
+            "source_identity",
+            "source_revision"
+          ],
+          "properties": {
+            "source_mode": {
+              "enum": [
+                "real_trace",
+                "synthetic_trace",
+                "compatibility_harness_trace"
+              ]
+            },
+            "source_identity": {
+              "$ref": "common.schema.json#/$defs/stableId"
+            },
+            "source_revision": {
+              "$ref": "common.schema.json#/$defs/revision"
+            }
+          }
+        },
+        "generation_method": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "calibration_level": {
+          "enum": [
+            "uncalibrated",
+            "calibrated",
+            "held_out_validated"
+          ]
+        },
+        "allowed_claim_scope": {
+          "enum": [
+            "exploration",
+            "synthetic_consistency",
+            "limited_extrapolation",
+            "similar_regime_conditional_prediction",
+            "real_calibrated_validation"
+          ]
+        },
+        "scaling_policy": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "seed": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "reproducibility_fields": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "allowed_overrides": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "trace_source": {
+                "properties": {
+                  "source_mode": {
+                    "const": "synthetic_trace"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "calibration_level": {
+                "const": "uncalibrated"
+              },
+              "allowed_claim_scope": {
+                "enum": [
+                  "exploration",
+                  "synthetic_consistency"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "trace_source": {
+                "properties": {
+                  "source_mode": {
+                    "const": "compatibility_harness_trace"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "calibration_level": {
+                "const": "uncalibrated"
+              },
+              "allowed_claim_scope": {
+                "const": "exploration"
+              }
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "unevaluatedProperties": false
+}

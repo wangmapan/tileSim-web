@@ -1,19 +1,28 @@
 param(
-    [string]$RepositoryRoot = "D:\tileSim",
-    [string]$BackendRoot = "D:\tileSim-backend",
+    [string]$RepositoryRoot = "",
+    [string]$BackendRoot = "",
     [string]$WslDistro = "Ubuntu-24.04",
+    [string]$BuildRootWsl = "",
     [switch]$NoFetch,
     [switch]$NoRestart
 )
 
 $ErrorActionPreference = "Stop"
-$webRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$repository = (Resolve-Path -LiteralPath $RepositoryRoot).Path
-$backend = [System.IO.Path]::GetFullPath($BackendRoot)
+Import-Module (Join-Path $PSScriptRoot "deployment-common.psm1") -Force
+$webRoot = Resolve-TileSimWebRoot $PSScriptRoot
+$repositoryPath = Resolve-TileSimBackendRepositoryRoot $webRoot $RepositoryRoot
+if (-not (Test-Path -LiteralPath $repositoryPath)) {
+    throw "The TileSim backend repository was not found: $repositoryPath. Run scripts/bootstrap-workbench.ps1 first or pass -RepositoryRoot."
+}
+$repository = (Resolve-Path -LiteralPath $repositoryPath).Path
+$backend = Resolve-TileSimBackendDeploymentRoot $webRoot $BackendRoot
+$webRootWsl = ConvertTo-TileSimWslPath $webRoot
+Assert-TileSimWslDistro $WslDistro
+$resolvedBuildRootWsl = Resolve-TileSimWslBuildRoot $WslDistro $BuildRootWsl
 $runtimeRoot = Join-Path $webRoot "runtime"
 $manifestPath = Join-Path $runtimeRoot "backend-current.json"
 $Ref = "origin/main"
-$node = "C:\Users\mapanwang\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe"
+$node = Resolve-TileSimNode
 $mutex = [System.Threading.Mutex]::new($false, "Local\TileSimBackendUpdate")
 
 function Invoke-Checked {
@@ -80,16 +89,9 @@ function Update-OriginWithRetry {
     throw "Could not refresh origin after $attempts attempts. Check the GitHub connection or proxy, then retry."
 }
 
-function Convert-ToWslPath {
-    param([string]$WindowsPath)
-    $full = [System.IO.Path]::GetFullPath($WindowsPath)
-    if ($full -notmatch '^([A-Za-z]):\\(.*)$') { throw "Only absolute Windows drive paths are supported: $full" }
-    return "/mnt/$($matches[1].ToLower())/$($matches[2].Replace('\', '/'))"
-}
-
 function Get-SourceStateDigest {
     param([string]$SourceRootWsl)
-    $output = @(& wsl.exe -d $WslDistro --exec env "TILESIM_ROOT=$SourceRootWsl" python3 "/mnt/d/tileSim-web/bridge/server.py" --print-source-state-digest)
+    $output = @(& wsl.exe -d $WslDistro --exec env "TILESIM_ROOT=$SourceRootWsl" python3 "$webRootWsl/bridge/server.py" --print-source-state-digest)
     if ($LASTEXITCODE -ne 0) { throw "Could not calculate the backend source-state digest." }
     $digest = $output | Where-Object { $_ -match '^[0-9a-f]{64}$' } | Select-Object -Last 1
     if (-not $digest) { throw "The backend source-state digest was not returned." }
@@ -108,7 +110,7 @@ function Get-DirectoryDigest {
 }
 
 function Get-SchemaSetRevision {
-    $output = @(& wsl.exe -d $WslDistro --exec python3 "/mnt/d/tileSim-web/bridge/server.py" --print-schema-set-revision)
+    $output = @(& wsl.exe -d $WslDistro --exec python3 "$webRootWsl/bridge/server.py" --print-schema-set-revision)
     if ($LASTEXITCODE -ne 0) { throw "Could not calculate the Bridge schema-set revision." }
     $revision = $output | Where-Object { $_ -match '^sha256:[0-9a-f]{64}$' } | Select-Object -Last 1
     if (-not $revision) { throw "The Bridge schema-set revision was not returned." }
@@ -176,9 +178,9 @@ try {
     }
     Invoke-Checked "git" @("-C", $backend, "switch", "--detach", $targetRevision)
 
-    $backendWsl = Convert-ToWslPath $backend
+    $backendWsl = ConvertTo-TileSimWslPath $backend
     $shortRevision = $targetRevision.Substring(0, 12)
-    $buildDirWsl = "/home/mapanwang/tilesim-backend-builds/$shortRevision"
+    $buildDirWsl = "$resolvedBuildRootWsl/backend-builds/$shortRevision"
     $sourceDigest = Get-SourceStateDigest $backendWsl
     $webRevision = (& git -C $webRoot rev-parse HEAD).Trim()
     if ($LASTEXITCODE -ne 0 -or $webRevision -notmatch '^[0-9a-f]{40}$') {
@@ -188,7 +190,7 @@ try {
     Invoke-Checked "wsl.exe" @("-d", $WslDistro, "--exec", "env", "TILESIM_WSL_BUILD_DIR=$buildDirWsl", "bash", "$backendWsl/scripts/build_wsl.sh")
     Invoke-Checked "wsl.exe" @("-d", $WslDistro, "--exec", "ctest", "--test-dir", $buildDirWsl, "--output-on-failure")
     Write-Output "Backend validation passed; validating and rebuilding the frontend once..."
-    Invoke-Checked "wsl.exe" @("-d", $WslDistro, "--exec", "python3", "-m", "py_compile", "/mnt/d/tileSim-web/bridge/server.py")
+    Invoke-Checked "wsl.exe" @("-d", $WslDistro, "--exec", "python3", "-m", "py_compile", "$webRootWsl/bridge/server.py")
     Invoke-Checked $node @((Join-Path $webRoot "node_modules\vitest\vitest.mjs"), "run") $webRoot
     Invoke-Checked $node @((Join-Path $webRoot "node_modules\vite\bin\vite.js"), "build") $webRoot
 
@@ -203,8 +205,8 @@ try {
     $webBuildDigest = Get-DirectoryDigest (Join-Path $webRoot "dist") ""
     $schemaSetRevision = Get-SchemaSetRevision
     $webRelease = New-WebReleaseSnapshot $webRevision $webSourceDigest $webBuildDigest $schemaSetRevision
-    $webReleaseRootWsl = Convert-ToWslPath $webRelease.release_root_windows
-    $webStateRootWsl = Convert-ToWslPath $webRoot
+    $webReleaseRootWsl = ConvertTo-TileSimWslPath $webRelease.release_root_windows
+    $webStateRootWsl = ConvertTo-TileSimWslPath $webRoot
 
     New-Item -ItemType Directory -Path $runtimeRoot -Force | Out-Null
     $manifest = [ordered]@{
@@ -229,7 +231,7 @@ try {
         tilesim_root_wsl = $backendWsl
         build_dir_wsl = $buildDirWsl
         tilesim_cli_wsl = "$buildDirWsl/TileSimCLI"
-        manifest_path_wsl = Convert-ToWslPath $manifestPath
+        manifest_path_wsl = ConvertTo-TileSimWslPath $manifestPath
         deployed_at = [DateTimeOffset]::Now.ToString("o")
         validation = [ordered]@{
             tilesim_ctest = "passed"
@@ -241,21 +243,30 @@ try {
 
     if (-not $NoRestart) {
         $restartAttempted = $true
-        & (Join-Path $PSScriptRoot "start-backend.ps1") -ManifestPath $manifestPath -WslDistro $WslDistro
+        & (Join-Path $PSScriptRoot "start-workbench.ps1") -ManifestPath $manifestPath -WslDistro $WslDistro
         if ($LASTEXITCODE -ne 0) { throw "Backend build passed, but bridge restart failed." }
     }
     Write-Output "TileSim backend deployed: $Ref -> $targetRevision"
 } catch {
     $deploymentError = $_
     $rollbackError = $null
-    if ($previousManifest.source_revision -and (Test-Path -LiteralPath $backend)) {
+    $previousBackendRoot = if ($previousManifest.source_root_windows) {
+        [System.IO.Path]::GetFullPath([string]$previousManifest.source_root_windows)
+    } else {
+        ""
+    }
+    if (
+        $previousManifest.source_revision -and
+        $previousBackendRoot -eq $backend -and
+        (Test-Path -LiteralPath $backend)
+    ) {
         & git -C $backend switch --detach $previousManifest.source_revision | Out-Null
     }
     if ($manifestWritten -and $null -ne $previousManifestText) {
         Write-AtomicTextFile $manifestPath $previousManifestText
         if ($restartAttempted) {
             try {
-                & (Join-Path $PSScriptRoot "start-backend.ps1") -ManifestPath $manifestPath -WslDistro $WslDistro
+                & (Join-Path $PSScriptRoot "start-workbench.ps1") -ManifestPath $manifestPath -WslDistro $WslDistro
                 if ($LASTEXITCODE -ne 0) { throw "Previous Bridge restart returned exit code $LASTEXITCODE." }
                 Write-Warning "Deployment failed; the previous deployment manifest and Bridge service were restored."
             } catch {

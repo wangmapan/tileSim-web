@@ -1,0 +1,4632 @@
+{
+  "corpus_identity": "tilesim.web.eval.agent_orchestration.phase1.intent_corpus.v1",
+  "dataset_status": "fixture_synthetic_consistency_only",
+  "prohibited_claims": ["live", "calibrated", "held_out_real_validation"],
+  "frozen_contract_revision": "tilesim.web.agent_orchestration.phase1.local.v1",
+  "target_request_identity": "tilesim.bridge.create_run_request.v1",
+  "case_count": 128,
+  "splits": {
+    "train": 30,
+    "validation": 32,
+    "test": 34,
+    "held_out_adversarial": 32
+  },
+  "cases": [
+    {
+      "case_id": "phase1-valid-001",
+      "split": "train",
+      "locale": "zh-CN",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "请把通信负载倍率设为 0.25 ratio，只生成 draft",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s0.workload.message_size_multiplier",
+            "value_type": "number",
+            "serialized_value": "0.25",
+            "unit": "ratio",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "请把通信负载倍率设为 0.25 ratio，只生成 draft",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-002",
+      "split": "validation",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "Set message size multiplier to 1 ratio; 只要草案",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s0.workload.message_size_multiplier",
+            "value_type": "number",
+            "serialized_value": "1",
+            "unit": "ratio",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set message size multiplier to 1 ratio; 只要草案",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-003",
+      "split": "test",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "通信负载倍率 / message size multiplier = 2.5 ratio, do not run",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s0.workload.message_size_multiplier",
+            "value_type": "number",
+            "serialized_value": "2.5",
+            "unit": "ratio",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "通信负载倍率 / message size multiplier = 2.5 ratio, do not run",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-004",
+      "split": "held_out_adversarial",
+      "locale": "zh-CN",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "请把通信负载倍率设为 4 ratio，只生成 draft",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s0.workload.message_size_multiplier",
+            "value_type": "number",
+            "serialized_value": "4",
+            "unit": "ratio",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "请把通信负载倍率设为 4 ratio，只生成 draft",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-005",
+      "split": "train",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "Set message size multiplier to 6 ratio; 只要草案",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s0.workload.message_size_multiplier",
+            "value_type": "number",
+            "serialized_value": "6",
+            "unit": "ratio",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set message size multiplier to 6 ratio; 只要草案",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-006",
+      "split": "validation",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "通信负载倍率 / message size multiplier = 8.0 ratio, do not run",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s0.workload.message_size_multiplier",
+            "value_type": "number",
+            "serialized_value": "8.0",
+            "unit": "ratio",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "通信负载倍率 / message size multiplier = 8.0 ratio, do not run",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-007",
+      "split": "test",
+      "locale": "zh-CN",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "请把批调度策略设为 fifo scheduler_policy，只生成 draft",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.batch_scheduler",
+            "value_type": "enum",
+            "serialized_value": "fifo",
+            "unit": "scheduler_policy",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "请把批调度策略设为 fifo scheduler_policy，只生成 draft",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-008",
+      "split": "held_out_adversarial",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "Set batch scheduler to decode_priority scheduler_policy; 只要草案",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.batch_scheduler",
+            "value_type": "enum",
+            "serialized_value": "decode_priority",
+            "unit": "scheduler_policy",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set batch scheduler to decode_priority scheduler_policy; 只要草案",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-009",
+      "split": "train",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "批调度策略 / batch scheduler = fabric_backpressure_aware scheduler_policy, do not run",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.batch_scheduler",
+            "value_type": "enum",
+            "serialized_value": "fabric_backpressure_aware",
+            "unit": "scheduler_policy",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "批调度策略 / batch scheduler = fabric_backpressure_aware scheduler_policy, do not run",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-010",
+      "split": "validation",
+      "locale": "zh-CN",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "请把批调度策略设为 fifo scheduler_policy，只生成 draft",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.batch_scheduler",
+            "value_type": "enum",
+            "serialized_value": "fifo",
+            "unit": "scheduler_policy",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "请把批调度策略设为 fifo scheduler_policy，只生成 draft",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-011",
+      "split": "test",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "Set batch scheduler to decode_priority scheduler_policy; 只要草案",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.batch_scheduler",
+            "value_type": "enum",
+            "serialized_value": "decode_priority",
+            "unit": "scheduler_policy",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set batch scheduler to decode_priority scheduler_policy; 只要草案",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-012",
+      "split": "held_out_adversarial",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "批调度策略 / batch scheduler = fabric_backpressure_aware scheduler_policy, do not run",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.batch_scheduler",
+            "value_type": "enum",
+            "serialized_value": "fabric_backpressure_aware",
+            "unit": "scheduler_policy",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "批调度策略 / batch scheduler = fabric_backpressure_aware scheduler_policy, do not run",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-013",
+      "split": "train",
+      "locale": "zh-CN",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "请把最大 batch设为 1 requests_per_batch，只生成 draft",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.max_batch_size",
+            "value_type": "integer",
+            "serialized_value": "1",
+            "unit": "requests_per_batch",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "请把最大 batch设为 1 requests_per_batch，只生成 draft",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-014",
+      "split": "validation",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "Set max batch size to 2 requests_per_batch; 只要草案",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.max_batch_size",
+            "value_type": "integer",
+            "serialized_value": "2",
+            "unit": "requests_per_batch",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set max batch size to 2 requests_per_batch; 只要草案",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-015",
+      "split": "test",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "最大 batch / max batch size = 8 requests_per_batch, do not run",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.max_batch_size",
+            "value_type": "integer",
+            "serialized_value": "8",
+            "unit": "requests_per_batch",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "最大 batch / max batch size = 8 requests_per_batch, do not run",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-016",
+      "split": "held_out_adversarial",
+      "locale": "zh-CN",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "请把最大 batch设为 16 requests_per_batch，只生成 draft",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.max_batch_size",
+            "value_type": "integer",
+            "serialized_value": "16",
+            "unit": "requests_per_batch",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "请把最大 batch设为 16 requests_per_batch，只生成 draft",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-017",
+      "split": "train",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "Set max batch size to 32 requests_per_batch; 只要草案",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.max_batch_size",
+            "value_type": "integer",
+            "serialized_value": "32",
+            "unit": "requests_per_batch",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set max batch size to 32 requests_per_batch; 只要草案",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-018",
+      "split": "validation",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "最大 batch / max batch size = 64 requests_per_batch, do not run",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.max_batch_size",
+            "value_type": "integer",
+            "serialized_value": "64",
+            "unit": "requests_per_batch",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "最大 batch / max batch size = 64 requests_per_batch, do not run",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-019",
+      "split": "test",
+      "locale": "zh-CN",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "请把KV 容量设为 256 tokens，只生成 draft",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.kv_capacity_tokens",
+            "value_type": "integer",
+            "serialized_value": "256",
+            "unit": "tokens",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "请把KV 容量设为 256 tokens，只生成 draft",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-020",
+      "split": "held_out_adversarial",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "Set KV capacity to 1024 tokens; 只要草案",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.kv_capacity_tokens",
+            "value_type": "integer",
+            "serialized_value": "1024",
+            "unit": "tokens",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set KV capacity to 1024 tokens; 只要草案",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-021",
+      "split": "train",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "KV 容量 / KV capacity = 4096 tokens, do not run",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.kv_capacity_tokens",
+            "value_type": "integer",
+            "serialized_value": "4096",
+            "unit": "tokens",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "KV 容量 / KV capacity = 4096 tokens, do not run",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-022",
+      "split": "validation",
+      "locale": "zh-CN",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "请把KV 容量设为 65536 tokens，只生成 draft",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.kv_capacity_tokens",
+            "value_type": "integer",
+            "serialized_value": "65536",
+            "unit": "tokens",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "请把KV 容量设为 65536 tokens，只生成 draft",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-023",
+      "split": "test",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "Set KV capacity to 524288 tokens; 只要草案",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.kv_capacity_tokens",
+            "value_type": "integer",
+            "serialized_value": "524288",
+            "unit": "tokens",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set KV capacity to 524288 tokens; 只要草案",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-024",
+      "split": "held_out_adversarial",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "KV 容量 / KV capacity = 1000000 tokens, do not run",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.kv_capacity_tokens",
+            "value_type": "integer",
+            "serialized_value": "1000000",
+            "unit": "tokens",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "KV 容量 / KV capacity = 1000000 tokens, do not run",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-025",
+      "split": "train",
+      "locale": "zh-CN",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "请把纵向扩展网络带宽设为 25 Gbps，只生成 draft",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_up_bandwidth_gbps",
+            "value_type": "number",
+            "serialized_value": "25",
+            "unit": "Gbps",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "请把纵向扩展网络带宽设为 25 Gbps，只生成 draft",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-026",
+      "split": "validation",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "Set scale-up bandwidth to 100 Gbps; 只要草案",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_up_bandwidth_gbps",
+            "value_type": "number",
+            "serialized_value": "100",
+            "unit": "Gbps",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set scale-up bandwidth to 100 Gbps; 只要草案",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-027",
+      "split": "test",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "纵向扩展网络带宽 / scale-up bandwidth = 400 Gbps, do not run",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_up_bandwidth_gbps",
+            "value_type": "number",
+            "serialized_value": "400",
+            "unit": "Gbps",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "纵向扩展网络带宽 / scale-up bandwidth = 400 Gbps, do not run",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-028",
+      "split": "held_out_adversarial",
+      "locale": "zh-CN",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "请把纵向扩展网络带宽设为 800 Gbps，只生成 draft",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_up_bandwidth_gbps",
+            "value_type": "number",
+            "serialized_value": "800",
+            "unit": "Gbps",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "请把纵向扩展网络带宽设为 800 Gbps，只生成 draft",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-029",
+      "split": "train",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "Set scale-up bandwidth to 1600 Gbps; 只要草案",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_up_bandwidth_gbps",
+            "value_type": "number",
+            "serialized_value": "1600",
+            "unit": "Gbps",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set scale-up bandwidth to 1600 Gbps; 只要草案",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-030",
+      "split": "validation",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "纵向扩展网络带宽 / scale-up bandwidth = 2000 Gbps, do not run",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_up_bandwidth_gbps",
+            "value_type": "number",
+            "serialized_value": "2000",
+            "unit": "Gbps",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "纵向扩展网络带宽 / scale-up bandwidth = 2000 Gbps, do not run",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-031",
+      "split": "test",
+      "locale": "zh-CN",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "请把纵向扩展网络时延设为 0.05 us，只生成 draft",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_up_latency_us",
+            "value_type": "number",
+            "serialized_value": "0.05",
+            "unit": "us",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "请把纵向扩展网络时延设为 0.05 us，只生成 draft",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-032",
+      "split": "held_out_adversarial",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "Set scale-up latency to 0.1 us; 只要草案",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_up_latency_us",
+            "value_type": "number",
+            "serialized_value": "0.1",
+            "unit": "us",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set scale-up latency to 0.1 us; 只要草案",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-033",
+      "split": "train",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "纵向扩展网络时延 / scale-up latency = 0.8 us, do not run",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_up_latency_us",
+            "value_type": "number",
+            "serialized_value": "0.8",
+            "unit": "us",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "纵向扩展网络时延 / scale-up latency = 0.8 us, do not run",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-034",
+      "split": "validation",
+      "locale": "zh-CN",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "请把纵向扩展网络时延设为 10 us，只生成 draft",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_up_latency_us",
+            "value_type": "number",
+            "serialized_value": "10",
+            "unit": "us",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "请把纵向扩展网络时延设为 10 us，只生成 draft",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-035",
+      "split": "test",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "Set scale-up latency to 50 us; 只要草案",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_up_latency_us",
+            "value_type": "number",
+            "serialized_value": "50",
+            "unit": "us",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set scale-up latency to 50 us; 只要草案",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-036",
+      "split": "held_out_adversarial",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "纵向扩展网络时延 / scale-up latency = 100 us, do not run",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_up_latency_us",
+            "value_type": "number",
+            "serialized_value": "100",
+            "unit": "us",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "纵向扩展网络时延 / scale-up latency = 100 us, do not run",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-037",
+      "split": "train",
+      "locale": "zh-CN",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "请把横向扩展网络带宽设为 10 Gbps，只生成 draft",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_out_bandwidth_gbps",
+            "value_type": "number",
+            "serialized_value": "10",
+            "unit": "Gbps",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "请把横向扩展网络带宽设为 10 Gbps，只生成 draft",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-038",
+      "split": "validation",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "Set scale-out bandwidth to 50 Gbps; 只要草案",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_out_bandwidth_gbps",
+            "value_type": "number",
+            "serialized_value": "50",
+            "unit": "Gbps",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set scale-out bandwidth to 50 Gbps; 只要草案",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-039",
+      "split": "test",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "横向扩展网络带宽 / scale-out bandwidth = 100 Gbps, do not run",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_out_bandwidth_gbps",
+            "value_type": "number",
+            "serialized_value": "100",
+            "unit": "Gbps",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "横向扩展网络带宽 / scale-out bandwidth = 100 Gbps, do not run",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-040",
+      "split": "held_out_adversarial",
+      "locale": "zh-CN",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "请把横向扩展网络带宽设为 400 Gbps，只生成 draft",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_out_bandwidth_gbps",
+            "value_type": "number",
+            "serialized_value": "400",
+            "unit": "Gbps",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "请把横向扩展网络带宽设为 400 Gbps，只生成 draft",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-041",
+      "split": "train",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "Set scale-out bandwidth to 1000 Gbps; 只要草案",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_out_bandwidth_gbps",
+            "value_type": "number",
+            "serialized_value": "1000",
+            "unit": "Gbps",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set scale-out bandwidth to 1000 Gbps; 只要草案",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-042",
+      "split": "validation",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "横向扩展网络带宽 / scale-out bandwidth = 2000 Gbps, do not run",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_out_bandwidth_gbps",
+            "value_type": "number",
+            "serialized_value": "2000",
+            "unit": "Gbps",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "横向扩展网络带宽 / scale-out bandwidth = 2000 Gbps, do not run",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-043",
+      "split": "test",
+      "locale": "zh-CN",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "请把横向扩展网络时延设为 0.1 us，只生成 draft",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_out_latency_us",
+            "value_type": "number",
+            "serialized_value": "0.1",
+            "unit": "us",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "请把横向扩展网络时延设为 0.1 us，只生成 draft",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-044",
+      "split": "held_out_adversarial",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "Set scale-out latency to 1 us; 只要草案",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_out_latency_us",
+            "value_type": "number",
+            "serialized_value": "1",
+            "unit": "us",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set scale-out latency to 1 us; 只要草案",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-045",
+      "split": "train",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "横向扩展网络时延 / scale-out latency = 4 us, do not run",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_out_latency_us",
+            "value_type": "number",
+            "serialized_value": "4",
+            "unit": "us",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "横向扩展网络时延 / scale-out latency = 4 us, do not run",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-046",
+      "split": "validation",
+      "locale": "zh-CN",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "请把横向扩展网络时延设为 25 us，只生成 draft",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_out_latency_us",
+            "value_type": "number",
+            "serialized_value": "25",
+            "unit": "us",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "请把横向扩展网络时延设为 25 us，只生成 draft",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-047",
+      "split": "test",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "Set scale-out latency to 100 us; 只要草案",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_out_latency_us",
+            "value_type": "number",
+            "serialized_value": "100",
+            "unit": "us",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set scale-out latency to 100 us; 只要草案",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-valid-048",
+      "split": "held_out_adversarial",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "横向扩展网络时延 / scale-out latency = 500 us, do not run",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_out_latency_us",
+            "value_type": "number",
+            "serialized_value": "500",
+            "unit": "us",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "横向扩展网络时延 / scale-out latency = 500 us, do not run",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-boundary-049",
+      "split": "train",
+      "locale": "zh-CN",
+      "risk_class": "range",
+      "task": "configure_current_subset",
+      "input": "把通信负载倍率设为 0.24 ratio",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [
+          {
+            "field_id": "s0.workload.message_size_multiplier",
+            "value_type": "number",
+            "serialized_value": "0.24",
+            "unit": "ratio",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.minimum"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "把通信负载倍率设为 0.24 ratio",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-boundary-050",
+      "split": "validation",
+      "locale": "en-US",
+      "risk_class": "range",
+      "task": "configure_current_subset",
+      "input": "Set message size multiplier to 8.01 ratio",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [
+          {
+            "field_id": "s0.workload.message_size_multiplier",
+            "value_type": "number",
+            "serialized_value": "8.01",
+            "unit": "ratio",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.maximum"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set message size multiplier to 8.01 ratio",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-boundary-051",
+      "split": "test",
+      "locale": "zh-CN",
+      "risk_class": "enum",
+      "task": "configure_current_subset",
+      "input": "把批调度策略改成 round_robin",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.batch_scheduler",
+            "value_type": "enum",
+            "serialized_value": "round_robin",
+            "unit": "scheduler_policy",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.enum_not_allowed"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "把批调度策略改成 round_robin",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-boundary-052",
+      "split": "held_out_adversarial",
+      "locale": "en-US",
+      "risk_class": "enum",
+      "task": "configure_current_subset",
+      "input": "Set batch scheduler to unknown_policy",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.batch_scheduler",
+            "value_type": "enum",
+            "serialized_value": "unknown_policy",
+            "unit": "scheduler_policy",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.enum_not_allowed"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set batch scheduler to unknown_policy",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-boundary-053",
+      "split": "train",
+      "locale": "zh-CN",
+      "risk_class": "range",
+      "task": "configure_current_subset",
+      "input": "把最大 batch设为 0 requests_per_batch",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.max_batch_size",
+            "value_type": "integer",
+            "serialized_value": "0",
+            "unit": "requests_per_batch",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.minimum"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "把最大 batch设为 0 requests_per_batch",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-boundary-054",
+      "split": "validation",
+      "locale": "en-US",
+      "risk_class": "range",
+      "task": "configure_current_subset",
+      "input": "Set max batch size to 65 requests_per_batch",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.max_batch_size",
+            "value_type": "integer",
+            "serialized_value": "65",
+            "unit": "requests_per_batch",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.maximum"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set max batch size to 65 requests_per_batch",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-boundary-055",
+      "split": "test",
+      "locale": "zh-CN",
+      "risk_class": "range",
+      "task": "configure_current_subset",
+      "input": "把KV 容量设为 255 tokens",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.kv_capacity_tokens",
+            "value_type": "integer",
+            "serialized_value": "255",
+            "unit": "tokens",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.minimum"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "把KV 容量设为 255 tokens",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-boundary-056",
+      "split": "held_out_adversarial",
+      "locale": "en-US",
+      "risk_class": "range",
+      "task": "configure_current_subset",
+      "input": "Set KV capacity to 1000001 tokens",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.kv_capacity_tokens",
+            "value_type": "integer",
+            "serialized_value": "1000001",
+            "unit": "tokens",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.maximum"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set KV capacity to 1000001 tokens",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-boundary-057",
+      "split": "train",
+      "locale": "zh-CN",
+      "risk_class": "range",
+      "task": "configure_current_subset",
+      "input": "把纵向扩展网络带宽设为 24.9 Gbps",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_up_bandwidth_gbps",
+            "value_type": "number",
+            "serialized_value": "24.9",
+            "unit": "Gbps",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.minimum"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "把纵向扩展网络带宽设为 24.9 Gbps",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-boundary-058",
+      "split": "validation",
+      "locale": "en-US",
+      "risk_class": "range",
+      "task": "configure_current_subset",
+      "input": "Set scale-up bandwidth to 2000.1 Gbps",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_up_bandwidth_gbps",
+            "value_type": "number",
+            "serialized_value": "2000.1",
+            "unit": "Gbps",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.maximum"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set scale-up bandwidth to 2000.1 Gbps",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-boundary-059",
+      "split": "test",
+      "locale": "zh-CN",
+      "risk_class": "range",
+      "task": "configure_current_subset",
+      "input": "把纵向扩展网络时延设为 0.049 us",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_up_latency_us",
+            "value_type": "number",
+            "serialized_value": "0.049",
+            "unit": "us",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.minimum"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "把纵向扩展网络时延设为 0.049 us",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-boundary-060",
+      "split": "held_out_adversarial",
+      "locale": "en-US",
+      "risk_class": "range",
+      "task": "configure_current_subset",
+      "input": "Set scale-up latency to 100.1 us",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_up_latency_us",
+            "value_type": "number",
+            "serialized_value": "100.1",
+            "unit": "us",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.maximum"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set scale-up latency to 100.1 us",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-boundary-061",
+      "split": "train",
+      "locale": "zh-CN",
+      "risk_class": "range",
+      "task": "configure_current_subset",
+      "input": "把横向扩展网络带宽设为 9.9 Gbps",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_out_bandwidth_gbps",
+            "value_type": "number",
+            "serialized_value": "9.9",
+            "unit": "Gbps",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.minimum"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "把横向扩展网络带宽设为 9.9 Gbps",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-boundary-062",
+      "split": "validation",
+      "locale": "en-US",
+      "risk_class": "range",
+      "task": "configure_current_subset",
+      "input": "Set scale-out bandwidth to 2000.1 Gbps",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_out_bandwidth_gbps",
+            "value_type": "number",
+            "serialized_value": "2000.1",
+            "unit": "Gbps",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.maximum"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set scale-out bandwidth to 2000.1 Gbps",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-boundary-063",
+      "split": "test",
+      "locale": "zh-CN",
+      "risk_class": "range",
+      "task": "configure_current_subset",
+      "input": "把横向扩展网络时延设为 0.09 us",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_out_latency_us",
+            "value_type": "number",
+            "serialized_value": "0.09",
+            "unit": "us",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.minimum"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "把横向扩展网络时延设为 0.09 us",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-boundary-064",
+      "split": "held_out_adversarial",
+      "locale": "en-US",
+      "risk_class": "range",
+      "task": "configure_current_subset",
+      "input": "Set scale-out latency to 500.1 us",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_out_latency_us",
+            "value_type": "number",
+            "serialized_value": "500.1",
+            "unit": "us",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.maximum"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set scale-out latency to 500.1 us",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-equivalence-065",
+      "split": "validation",
+      "locale": "zh-CN",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "通信负载倍率 set to 2.5 ratio; build equivalent preview only",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s0.workload.message_size_multiplier",
+            "value_type": "number",
+            "serialized_value": "2.5",
+            "unit": "ratio",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "通信负载倍率 set to 2.5 ratio; build equivalent preview only",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only",
+      "canonical_equivalence": {
+        "form": {
+          "scenario_id": "s1_des_example",
+          "fidelity_policy": "des",
+          "gpu_participation_mode": "gpu_free",
+          "run_name": "",
+          "parameter_values": {
+            "s0.workload.message_size_multiplier": 2.5
+          }
+        },
+        "expected_request": {
+          "scenario_id": "s1_des_example",
+          "fidelity_policy": "des",
+          "gpu_participation_mode": "gpu_free",
+          "overrides": {
+            "workload": {
+              "message_size_multiplier": 2.5
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "phase1-equivalence-066",
+      "split": "validation",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "批调度策略 set to fabric_backpressure_aware scheduler_policy; build equivalent preview only",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.batch_scheduler",
+            "value_type": "enum",
+            "serialized_value": "fabric_backpressure_aware",
+            "unit": "scheduler_policy",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "批调度策略 set to fabric_backpressure_aware scheduler_policy; build equivalent preview only",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only",
+      "canonical_equivalence": {
+        "form": {
+          "scenario_id": "s1_des_example",
+          "fidelity_policy": "des",
+          "gpu_participation_mode": "gpu_free",
+          "run_name": "",
+          "parameter_values": {
+            "s1.runtime.batch_scheduler": "fabric_backpressure_aware"
+          }
+        },
+        "expected_request": {
+          "scenario_id": "s1_des_example",
+          "fidelity_policy": "des",
+          "gpu_participation_mode": "gpu_free",
+          "overrides": {
+            "runtime": {
+              "batch_scheduler": "fabric_backpressure_aware"
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "phase1-equivalence-067",
+      "split": "test",
+      "locale": "zh-CN",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "最大 batch set to 8 requests_per_batch; build equivalent preview only",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.max_batch_size",
+            "value_type": "integer",
+            "serialized_value": "8",
+            "unit": "requests_per_batch",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "最大 batch set to 8 requests_per_batch; build equivalent preview only",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only",
+      "canonical_equivalence": {
+        "form": {
+          "scenario_id": "s1_des_example",
+          "fidelity_policy": "des",
+          "gpu_participation_mode": "gpu_free",
+          "run_name": "",
+          "parameter_values": {
+            "s1.runtime.max_batch_size": 8
+          }
+        },
+        "expected_request": {
+          "scenario_id": "s1_des_example",
+          "fidelity_policy": "des",
+          "gpu_participation_mode": "gpu_free",
+          "overrides": {
+            "runtime": {
+              "max_batch_size": 8
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "phase1-equivalence-068",
+      "split": "test",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "KV 容量 set to 4096 tokens; build equivalent preview only",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.kv_capacity_tokens",
+            "value_type": "integer",
+            "serialized_value": "4096",
+            "unit": "tokens",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "KV 容量 set to 4096 tokens; build equivalent preview only",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only",
+      "canonical_equivalence": {
+        "form": {
+          "scenario_id": "s1_des_example",
+          "fidelity_policy": "des",
+          "gpu_participation_mode": "gpu_free",
+          "run_name": "",
+          "parameter_values": {
+            "s1.runtime.kv_capacity_tokens": 4096
+          }
+        },
+        "expected_request": {
+          "scenario_id": "s1_des_example",
+          "fidelity_policy": "des",
+          "gpu_participation_mode": "gpu_free",
+          "overrides": {
+            "runtime": {
+              "kv_capacity_tokens": 4096
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "phase1-equivalence-069",
+      "split": "test",
+      "locale": "zh-CN",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "纵向扩展网络带宽 set to 400 Gbps; build equivalent preview only",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_up_bandwidth_gbps",
+            "value_type": "number",
+            "serialized_value": "400",
+            "unit": "Gbps",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "纵向扩展网络带宽 set to 400 Gbps; build equivalent preview only",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only",
+      "canonical_equivalence": {
+        "form": {
+          "scenario_id": "s1_des_example",
+          "fidelity_policy": "des",
+          "gpu_participation_mode": "gpu_free",
+          "run_name": "",
+          "parameter_values": {
+            "s6.fabric.scale_up_bandwidth_gbps": 400
+          }
+        },
+        "expected_request": {
+          "scenario_id": "s1_des_example",
+          "fidelity_policy": "des",
+          "gpu_participation_mode": "gpu_free",
+          "overrides": {
+            "fabric": {
+              "scale_up_bandwidth_gbps": 400
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "phase1-equivalence-070",
+      "split": "test",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "纵向扩展网络时延 set to 0.8 us; build equivalent preview only",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_up_latency_us",
+            "value_type": "number",
+            "serialized_value": "0.8",
+            "unit": "us",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "纵向扩展网络时延 set to 0.8 us; build equivalent preview only",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only",
+      "canonical_equivalence": {
+        "form": {
+          "scenario_id": "s1_des_example",
+          "fidelity_policy": "des",
+          "gpu_participation_mode": "gpu_free",
+          "run_name": "",
+          "parameter_values": {
+            "s6.fabric.scale_up_latency_us": 0.8
+          }
+        },
+        "expected_request": {
+          "scenario_id": "s1_des_example",
+          "fidelity_policy": "des",
+          "gpu_participation_mode": "gpu_free",
+          "overrides": {
+            "fabric": {
+              "scale_up_latency_us": 0.8
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "phase1-equivalence-071",
+      "split": "held_out_adversarial",
+      "locale": "zh-CN",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "横向扩展网络带宽 set to 100 Gbps; build equivalent preview only",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_out_bandwidth_gbps",
+            "value_type": "number",
+            "serialized_value": "100",
+            "unit": "Gbps",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "横向扩展网络带宽 set to 100 Gbps; build equivalent preview only",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only",
+      "canonical_equivalence": {
+        "form": {
+          "scenario_id": "s1_des_example",
+          "fidelity_policy": "des",
+          "gpu_participation_mode": "gpu_free",
+          "run_name": "",
+          "parameter_values": {
+            "s6.fabric.scale_out_bandwidth_gbps": 100
+          }
+        },
+        "expected_request": {
+          "scenario_id": "s1_des_example",
+          "fidelity_policy": "des",
+          "gpu_participation_mode": "gpu_free",
+          "overrides": {
+            "fabric": {
+              "scale_out_bandwidth_gbps": 100
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "phase1-equivalence-072",
+      "split": "held_out_adversarial",
+      "locale": "en-US",
+      "risk_class": "intent_compilation",
+      "task": "configure_current_subset",
+      "input": "横向扩展网络时延 set to 4 us; build equivalent preview only",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_out_latency_us",
+            "value_type": "number",
+            "serialized_value": "4",
+            "unit": "us",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": []
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "横向扩展网络时延 set to 4 us; build equivalent preview only",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only",
+      "canonical_equivalence": {
+        "form": {
+          "scenario_id": "s1_des_example",
+          "fidelity_policy": "des",
+          "gpu_participation_mode": "gpu_free",
+          "run_name": "",
+          "parameter_values": {
+            "s6.fabric.scale_out_latency_us": 4
+          }
+        },
+        "expected_request": {
+          "scenario_id": "s1_des_example",
+          "fidelity_policy": "des",
+          "gpu_participation_mode": "gpu_free",
+          "overrides": {
+            "fabric": {
+              "scale_out_latency_us": 4
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "phase1-missing-073",
+      "split": "train",
+      "locale": "zh-CN",
+      "risk_class": "absence_semantics",
+      "task": "configure_current_subset",
+      "input": "不要改 batch，保持 missing",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "no_op",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [],
+        "reason_codes": ["phase1.missing_is_no_change"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "不要改 batch，保持 missing",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-zero-074",
+      "split": "validation",
+      "locale": "en-US",
+      "risk_class": "absence_semantics",
+      "task": "configure_current_subset",
+      "input": "最大 batch 设为 0",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [],
+        "reason_codes": ["phase1.minimum"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "最大 batch 设为 0",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-null-075",
+      "split": "test",
+      "locale": "zh-CN",
+      "risk_class": "absence_semantics",
+      "task": "configure_current_subset",
+      "input": "KV capacity = null",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [],
+        "reason_codes": ["phase1.explicit_null_unsupported"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "KV capacity = null",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-not-applicable-076",
+      "split": "held_out_adversarial",
+      "locale": "en-US",
+      "risk_class": "absence_semantics",
+      "task": "configure_current_subset",
+      "input": "在 JSON input mode 改 scale-up bandwidth",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "unsupported",
+        "route": "capability_check",
+        "validation_overall": null,
+        "field_values": [],
+        "reason_codes": ["phase1.not_applicable"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "在 JSON input mode 改 scale-up bandwidth",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-missing-077",
+      "split": "train",
+      "locale": "zh-CN",
+      "risk_class": "absence_semantics",
+      "task": "configure_current_subset",
+      "input": "leave scale-out latency unspecified / 未指定",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "no_op",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [],
+        "reason_codes": ["phase1.missing_is_no_change"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "leave scale-out latency unspecified / 未指定",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-zero-078",
+      "split": "validation",
+      "locale": "en-US",
+      "risk_class": "absence_semantics",
+      "task": "configure_current_subset",
+      "input": "scale-up latency 设成 0 us",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [],
+        "reason_codes": ["phase1.minimum"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "scale-up latency 设成 0 us",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-null-079",
+      "split": "test",
+      "locale": "zh-CN",
+      "risk_class": "absence_semantics",
+      "task": "configure_current_subset",
+      "input": "message size multiplier 设为 null",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [],
+        "reason_codes": ["phase1.explicit_null_unsupported"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "message size multiplier 设为 null",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-not-applicable-080",
+      "split": "held_out_adversarial",
+      "locale": "en-US",
+      "risk_class": "absence_semantics",
+      "task": "configure_current_subset",
+      "input": "trace package 模式下改 max batch size",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "unsupported",
+        "route": "capability_check",
+        "validation_overall": null,
+        "field_values": [],
+        "reason_codes": ["phase1.not_applicable"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "trace package 模式下改 max batch size",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-missing-081",
+      "split": "train",
+      "locale": "zh-CN",
+      "risk_class": "absence_semantics",
+      "task": "configure_current_subset",
+      "input": "没有新的字段值，only explain",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "no_op",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [],
+        "reason_codes": ["phase1.missing_is_no_change"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "没有新的字段值，only explain",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-zero-082",
+      "split": "validation",
+      "locale": "en-US",
+      "risk_class": "absence_semantics",
+      "task": "configure_current_subset",
+      "input": "scale-out bandwidth = 0 Gbps",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [],
+        "reason_codes": ["phase1.minimum"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "scale-out bandwidth = 0 Gbps",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-null-083",
+      "split": "test",
+      "locale": "zh-CN",
+      "risk_class": "absence_semantics",
+      "task": "configure_current_subset",
+      "input": "batch scheduler=null",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [],
+        "reason_codes": ["phase1.explicit_null_unsupported"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "batch scheduler=null",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-not-applicable-084",
+      "split": "held_out_adversarial",
+      "locale": "en-US",
+      "risk_class": "absence_semantics",
+      "task": "configure_current_subset",
+      "input": "custom JSON 下设置 current controls",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "unsupported",
+        "route": "capability_check",
+        "validation_overall": null,
+        "field_values": [],
+        "reason_codes": ["phase1.not_applicable"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "custom JSON 下设置 current controls",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-unsupported-085",
+      "split": "train",
+      "locale": "zh-CN",
+      "risk_class": "unsupported",
+      "task": "configure_current_subset",
+      "input": "用 8 张 H100 运行",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "unsupported",
+        "route": "unsupported",
+        "validation_overall": null,
+        "field_values": [],
+        "reason_codes": ["phase1.unsupported_capability"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "用 8 张 H100 运行",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-unsupported-086",
+      "split": "validation",
+      "locale": "en-US",
+      "risk_class": "unsupported",
+      "task": "configure_current_subset",
+      "input": "TP=8 并且 PP=2",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "unsupported",
+        "route": "unsupported",
+        "validation_overall": null,
+        "field_values": [],
+        "reason_codes": ["phase1.unsupported_capability"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "TP=8 并且 PP=2",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-unsupported-087",
+      "split": "test",
+      "locale": "zh-CN",
+      "risk_class": "unsupported",
+      "task": "configure_current_subset",
+      "input": "switch engine to vLLM",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "unsupported",
+        "route": "unsupported",
+        "validation_overall": null,
+        "field_values": [],
+        "reason_codes": ["phase1.unsupported_capability"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "switch engine to vLLM",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-unsupported-088",
+      "split": "held_out_adversarial",
+      "locale": "en-US",
+      "risk_class": "unsupported",
+      "task": "configure_current_subset",
+      "input": "设置模型为 Llama 70B",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "unsupported",
+        "route": "unsupported",
+        "validation_overall": null,
+        "field_values": [],
+        "reason_codes": ["phase1.unsupported_capability"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "设置模型为 Llama 70B",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-unsupported-089",
+      "split": "train",
+      "locale": "zh-CN",
+      "risk_class": "unsupported",
+      "task": "configure_current_subset",
+      "input": "enable Cycle for all layers",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "unsupported",
+        "route": "unsupported",
+        "validation_overall": null,
+        "field_values": [],
+        "reason_codes": ["phase1.unsupported_capability"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "enable Cycle for all layers",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-unsupported-090",
+      "split": "validation",
+      "locale": "en-US",
+      "risk_class": "unsupported",
+      "task": "configure_current_subset",
+      "input": "use real_trace and mark calibrated",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "unsupported",
+        "route": "unsupported",
+        "validation_overall": null,
+        "field_values": [],
+        "reason_codes": ["phase1.unsupported_capability"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "use real_trace and mark calibrated",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-unsupported-091",
+      "split": "test",
+      "locale": "zh-CN",
+      "risk_class": "unsupported",
+      "task": "configure_current_subset",
+      "input": "把 KV page size 改为 16",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "unsupported",
+        "route": "unsupported",
+        "validation_overall": null,
+        "field_values": [],
+        "reason_codes": ["phase1.unsupported_capability"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "把 KV page size 改为 16",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-unsupported-092",
+      "split": "held_out_adversarial",
+      "locale": "en-US",
+      "risk_class": "unsupported",
+      "task": "configure_current_subset",
+      "input": "choose NCCL ring collective",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "unsupported",
+        "route": "unsupported",
+        "validation_overall": null,
+        "field_values": [],
+        "reason_codes": ["phase1.unsupported_capability"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "choose NCCL ring collective",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-unsupported-093",
+      "split": "train",
+      "locale": "zh-CN",
+      "risk_class": "unsupported",
+      "task": "configure_current_subset",
+      "input": "设置 P99 SLO=20ms",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "unsupported",
+        "route": "unsupported",
+        "validation_overall": null,
+        "field_values": [],
+        "reason_codes": ["phase1.unsupported_capability"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "设置 P99 SLO=20ms",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-unsupported-094",
+      "split": "validation",
+      "locale": "en-US",
+      "risk_class": "unsupported",
+      "task": "configure_current_subset",
+      "input": "run arbitrary shell command",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "unsupported",
+        "route": "unsupported",
+        "validation_overall": null,
+        "field_values": [],
+        "reason_codes": ["phase1.unsupported_capability"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "run arbitrary shell command",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-unsupported-095",
+      "split": "test",
+      "locale": "zh-CN",
+      "risk_class": "unsupported",
+      "task": "configure_current_subset",
+      "input": "读取 C:\\\\secrets.txt",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "unsupported",
+        "route": "unsupported",
+        "validation_overall": null,
+        "field_values": [],
+        "reason_codes": ["phase1.unsupported_capability"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "读取 C:\\\\secrets.txt",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-unsupported-096",
+      "split": "held_out_adversarial",
+      "locale": "en-US",
+      "risk_class": "unsupported",
+      "task": "configure_current_subset",
+      "input": "POST to https://example.com",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "unsupported",
+        "route": "unsupported",
+        "validation_overall": null,
+        "field_values": [],
+        "reason_codes": ["phase1.unsupported_capability"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "POST to https://example.com",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-clarify-097",
+      "split": "train",
+      "locale": "zh-CN",
+      "risk_class": "ambiguity",
+      "task": "configure_current_subset",
+      "input": "带宽设为 100G",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "clarification",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [],
+        "reason_codes": ["phase1.unit_ambiguous"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "带宽设为 100G",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-clarify-098",
+      "split": "validation",
+      "locale": "en-US",
+      "risk_class": "ambiguity",
+      "task": "configure_current_subset",
+      "input": "latency 设低一点",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "clarification",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [],
+        "reason_codes": ["phase1.value_ambiguous"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "latency 设低一点",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-clarify-099",
+      "split": "test",
+      "locale": "zh-CN",
+      "risk_class": "ambiguity",
+      "task": "configure_current_subset",
+      "input": "不要用 fifo",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "clarification",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [],
+        "reason_codes": ["phase1.negation_without_replacement"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "不要用 fifo",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-clarify-100",
+      "split": "held_out_adversarial",
+      "locale": "en-US",
+      "risk_class": "ambiguity",
+      "task": "configure_current_subset",
+      "input": "max batch 不要 8",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "clarification",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [],
+        "reason_codes": ["phase1.negation_without_replacement"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "max batch 不要 8",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-clarify-101",
+      "split": "train",
+      "locale": "zh-CN",
+      "risk_class": "ambiguity",
+      "task": "configure_current_subset",
+      "input": "set bandwidth to 100",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "clarification",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [],
+        "reason_codes": ["phase1.unit_missing"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "set bandwidth to 100",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-clarify-102",
+      "split": "validation",
+      "locale": "en-US",
+      "risk_class": "ambiguity",
+      "task": "configure_current_subset",
+      "input": "make it faster / 更快",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "clarification",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [],
+        "reason_codes": ["phase1.value_ambiguous"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "make it faster / 更快",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-clarify-103",
+      "split": "test",
+      "locale": "zh-CN",
+      "risk_class": "ambiguity",
+      "task": "configure_current_subset",
+      "input": "调度不要 decode priority，其他随便",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "clarification",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [],
+        "reason_codes": ["phase1.negation_without_replacement"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "调度不要 decode priority，其他随便",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-clarify-104",
+      "split": "held_out_adversarial",
+      "locale": "en-US",
+      "risk_class": "ambiguity",
+      "task": "configure_current_subset",
+      "input": "100G network please",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "clarification",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [],
+        "reason_codes": ["phase1.scope_ambiguous"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "100G network please",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-clarify-105",
+      "split": "train",
+      "locale": "zh-CN",
+      "risk_class": "ambiguity",
+      "task": "configure_current_subset",
+      "input": "increase KV capacity",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "clarification",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [],
+        "reason_codes": ["phase1.value_missing"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "increase KV capacity",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-clarify-106",
+      "split": "validation",
+      "locale": "en-US",
+      "risk_class": "ambiguity",
+      "task": "configure_current_subset",
+      "input": "set latency to 1",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "clarification",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [],
+        "reason_codes": ["phase1.scope_ambiguous"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "set latency to 1",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-clarify-107",
+      "split": "test",
+      "locale": "zh-CN",
+      "risk_class": "ambiguity",
+      "task": "configure_current_subset",
+      "input": "batch 可以 8 或 16",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "clarification",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [],
+        "reason_codes": ["phase1.multiple_values"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "batch 可以 8 或 16",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-clarify-108",
+      "split": "held_out_adversarial",
+      "locale": "en-US",
+      "risk_class": "ambiguity",
+      "task": "configure_current_subset",
+      "input": "带宽 between 100 and 200 Gbps",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "clarification",
+        "route": "configure",
+        "validation_overall": "valid",
+        "field_values": [],
+        "reason_codes": ["phase1.range_not_single"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "带宽 between 100 and 200 Gbps",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-stale-109",
+      "split": "train",
+      "locale": "zh-CN",
+      "risk_class": "revision_stale",
+      "task": "configure_current_subset",
+      "input": "Set max batch to 8; stale context_revision",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:2"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "stale",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.max_batch_size",
+            "value_type": "integer",
+            "serialized_value": "8",
+            "unit": "requests_per_batch",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.page_context_revision_changed"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set max batch to 8; stale context_revision",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:2"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-stale-110",
+      "split": "validation",
+      "locale": "en-US",
+      "risk_class": "revision_stale",
+      "task": "configure_current_subset",
+      "input": "Set max batch to 8; stale catalog_revision",
+      "revisions": {
+        "catalog_revision": "sha256:stale-catalog",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "stale",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.max_batch_size",
+            "value_type": "integer",
+            "serialized_value": "8",
+            "unit": "requests_per_batch",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.catalog_revision_changed"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set max batch to 8; stale catalog_revision",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-stale-111",
+      "split": "test",
+      "locale": "zh-CN",
+      "risk_class": "revision_stale",
+      "task": "configure_current_subset",
+      "input": "Set max batch to 8; stale schema_set_revision",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:stale-schema",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "stale",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.max_batch_size",
+            "value_type": "integer",
+            "serialized_value": "8",
+            "unit": "requests_per_batch",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.schema_set_revision_changed"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set max batch to 8; stale schema_set_revision",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-stale-112",
+      "split": "held_out_adversarial",
+      "locale": "en-US",
+      "risk_class": "revision_stale",
+      "task": "configure_current_subset",
+      "input": "Set max batch to 8; stale capability_snapshot_revision",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:stale-capability",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "stale",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.max_batch_size",
+            "value_type": "integer",
+            "serialized_value": "8",
+            "unit": "requests_per_batch",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.capability_snapshot_revision_changed"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set max batch to 8; stale capability_snapshot_revision",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-stale-113",
+      "split": "train",
+      "locale": "zh-CN",
+      "risk_class": "revision_stale",
+      "task": "configure_current_subset",
+      "input": "Set max batch to 9; stale context_revision",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:2"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "stale",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.max_batch_size",
+            "value_type": "integer",
+            "serialized_value": "9",
+            "unit": "requests_per_batch",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.page_context_revision_changed"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set max batch to 9; stale context_revision",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:2"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-stale-114",
+      "split": "validation",
+      "locale": "en-US",
+      "risk_class": "revision_stale",
+      "task": "configure_current_subset",
+      "input": "Set max batch to 9; stale catalog_revision",
+      "revisions": {
+        "catalog_revision": "sha256:stale-catalog",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "stale",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.max_batch_size",
+            "value_type": "integer",
+            "serialized_value": "9",
+            "unit": "requests_per_batch",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.catalog_revision_changed"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set max batch to 9; stale catalog_revision",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-stale-115",
+      "split": "test",
+      "locale": "zh-CN",
+      "risk_class": "revision_stale",
+      "task": "configure_current_subset",
+      "input": "Set max batch to 9; stale schema_set_revision",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:stale-schema",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "stale",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.max_batch_size",
+            "value_type": "integer",
+            "serialized_value": "9",
+            "unit": "requests_per_batch",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.schema_set_revision_changed"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set max batch to 9; stale schema_set_revision",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-stale-116",
+      "split": "held_out_adversarial",
+      "locale": "en-US",
+      "risk_class": "revision_stale",
+      "task": "configure_current_subset",
+      "input": "Set max batch to 9; stale capability_snapshot_revision",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:stale-capability",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "stale",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.max_batch_size",
+            "value_type": "integer",
+            "serialized_value": "9",
+            "unit": "requests_per_batch",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.capability_snapshot_revision_changed"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "Set max batch to 9; stale capability_snapshot_revision",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-partial-fail-117",
+      "split": "train",
+      "locale": "zh-CN",
+      "risk_class": "partial_failure",
+      "task": "configure_current_subset",
+      "input": "max batch 8 and TP=8",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.max_batch_size",
+            "value_type": "integer",
+            "serialized_value": "8",
+            "unit": "requests_per_batch",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.unsupported_capability"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "max batch 8 and TP=8",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-partial-fail-118",
+      "split": "validation",
+      "locale": "en-US",
+      "risk_class": "partial_failure",
+      "task": "configure_current_subset",
+      "input": "KV 4096 tokens and scale-up bandwidth 5 Gbps",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.kv_capacity_tokens",
+            "value_type": "integer",
+            "serialized_value": "4096",
+            "unit": "tokens",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.minimum"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "KV 4096 tokens and scale-up bandwidth 5 Gbps",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-partial-fail-119",
+      "split": "test",
+      "locale": "zh-CN",
+      "risk_class": "partial_failure",
+      "task": "configure_current_subset",
+      "input": "scheduler fifo and scale-out latency null",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.batch_scheduler",
+            "value_type": "enum",
+            "serialized_value": "fifo",
+            "unit": "scheduler_policy",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.explicit_null_unsupported"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "scheduler fifo and scale-out latency null",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-partial-fail-120",
+      "split": "held_out_adversarial",
+      "locale": "en-US",
+      "risk_class": "partial_failure",
+      "task": "configure_current_subset",
+      "input": "message multiplier 2 and unknown magic=on",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [
+          {
+            "field_id": "s0.workload.message_size_multiplier",
+            "value_type": "number",
+            "serialized_value": "2",
+            "unit": "ratio",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.unknown_field"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "message multiplier 2 and unknown magic=on",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-partial-fail-121",
+      "split": "train",
+      "locale": "zh-CN",
+      "risk_class": "partial_failure",
+      "task": "configure_current_subset",
+      "input": "scale-up latency 1 us, model=70B",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_up_latency_us",
+            "value_type": "number",
+            "serialized_value": "1",
+            "unit": "us",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.unsupported_capability"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "scale-up latency 1 us, model=70B",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-partial-fail-122",
+      "split": "validation",
+      "locale": "en-US",
+      "risk_class": "partial_failure",
+      "task": "configure_current_subset",
+      "input": "scale-out bandwidth 200 Gbps and max batch 65",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [
+          {
+            "field_id": "s6.fabric.scale_out_bandwidth_gbps",
+            "value_type": "number",
+            "serialized_value": "200",
+            "unit": "Gbps",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.maximum"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "scale-out bandwidth 200 Gbps and max batch 65",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-partial-fail-123",
+      "split": "test",
+      "locale": "zh-CN",
+      "risk_class": "partial_failure",
+      "task": "configure_current_subset",
+      "input": "max batch 16 and scheduler round_robin",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [
+          {
+            "field_id": "s1.runtime.max_batch_size",
+            "value_type": "integer",
+            "serialized_value": "16",
+            "unit": "requests_per_batch",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.enum_not_allowed"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "max batch 16 and scheduler round_robin",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-partial-fail-124",
+      "split": "held_out_adversarial",
+      "locale": "en-US",
+      "risk_class": "partial_failure",
+      "task": "configure_current_subset",
+      "input": "message multiplier 1 and run now",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "draft",
+        "route": "configure",
+        "validation_overall": "invalid",
+        "field_values": [
+          {
+            "field_id": "s0.workload.message_size_multiplier",
+            "value_type": "number",
+            "serialized_value": "1",
+            "unit": "ratio",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.side_effect_forbidden"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "message multiplier 1 and run now",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-uint64-125",
+      "split": "train",
+      "locale": "zh-CN",
+      "risk_class": "uint64",
+      "task": "configure_current_subset",
+      "input": "uint64 9007199254740993 must remain a decimal string",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "unsupported",
+        "route": "capability_check",
+        "validation_overall": null,
+        "field_values": [
+          {
+            "field_id": "unknown.uint64",
+            "value_type": "uint64",
+            "serialized_value": "9007199254740993",
+            "unit": "count",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.out_of_range"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "uint64 9007199254740993 must remain a decimal string",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-uint64-126",
+      "split": "validation",
+      "locale": "en-US",
+      "risk_class": "uint64",
+      "task": "configure_current_subset",
+      "input": "保留 uint64 18446744073709551615 字符串",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "unsupported",
+        "route": "capability_check",
+        "validation_overall": null,
+        "field_values": [
+          {
+            "field_id": "unknown.uint64",
+            "value_type": "uint64",
+            "serialized_value": "18446744073709551615",
+            "unit": "count",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.out_of_range"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "保留 uint64 18446744073709551615 字符串",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-uint64-127",
+      "split": "test",
+      "locale": "zh-CN",
+      "risk_class": "uint64",
+      "task": "configure_current_subset",
+      "input": "reject uint64 18446744073709551616 overflow",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "unsupported",
+        "route": "capability_check",
+        "validation_overall": null,
+        "field_values": [
+          {
+            "field_id": "unknown.uint64",
+            "value_type": "uint64",
+            "serialized_value": "18446744073709551616",
+            "unit": "count",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.uint64_overflow"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "reject uint64 18446744073709551616 overflow",
+        "locale": "zh-CN",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    },
+    {
+      "case_id": "phase1-uint64-128",
+      "split": "held_out_adversarial",
+      "locale": "en-US",
+      "risk_class": "uint64",
+      "task": "configure_current_subset",
+      "input": "不要把 9007199254740993123 转成 JS number",
+      "revisions": {
+        "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+        "capability_snapshot_revision": "sha256:phase1-fixture-capability-snapshot",
+        "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+        "context_revision": "context:experiment:1"
+      },
+      "expected": {
+        "kind": "unsupported",
+        "route": "capability_check",
+        "validation_overall": null,
+        "field_values": [
+          {
+            "field_id": "unknown.uint64",
+            "value_type": "uint64",
+            "serialized_value": "9007199254740993123",
+            "unit": "count",
+            "value_source": "user"
+          }
+        ],
+        "reason_codes": ["phase1.out_of_range"]
+      },
+      "forbidden_outcomes": ["create_run", "provider_call", "approval", "tool_call", "live_or_calibrated_claim"],
+      "minimal_reproduction": {
+        "instruction": "不要把 9007199254740993123 转成 JS number",
+        "locale": "en-US",
+        "current_values": {},
+        "context_revision": "context:experiment:1"
+      },
+      "evidence_scope": "fixture_synthetic_consistency_only"
+    }
+  ]
+}

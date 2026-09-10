@@ -5,8 +5,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import { defineComponent, h, onMounted, onUnmounted } from "vue";
 import ExecutionVisualizationPanel from "../../src/features/execution-inspector/components/ExecutionVisualizationPanel.vue";
 import type { LayerVisualization } from "../../src/features/execution-inspector/model/types";
+import { setLocale } from "../../src/i18n";
 
 enableAutoUnmount(afterEach);
+afterEach(() => setLocale("zh-CN"));
 
 describe("execution visualization panel", () => {
   it("does not initialize a chart for unavailable data", () => {
@@ -70,10 +72,119 @@ describe("execution visualization panel", () => {
       },
     });
     expect(wrapper.find(".execution-chart").exists()).toBe(false);
-    expect(wrapper.text()).toContain("real_trace");
+    expect(wrapper.text()).toContain("输入来源模式");
+    expect(wrapper.text()).toContain("真实系统采集 Trace");
+    expect(wrapper.text()).toContain("技术字段：source_mode = real_trace");
     expect(wrapper.text()).toContain("/validation/trace_provenance/source_mode");
     expect(wrapper.text()).toContain("字段质量提醒");
     expect(wrapper.text()).toContain("calibration_level");
+  });
+
+  it("uses explained English labels and retains raw field/value pairs", () => {
+    setLocale("en-US");
+    const wrapper = mount(ExecutionVisualizationPanel, {
+      props: {
+        visualization: {
+          id: "semantic-matrix-en",
+          kind: "matrix",
+          title: "来源",
+          description: "状态字段。",
+          question: "报告声明了什么来源？",
+          firstLook: "先看报告值。",
+          boundary: "分类值不用于数值比较。",
+          rationale: "分类数据不使用数量图。",
+          unit: "",
+          sourcePaths: ["validation:/trace_provenance/source_mode"],
+          derivation: "identity",
+          columns: ["报告值"],
+          series: [],
+          rows: [
+            {
+              label: "source_mode",
+              values: ["synthetic_trace"],
+              sourcePath: "validation:/trace_provenance/source_mode",
+            },
+          ],
+        },
+      },
+    });
+    expect(wrapper.text()).toContain("Input source mode");
+    expect(wrapper.text()).toContain("Synthetic trace");
+    expect(wrapper.text()).toContain("Generated, not captured from a real system");
+    expect(wrapper.text()).toContain("Technical field: source_mode = synthetic_trace");
+  });
+
+  it("shows safe unknown-field and unknown-value fallbacks with raw traceability", () => {
+    const wrapper = mount(ExecutionVisualizationPanel, {
+      props: {
+        visualization: {
+          id: "unknown-matrix",
+          kind: "matrix",
+          title: "来源",
+          description: "状态字段。",
+          question: "报告声明了什么来源？",
+          firstLook: "先看报告值。",
+          boundary: "分类值不用于数值比较。",
+          rationale: "分类数据不使用数量图。",
+          unit: "",
+          sourcePaths: ["validation:/future_field"],
+          derivation: "identity",
+          columns: ["报告值"],
+          series: [],
+          rows: [{ label: "future_field", values: ["future_value"], sourcePath: "validation:/future_field" }],
+        },
+      },
+    });
+    expect(wrapper.text()).toContain("未收录字段");
+    expect(wrapper.text()).toContain("未识别值");
+    expect(wrapper.text()).toContain("future_field = future_value");
+    expect(wrapper.text()).toContain("validation:/future_field");
+  });
+
+  it("keeps self-explanatory calibration and fidelity states compact", () => {
+    const wrapper = mount(ExecutionVisualizationPanel, {
+      props: {
+        visualization: {
+          id: "compact-fidelity-matrix",
+          kind: "matrix",
+          title: "精细度",
+          description: "状态字段。",
+          question: "本次使用什么精细度？",
+          firstLook: "先看报告值。",
+          boundary: "分类值不用于数值比较。",
+          rationale: "分类数据不使用数量图。",
+          unit: "",
+          sourcePaths: ["validation:/resolution_entries/0"],
+          derivation: "identity",
+          columns: ["报告值"],
+          series: [],
+          rows: [
+            {
+              label: "calibration_level",
+              values: ["uncalibrated"],
+              sourcePath: "validation:/trace_provenance/calibration_level",
+            },
+            {
+              label: "requested_fidelity",
+              values: ["des"],
+              sourcePath: "validation:/resolution_entries/0/requested_fidelity",
+            },
+            {
+              label: "actual_fidelity",
+              values: ["analytical"],
+              sourcePath: "validation:/resolution_entries/0/actual_fidelity",
+            },
+          ],
+        },
+      },
+    });
+    expect(wrapper.text()).toContain("校准级别未校准");
+    expect(wrapper.text()).toContain("请求的仿真精细度离散事件模拟（DES）");
+    expect(wrapper.text()).toContain("实际仿真精细度分析估算（Analytical）");
+    expect(wrapper.text()).toContain("calibration_level = uncalibrated");
+    expect(wrapper.text()).not.toContain("真实测量校准证据");
+    expect(wrapper.text()).not.toContain("全局时间轴上的动态事件模拟");
+    expect(wrapper.text()).not.toContain("结构化成本模型估算");
   });
 
   it("keeps the complete table and exposes the selected row's exact evidence source", async () => {

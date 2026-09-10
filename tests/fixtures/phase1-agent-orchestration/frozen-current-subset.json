@@ -1,0 +1,75 @@
+{
+  "fixture_identity": "tilesim.web.fixture.agent_orchestration.phase1.current_subset.v1",
+  "local_contract_revision": "tilesim.web.agent_orchestration.phase1.local.v1",
+  "catalog_identity": "tilesim.bridge.agent_orchestration_capability_catalog.v1",
+  "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+  "contract_package_revision": "sha256:1fa372e1fc4eafe5b819aedd29f258732b8a53fab6b9559e964f6ee1164a4fe3",
+  "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+  "experiment_descriptor_revision": "sha256:130ff231e59c5b7900dd9d4b51b590d23022b08a8ab8ad7857355a9b45632b6b",
+  "target_request_identity": "tilesim.bridge.create_run_request.v1",
+  "fields": [
+    {
+      "field_id": "s0.workload.message_size_multiplier",
+      "value_type": "number",
+      "unit": "ratio",
+      "minimum": "0.25",
+      "maximum": "8.0",
+      "request_json_pointer": "/overrides/workload/message_size_multiplier"
+    },
+    {
+      "field_id": "s1.runtime.batch_scheduler",
+      "value_type": "enum",
+      "unit": "scheduler_policy",
+      "enum_values": ["fifo", "decode_priority", "fabric_backpressure_aware"],
+      "request_json_pointer": "/overrides/runtime/batch_scheduler"
+    },
+    {
+      "field_id": "s1.runtime.max_batch_size",
+      "value_type": "integer",
+      "unit": "requests_per_batch",
+      "minimum": "1",
+      "maximum": "64",
+      "request_json_pointer": "/overrides/runtime/max_batch_size"
+    },
+    {
+      "field_id": "s1.runtime.kv_capacity_tokens",
+      "value_type": "integer",
+      "unit": "tokens",
+      "minimum": "256",
+      "maximum": "1000000",
+      "request_json_pointer": "/overrides/runtime/kv_capacity_tokens"
+    },
+    {
+      "field_id": "s6.fabric.scale_up_bandwidth_gbps",
+      "value_type": "number",
+      "unit": "Gbps",
+      "minimum": "25",
+      "maximum": "2000",
+      "request_json_pointer": "/overrides/fabric/scale_up_bandwidth_gbps"
+    },
+    {
+      "field_id": "s6.fabric.scale_up_latency_us",
+      "value_type": "number",
+      "unit": "us",
+      "minimum": "0.05",
+      "maximum": "100",
+      "request_json_pointer": "/overrides/fabric/scale_up_latency_us"
+    },
+    {
+      "field_id": "s6.fabric.scale_out_bandwidth_gbps",
+      "value_type": "number",
+      "unit": "Gbps",
+      "minimum": "10",
+      "maximum": "2000",
+      "request_json_pointer": "/overrides/fabric/scale_out_bandwidth_gbps"
+    },
+    {
+      "field_id": "s6.fabric.scale_out_latency_us",
+      "value_type": "number",
+      "unit": "us",
+      "minimum": "0.1",
+      "maximum": "500",
+      "request_json_pointer": "/overrides/fabric/scale_out_latency_us"
+    }
+  ]
+}

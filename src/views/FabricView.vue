@@ -8,7 +8,12 @@ import "../styles/workbench.css";
 import RecordPager from "../components/ui/RecordPager.vue";
 import { useRecordPage } from "../components/ui/useRecordPage";
 import { buildFabricAnalysis } from "../features/f7-analysis";
-import { buildFabricCompositionVisualizations, ExecutionVisualizationPanel } from "../features/execution-inspector";
+import {
+  buildFabricCompositionVisualizations,
+  executionLayerName,
+  ExecutionVisualizationPanel,
+  semanticFieldPresentation,
+} from "../features/execution-inspector";
 import { formatNumber, formatPercent, statusLabel } from "../lib/format";
 import { useDashboard } from "../store/dashboard";
 import { useI18n } from "../i18n";
@@ -40,6 +45,14 @@ const compositionVisualizations = computed(() => buildFabricCompositionVisualiza
 
 function utilizationWidth(value: number | undefined) {
   return typeof value === "number" && Number.isFinite(value) ? `${Math.max(0, Math.min(value * 100, 100))}%` : null;
+}
+
+function semanticField(field: string, value: unknown) {
+  return semanticFieldPresentation(field, value);
+}
+
+function moduleBinding(value: string | undefined) {
+  return value && /^S[0-6]$/.test(value) ? executionLayerName(value) : value || t("不适用");
 }
 </script>
 
@@ -134,7 +147,13 @@ function utilizationWidth(value: number | undefined) {
       <dl>
         <div>
           <dt>contract</dt>
-          <dd>{{ analysis.artifactAvailability }}</dd>
+          <dd>
+            <strong>{{ semanticField("availability", analysis.artifactAvailability).valueLabel }}</strong>
+            <small v-if="semanticField('availability', analysis.artifactAvailability).valueDescription">
+              {{ semanticField("availability", analysis.artifactAvailability).valueDescription }}
+            </small>
+            <code>availability = {{ analysis.artifactAvailability }}</code>
+          </dd>
         </div>
         <div>
           <dt>schema</dt>
@@ -202,7 +221,10 @@ function utilizationWidth(value: number | undefined) {
           </dl>
           <div class="domain-evidence-row">
             <ArtifactEvidenceLink v-if="domain.evidence.sourcePath" :source-path="domain.evidence.sourcePath" />
-            <small v-else>{{ domain.availability }}</small>
+            <small v-else>
+              {{ semanticField("availability", domain.availability).valueLabel }}
+              <code>availability = {{ domain.availability }}</code>
+            </small>
           </div>
           <section v-if="domain.topologyDomain" class="domain-topology-contract">
             <header>
@@ -212,7 +234,10 @@ function utilizationWidth(value: number | undefined) {
             <dl>
               <div>
                 <dt>{{ t("模块绑定") }}</dt>
-                <dd>{{ domain.topologyDomain.module_binding || t("不适用") }}</dd>
+                <dd>
+                  {{ moduleBinding(domain.topologyDomain.module_binding) }}
+                  <code v-if="domain.topologyDomain.module_binding">{{ domain.topologyDomain.module_binding }}</code>
+                </dd>
               </div>
               <div>
                 <dt>{{ t("成员设备") }}</dt>
@@ -225,7 +250,10 @@ function utilizationWidth(value: number | undefined) {
               label="Topology 证据"
             />
           </section>
-          <small v-else class="domain-topology-status">topology: {{ domain.topologyAvailability }}</small>
+          <small v-else class="domain-topology-status">
+            {{ semanticField("availability", domain.topologyAvailability).valueLabel }}
+            <code>topology availability = {{ domain.topologyAvailability }}</code>
+          </small>
         </article>
       </section>
       <RecordPager v-if="domainsOpen" v-model:page="domainPage" :pages="domainPages" :label="t('通信范围详情分页')" />
@@ -266,7 +294,10 @@ function utilizationWidth(value: number | undefined) {
                 <ArtifactEvidenceLink
                   v-if="domain.evidence.sourcePath"
                   :source-path="domain.evidence.sourcePath"
-                /><small v-else>{{ domain.availability }}</small>
+                /><small v-else>
+                  {{ semanticField("availability", domain.availability).valueLabel }}
+                  <code>availability = {{ domain.availability }}</code>
+                </small>
               </td>
             </tr>
           </tbody>
@@ -335,7 +366,10 @@ function utilizationWidth(value: number | undefined) {
                     :source-path="request.dominantPhaseEvidence.sourcePath"
                     label="phase 证据"
                   />
-                  <small v-if="!request.evidence.sourcePath">{{ request.availability }}</small>
+                  <small v-if="!request.evidence.sourcePath">
+                    {{ semanticField("availability", request.availability).valueLabel }}
+                    <code>availability = {{ request.availability }}</code>
+                  </small>
                 </span>
               </td>
             </tr>
@@ -369,7 +403,10 @@ function utilizationWidth(value: number | undefined) {
           }}
         </p>
       </div>
-      <span>{{ analysis.topologyJoinAvailability }}</span>
+      <span>
+        {{ semanticField("availability", analysis.topologyJoinAvailability).valueLabel }}
+        <code>availability = {{ analysis.topologyJoinAvailability }}</code>
+      </span>
     </section>
   </div>
 </template>

@@ -10,8 +10,13 @@ import { workflowReviewEnglishCatalog } from "../../src/i18n/workstreams/workflo
 import { networkReviewEnglishCatalog } from "../../src/i18n/workstreams/network-review";
 import { attributionReviewEnglishCatalog } from "../../src/i18n/workstreams/attribution-review";
 import { workbenchReviewEnglishCatalog } from "../../src/i18n/workstreams/workbench-review";
+import { semanticGlossaryEnglishCatalog } from "../../src/i18n/workstreams/semantic-glossary";
 
-const modelFiles = ["records.ts", "visualizations.ts"];
+const modelFiles = [
+  "src/features/execution-inspector/model/records.ts",
+  "src/features/execution-inspector/model/visualizations.ts",
+  "src/features/execution-inspector/presentation.ts",
+];
 
 const catalogs = {
   core: coreEnglishCatalog,
@@ -22,10 +27,11 @@ const catalogs = {
   networkReview: networkReviewEnglishCatalog,
   attributionReview: attributionReviewEnglishCatalog,
   workbenchReview: workbenchReviewEnglishCatalog,
+  semanticGlossary: semanticGlossaryEnglishCatalog,
 };
 
 function chineseStringLiterals(file) {
-  const source = readFileSync(resolve(process.cwd(), "src/features/execution-inspector/model", file), "utf8");
+  const source = readFileSync(resolve(process.cwd(), file), "utf8");
   return [...source.matchAll(/"([^"\r\n]*[\u3400-\u9fff][^"\r\n]*)"/gu)].map((match) => match[1]);
 }
 

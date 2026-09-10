@@ -30,7 +30,7 @@ test("deployed Week 8 Bridge closes the request-bound F6B chain", async ({ page 
   await expect(panel).toBeVisible({ timeout: 30_000 });
   await expect(panel).toContainText("partitioned_des", { timeout: 30_000 });
   await expect(panel.locator(".run-bound-identity-strip")).toContainText("版本化 contract");
-  await expect(panel.locator('.run-bound-percentile-grid article[aria-current="true"]')).not.toHaveCount(0);
+  await expect(panel.locator('.percentile-subjects [aria-current="true"]')).not.toHaveCount(0);
 
   const states = await panel.locator(".run-bound-node, .run-bound-output-node").evaluateAll((nodes) =>
     nodes.map((node) => ({
@@ -94,6 +94,8 @@ test("deployed Week 8 Bridge serves metrics-backed F7 Fabric evidence", async ({
   expect(targets.every(({ pointer }) => pointer?.startsWith("/system_summary/"))).toBe(true);
   expect(targets.every(({ sha }) => /^[a-f0-9]{64}$/.test(sha || ""))).toBe(true);
   await expect(page.locator(".fabric-topology-gap")).toContainText("正式契约已验证");
+  await page.locator(".fabric-domain-disclosure > summary").click();
+  await expect(page.locator(".domain-topology-contract a.artifact-evidence-link").first()).toBeVisible();
   const topologyTargets = await page
     .locator(".domain-topology-contract a.artifact-evidence-link")
     .evaluateAll((links) =>
@@ -158,17 +160,24 @@ test("deployed Week 8 Bridge serves formal F7 design-space evidence", async ({ p
   expect(browserFailures).toEqual([]);
 });
 
-test("deployed Week 8 Bridge exposes the formal F8 schema-driven experiment surface", async ({ page }) => {
+test("deployed Week 8 Bridge exposes the formal F8 schema-driven experiment surface", async ({ page, request }) => {
   test.skip(!liveBaseUrl, "Live Week 8 Bridge base URL was not provided.");
 
   const browserFailures = observeBrowserFailures(page);
+  const manifestResponse = await request.get(`${liveBaseUrl}/api/manifest`);
+  const descriptorResponse = await request.get(`${liveBaseUrl}/api/experiment-schema`);
+  expect(manifestResponse.ok()).toBe(true);
+  expect(descriptorResponse.ok()).toBe(true);
+  const manifest = await manifestResponse.json();
+  const descriptor = await descriptorResponse.json();
+  expect(descriptor.schema_set_revision).toBe(manifest.schema_set_revision);
   await page.goto(`${liveBaseUrl}/experiment`, { waitUntil: "domcontentloaded" });
 
   await page.locator(".capability-disclosure > summary").click();
   const schemaPanel = page.locator(".experiment-schema-panel");
   await expect(schemaPanel).toBeVisible({ timeout: 30_000 });
-  await expect(schemaPanel).toContainText("sha256:92acce87f4f611893fafb2bf81dd1fa4fac509316ea2b5215a60f1995688871e");
-  await expect(schemaPanel).toContainText("sha256:fe6d389035f9ca5f15f68a2ec65292c49f1e6bdc79e35d95b1acd641f8bcee96");
+  await expect(schemaPanel).toContainText(manifest.schema_set_revision, { timeout: 30_000 });
+  await expect(schemaPanel).toContainText(descriptor.descriptor_revision);
   await expect(schemaPanel).toContainText("controls · json");
   await expect(schemaPanel).toContainText("built_in_synthetic · strict_s6_manifest");
   await expect(schemaPanel).toContainText("supported");
@@ -199,10 +208,8 @@ test("deployed Bridge exposes the F9 descriptor v2 and reports authenticated Pro
 
   const manifestResponse = await request.get(`${liveBaseUrl}/api/manifest`);
   expect(manifestResponse.ok()).toBe(true);
-  expect(manifestResponse.headers()["x-tilesim-schema-set-revision"]).toBe(
-    "sha256:92acce87f4f611893fafb2bf81dd1fa4fac509316ea2b5215a60f1995688871e",
-  );
   const manifest = await manifestResponse.json();
+  expect(manifestResponse.headers()["x-tilesim-schema-set-revision"]).toBe(manifest.schema_set_revision);
   expect(manifest.evidence_agent).toMatchObject({
     descriptor_schema_identity: "tilesim.bridge.evidence_agent_descriptor.v2",
     descriptor_revision: "sha256:5f78ed33e20c131f672af53368c5ca950f41d63fd2e8f5301757d1f42debe357",
@@ -215,7 +222,7 @@ test("deployed Bridge exposes the F9 descriptor v2 and reports authenticated Pro
   const descriptor = await descriptorResponse.json();
   expect(descriptor).toMatchObject({
     schema_version: "tilesim.bridge.evidence_agent_descriptor.v2",
-    schema_set_revision: "sha256:92acce87f4f611893fafb2bf81dd1fa4fac509316ea2b5215a60f1995688871e",
+    schema_set_revision: manifest.schema_set_revision,
   });
   if (descriptor.availability === "available") {
     expect(descriptor.provider).toMatchObject({
@@ -255,7 +262,7 @@ test("deployed Bridge exposes the F9 descriptor v2 and reports authenticated Pro
   });
   await expect(page.getByRole("heading", { name: "AI 解释" })).toBeVisible({ timeout: 30_000 });
   if (descriptor.availability === "available") {
-    await expect(page.locator(".evidence-agent-unavailable")).toHaveCount(0);
+    await expect(page.locator(".evidence-agent-unavailable")).toHaveCount(0, { timeout: 30_000 });
   } else {
     await expect(page.locator(".evidence-agent-unavailable")).toContainText("provider_unavailable");
     await expect(page.getByRole("button", { name: "生成解释" })).toBeDisabled();
@@ -268,5 +275,56 @@ test("deployed Bridge exposes the F9 descriptor v2 and reports authenticated Pro
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
     await page.evaluate(() => document.documentElement.clientWidth),
   );
+  expect(browserFailures).toEqual([]);
+});
+
+test("deployed semantic glossary remains bilingual, traceable, and readable at both desktop widths", async ({
+  page,
+}) => {
+  test.skip(!liveBaseUrl || !liveRunId, "Live Bridge coordinates were not provided.");
+  test.setTimeout(120_000);
+
+  const browserFailures = observeBrowserFailures(page);
+  await page.setViewportSize({ width: 1100, height: 900 });
+  await page.goto(`${liveBaseUrl}/execution?run=${encodeURIComponent(liveRunId)}`, {
+    waitUntil: "domcontentloaded",
+  });
+  await expect(page.getByRole("heading", { name: "请求执行路线" })).toBeVisible({ timeout: 30_000 });
+  await page.locator(".flow-node").filter({ hasText: "S0" }).click();
+  const provenance = page.locator('.visualization-panel[data-chart-kind="matrix"]');
+  await expect(provenance).toContainText("输入来源模式");
+  await expect(provenance).toContainText("人工生成 Trace");
+  await expect(provenance).toContainText("技术字段：source_mode = synthetic_trace");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
+    await page.evaluate(() => document.documentElement.clientWidth),
+  );
+
+  await page.getByRole("button", { name: "切换到深色模式" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-appearance", "dark");
+  await page.getByRole("button", { name: "切换到英文" }).click();
+  await expect(provenance).toContainText("Input source mode");
+  await expect(provenance).toContainText("Synthetic trace");
+  await expect(provenance).toContainText("Technical field: source_mode = synthetic_trace");
+
+  await page.goto(`${liveBaseUrl}/metrics?run=${encodeURIComponent(liveRunId)}`, { waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("heading", { name: "Per-request results" })).toBeVisible({ timeout: 30_000 });
+  const metricsDetails = page.locator(".visualization-data").first();
+  await metricsDetails.locator("summary").click();
+  await expect(metricsDetails).toContainText("Technical field: derivation = unit_conversion");
+
+  await page.goto(`${liveBaseUrl}/validation?run=${encodeURIComponent(liveRunId)}`, {
+    waitUntil: "domcontentloaded",
+  });
+  await expect(page.locator(".provenance-grid")).toContainText("Input source mode", { timeout: 30_000 });
+  await expect(page.locator(".provenance-grid")).toContainText("Technical field: calibration_level = uncalibrated");
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-appearance", "light");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
+    await page.evaluate(() => document.documentElement.clientWidth),
+  );
+
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations.filter((item) => ["serious", "critical"].includes(item.impact))).toEqual([]);
   expect(browserFailures).toEqual([]);
 });

@@ -9,6 +9,8 @@ export { default as ExperimentSubmitCard } from "./ExperimentSubmitCard.vue";
 export { default as TracePackageInputPanel } from "./TracePackageInputPanel.vue";
 export { fetchTracePackageCatalog, inspectTracePackage, tracePackageBackendIdentity } from "./trace-package-queries";
 export type { TracePackageQueryContext } from "./trace-package-queries";
+export { buildExperimentAgentContextPublication } from "./agent-context-adapter";
+export type { ExperimentAgentContextPublication, ExperimentAgentContextPublisher } from "./agent-context-adapter";
 export {
   ExperimentRequestError,
   buildExperimentRequest,

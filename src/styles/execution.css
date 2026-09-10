@@ -413,6 +413,7 @@
   color: var(--muted);
   font-size: var(--text-xs);
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 .stage-list li > small {
   color: var(--muted);
@@ -553,6 +554,53 @@
   gap: 0 14px;
   margin: 0 23px 17px;
 }
+.layer-status-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0 23px 16px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--line);
+}
+.layer-status-summary > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 11px;
+  background: var(--surface-inset);
+}
+.layer-status-summary small,
+.layer-status-summary p,
+.layer-status-summary code {
+  overflow-wrap: anywhere;
+}
+.layer-status-summary small {
+  color: var(--muted);
+  font-size: var(--text-micro);
+  font-weight: 700;
+}
+.layer-status-summary strong {
+  font-size: var(--text-sm);
+}
+.layer-status-summary p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+}
+.layer-status-summary code,
+.backend-raw,
+.stage-list code {
+  color: var(--muted);
+  font: var(--text-micro)/1.45 var(--font-mono);
+  overflow-wrap: anywhere;
+}
+.backend-raw {
+  display: block;
+  margin-top: 5px;
+}
 .layer-metric {
   display: grid;
   align-content: start;
@@ -571,6 +619,11 @@
   font: 500 16px var(--font-sans);
   font-variant-numeric: tabular-nums;
   line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.layer-metric code {
+  color: var(--muted);
+  font: var(--text-micro)/1.4 var(--font-mono);
   overflow-wrap: anywhere;
 }
 .layer-metric span {
@@ -665,6 +718,32 @@
   min-width: 0;
   padding: 9px 10px;
   background: var(--surface-inset);
+}
+.visualization-matrix .semantic-field-label {
+  color: var(--ink);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+.visualization-matrix .semantic-field-description,
+.visualization-matrix .semantic-value-description {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-micro);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.visualization-matrix .semantic-value-description {
+  min-height: 3em;
+}
+.visualization-matrix .semantic-technical {
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+  color: var(--ink-soft);
+  font: var(--text-micro)/1.5 var(--font-mono);
+}
+.visualization-matrix .semantic-pointer {
+  color: var(--muted);
+  font-size: var(--text-micro);
 }
 .visualization-matrix code {
   color: var(--muted);
@@ -821,6 +900,15 @@
   margin: 4px 0 0;
   font-size: var(--text-xs);
   overflow-wrap: anywhere;
+}
+.visualization-contract dd strong,
+.visualization-contract dd p {
+  display: block;
+}
+.visualization-contract dd p {
+  margin: 3px 0 5px;
+  color: var(--muted);
+  line-height: 1.45;
 }
 .visualization-contract code {
   color: var(--ink-soft);

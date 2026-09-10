@@ -17,13 +17,16 @@ import JsonArtifactPanel from "../components/JsonArtifactPanel.vue";
 import StatusPill from "../components/StatusPill.vue";
 import {
   attributionSource,
+  backendExplanationPresentation,
   buildExecutionResult,
   executionLayerHeadline,
   executionLayerName,
   executionMetricLabel,
+  executionMetricSemanticField,
   executionStageSource,
   ExecutionVisualizationPanel,
   LayerRecordTable,
+  semanticFieldPresentation,
   validationCheckSource,
 } from "../features/execution-inspector";
 import { formatNumber, formatPercent } from "../lib/format";
@@ -57,6 +60,18 @@ const evidenceLabels: Record<string, string> = {
   missing: "没有明细",
 };
 
+function semanticField(field: string, value: unknown) {
+  return semanticFieldPresentation(field, value);
+}
+
+function backendExplanation(value: string | null | undefined) {
+  return backendExplanationPresentation(value);
+}
+
+function stageKind(stage: ExecutionStage) {
+  return stage.stage_kind || (typeof stage.title === "string" ? stage.title.replaceAll(" ", "_") : "unknown");
+}
+
 function displayHeadline(layer: ExecutionLayer | undefined) {
   if (!layer?.headline) return "—";
   return typeof layer.headline.value === "number"
@@ -84,6 +99,11 @@ function displayValue(value: unknown, unit = "") {
   if (unit === "bytes" && typeof value === "number") return `${formatNumber(value / 1_048_576)} MiB`;
   if (typeof value === "number") return `${formatNumber(value)}${unit ? ` ${unit}` : ""}`;
   return `${value}${unit ? ` ${unit}` : ""}`;
+}
+
+function metricSemantic(metric: ExecutionLayer["stats"][number]) {
+  const field = executionMetricSemanticField(metric.label);
+  return field ? semanticField(field, metric.value) : null;
 }
 
 function checkLabel(status: string | undefined) {
@@ -208,11 +228,34 @@ async function exportStructuredReport() {
           </div>
         </header>
 
+        <div class="layer-status-summary">
+          <div>
+            <small>{{ semanticField("actual_fidelity", selected.resolution?.actual_fidelity).fieldLabel }}</small>
+            <strong>{{ semanticField("actual_fidelity", selected.resolution?.actual_fidelity).valueLabel }}</strong>
+            <p v-if="semanticField('actual_fidelity', selected.resolution?.actual_fidelity).valueDescription">
+              {{ semanticField("actual_fidelity", selected.resolution?.actual_fidelity).valueDescription }}
+            </p>
+            <code>{{ semanticField("actual_fidelity", selected.resolution?.actual_fidelity).technicalText }}</code>
+          </div>
+          <div>
+            <small>{{ semanticField("evidenceState", selected.evidenceState).fieldLabel }}</small>
+            <strong>{{ semanticField("evidenceState", selected.evidenceState).valueLabel }}</strong>
+            <p v-if="semanticField('evidenceState', selected.evidenceState).valueDescription">
+              {{ semanticField("evidenceState", selected.evidenceState).valueDescription }}
+            </p>
+            <code>{{ semanticField("evidenceState", selected.evidenceState).technicalText }}</code>
+          </div>
+        </div>
+
         <div class="layer-metric-grid" :aria-label="t('本层关键指标')">
           <div v-for="metric in selected.stats" :key="metric.label" class="layer-metric">
             <small>{{ executionMetricLabel(metric.label) }}</small>
-            <strong :title="String(metric.value ?? '')">{{ displayValue(metric.value, metric.unit) }}</strong>
-            <span v-if="metric.hint">{{ metric.hint }}</span>
+            <strong :title="String(metric.value ?? '')">{{
+              metricSemantic(metric)?.valueLabel || displayValue(metric.value, metric.unit)
+            }}</strong>
+            <span v-if="metricSemantic(metric)?.valueDescription">{{ metricSemantic(metric)?.valueDescription }}</span>
+            <span v-else-if="metric.hint">{{ metric.hint }}</span>
+            <code v-if="metricSemantic(metric)">{{ metricSemantic(metric)?.technicalText }}</code>
             <ArtifactEvidenceLink v-if="metric.sourcePath" :source-path="metric.sourcePath" />
           </div>
         </div>
@@ -234,28 +277,47 @@ async function exportStructuredReport() {
           <div class="layer-insight-grid">
             <article>
               <header>
-                <Braces :size="17" /><strong>{{ t("后端原始说明") }}</strong>
+                <Braces :size="17" /><strong>{{ backendExplanation(selected.detail).label }}</strong>
               </header>
-              <p>{{ selected.detail }}</p>
+              <p>{{ backendExplanation(selected.detail).text }}</p>
+              <small v-if="backendExplanation(selected.detail).mapped" class="backend-raw"
+                >{{ t("后端原文") }}: {{ selected.detail }}</small
+              >
             </article>
             <article>
               <header>
-                <ShieldCheck :size="17" /><strong>{{ t("当前实现证据") }}</strong>
+                <ShieldCheck :size="17" /><strong>{{
+                  backendExplanation(selected.implementation?.evidence).label
+                }}</strong>
               </header>
-              <p>{{ selected.implementation?.evidence || t("本次报告没有提供该层的实现说明。") }}</p>
+              <p>{{ backendExplanation(selected.implementation?.evidence).text }}</p>
+              <small v-if="backendExplanation(selected.implementation?.evidence).mapped" class="backend-raw"
+                >{{ t("后端原文") }}: {{ selected.implementation?.evidence }}</small
+              >
             </article>
             <article class="layer-insight--gap">
               <header>
-                <AlertTriangle :size="17" /><strong>{{ t("仍有限制") }}</strong>
+                <AlertTriangle :size="17" /><strong>{{
+                  backendExplanation(selected.implementation?.gap).label
+                }}</strong>
               </header>
-              <p>{{ selected.implementation?.gap || t("本次报告没有单独声明该层的实现限制。") }}</p>
+              <p>{{ backendExplanation(selected.implementation?.gap).text }}</p>
+              <small v-if="backendExplanation(selected.implementation?.gap).mapped" class="backend-raw"
+                >{{ t("后端原文") }}: {{ selected.implementation?.gap }}</small
+              >
             </article>
           </div>
 
           <dl class="layer-source-list">
             <div>
               <dt>{{ t("证据状态") }}</dt>
-              <dd>{{ t(evidenceLabels[selected.evidenceState] || selected.evidenceState) }}</dd>
+              <dd>
+                <strong>{{ semanticField("evidenceState", selected.evidenceState).valueLabel }}</strong>
+                <small v-if="semanticField('evidenceState', selected.evidenceState).valueDescription">
+                  {{ semanticField("evidenceState", selected.evidenceState).valueDescription }}
+                </small>
+                <code>{{ semanticField("evidenceState", selected.evidenceState).technicalText }}</code>
+              </dd>
             </div>
             <div>
               <dt>{{ t("报告字段") }}</dt>
@@ -282,7 +344,11 @@ async function exportStructuredReport() {
               <StatusPill :value="check.status" />
               <div>
                 <strong>{{ check.check_id }}</strong>
-                <p>{{ check.detail }}</p>
+                <p>{{ backendExplanation(check.detail).text }}</p>
+                <small>{{ backendExplanation(check.detail).label }}</small>
+                <code v-if="backendExplanation(check.detail).mapped" class="backend-raw"
+                  >{{ t("后端原文") }}: {{ check.detail }}</code
+                >
                 <ArtifactEvidenceLink
                   :source-path="validationCheckSource(state.bundle.validation?.checks || [], check.check_id)"
                 />
@@ -303,7 +369,11 @@ async function exportStructuredReport() {
               <span>{{ item.rank }}</span>
               <div>
                 <strong>{{ item.component_code }}</strong>
-                <p>{{ item.detail }}</p>
+                <p>{{ backendExplanation(item.detail).text }}</p>
+                <small>{{ backendExplanation(item.detail).label }}</small>
+                <code v-if="backendExplanation(item.detail).mapped" class="backend-raw"
+                  >{{ t("后端原文") }}: {{ item.detail }}</code
+                >
                 <small>{{ item.evidence_link }}</small>
                 <ArtifactEvidenceLink
                   :source-path="attributionSource(state.bundle.tail?.attribution_ranking || [], item.attribution_id)"
@@ -343,10 +413,18 @@ async function exportStructuredReport() {
           <ExecutionVisualizationPanel :visualization="result.timeline" compact />
           <ol v-if="result.stages.length" class="stage-list">
             <li v-for="stage in result.stages" :key="stage.stage_id">
-              <span>{{ stage.subsystem }}</span>
+              <span :title="stage.subsystem">{{ executionLayerName(stage.subsystem) }}</span>
               <div>
-                <strong>{{ stage.stage_kind?.replaceAll("_", " ") }}</strong>
-                <p>{{ stage.detail }}</p>
+                <strong>{{ semanticField("stage_kind", stageKind(stage)).valueLabel }}</strong>
+                <small v-if="semanticField('stage_kind', stageKind(stage)).valueDescription">
+                  {{ semanticField("stage_kind", stageKind(stage)).valueDescription }}
+                </small>
+                <code>{{ semanticField("stage_kind", stageKind(stage)).technicalText }}</code>
+                <p>{{ backendExplanation(stage.detail).text }}</p>
+                <small>{{ backendExplanation(stage.detail).label }}</small>
+                <code v-if="backendExplanation(stage.detail).mapped" class="backend-raw"
+                  >{{ t("后端原文") }}: {{ stage.detail }}</code
+                >
               </div>
               <small>{{ durationUs(stage) }} µs</small>
               <ArtifactEvidenceLink
@@ -371,10 +449,16 @@ async function exportStructuredReport() {
         </summary>
         <div class="support-card-body">
           <template v-if="result.resourceConvergence">
-            <p>{{ result.resourceConvergence.summary || t("报告提供了资源汇合统计。") }}</p>
+            <p>
+              <small>{{ backendExplanation(result.resourceConvergence.summary).label }}</small>
+              {{ backendExplanation(result.resourceConvergence.summary).text }}
+              <code v-if="backendExplanation(result.resourceConvergence.summary).mapped" class="backend-raw"
+                >{{ t("后端原文") }}: {{ result.resourceConvergence.summary }}</code
+              >
+            </p>
             <dl>
               <div>
-                <dt>Collective phases</dt>
+                <dt>{{ t("集合通信阶段") }}</dt>
                 <dd>{{ formatNumber(result.resourceConvergence.collective_phase_count, 0) }}</dd>
               </div>
               <div>

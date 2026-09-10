@@ -1,0 +1,143 @@
+{
+  "schema_version": "tilesim.proposal.agent_orchestration.invalid_fixture_cases.v1",
+  "cases": [
+    {
+      "id": "agent-exposed-without-execution",
+      "schema": "parameter-descriptor.schema.json",
+      "base_fixture": "valid/parameter-descriptor.proposal.jsonc",
+      "patches": [
+        {
+          "pointer": "/dimensions/agent_exposed/state",
+          "value": "affirmed"
+        },
+        {
+          "pointer": "/dimensions/agent_exposed/reason_code",
+          "value": "agent_policy_evidence"
+        },
+        {
+          "pointer": "/dimensions/agent_exposed/evidence_refs",
+          "value": [
+            {
+              "kind": "synthetic_fixture",
+              "identity": "phase0.fixture.agent-policy",
+              "revision": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+              "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "held-out-without-calibration",
+      "schema": "parameter-descriptor.schema.json",
+      "base_fixture": "valid/parameter-descriptor.proposal.jsonc",
+      "patches": [
+        {
+          "pointer": "/dimensions/held_out_validated/state",
+          "value": "affirmed"
+        },
+        {
+          "pointer": "/dimensions/held_out_validated/reason_code",
+          "value": "held_out_validation_receipt_evidence"
+        },
+        {
+          "pointer": "/dimensions/held_out_validated/evidence_refs",
+          "value": [
+            {
+              "kind": "held_out_validation_receipt",
+              "identity": "phase0.fixture.held-out",
+              "revision": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+              "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unknown-reason-code",
+      "schema": "parameter-descriptor.schema.json",
+      "base_fixture": "valid/parameter-descriptor.proposal.jsonc",
+      "patches": [
+        {
+          "pointer": "/status_reason_code",
+          "value": "llm_says_supported"
+        }
+      ]
+    },
+    {
+      "id": "digest-material-includes-self",
+      "schema": "parameter-descriptor.schema.json",
+      "base_fixture": "valid/parameter-descriptor.proposal.jsonc",
+      "patches": [
+        {
+          "pointer": "/digest_material_fields",
+          "value": [
+            "field_id",
+            "canonical_digest"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "accepted-without-request-target",
+      "schema": "parameter-descriptor.schema.json",
+      "base_fixture": "valid/parameter-descriptor.proposal.jsonc",
+      "patches": [
+        {
+          "pointer": "/request_target",
+          "value": null
+        }
+      ]
+    },
+    {
+      "id": "unknown-schema-revision",
+      "schema": "capability-snapshot.schema.json",
+      "base_fixture": "valid/capability-snapshot.proposal.jsonc",
+      "patches": [
+        {
+          "pointer": "/bindings/schema_set_revision",
+          "value": "unknown"
+        }
+      ]
+    },
+    {
+      "id": "ambiguous-alias-with-one-candidate",
+      "schema": "capability-snapshot.schema.json",
+      "base_fixture": "valid/capability-snapshot.proposal.jsonc",
+      "patches": [
+        {
+          "pointer": "/alias_resolution/0/candidate_ids",
+          "value": [
+            "phase0.fixture.model.unknown"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "profile-without-source",
+      "schema": "model-profile.schema.json",
+      "base_fixture": "valid/model-profile.proposal.jsonc",
+      "patches": [
+        {
+          "pointer": "/sources",
+          "value": []
+        }
+      ]
+    },
+    {
+      "id": "synthetic-calibration-self-claim",
+      "schema": "workload-profile.schema.json",
+      "base_fixture": "valid/workload-profile.proposal.jsonc",
+      "patches": [
+        {
+          "pointer": "/calibration_level",
+          "value": "held_out_validated"
+        },
+        {
+          "pointer": "/allowed_claim_scope",
+          "value": "real_calibrated_validation"
+        }
+      ]
+    }
+  ]
+}

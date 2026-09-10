@@ -8,9 +8,9 @@
 
 1. `AGENTS.md`
 2. `docs/AI_HANDOFF.md`
-3. 稳定版维护或交接任务读取 `docs/NEXT_STABLE_MAINTENANCE_PROMPT.md`
-4. 当前任务涉及的代码和测试
-5. 仅在需要追溯时读取 `docs/development/`
+3. 部署或交接任务读取 `docs/getting-started/AI_DEPLOYMENT_AND_HANDOFF.md`
+4. 当前任务涉及的架构、契约、功能说明、代码和测试
+5. 仅在需要追溯时读取 `docs/archive/`
 
 `docs/AI_HANDOFF.md` 是当前事实来源；阶段文档是历史证据，不能用旧状态覆盖当前状态。
 
@@ -59,6 +59,7 @@
 
 ```powershell
 pnpm contracts:check
+pnpm docs:check
 pnpm deps:check
 pnpm typecheck
 pnpm test

@@ -2,13 +2,13 @@
 
 > 文档集 ID：`tilesim.docs.agent_orchestration.v1alpha1`
 >
-> 状态：Phase 0D backend 与 Web runtime/reproducibility commits 已闭合；docs/evidence 等待授权
+> 状态：Phase 1 Web 八字段只读草案侧栏已完成本地 Git 集成；正式写工作流仍未启动
 >
-> 事实日期：2026-09-09
+> 事实日期：2026-09-10
 >
 > 后端 execution evidence commit：`7e5a8c6a5cf738bd24608b440a61b62dee8d1881`
 >
-> Web 当前 HEAD：`df1f24452384d328ce402ffa37affbd8c734da13`
+> Web Phase 1 开发基线：`b46b9783bdd8a8ed330cffe549327e4e381b6f03`
 
 Phase 0B 开发基线为后端 `09c22c0efff890253a1eacf403c2979f56fd9ba6`、Web
 `09e95b0efd37c04c00a8c5310cc3c47f89cf3f42`。2026-09-08 的只读审计发现 `127.0.0.1:5173`
@@ -20,12 +20,16 @@ Phase 0C 已恢复 nested v1 的旧接受集合，并新增 nested v2 承载严�
 oracle 已通过。正式 Capability Catalog、snapshot、parameter descriptor 与五类 Profile Schema 已进入
 OpenAPI/schema-set/manifest/generated/runtime validator，Bridge 与 Web 只读 adapter 已闭合。Phase 0D 已把八字段执行证据
 绑定到独立后端 commit，Web runtime/reproducibility commits 为 `64a741f3…` / `df1f2445…`，Git 可复现性 oracle
-为 8/8，runtime/reproducibility HEAD snapshot 为 `sha256:2411a70b…673a0`。Docs/evidence 尚未提交，也未部署 5173。
-Phase 1 技术 DoR 已 ready，但本任务不启动 Phase 1。
+为 8/8，runtime/reproducibility HEAD snapshot 为 `sha256:2411a70b…673a0`，docs/evidence commit 为
+`b46b9783bdd8a8ed330cffe549327e4e381b6f03`。未部署 5173。
+Phase 1 已在 Web 开发基线之上实现本地、单轮、无副作用的八字段参数草案：全局右侧栏、最小只读页面上下文、
+确定性意图编译、typed blocks、stale 隔离和 128 条 fixture eval 已完成。该实现不发布新的 Bridge contract，
+不创建运行，不调用 Evidence Provider，也不关闭正式 Draft、Validation、Conversation、Approval 或 Workflow Gap。
+准确验收记录见 [Phase 1 Web 本地验收](19_PHASE1_WEB_LOCAL_ACCEPTANCE.md)。
 
 本目录是一套供后续 AI Agent、开发者和评审者共同阅读的实施规范。它将总路线图拆成可独立执行的专题文档，并明确区分当前事实、拟议设计、契约缺口和远期研究项。
 
-总览见 [基于 Agent 的仿真编排模块完整开发方案](../F9_AGENT_BASED_SIMULATION_ORCHESTRATION_PLAN.md)。当前 Evidence Agent 的实际使用方式见 [Evidence Agent 使用指南](../F9_EVIDENCE_AGENT_USER_GUIDE.md)。
+总览见 [基于 Agent 的仿真编排模块完整开发方案](../research/F9_AGENT_BASED_SIMULATION_ORCHESTRATION_PLAN.md)。当前 Evidence Agent 的实际使用方式见 [Evidence Agent 使用指南](../features/evidence-agent/F9_EVIDENCE_AGENT_USER_GUIDE.md)。
 
 ## 1. AI 必读协议
 
@@ -83,6 +87,7 @@ Phase 1 技术 DoR 已 ready，但本任务不启动 Phase 1。
 | 16   | [全局右侧 Agent 对话栏](16_RIGHT_SIDE_AGENT_COPILOT_PANEL.md)          | App Shell、跨页面助手、对话交互  | 侧栏、页面上下文、typed blocks 和分期接入  |
 | 17   | [开发者指导 AI 实施手册](17_DEVELOPER_AI_EXECUTION_PLAYBOOK.md)        | 启动阶段、多 Agent、调试和验收   | 必读路由、提示词模板、分工和门禁           |
 | 18   | [Phase 0–7 可复制提示词包](18_COPY_READY_MULTI_AGENT_PROMPTS.md)       | 实际启动一个并行开发阶段         | 八个完整总控提示词和三路子 Agent 分工      |
+| 19   | [Phase 1 Web 本地验收](19_PHASE1_WEB_LOCAL_ACCEPTANCE.md)              | Phase 1 复核、集成和交接         | 实现边界、门禁、证据等级与 remaining Gap   |
 
 ## 4. 按任务路由阅读
 
@@ -131,10 +136,11 @@ Phase 1 技术 DoR 已 ready，但本任务不启动 Phase 1。
 
 优先完成：
 
-1. 等待用户授权 47 文件 docs/evidence 本地 commit；
-2. docs/evidence 必须使用独立 allow-list，继续排除 mixed-ownership、launcher、deployment、Evidence Agent 和 Trace 文件；
-3. 五类 Profile 的正式 Schema 保持已发布但实际数据为 0/unavailable，真实 source/licensing/calibration Gap 继续开放；
-4. Phase 1 技术 DoR 已 ready，但本任务到 Phase 0D 为止，不启动 Phase 1。
+1. 审计 Phase 2 的五类真实 Profile、模型/设备/引擎选择、TP/PP/EP、物理 KV、工作负载和网络累计链 DoR；
+2. 五类 Profile 的正式 Schema 保持已发布但实际数据为 0/unavailable，真实 source/licensing/calibration Gap 继续开放；
+3. Phase 1 Web 只读草案侧栏已完成 `validated` 本地集成；正式 Draft、Validation、Conversation、Approval、Workflow、
+   RAG 与写工具仍需新契约；
+4. 不自动启动 Phase 2，也不把本地草案能力描述成外部模型对话或正式运行能力。
 
 当前 catalog revision 为 `sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b`，
 contract package revision 为 `sha256:1fa372e1fc4eafe5b819aedd29f258732b8a53fab6b9559e964f6ee1164a4fe3`，

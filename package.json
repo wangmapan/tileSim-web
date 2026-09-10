@@ -2,6 +2,10 @@
   "name": "tilesim-evidence-studio",
   "private": true,
   "version": "0.2.0",
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -13,6 +17,7 @@
     "typecheck": "vue-tsc --noEmit",
     "contracts:generate": "node scripts/generate-contract-types.mjs && node scripts/generate-bridge-client.mjs",
     "contracts:check": "node scripts/generate-contract-types.mjs --check && node scripts/generate-bridge-client.mjs --check",
+    "docs:check": "node scripts/check-doc-links.mjs",
     "deps:check": "node scripts/check-frontend-dependencies.mjs",
     "perf:artifact-baseline": "node --expose-gc scripts/measure-artifact-baseline.mjs",
     "perf:artifact-worker": "vite-node scripts/measure-artifact-worker-baseline.ts",

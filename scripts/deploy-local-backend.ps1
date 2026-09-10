@@ -1,17 +1,24 @@
 param(
-    [string]$SourceRoot = "D:\tileSim",
+    [string]$SourceRoot = "",
     [string]$WslDistro = "Ubuntu-24.04",
+    [string]$BuildRootWsl = "",
     [string]$BuildDirWsl = "",
     [switch]$NoRestart
 )
 
 $ErrorActionPreference = "Stop"
-$webRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$source = (Resolve-Path -LiteralPath $SourceRoot).Path
+Import-Module (Join-Path $PSScriptRoot "deployment-common.psm1") -Force
+$webRoot = Resolve-TileSimWebRoot $PSScriptRoot
+$sourcePath = Resolve-TileSimBackendRepositoryRoot $webRoot $SourceRoot
+if (-not (Test-Path -LiteralPath $sourcePath)) {
+    throw "The TileSim backend repository was not found: $sourcePath. Run scripts/bootstrap-workbench.ps1 first or pass -SourceRoot."
+}
+$source = (Resolve-Path -LiteralPath $sourcePath).Path
+$webRootWsl = ConvertTo-TileSimWslPath $webRoot
+Assert-TileSimWslDistro $WslDistro
 $runtimeRoot = Join-Path $webRoot "runtime"
 $manifestPath = Join-Path $runtimeRoot "backend-current.json"
-$evidenceAgentConfigPath = Join-Path $runtimeRoot "evidence-agent.local.json"
-$node = "C:\Users\mapanwang\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe"
+$node = Resolve-TileSimNode
 $mutex = [System.Threading.Mutex]::new($false, "Local\TileSimBackendUpdate")
 
 function Invoke-Checked {
@@ -38,18 +45,9 @@ function Write-AtomicTextFile {
     }
 }
 
-function Convert-ToWslPath {
-    param([string]$WindowsPath)
-    $full = [System.IO.Path]::GetFullPath($WindowsPath)
-    if ($full -notmatch '^([A-Za-z]):\\(.*)$') {
-        throw "Only absolute Windows drive paths are supported: $full"
-    }
-    return "/mnt/$($matches[1].ToLower())/$($matches[2].Replace('\', '/'))"
-}
-
 function Get-SourceStateDigest {
     param([string]$SourceRootWsl)
-    $output = @(& wsl.exe -d $WslDistro --exec env "TILESIM_ROOT=$SourceRootWsl" python3 "/mnt/d/tileSim-web/bridge/server.py" --print-source-state-digest)
+    $output = @(& wsl.exe -d $WslDistro --exec env "TILESIM_ROOT=$SourceRootWsl" python3 "$webRootWsl/bridge/server.py" --print-source-state-digest)
     if ($LASTEXITCODE -ne 0) { throw "Could not calculate the local backend source-state digest." }
     $digest = $output | Where-Object { $_ -match '^[0-9a-f]{64}$' } | Select-Object -Last 1
     if (-not $digest) { throw "The local backend source-state digest was not returned." }
@@ -68,7 +66,7 @@ function Get-DirectoryDigest {
 }
 
 function Get-SchemaSetRevision {
-    $output = @(& wsl.exe -d $WslDistro --exec python3 "/mnt/d/tileSim-web/bridge/server.py" --print-schema-set-revision)
+    $output = @(& wsl.exe -d $WslDistro --exec python3 "$webRootWsl/bridge/server.py" --print-schema-set-revision)
     if ($LASTEXITCODE -ne 0) { throw "Could not calculate the Bridge schema-set revision." }
     $revision = $output | Where-Object { $_ -match '^sha256:[0-9a-f]{64}$' } | Select-Object -Last 1
     if (-not $revision) { throw "The Bridge schema-set revision was not returned." }
@@ -95,15 +93,9 @@ function New-WebReleaseSnapshot {
 }
 
 function Start-DeployedBridge {
-    if (Test-Path -LiteralPath $evidenceAgentConfigPath) {
-        & (Join-Path $PSScriptRoot "start-evidence-agent.ps1") `
-            -ConfigPath $evidenceAgentConfigPath `
-            -WslDistro $WslDistro
-    } else {
-        & (Join-Path $PSScriptRoot "start-backend.ps1") `
-            -ManifestPath $manifestPath `
-            -WslDistro $WslDistro
-    }
+    & (Join-Path $PSScriptRoot "start-workbench.ps1") `
+        -ManifestPath $manifestPath `
+        -WslDistro $WslDistro
     if ($LASTEXITCODE -ne 0) { throw "Bridge restart returned exit code $LASTEXITCODE." }
 }
 
@@ -121,7 +113,7 @@ try {
     }
     $branch = (& git -C $source branch --show-current).Trim()
     if (-not $branch) { $branch = "detached" }
-    $sourceWsl = Convert-ToWslPath $source
+    $sourceWsl = ConvertTo-TileSimWslPath $source
     $sourceDigest = Get-SourceStateDigest $sourceWsl
     $webRevision = (& git -C $webRoot rev-parse HEAD).Trim()
     if ($LASTEXITCODE -ne 0 -or $webRevision -notmatch '^[0-9a-f]{40}$') {
@@ -139,7 +131,8 @@ try {
             $previousManifest.build_dir_wsl) {
             $BuildDirWsl = $previousManifest.build_dir_wsl
         } else {
-            $BuildDirWsl = "/home/mapanwang/tilesim-local-builds/$($revision.Substring(0, 12))-snapshot"
+            $resolvedBuildRootWsl = Resolve-TileSimWslBuildRoot $WslDistro $BuildRootWsl
+            $BuildDirWsl = "$resolvedBuildRootWsl/local-builds/$($revision.Substring(0, 12))-snapshot"
         }
     }
 
@@ -157,12 +150,12 @@ try {
     $testCount = @($testInventory.tests).Count
 
     Invoke-Checked "wsl.exe" @(
-        "-d", $WslDistro, "--cd", "/mnt/d/tileSim-web/bridge", "--exec",
+        "-d", $WslDistro, "--cd", "$webRootWsl/bridge", "--exec",
         "python3", "-m", "unittest", "test_server.py"
     )
     Invoke-Checked "wsl.exe" @(
         "-d", $WslDistro, "--exec", "python3", "-m", "py_compile",
-        "/mnt/d/tileSim-web/bridge/server.py"
+        "$webRootWsl/bridge/server.py"
     )
     Invoke-Checked $node @((Join-Path $webRoot "node_modules\vitest\vitest.mjs"), "run") $webRoot
     Invoke-Checked $node @((Join-Path $webRoot "node_modules\vite\bin\vite.js"), "build") $webRoot
@@ -178,8 +171,8 @@ try {
     $webBuildDigest = Get-DirectoryDigest (Join-Path $webRoot "dist") ""
     $schemaSetRevision = Get-SchemaSetRevision
     $webRelease = New-WebReleaseSnapshot $webRevision $webSourceDigest $webBuildDigest $schemaSetRevision
-    $webReleaseRootWsl = Convert-ToWslPath $webRelease.release_root_windows
-    $webStateRootWsl = Convert-ToWslPath $webRoot
+    $webReleaseRootWsl = ConvertTo-TileSimWslPath $webRelease.release_root_windows
+    $webStateRootWsl = ConvertTo-TileSimWslPath $webRoot
 
     New-Item -ItemType Directory -Path $runtimeRoot -Force | Out-Null
     $manifest = [ordered]@{
@@ -204,7 +197,7 @@ try {
         tilesim_root_wsl = $sourceWsl
         build_dir_wsl = $BuildDirWsl
         tilesim_cli_wsl = "$BuildDirWsl/TileSimCLI"
-        manifest_path_wsl = Convert-ToWslPath $manifestPath
+        manifest_path_wsl = ConvertTo-TileSimWslPath $manifestPath
         deployed_at = [DateTimeOffset]::Now.ToString("o")
         validation = [ordered]@{
             tilesim_ctest = "$testCount/$testCount"

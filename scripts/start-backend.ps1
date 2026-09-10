@@ -1,13 +1,35 @@
 param(
     [string]$ManifestPath = (Join-Path $PSScriptRoot "..\runtime\backend-current.json"),
+    [string]$TracePackageRoot = (Join-Path $PSScriptRoot "..\runtime\trace-packages"),
     [string]$WslDistro = "Ubuntu-24.04"
 )
 
 $ErrorActionPreference = "Stop"
-$webRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$node = "C:\Users\mapanwang\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe"
+Import-Module (Join-Path $PSScriptRoot "deployment-common.psm1") -Force
+
+$wslCommand = Get-Command "wsl.exe" -ErrorAction SilentlyContinue
+if ($null -eq $wslCommand) {
+    throw "TILESIM_WSL_NOT_INSTALLED: Windows Subsystem for Linux is required to start TileSim Web."
+}
+
+$wslService = Get-CimInstance Win32_Service -Filter "Name='WslService'" -ErrorAction SilentlyContinue
+if ($null -ne $wslService -and $wslService.StartMode -eq "Disabled") {
+    throw (
+        "TILESIM_WSL_SERVICE_DISABLED: The Windows WSL Service is disabled. " +
+        "Open PowerShell as Administrator and run: " +
+        "Set-Service -Name WslService -StartupType Manual; Start-Service -Name WslService"
+    )
+}
+
+$webRoot = Resolve-TileSimWebRoot $PSScriptRoot
+$webRootWsl = ConvertTo-TileSimWslPath $webRoot
+$node = Resolve-TileSimNode
+Assert-TileSimWslDistro $WslDistro
 $manifestFile = (Resolve-Path -LiteralPath $ManifestPath).Path
 $manifest = Get-Content -Raw -LiteralPath $manifestFile | ConvertFrom-Json
+$tracePackageRootWindows = [System.IO.Path]::GetFullPath($TracePackageRoot)
+New-Item -ItemType Directory -Path $tracePackageRootWindows -Force | Out-Null
+$tracePackageRootWsl = ConvertTo-TileSimWslPath $tracePackageRootWindows
 $required = @("source_revision", "tilesim_root_wsl", "tilesim_cli_wsl", "manifest_path_wsl")
 foreach ($name in $required) {
     if (-not $manifest.$name) { throw "Deployment manifest is missing '$name'." }
@@ -52,14 +74,12 @@ if ($manifest.web_release_root_windows) {
             throw "TileSim Web build output no longer matches the deployment manifest."
         }
     }
-    $bridgeScriptWsl = "/mnt/d/tileSim-web/bridge/server.py"
-    $webStateRootWsl = "/mnt/d/tileSim-web"
+    $bridgeScriptWsl = "$webRootWsl/bridge/server.py"
+    $webStateRootWsl = $webRootWsl
 }
 
-& wsl.exe -d $WslDistro --exec sh -lc "pkill -f '^python3 /mnt/d/tileSim-web/bridge/server.py$' || true"
-if ($LASTEXITCODE -ne 0) { throw "Could not stop the previous TileSim Web bridge." }
-& wsl.exe -d $WslDistro --exec sh -lc "pkill -f '^python3 /mnt/d/tileSim-web/runtime/releases/[^ ]+/bridge/server.py$' || true"
-if ($LASTEXITCODE -ne 0) { throw "Could not stop the previous immutable TileSim Web bridge." }
+& wsl.exe -d $WslDistro --exec sh -lc "fuser -k 5173/tcp >/dev/null 2>&1 || true"
+if ($LASTEXITCODE -ne 0) { throw "Could not stop the previous TileSim Web bridge on port 5173." }
 Start-Sleep -Milliseconds 350
 
 $arguments = @(
@@ -71,6 +91,7 @@ $arguments = @(
     "TILESIM_BUILD_STATE_DIGEST=$($manifest.build_state_digest)",
     "TILESIM_DEPLOYMENT_MANIFEST=$($manifest.manifest_path_wsl)",
     "TILESIM_WEB_STATE_ROOT=$webStateRootWsl",
+    "TILESIM_TRACE_PACKAGE_ROOT=$tracePackageRootWsl",
     "python3", $bridgeScriptWsl
 )
 $evidenceAgentEnvironmentNames = @(

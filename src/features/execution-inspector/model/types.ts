@@ -99,11 +99,16 @@ export interface ExecutionResult {
 }
 
 export const layerDefinitions: LayerDefinition[] = [
-  { id: "S0", name: "Workload", title: "请求与负载", role: "本次运行的输入边界" },
-  { id: "S1", name: "Runtime", title: "运行时与策略", role: "调度、批处理与请求推进" },
-  { id: "S2", name: "Execution", title: "执行抽象", role: "把运行时输出 lowering 为资源语义" },
-  { id: "S3", name: "Memory / KV", title: "内存与 KV", role: "KV 分配、增长与内存延迟" },
-  { id: "S4", name: "Device", title: "设备性能", role: "设备任务、profile 与执行延迟" },
-  { id: "S5", name: "Collective", title: "集合通信", role: "collective 与通信 phase 语义" },
-  { id: "S6", name: "Fabric", title: "互连实现", role: "链路排队、拥塞与执行记录" },
+  {
+    id: "S0",
+    name: "Workload",
+    title: "工作负载抽象与负载描述语言模块",
+    role: "本次运行的输入边界",
+  },
+  { id: "S1", name: "Runtime", title: "推理引擎与服务运行时模块", role: "调度、批处理与请求推进" },
+  { id: "S2", name: "Execution", title: "执行语义建模模块", role: "把运行时输出转换为资源语义" },
+  { id: "S3", name: "Memory / KV", title: "KV Cache 建模模块", role: "KV 分配、增长与内存延迟" },
+  { id: "S4", name: "Device", title: "设备性能建模模块", role: "设备任务、profile 与执行延迟" },
+  { id: "S5", name: "Collective", title: "集合通信语义模块", role: "collective 与通信 phase 语义" },
+  { id: "S6", name: "Fabric", title: "网络与硬件资源模块", role: "链路排队、拥塞与执行记录" },
 ];

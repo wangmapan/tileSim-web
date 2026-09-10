@@ -20,7 +20,7 @@
 
 工作树未提交内容不构成发布基线，也不得被本任务清理或覆盖。
 
-### 1.1 Phase 0D pre-commit 事实（2026-09-09）
+### 1.1 Phase 0D 发布事实（2026-09-09）
 
 - nested v1 保留 partially_calibrated、旧五类 claim scope、oversubscription 下界 0.000001、
   包含 uncertainty/tail-risk 的 uniqueness，且不应用新 DES aggregate budget。
@@ -31,8 +31,8 @@
   agent_exposed，五类实际 Profile 为 0/unavailable，未公开能力仍为 not_exposed。
 - 八字段 execution evidence 已绑定后端 commit `7e5a8c6a…`，Git 可复现性 oracle 为 8/8；三项新增差分仍只证明
   synthetic consistency，不构成 calibration 或 held-out validation。
-- Web runtime 与 Windows UTF-8 oracle portability follow-up 均已形成 Git commit；docs/evidence 仍未提交。这些 commit
-  不是 5173 deployment，也不构成 live evidence。
+- Web runtime、Windows UTF-8 oracle portability follow-up 与 docs/evidence 均已形成 Git commit。这些 commit
+  不是 5173 deployment，也不构成 live evidence；Phase 1 后续集成不改变这些正式 identity。
 
 ## 2. 后端当前闭合程度
 
@@ -232,8 +232,21 @@ strict candidate 可执行字段：
   后端 evidence commit 构造的 pre-commit snapshot vector 为 `sha256:90869411…0df9`。
 - F8 compatibility 为 28/28，Phase 0D oracle unit 为 5/5，完整 Bridge 为 105/105，frontend 为 417 passed、
   7 skipped，desktop fixture E2E 为 47 passed、5 个 deployed/live tests skipped。
-- Web runtime 与 docs/evidence 必须分别按精确 allow-list 获得授权；不得把 launcher、deployment、Evidence Agent、
-  Trace prototype、mixed-ownership 文档或 Phase 0 proposal 包带入提交。
+- Phase 0 proposal 与 Phase 0B publication candidate 已归档；正式 runtime contract 继续只位于
+  `bridge/contracts/agent_orchestration_capability/`，不得从归档恢复候选语义。
+
+### 9.5 Phase 1 Web 本地八字段草案（2026-09-09）
+
+- 在 Web 开发基线 `b46b9783bdd8a8ed330cffe549327e4e381b6f03` 上完成全局右侧栏、最小只读
+  `PageContextEnvelope`、typed result blocks、确定性单轮 intent compiler 和 current-subset 内存草案；
+- 草案只覆盖正式 Capability Catalog 暴露的八个字段，不是 Bridge Experiment Draft，也不会创建运行或调用
+  Evidence Provider；模型、设备、卡数、TP/PP/EP、placement、物理 KV、集合通信算法和 SLO 均 fail closed；
+- 双语或中英混合 fixture corpus 为 128/128，八字段 canonical request equivalence 为 8/8；结果只证明
+  synthetic consistency 与 UI/contract 行为，不构成真实校准或独立 held-out validation；
+- 最新集成门禁为 Web 504 passed、8 skipped，桌面 fixture E2E 50 passed、6 个 deployed/live tests skipped，
+  Bridge 为 105/105；Phase 0D 可复现性 oracle 以不可变后端 evidence revision 复跑并保持通过；
+- `GAP-COPILOT-UI-001` 已达到 `validated`；`GAP-DRAFT-001`、`GAP-VALIDATE-001`、
+  `GAP-CLARIFY-001` 及 Conversation/Approval/Workflow Gap 仍为 open。
 
 ## 10. 优先缺口
 

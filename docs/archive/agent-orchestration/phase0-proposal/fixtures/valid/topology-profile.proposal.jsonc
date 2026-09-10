@@ -1,0 +1,191 @@
+{
+  "schema_version": "tilesim.proposal.agent_orchestration.topology_profile.v1alpha1",
+  "contract_status": "proposal_only",
+  "profile_family": "topology",
+  "profile_id": "phase0.fixture.topology.unknown",
+  "profile_revision": "sha256:5111111111111111111111111111111111111111111111111111111111111111",
+  "canonical_digest": "sha256:1aea769e2dd623dedfb2d49fdfc0fa83b1cc6ee1797ae48fbdb30de21b5b0b91",
+  "canonicalization": {
+    "identity": "tilesim.bridge.canonical_json.v1",
+    "algorithm": "sha256",
+    "text_encoding": "utf-8",
+    "object_key_order": "unicode_code_point_ascending",
+    "array_order": "preserved",
+    "number_policy": "lossless_integer_tokens_decimal_strings_no_binary_float"
+  },
+  "digest_material_fields": [
+    "profile_family",
+    "profile_id",
+    "status"
+  ],
+  "aliases": [],
+  "owner_module": "网络与硬件资源模块",
+  "status": "profile_missing",
+  "reason_code": "profile_missing",
+  "sources": [
+    {
+      "source_id": "phase0.fixture.source.topology",
+      "source_kind": "synthetic_fixture",
+      "revision": "sha256:5111111111111111111111111111111111111111111111111111111111111111",
+      "digest": "sha256:5111111111111111111111111111111111111111111111111111111111111111",
+      "field_class": "modelled",
+      "claim_scope": "contract_fixture_only"
+    }
+  ],
+  "valid_regimes": [
+    {
+      "regime_id": "phase0.fixture.contract-only",
+      "source_modes": [
+        "synthetic_trace"
+      ],
+      "gpu_participation_modes": [
+        "gpu_free"
+      ],
+      "fidelity_tiers": [
+        "Analytical"
+      ],
+      "limitations": [
+        "Contract shape only; no topology or calibration claim."
+      ]
+    }
+  ],
+  "field_provenance": {
+    "observed_fields": [],
+    "inferred_fields": [],
+    "modelled_fields": [
+      "/demand_execution_ownership"
+    ],
+    "unknown_fields": [
+      "/devices",
+      "/endpoints",
+      "/domains",
+      "/links",
+      "/ports",
+      "/network_classes",
+      "/link_characteristics",
+      "/routing_binding",
+      "/transport_binding",
+      "/collective_binding",
+      "/placement_constraints",
+      "/disabled_resources",
+      "/applicable_scale",
+      "/calibration_receipt"
+    ]
+  },
+  "lifecycle": {
+    "state": "active",
+    "introduced_revision": "sha256:5111111111111111111111111111111111111111111111111111111111111111",
+    "deprecated_revision": null,
+    "removal_revision": null,
+    "replacement_identity": null
+  },
+  "compatibility": {
+    "policy": "additive_optional",
+    "unknown_identity_behavior": "fail_closed",
+    "unknown_revision_behavior": "fail_closed",
+    "predecessor_identity": null,
+    "successor_identity": null
+  },
+  "devices": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "endpoints": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "domains": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "links": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "ports": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "network_classes": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "link_characteristics": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "routing_binding": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "transport_binding": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "collective_binding": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "placement_constraints": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "disabled_resources": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "applicable_scale": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "calibration_receipt": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "calibration_missing"
+  },
+  "demand_execution_ownership": {
+    "communication_demand_owner": "集合通信语义模块",
+    "path_queue_congestion_completion_owner": "网络与硬件资源模块"
+  }
+}

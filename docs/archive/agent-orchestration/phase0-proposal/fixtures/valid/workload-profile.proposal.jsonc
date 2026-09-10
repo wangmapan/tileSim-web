@@ -1,0 +1,220 @@
+{
+  "schema_version": "tilesim.proposal.agent_orchestration.workload_profile.v1alpha1",
+  "contract_status": "proposal_only",
+  "profile_family": "workload",
+  "profile_id": "phase0.fixture.workload.synthetic",
+  "profile_revision": "sha256:6111111111111111111111111111111111111111111111111111111111111111",
+  "canonical_digest": "sha256:a6280edb0b52f0908999bfcb76af581d157ba168aa20b1d50bd0b1cdfae387e2",
+  "canonicalization": {
+    "identity": "tilesim.bridge.canonical_json.v1",
+    "algorithm": "sha256",
+    "text_encoding": "utf-8",
+    "object_key_order": "unicode_code_point_ascending",
+    "array_order": "preserved",
+    "number_policy": "lossless_integer_tokens_decimal_strings_no_binary_float"
+  },
+  "digest_material_fields": [
+    "profile_family",
+    "profile_id",
+    "status"
+  ],
+  "aliases": [],
+  "owner_module": "工作负载抽象与负载描述语言模块",
+  "status": "profile_missing",
+  "reason_code": "profile_missing",
+  "sources": [
+    {
+      "source_id": "phase0.fixture.source.workload",
+      "source_kind": "synthetic_fixture",
+      "revision": "sha256:6111111111111111111111111111111111111111111111111111111111111111",
+      "digest": "sha256:6111111111111111111111111111111111111111111111111111111111111111",
+      "field_class": "modelled",
+      "claim_scope": "contract_fixture_only"
+    }
+  ],
+  "valid_regimes": [
+    {
+      "regime_id": "phase0.fixture.contract-only",
+      "source_modes": [
+        "synthetic_trace"
+      ],
+      "gpu_participation_modes": [
+        "gpu_free"
+      ],
+      "fidelity_tiers": [
+        "Analytical"
+      ],
+      "limitations": [
+        "Contract shape only; synthetic fixture is not calibration ground truth."
+      ]
+    }
+  ],
+  "field_provenance": {
+    "observed_fields": [],
+    "inferred_fields": [],
+    "modelled_fields": [
+      "/trace_source",
+      "/calibration_level",
+      "/allowed_claim_scope"
+    ],
+    "unknown_fields": [
+      "/task_scenario_identity",
+      "/task_scenario_revision",
+      "/request_count",
+      "/prompt_length_distribution",
+      "/decode_length_distribution",
+      "/arrival_process",
+      "/arrival_rate",
+      "/burst",
+      "/concurrency",
+      "/model_constraints",
+      "/engine_constraints",
+      "/session_prefix_cache_reuse",
+      "/generation_method",
+      "/scaling_policy",
+      "/seed",
+      "/reproducibility_fields",
+      "/allowed_overrides"
+    ]
+  },
+  "lifecycle": {
+    "state": "active",
+    "introduced_revision": "sha256:6111111111111111111111111111111111111111111111111111111111111111",
+    "deprecated_revision": null,
+    "removal_revision": null,
+    "replacement_identity": null
+  },
+  "compatibility": {
+    "policy": "additive_optional",
+    "unknown_identity_behavior": "fail_closed",
+    "unknown_revision_behavior": "fail_closed",
+    "predecessor_identity": null,
+    "successor_identity": null
+  },
+  "task_scenario_identity": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "task_scenario_revision": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "request_count": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "prompt_length_distribution": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "decode_length_distribution": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "arrival_process": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "arrival_rate": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "burst": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "concurrency": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "model_constraints": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "engine_constraints": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "session_prefix_cache_reuse": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "trace_source": {
+    "source_mode": "synthetic_trace",
+    "source_identity": "phase0.fixture.synthetic-workload-source",
+    "source_revision": "sha256:6111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "generation_method": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "calibration_level": "uncalibrated",
+  "allowed_claim_scope": "synthetic_consistency",
+  "scaling_policy": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "seed": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "reproducibility_fields": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "allowed_overrides": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  }
+}

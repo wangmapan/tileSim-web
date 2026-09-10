@@ -1,0 +1,661 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/proposals/agent-orchestration-phase0/common.schema.json",
+  "x-tilesim-contract-status": "proposal_only",
+  "$defs": {
+    "revision": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "stableId": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{0,159}$"
+    },
+    "uint64Decimal": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]{0,19})$",
+      "x-tilesim-lossless-json-integer": "uint64_decimal_string"
+    },
+    "decimalString": {
+      "type": "string",
+      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+    },
+    "ownerModule": {
+      "enum": [
+        "工作负载抽象与负载描述语言模块",
+        "推理引擎与服务运行时模块",
+        "执行语义建模模块",
+        "KV Cache 建模模块",
+        "设备性能建模模块",
+        "集合通信语义模块",
+        "网络与硬件资源模块",
+        "统一仿真内核模块",
+        "场景与探索编排模块",
+        "校准验证与指标归因模块",
+        "基于 Agent 的仿真编排模块"
+      ]
+    },
+    "supportStatus": {
+      "enum": [
+        "available",
+        "conditional",
+        "not_exposed",
+        "unsupported",
+        "unresolved_not_executed",
+        "profile_missing",
+        "calibration_missing",
+        "temporarily_unavailable",
+        "deprecated"
+      ]
+    },
+    "reasonCode": {
+      "enum": [
+        "none",
+        "formal_descriptor_evidence",
+        "formal_request_schema_evidence",
+        "deterministic_validation_evidence",
+        "lowering_evidence",
+        "execution_test_evidence",
+        "artifact_observation_evidence",
+        "calibration_receipt_evidence",
+        "held_out_validation_receipt_evidence",
+        "ui_surface_evidence",
+        "agent_policy_evidence",
+        "not_formally_described",
+        "request_not_accepted",
+        "deterministic_validation_missing",
+        "lowering_missing",
+        "execution_evidence_missing",
+        "observable_evidence_missing",
+        "profile_missing",
+        "profile_expired",
+        "profile_withdrawn",
+        "profile_revision_unknown",
+        "profile_source_missing",
+        "ambiguous_alias",
+        "combination_unsupported",
+        "combination_unresolved",
+        "calibration_missing",
+        "calibration_self_claim_rejected",
+        "held_out_validation_missing",
+        "not_exposed_by_ui",
+        "not_exposed_to_agent",
+        "temporarily_unavailable",
+        "deprecated",
+        "not_applicable",
+        "binding_revision_mismatch",
+        "catalog_drift"
+      ]
+    },
+    "evidenceReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "identity",
+        "revision",
+        "digest"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "formal_contract",
+            "runtime_descriptor",
+            "backend_registry",
+            "lowering_test",
+            "execution_test",
+            "artifact_field",
+            "calibration_receipt",
+            "held_out_validation_receipt",
+            "synthetic_fixture"
+          ]
+        },
+        "identity": {
+          "$ref": "#/$defs/stableId"
+        },
+        "revision": {
+          "$ref": "#/$defs/revision"
+        },
+        "digest": {
+          "$ref": "#/$defs/revision"
+        },
+        "json_pointer": {
+          "type": "string",
+          "pattern": "^/"
+        }
+      }
+    },
+    "dimension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "reason_code",
+        "evidence_refs"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "affirmed",
+            "denied",
+            "unknown",
+            "not_applicable"
+          ]
+        },
+        "reason_code": {
+          "$ref": "#/$defs/reasonCode"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidenceReference"
+          },
+          "uniqueItems": true
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "affirmed"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason_code": {
+                "not": {
+                  "enum": [
+                    "none",
+                    "not_applicable"
+                  ]
+                }
+              },
+              "evidence_refs": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "enum": [
+                  "unknown",
+                  "denied"
+                ]
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason_code": {
+                "not": {
+                  "const": "none"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "not_applicable"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason_code": {
+                "const": "not_applicable"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "canonicalization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity",
+        "algorithm",
+        "text_encoding",
+        "object_key_order",
+        "array_order",
+        "number_policy"
+      ],
+      "properties": {
+        "identity": {
+          "const": "tilesim.bridge.canonical_json.v1"
+        },
+        "algorithm": {
+          "const": "sha256"
+        },
+        "text_encoding": {
+          "const": "utf-8"
+        },
+        "object_key_order": {
+          "const": "unicode_code_point_ascending"
+        },
+        "array_order": {
+          "const": "preserved"
+        },
+        "number_policy": {
+          "const": "lossless_integer_tokens_decimal_strings_no_binary_float"
+        }
+      }
+    },
+    "lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "introduced_revision",
+        "deprecated_revision",
+        "removal_revision",
+        "replacement_identity"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "active",
+            "deprecated",
+            "withdrawn"
+          ]
+        },
+        "introduced_revision": {
+          "$ref": "#/$defs/revision"
+        },
+        "deprecated_revision": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/revision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "removal_revision": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/revision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "replacement_identity": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/stableId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "active"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "deprecated_revision": {
+                "type": "null"
+              },
+              "removal_revision": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "deprecated"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "deprecated_revision": {
+                "$ref": "#/$defs/revision"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy",
+        "unknown_identity_behavior",
+        "unknown_revision_behavior",
+        "predecessor_identity",
+        "successor_identity"
+      ],
+      "properties": {
+        "policy": {
+          "enum": [
+            "additive_optional",
+            "backward_compatible",
+            "deprecating",
+            "breaking"
+          ]
+        },
+        "unknown_identity_behavior": {
+          "const": "fail_closed"
+        },
+        "unknown_revision_behavior": {
+          "const": "fail_closed"
+        },
+        "predecessor_identity": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/stableId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "successor_identity": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/stableId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "sourceRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "source_kind",
+        "revision",
+        "digest",
+        "field_class",
+        "claim_scope"
+      ],
+      "properties": {
+        "source_id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "source_kind": {
+          "enum": [
+            "formal_contract",
+            "backend_registry",
+            "reviewed_profile_artifact",
+            "user_supplied_candidate",
+            "template_default",
+            "calibration_receipt",
+            "held_out_validation_receipt",
+            "synthetic_fixture"
+          ]
+        },
+        "revision": {
+          "$ref": "#/$defs/revision"
+        },
+        "digest": {
+          "$ref": "#/$defs/revision"
+        },
+        "field_class": {
+          "enum": [
+            "observed",
+            "inferred",
+            "modelled"
+          ]
+        },
+        "claim_scope": {
+          "enum": [
+            "contract_fixture_only",
+            "exploration",
+            "synthetic_consistency",
+            "limited_extrapolation",
+            "similar_regime_conditional_prediction",
+            "real_calibrated_validation"
+          ]
+        }
+      }
+    },
+    "regime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "regime_id",
+        "source_modes",
+        "gpu_participation_modes",
+        "fidelity_tiers",
+        "limitations"
+      ],
+      "properties": {
+        "regime_id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "source_modes": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "real_trace",
+              "synthetic_trace",
+              "compatibility_harness_trace"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "gpu_participation_modes": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "gpu_free",
+              "gpu_assisted_trace",
+              "gpu_in_loop"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "fidelity_tiers": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "Analytical",
+              "DES",
+              "Cycle"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "assertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "knowledge_state",
+        "value",
+        "field_class",
+        "evidence_refs",
+        "reason_code"
+      ],
+      "properties": {
+        "knowledge_state": {
+          "enum": [
+            "known",
+            "unknown",
+            "not_applicable"
+          ]
+        },
+        "value": {},
+        "field_class": {
+          "enum": [
+            "observed",
+            "inferred",
+            "modelled",
+            "unknown"
+          ]
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidenceReference"
+          },
+          "uniqueItems": true
+        },
+        "reason_code": {
+          "$ref": "#/$defs/reasonCode"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "knowledge_state": {
+                "const": "known"
+              }
+            },
+            "required": [
+              "knowledge_state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "not": {
+                  "type": "null"
+                }
+              },
+              "field_class": {
+                "not": {
+                  "const": "unknown"
+                }
+              },
+              "evidence_refs": {
+                "minItems": 1
+              },
+              "reason_code": {
+                "not": {
+                  "enum": [
+                    "none",
+                    "not_applicable"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "knowledge_state": {
+                "const": "unknown"
+              }
+            },
+            "required": [
+              "knowledge_state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "type": "null"
+              },
+              "field_class": {
+                "const": "unknown"
+              },
+              "reason_code": {
+                "not": {
+                  "const": "none"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "knowledge_state": {
+                "const": "not_applicable"
+              }
+            },
+            "required": [
+              "knowledge_state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "type": "null"
+              },
+              "reason_code": {
+                "const": "not_applicable"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "profileReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile_id",
+        "profile_revision",
+        "canonical_digest"
+      ],
+      "properties": {
+        "profile_id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "profile_revision": {
+          "$ref": "#/$defs/revision"
+        },
+        "canonical_digest": {
+          "$ref": "#/$defs/revision"
+        }
+      }
+    }
+  }
+}

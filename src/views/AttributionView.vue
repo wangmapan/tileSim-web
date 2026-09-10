@@ -11,9 +11,12 @@ import { useRecordPage } from "../components/ui/useRecordPage";
 import { partitionCausalAttributions, RunBoundEvidencePanel } from "../features/run-bound-evidence";
 import {
   attributionSource,
+  backendExplanationPresentation,
+  executionLayerName,
   buildAttributionVisualization,
   causeSource,
   ExecutionVisualizationPanel,
+  semanticFieldPresentation,
 } from "../features/execution-inspector";
 import { useEvidenceSelectionStore } from "../stores/evidence-selection";
 const { state } = useDashboard();
@@ -62,6 +65,14 @@ function shareWidth(share: number | undefined) {
 
 function shareOutOfRange(share: number | undefined) {
   return typeof share === "number" && Number.isFinite(share) && (share < 0 || share > 1);
+}
+
+function backendExplanation(value: string | null | undefined) {
+  return backendExplanationPresentation(value);
+}
+
+function semanticField(field: string, value: unknown) {
+  return semanticFieldPresentation(field, value);
 }
 </script>
 
@@ -171,9 +182,13 @@ function shareOutOfRange(share: number | undefined) {
                 <tr v-for="{ item, sourceIndex } in visibleRanking" :key="sourceIndex" class="ranking-row">
                   <td class="rank-index">{{ item.rank ?? t("未报告") }}</td>
                   <th scope="row" class="rank-copy">
-                    <small>{{ item.subsystem }}</small
+                    <small>{{ executionLayerName(item.subsystem) }} · {{ item.subsystem }}</small
                     ><strong>{{ item.component_code || t("未报告") }}</strong>
-                    <p v-if="item.detail">{{ item.detail }}</p>
+                    <p v-if="item.detail">
+                      <small>{{ backendExplanation(item.detail).label }}</small>
+                      {{ backendExplanation(item.detail).text }}
+                      <code v-if="backendExplanation(item.detail).mapped">{{ t("后端原文") }}: {{ item.detail }}</code>
+                    </p>
                   </th>
                   <td class="attribution-share">
                     <strong>{{ formatPercent(item.share) }}</strong>
@@ -222,7 +237,7 @@ function shareOutOfRange(share: number | undefined) {
                   ? 'status-pill--positive'
                   : 'status-pill--warning'
               "
-              >{{ state.bundle.tail.attribution_audit.status || t("未报告") }}</span
+              >{{ semanticField("availability", state.bundle.tail.attribution_audit.status).valueLabel }}</span
             >
             <ChevronDown :size="17" />
           </summary>
@@ -230,7 +245,20 @@ function shareOutOfRange(share: number | undefined) {
             <dl class="attribution-audit-grid">
               <div>
                 <dt>{{ t("证据层级") }}</dt>
-                <dd>{{ state.bundle.tail.attribution_audit.evidence_tier || t("未报告") }}</dd>
+                <dd>
+                  <strong>{{
+                    semanticField("evidence_tier", state.bundle.tail.attribution_audit.evidence_tier).valueLabel
+                  }}</strong>
+                  <small
+                    v-if="
+                      semanticField('evidence_tier', state.bundle.tail.attribution_audit.evidence_tier).valueDescription
+                    "
+                    >{{
+                      semanticField("evidence_tier", state.bundle.tail.attribution_audit.evidence_tier).valueDescription
+                    }}</small
+                  >
+                  <code>evidence_tier = {{ state.bundle.tail.attribution_audit.evidence_tier || "—" }}</code>
+                </dd>
               </div>
               <div>
                 <dt>{{ t("归因总分") }}</dt>
@@ -319,9 +347,18 @@ function shareOutOfRange(share: number | undefined) {
               <li v-for="{ item: cause, sourceIndex } in visibleCauses" :key="sourceIndex">
                 <span>{{ sourceIndex + 1 }}</span>
                 <div>
-                  <small>{{ cause.subsystem }}</small
-                  ><strong>{{ cause.title || cause.cause_code }}</strong>
-                  <p>{{ cause.evidence }}</p>
+                  <small>{{ executionLayerName(cause.subsystem) }} · {{ cause.subsystem }}</small
+                  ><strong>{{ backendExplanation(cause.title || cause.cause_code).text }}</strong>
+                  <code>{{
+                    t("技术字段：{field} = {value}", { field: "cause_code", value: cause.cause_code || "—" })
+                  }}</code>
+                  <p>
+                    <small>{{ backendExplanation(cause.evidence).label }}</small>
+                    {{ backendExplanation(cause.evidence).text }}
+                    <code v-if="backendExplanation(cause.evidence).mapped"
+                      >{{ t("后端原文") }}: {{ cause.evidence }}</code
+                    >
+                  </p>
                 </div>
                 <GitCommitHorizontal :size="18" />
                 <ArtifactEvidenceLink :source-path="causeSource(state.bundle.tail.cause_chain || [], cause.cause_id)" />
@@ -373,6 +410,7 @@ function shareOutOfRange(share: number | undefined) {
                 <tr v-for="{ item, sourceIndex } in visibleOutput" :key="sourceIndex">
                   <td>{{ item.rank ?? t("缺失") }}</td>
                   <td>
+                    <strong>{{ executionLayerName(item.subsystem) }}</strong>
                     <code>{{ item.subsystem || t("缺失") }}</code>
                   </td>
                   <td>{{ item.component_code || t("缺失") }}</td>
@@ -380,7 +418,11 @@ function shareOutOfRange(share: number | undefined) {
                   <td class="numeric">
                     <code>{{ formatNumber(item.score_ps) }}</code>
                   </td>
-                  <td>{{ item.detail || t("未报告") }}</td>
+                  <td>
+                    <small>{{ backendExplanation(item.detail).label }}</small>
+                    {{ backendExplanation(item.detail).text }}
+                    <code v-if="backendExplanation(item.detail).mapped">{{ t("后端原文") }}: {{ item.detail }}</code>
+                  </td>
                   <td>
                     <ArtifactEvidenceLink
                       :source-path="

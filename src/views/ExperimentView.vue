@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
+import { computed, onActivated, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { AlertCircle } from "@lucide/vue";
 import {
   BridgeApiError,
@@ -10,6 +10,7 @@ import {
   ExperimentRequestError,
   ExperimentSubmitCard,
   TracePackageInputPanel,
+  buildExperimentAgentContextPublication,
   buildExperimentRequestPreview,
   buildExperimentSurface,
   createExperimentForm,
@@ -23,6 +24,10 @@ import {
 } from "../features/run-experiment";
 import { useDashboard } from "../store/dashboard";
 import { useI18n } from "../i18n";
+
+const props = defineProps({
+  agentContextPublisher: { type: Function, default: null },
+});
 
 const {
   state,
@@ -61,6 +66,7 @@ const surface = computed(() =>
   ),
 );
 const form = reactive(createExperimentForm(surface.value));
+let agentContextSequence = 0;
 const selectedTracePackage = computed(
   () => tracePackageCatalog.value?.packages.find((item) => item.package_id === selectedTracePackageId.value) || null,
 );
@@ -163,6 +169,23 @@ watch(
   },
   { immediate: true },
 );
+
+function publishAgentContext() {
+  if (!props.agentContextPublisher) return;
+  agentContextSequence += 1;
+  props.agentContextPublisher(
+    buildExperimentAgentContextPublication({
+      form,
+      surface: surface.value,
+      mode: mode.value,
+      contextRevision: `context:experiment:${state.runId || "no-run"}:${state.bridge.manifest?.schema_set_revision || "schema-unavailable"}:${agentContextSequence}`,
+      runId: state.runId || null,
+    }),
+  );
+}
+
+watch([form, surface, mode, () => state.runId], publishAgentContext, { deep: true, immediate: true });
+onActivated(publishAgentContext);
 
 function resetControls() {
   resetExperimentControls(form, surface.value);

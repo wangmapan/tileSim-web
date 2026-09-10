@@ -9,6 +9,7 @@ import { workbenchReviewEnglishCatalog } from "./workstreams/workbench-review";
 import { shellReviewEnglishCatalog } from "./workstreams/shell-review";
 
 import { themeColorEnglishCatalog } from "./workstreams/theme-color";
+import { semanticGlossaryEnglishCatalog } from "./workstreams/semantic-glossary";
 
 export const workstreamEnglishCatalogs: Readonly<Record<string, string>> = {
   ...evidenceAgentEnglishCatalog,
@@ -21,4 +22,5 @@ export const workstreamEnglishCatalogs: Readonly<Record<string, string>> = {
   ...workbenchReviewEnglishCatalog,
   ...shellReviewEnglishCatalog,
   ...themeColorEnglishCatalog,
+  ...semanticGlossaryEnglishCatalog,
 };

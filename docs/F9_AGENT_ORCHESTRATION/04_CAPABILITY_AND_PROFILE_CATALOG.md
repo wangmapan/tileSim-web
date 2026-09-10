@@ -235,8 +235,8 @@
 
 新增参数、profile、后端 lowering、校准 receipt、正式 UI 暴露或 claim scope 变化时，必须同步更新本文、[当前基线](01_CURRENT_BASELINE_AND_GAPS.md) 与 [Gap Register](14_CONTRACT_GAP_REGISTER.md)。
 
-Phase 0 proposal 路径为 `bridge/contracts/proposals/agent_orchestration_phase0/`；Phase 0B publication candidate 路径为
-`bridge/contracts/publication_candidates/agent_orchestration_phase0b/`。两者都只用于评审和 fixture 验证；candidate 全部
+Phase 0 proposal 已归档到 `docs/archive/agent-orchestration/phase0-proposal/`；Phase 0B publication candidate 已归档到
+`docs/archive/agent-orchestration/phase0b-publication-candidate/`。两者都只用于评审和 fixture 验证；candidate 全部
 Schema/fixture 使用 `.jsonc`，不进入当前 Bridge 的正式 `*.json` schema-set 扫描。未知 identity/revision 必须失败关闭，
 且不得由 UI、Agent 或 registry 当作已发布 contract 自动发现。
 

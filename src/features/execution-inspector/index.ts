@@ -22,7 +22,17 @@ export {
 } from "./model/evidence-pointers";
 export { default as ExecutionVisualizationPanel } from "./components/ExecutionVisualizationPanel.vue";
 export { default as LayerRecordTable } from "./components/LayerRecordTable.vue";
-export { executionLayerDetail, executionLayerHeadline, executionLayerName, executionMetricLabel } from "./presentation";
+export {
+  backendExplanationPresentation,
+  executionLayerDetail,
+  executionLayerHeadline,
+  executionLayerName,
+  executionMetricLabel,
+  executionMetricSemanticField,
+  semanticFieldPresentation,
+  semanticValuePresentation,
+} from "./presentation";
+export type { BackendExplanationPresentation, SemanticField, SemanticPresentation } from "./presentation";
 export type {
   ExecutionFact,
   ExecutionLayer,

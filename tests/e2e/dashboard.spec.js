@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { fixtureCase } from "../helpers/fixtures";
@@ -8,6 +9,203 @@ import { createF8ExperimentDescriptor, f8Capabilities, f8SchemaRevision } from "
 import { createEvidenceAgentDescriptor, f9DescriptorRevision } from "../fixtures/evidence-agent-descriptor";
 
 const runId = "run-fixture-f1";
+const agentOrchestrationCatalog = JSON.parse(
+  readFileSync(
+    new URL("../../bridge/contracts/agent_orchestration_capability/catalog-content.json", import.meta.url),
+    "utf8",
+  ),
+);
+
+function createAgentOrchestrationCapabilitySnapshot() {
+  return {
+    schema_identity: "tilesim.bridge.agent_orchestration_capability_snapshot.v1",
+    publication_status: "published",
+    snapshot_id: "tilesim.agent-orchestration.capability-snapshot",
+    snapshot_revision: `sha256:${"2".repeat(64)}`,
+    snapshot_digest: `sha256:${"2".repeat(64)}`,
+    canonicalization_identity: "tilesim.bridge.canonical_json.v1",
+    catalog: structuredClone(agentOrchestrationCatalog),
+    release_binding: {
+      web_source_identity: "tilesim.web.git",
+      web_source_revision: "a".repeat(40),
+      web_build_revision: "a".repeat(40),
+      backend_identity: "tilesim.backend.git",
+      backend_revision: "b".repeat(40),
+      schema_set_revision: f8SchemaRevision,
+      experiment_descriptor_identity: "tilesim.bridge.experiment_descriptor.v1",
+      experiment_descriptor_revision: `sha256:${"3".repeat(64)}`,
+      create_run_identity: "tilesim.bridge.create_run_request.v1",
+      catalog_revision: agentOrchestrationCatalog.catalog_revision,
+      contract_package_revision: agentOrchestrationCatalog.contract_package_revision,
+      nested_design_space_identities: [
+        "tilesim.design_space.s6_candidates.v1",
+        "tilesim.design_space.s6_candidates.v2",
+      ],
+      default_nested_design_space_identity: "tilesim.design_space.s6_candidates.v1",
+    },
+    drift_policy: {
+      release_binding_mismatch: "fail_closed",
+      catalog_revision_mismatch: "fail_closed",
+      unknown_identity_or_status: "fail_closed",
+    },
+  };
+}
+
+test("Phase 1 Agent copilot drafts only the eight-field subset without writing application state", async ({ page }) => {
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  const visualOutput = path.resolve("runtime/visual-review/phase1-agent-copilot");
+  await mkdir(visualOutput, { recursive: true });
+  const prohibitedRequests = [];
+  let capabilityRequests = 0;
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === "/api/agent/orchestration-capabilities") capabilityRequests += 1;
+    if (
+      (url.pathname === "/api/runs" && request.method() === "POST") ||
+      url.pathname.includes("/agent/evidence-analyses")
+    ) {
+      prohibitedRequests.push(`${request.method()} ${url.pathname}`);
+    }
+  });
+  const failures = await openFixture(page, fixture, "experiment");
+  const batchInput = page.locator('.field[data-field-id="s1.runtime.max_batch_size"] input');
+  await batchInput.fill("4");
+
+  await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
+  const panel = page.locator("#tilesim-agent-copilot");
+  await expect(panel).toBeVisible();
+  await panel.getByRole("textbox", { name: "描述你想理解或调整的内容" }).fill("说明当前页面能做什么");
+  await panel.getByRole("button", { name: "提交", exact: true }).click();
+  await expect(panel).toContainText("这里可以核对当前实验参数");
+  expect(capabilityRequests).toBe(0);
+
+  const resizeHandle = panel.getByRole("separator", { name: "调整助手侧栏宽度" });
+  await resizeHandle.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(resizeHandle).toHaveAttribute("aria-valuenow", "436");
+  await page.setViewportSize({ width: 1920, height: 900 });
+  await panel.getByRole("button", { name: "展开", exact: true }).click();
+  await expect(panel).toHaveAttribute("data-state", "expanded");
+  const dockedBounds = await page.locator(".app-main").evaluate((main) => ({
+    mainRight: main.getBoundingClientRect().right,
+    panelLeft: document.querySelector("#tilesim-agent-copilot").getBoundingClientRect().left,
+  }));
+  expect(dockedBounds.mainRight).toBeLessThanOrEqual(dockedBounds.panelLeft + 1);
+  await panel.press("Escape");
+  await expect(panel).toHaveAttribute("data-state", "open");
+  await panel.getByRole("button", { name: "收起", exact: true }).click();
+  await expect(panel).toHaveAttribute("data-state", "collapsed");
+  await panel.getByRole("button", { name: "展开 TileSim 助手", exact: true }).click();
+  await expect(panel).toHaveAttribute("data-state", "open");
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  await panel.getByRole("radio", { name: "提出草案修改" }).check();
+  await panel
+    .getByRole("textbox", { name: "描述你想理解或调整的内容" })
+    .fill("把最大 batch 调整为 8，把横向扩展网络带宽改为 100 Gbps per-link");
+  await panel.getByRole("button", { name: "提交", exact: true }).click();
+
+  await expect(panel).toContainText("这是草案，尚未创建运行。");
+  expect(capabilityRequests).toBe(1);
+  await expect(panel).toContainText("4 → 8");
+  await expect(panel).toContainText("100 · Gbps");
+  await expect(panel).toContainText("确定性校验：valid");
+  const draftDetails = panel.locator('.agent-block[data-block-type="draft_summary"] details');
+  await expect(draftDetails).not.toHaveAttribute("open", "");
+  await expect(draftDetails.getByText("/overrides/runtime/max_batch_size", { exact: true })).not.toBeVisible();
+  await draftDetails.locator("summary").click();
+  await expect(draftDetails.getByText("/overrides/runtime/max_batch_size", { exact: true })).toBeVisible();
+  await page.screenshot({ path: path.join(visualOutput, "draft-1440-light.png"), fullPage: true });
+
+  await batchInput.fill("6");
+  await expect(panel).toContainText("现有内容使用旧上下文");
+  await expect(panel).toContainText("确定性校验：stale");
+  const originalUrl = new URL(page.url());
+  await page.locator(".nav-link").first().click();
+  await expect(page).toHaveURL(/\/overview\?run=run-fixture-f1/);
+  await expect(panel).toContainText("现有内容使用旧上下文");
+  await page.getByRole("button", { name: "新建实验", exact: true }).click();
+  await expect(page).toHaveURL(/\/experiment\?run=run-fixture-f1/);
+  await expect(batchInput).toHaveValue("6");
+  expect(new URL(page.url()).searchParams.get("run")).toBe(originalUrl.searchParams.get("run"));
+
+  await panel.getByRole("radio", { name: "提出草案修改" }).check();
+  await panel.getByRole("textbox", { name: "描述你想理解或调整的内容" }).fill("把带宽改为 100");
+  await panel.getByRole("button", { name: "提交", exact: true }).click();
+  await expect(panel).toContainText("需要补充的信息");
+
+  await panel.getByRole("radio", { name: "提出草案修改" }).check();
+  await panel.getByRole("textbox", { name: "描述你想理解或调整的内容" }).fill("把 TP 改成 8");
+  await panel.getByRole("button", { name: "提交", exact: true }).click();
+  await expect(panel).toContainText("当前能力不支持");
+
+  await page.getByRole("button", { name: "切换到深色模式", exact: true }).click();
+  await expect(panel).toHaveCSS("background-color", "rgb(25, 26, 28)");
+  for (const width of [1100, 1440, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expectNoUnexpectedTextOverflow(page);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    if (width !== 1440) {
+      await page.screenshot({ path: path.join(visualOutput, `unsupported-${width}-dark.png`), fullPage: true });
+    }
+  }
+  await page.setViewportSize({ width: 720, height: 900 });
+  await page.evaluate(() => {
+    document.documentElement.style.zoom = "2";
+  });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(720);
+  await page.evaluate(() => {
+    document.documentElement.style.zoom = "";
+  });
+  expect(
+    await panel.evaluate((element) =>
+      Math.max(...getComputedStyle(element).transitionDuration.split(",").map(parseFloat)),
+    ),
+  ).toBeLessThanOrEqual(0.001);
+  const accessibility = await new AxeBuilder({ page }).analyze();
+  expect(accessibility.violations.filter((item) => ["serious", "critical"].includes(item.impact))).toEqual([]);
+
+  const composer = panel.getByRole("textbox", { name: "描述你想理解或调整的内容" });
+  await composer.fill("保留这段尚未提交的中文输入");
+  await panel.getByRole("button", { name: "关闭", exact: true }).click();
+  await expect(page.getByRole("button", { name: "打开 TileSim 助手", exact: true })).toBeFocused();
+  await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
+  await expect(composer).toHaveValue("保留这段尚未提交的中文输入");
+
+  expect(capabilityRequests).toBe(3);
+  expect(prohibitedRequests).toEqual([]);
+  expect(failures).toEqual([]);
+});
+
+test("Phase 1 Agent copilot fails closed when the formal field binding drifts", async ({ page }) => {
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  const driftedSnapshot = createAgentOrchestrationCapabilitySnapshot();
+  driftedSnapshot.catalog.parameter_descriptors[0].request_json_pointer = "/overrides/workload/drifted";
+  const writes = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (
+      (url.pathname === "/api/runs" && request.method() === "POST") ||
+      url.pathname.includes("/agent/evidence-analyses")
+    ) {
+      writes.push(`${request.method()} ${url.pathname}`);
+    }
+  });
+  const failures = await openFixture(page, fixture, "experiment", {
+    agentOrchestrationSnapshot: driftedSnapshot,
+  });
+  await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
+  const panel = page.locator("#tilesim-agent-copilot");
+  await panel.getByRole("radio", { name: "提出草案修改" }).check();
+  await panel.getByRole("textbox", { name: "描述你想理解或调整的内容" }).fill("把消息大小倍率改为 2");
+  await panel.getByRole("button", { name: "提交", exact: true }).click();
+  await expect(panel.getByRole("alert")).toContainText("当前结果无法继续处理");
+  await expect(panel.locator('[data-block-type="draft_summary"]')).toHaveCount(0);
+  await panel.locator("summary", { hasText: "错误详情" }).click();
+  await expect(panel).toContainText("phase1_capability_descriptor_binding_mismatch");
+  expect(writes).toEqual([]);
+  expect(failures).toEqual([]);
+});
 
 test("request evidence rows preserve parallel resources and exact binding details", async ({ page }) => {
   const fixture = fixtureCase("synthetic-s1-s6-complete");
@@ -448,7 +646,9 @@ test("fabric review preserves readable evidence across desktop widths and appear
     for (const appearance of ["light", "dark"]) {
       await page.evaluate((mode) => localStorage.setItem("tilesim-web.appearance.v1", mode), appearance);
       await page.reload({ waitUntil: "networkidle" });
-      await expect(page.locator(".analysis-visualization-stack .execution-chart svg")).toHaveCount(2);
+      await expect(page.locator(".analysis-visualization-stack .execution-chart svg")).toHaveCount(2, {
+        timeout: 15_000,
+      });
       if (phase)
         await page.screenshot({ path: path.join(output, `fabric-${width}-${appearance}.png`), fullPage: true });
       if (phase !== "before") {
@@ -1120,7 +1320,12 @@ function addFormalF7Contracts(fixture) {
 async function installFixtureApi(
   page,
   fixture,
-  { evidenceAgentConfigured = false, evidenceAgentHandler = null, tracePackageRunHandler = null } = {},
+  {
+    evidenceAgentConfigured = false,
+    evidenceAgentHandler = null,
+    tracePackageRunHandler = null,
+    agentOrchestrationSnapshot = null,
+  } = {},
 ) {
   let week7OperationActive = false;
   await page.route(/^https?:\/\/[^/]+\/api(?:\/|$)/, async (route) => {
@@ -1193,6 +1398,14 @@ async function installFixtureApi(
           idempotency_header: "Idempotency-Key",
           execution_mode: "synchronous_terminal",
         },
+        agent_orchestration_capability: {
+          endpoint: "GET /api/agent/orchestration-capabilities",
+          snapshot_schema_identity: "tilesim.bridge.agent_orchestration_capability_snapshot.v1",
+          catalog_schema_identity: "tilesim.bridge.agent_orchestration_capability_catalog.v1",
+          parameter_descriptor_schema_identity: "tilesim.bridge.agent_orchestration_parameter_descriptor.v1",
+          catalog_revision: agentOrchestrationCatalog.catalog_revision,
+          contract_package_revision: agentOrchestrationCatalog.contract_package_revision,
+        },
         endpoints: {},
         run_creation: {
           idempotency_header: "Idempotency-Key",
@@ -1242,6 +1455,8 @@ async function installFixtureApi(
       };
     } else if (path === "/api/agent/evidence-capabilities") {
       payload = { ...createEvidenceAgentDescriptor(evidenceAgentConfigured), schema_set_revision: f8SchemaRevision };
+    } else if (path === "/api/agent/orchestration-capabilities") {
+      payload = agentOrchestrationSnapshot || createAgentOrchestrationCapabilitySnapshot();
     } else if (
       path === `/api/runs/${runId}/agent/evidence-analyses` &&
       route.request().method() === "POST" &&
@@ -1346,6 +1561,7 @@ async function installFixtureApi(
         "/api/trace-packages",
         "/api/trace-packages/synthetic-package/inspect",
         "/api/agent/evidence-capabilities",
+        "/api/agent/orchestration-capabilities",
       ].includes(path)
         ? { "X-TileSim-Schema-Set-Revision": f8SchemaRevision }
         : {},
@@ -1428,7 +1644,7 @@ test("synthetic evidence view is stable, accessible, and field-complete", async 
   await expect(page.locator('.visualization-panel[data-chart-kind="bar"] .execution-chart svg')).toBeVisible();
   await page.locator(".flow-node").filter({ hasText: "S5" }).click();
   await expect(page.locator(".flow-node").filter({ hasText: "S5" })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.locator("#execution-layer-detail h2")).toHaveText("多设备协同");
+  await expect(page.locator("#execution-layer-detail h2")).toHaveText("集合通信语义模块");
   await expect(page.locator('.visualization-panel[data-chart-kind="stacked-bar"] .execution-chart svg')).toBeVisible();
   await expect(
     page.locator('.visualization-panel[data-chart-kind="stacked-bar"] .visualization-caption'),
@@ -1465,6 +1681,61 @@ test("synthetic evidence view is stable, accessible, and field-complete", async 
   expect(browserFailures).toEqual([]);
   await page.evaluate(() => window.scrollTo(0, 0));
   await expect(page).toHaveScreenshot(`synthetic-evidence-${testInfo.project.name}.png`, { fullPage: true });
+});
+
+test("semantic glossary stays bilingual and traceable across the five primary result pages", async ({ page }) => {
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  fixture.reports.validation.trace_provenance.trace_kind = "future_trace_kind";
+  fixture.reports.metrics.trace_provenance.trace_kind = "future_trace_kind";
+  const browserFailures = await openFixture(page, fixture, "execution");
+  await page.setViewportSize({ width: 1100, height: 900 });
+  await page.getByRole("button", { name: "切换到深色模式" }).click();
+
+  await page.locator(".flow-node").filter({ hasText: "S0" }).click();
+  const provenance = page.locator('.visualization-panel[data-chart-kind="matrix"]');
+  await expect(provenance).toContainText("输入来源模式");
+  await expect(provenance).toContainText("人工生成 Trace");
+  await expect(provenance).toContainText("由生成器产生，不是真实采集");
+  await expect(provenance).toContainText("技术字段：source_mode = synthetic_trace");
+  await expect(provenance).toContainText("未识别值");
+  await expect(provenance).toContainText("trace_kind = future_trace_kind");
+
+  await page.getByRole("button", { name: "切换到英文" }).click();
+  await expect(provenance).toContainText("Input source mode");
+  await expect(provenance).toContainText("Synthetic trace");
+  await expect(provenance).toContainText("Technical field: source_mode = synthetic_trace");
+  await expect(provenance).not.toContainText("source mode = synthetic trace");
+
+  await page.goto(`/metrics?run=${runId}`, { waitUntil: "domcontentloaded" });
+  const metricsDetails = page.locator(".visualization-data").first();
+  await metricsDetails.locator("summary").click();
+  await expect(metricsDetails).toContainText("Field presentation method");
+  await expect(metricsDetails).toContainText("Technical field: derivation = unit_conversion");
+
+  await page.goto(`/fabric?run=${runId}`, { waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("heading", { name: "Longest communication wait" })).toBeVisible();
+  const fabricDetails = page.locator(".visualization-data").first();
+  await fabricDetails.locator("summary").click();
+  await expect(fabricDetails).toContainText("Field presentation method");
+
+  await page.goto(`/attribution?run=${runId}`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "Tail-latency attribution" }).click();
+  await expect(page.locator(".attribution-ranking-panel")).toContainText(
+    "Backend original: Fixture queue contribution.",
+  );
+  await page.locator(".attribution-cause-disclosure summary").click();
+  await expect(page.locator(".cause-chain")).toContainText("Runtime batching wait");
+  await expect(page.locator(".cause-chain")).toContainText("cause_code = runtime_batching_delay");
+  await expect(page.locator(".cause-chain")).toContainText("Backend original: Request waited before its first batch.");
+
+  await page.goto(`/validation?run=${runId}`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator(".provenance-grid")).toContainText("Input source mode");
+  await expect(page.locator(".provenance-grid")).toContainText("Calibration level");
+  await expect(page.locator(".provenance-grid")).toContainText("Allowed claim scope");
+  await expect(page.locator(".provenance-grid")).toContainText("Technical field: calibration_level = uncalibrated");
+  await expect(page.locator("html")).toHaveAttribute("data-appearance", "dark");
+  await expectNoUnexpectedTextOverflow(page);
+  expect(browserFailures).toEqual([]);
 });
 
 test("desktop routes preserve run deep links and browser history", async ({ page }) => {

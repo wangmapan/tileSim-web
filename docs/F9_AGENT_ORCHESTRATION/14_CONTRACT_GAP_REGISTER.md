@@ -34,7 +34,7 @@
 | `GAP-DRAFT-001`           | open            | Bridge                   | typed Experiment Draft                                                                                                                    | capability catalog                                 | draft schema、revision、source、digest 和 patch semantics 发布                   | localStorage 自造正式草案                                 |
 | `GAP-VALIDATE-001`        | open            | 后端领域服务             | 统一 deterministic Validation Report                                                                                                      | profiles/calculators/lowering                      | rule IDs、receipts、compile result 和 hard gates 发布                            | 用 LLM 文本判断可行                                       |
 | `GAP-CONV-001`            | open            | Bridge                   | Conversation/Turn/Goal                                                                                                                    | retention/auth/concurrency                         | 多轮 schema、revision conflict、expiry/delete 发布                               | 把 Evidence request 当 turn history                       |
-| `GAP-COPILOT-UI-001`      | open            | Web + Integration        | 全局右侧 Agent Shell 和页面上下文接口                                                                                                     | App Shell owner/context contract                   | Shell、Context Envelope、typed blocks、跨路由和无障碍门禁完成                    | 抓 DOM、复制业务 store 或暗示未发布能力                   |
+| `GAP-COPILOT-UI-001`      | validated       | Web + Integration        | Phase 1 全局右侧 Agent Shell、最小只读 Context Envelope、typed blocks、跨路由 stale 与无障碍门禁已完成                                    | 无                                                 | 本地 Git 可复现交付点与完整非 live 门禁完成                                      | 抓 DOM、复制业务 store 或暗示未发布能力                   |
 | `GAP-CLARIFY-001`         | open            | Agent service            | 主动澄清结果契约                                                                                                                          | conversation + capability                          | blocking questions/answer binding/limits 发布并评测                              | 仅在前端追加聊天气泡                                      |
 | `GAP-APPROVAL-001`        | open            | Bridge/Auth              | exact draft approval                                                                                                                      | identity/digest/principal                          | expiry/revoke/stale/scope 服务端强制                                             | 用确认按钮布尔值授权                                      |
 | `GAP-WORKFLOW-001`        | open            | Bridge services          | Operation/Event/Checkpoint                                                                                                                | approval/idempotency                               | durable graph、恢复、event sequence 和审计通过 crash tests                       | 浏览器内存假装长任务                                      |
@@ -63,6 +63,13 @@
 | `GAP-REVIEWER-001`        | deferred        | Research                 | reviewer Agent                                                                                                                            | baseline error/eval budget                         | held-out 高风险错误显著下降                                                      | 多 Agent 投票替代规则                                     |
 
 ## 4. Gap 详情模板
+
+Phase 1 Web 本地 current-subset 草案不改变以下正式 Gap：
+
+- `GAP-DRAFT-001` 仍为 `open`：当前对象是内存中的 Web/domain draft，不是正式 Bridge Experiment Draft；
+- `GAP-VALIDATE-001` 仍为 `open`：当前校验只覆盖冻结八字段与 canonical request equivalence，不是统一后端 Validation Report；
+- `GAP-CLARIFY-001` 仍为 `open`：当前最多 1–3 个 blocking questions 不持久化，也没有 answer binding contract；
+- `GAP-CONV/APPROVAL/WORKFLOW/CANCEL-*` 均未实现，侧栏没有写工具或运行创建能力。
 
 新增 Gap 必须补充：
 

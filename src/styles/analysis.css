@@ -136,6 +136,26 @@
   overflow-wrap: anywhere;
   font: 650 var(--text-xs) var(--font-mono);
 }
+.fabric-contract-strip dd strong,
+.fabric-contract-strip dd small,
+.fabric-contract-strip dd code,
+.fabric-evidence-actions small code,
+.domain-topology-status code,
+.domain-topology-contract dd code,
+.design-scope-banner > span code {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.fabric-contract-strip dd small,
+.fabric-contract-strip dd code,
+.fabric-evidence-actions small code,
+.domain-topology-status code,
+.domain-topology-contract dd code,
+.design-scope-banner > span code {
+  margin-top: 3px;
+  color: var(--muted);
+  font: var(--text-micro)/1.45 var(--font-mono);
+}
 .fabric-hotspot-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -417,6 +437,35 @@
   font-weight: 400;
   overflow-wrap: anywhere;
 }
+.attribution-ranking-table .rank-copy p small,
+.attribution-ranking-table .rank-copy p code,
+.attribution-output-plane td > small,
+.attribution-output-plane td > code,
+.cause-chain div > code,
+.cause-chain p > small,
+.cause-chain p > code,
+.attribution-audit-grid dd small,
+.attribution-audit-grid dd code {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.attribution-ranking-table .rank-copy p small,
+.attribution-output-plane td > small,
+.cause-chain p > small,
+.attribution-audit-grid dd small {
+  color: var(--muted);
+  font-size: var(--text-micro);
+  font-weight: 700;
+}
+.attribution-ranking-table .rank-copy p code,
+.attribution-output-plane td > code,
+.cause-chain div > code,
+.cause-chain p > code,
+.attribution-audit-grid dd code {
+  margin-top: 4px;
+  color: var(--muted);
+  font: var(--text-micro)/1.45 var(--font-mono);
+}
 .attribution-ranking-table .rank-copy small,
 .attribution-ranking-table .rank-copy strong {
   display: block;
@@ -680,6 +729,24 @@
   color: var(--muted);
   font-size: var(--text-sm);
 }
+.provenance-grid .provenance-semantic {
+  gap: 7px;
+}
+.provenance-grid .provenance-semantic > strong {
+  font: 650 var(--text-base)/1.35 var(--font-sans);
+  overflow-wrap: anywhere;
+}
+.provenance-grid .provenance-semantic > p {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+.provenance-grid .provenance-semantic > code {
+  margin-top: auto;
+  color: var(--ink-soft);
+  font: var(--text-micro)/1.45 var(--font-mono);
+  overflow-wrap: anywhere;
+}
 .validation-disclosure {
   overflow: hidden;
   padding: 0;
@@ -736,12 +803,50 @@
 }
 .fidelity-row {
   display: grid;
-  grid-template-columns: 55px 90px 20px 105px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(150px, 0.9fr) minmax(130px, 0.7fr) 20px minmax(150px, 0.75fr) minmax(180px, 1fr) auto;
   gap: 10px;
   align-items: center;
   min-height: 49px;
   border-top: 1px solid var(--line);
   font-size: var(--text-md);
+}
+.fidelity-module,
+.fidelity-value,
+.fidelity-row p {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.fidelity-module > span,
+.fidelity-value > b,
+.fidelity-row p,
+.fidelity-row p > code {
+  overflow-wrap: anywhere;
+}
+.fidelity-module code,
+.fidelity-value code,
+.fidelity-row p > code,
+.gap-panel li code,
+.check-row p code {
+  color: var(--muted);
+  font: var(--text-micro)/1.45 var(--font-mono);
+}
+.fidelity-value > b {
+  font: 650 var(--text-sm)/1.35 var(--font-sans);
+}
+.fidelity-row p > small,
+.check-row p > small,
+.gap-panel li small {
+  display: block;
+  color: var(--muted);
+  font-size: var(--text-micro);
+  font-weight: 700;
+}
+.fidelity-row p > code,
+.check-row p code,
+.gap-panel li code {
+  display: block;
+  margin-top: 4px;
 }
 .fidelity-row > strong {
   font: 700 var(--text-base) var(--font-mono);
@@ -758,6 +863,14 @@
   color: var(--muted);
   font-size: var(--text-sm);
   line-height: 1.45;
+}
+@media (max-width: 1200px) {
+  .fidelity-row {
+    grid-template-columns: minmax(140px, 1fr) minmax(112px, 0.75fr) 18px minmax(112px, 0.75fr) auto;
+  }
+  .fidelity-row p {
+    grid-column: 1 / -2;
+  }
 }
 .check-list {
   padding: 0 23px 20px;
@@ -838,6 +951,10 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 16px;
+}
+.gap-panel li small,
+.gap-panel li code {
+  color: var(--warning-ink);
 }
 
 .run-bound-evidence-panel {

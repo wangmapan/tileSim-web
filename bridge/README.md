@@ -52,7 +52,7 @@ catalog 只有在受控根目录、TileSim 根目录和 TileSimCLI 均可用时�
 package 可以通过 Bridge 进入统一仿真内核模块，并复用既有报告、History 与 Evidence 展示链；
 synthetic fixture 只属于契约和流程一致性证据，不构成真实设备校准、独立留出验证或硬件 fidelity。
 
-完整实现、边界和验证方法见 `docs/TRACE_PACKAGE_WEB_PROTOTYPE.md`。
+完整实现、边界和验证方法见 `docs/features/traces/TRACE_PACKAGE_WEB_PROTOTYPE.md`。
 
 Week 7 三个固定操作另共享一个非阻塞单槽，容量满返回 retryable `429 week7_capacity_reached`。前端必须按 evidence map、calibration、orchestration 顺序请求；不要使用并发请求自撞容量门禁。它们属于 backend-global fixture，不绑定当前 run，进入对应页面也不应清除当前 run。
 
@@ -101,7 +101,12 @@ F6B schema 将 ps/bytes/count 的 `uint64` 标记为 lossless JSON integer，并
 TypeScript 表示指定为 `bigint`。前端必须使用无损整数解析路径；原生 `JSON.parse`
 产生的 JavaScript `number` 不能满足该契约。Bridge/Python 不会把整数转换为浮点数。
 
-设计空间 manifest 以 JSON 内容提交，bridge 不接受浏览器传来的任意本地路径。内容会经过根字段和候选字段 allow-list、类型/范围、有限数、精确整数、唯一 ID、唯一规范输入和总 transfer budget 校验，然后物化为 run-local `input-design-space-candidates.json`。每次运行都会收集 `design-space.json`；未提交 manifest 时使用后端内置的 S6-only synthetic candidates。
+设计空间 manifest 以 JSON 内容提交，bridge 不接受浏览器传来的任意本地路径。当前候选溯源固定为
+`source_mode=synthetic_trace`、`calibration_level=uncalibrated`、`allowed_claim_scope=exploratory`。
+内容会经过根字段和候选字段 allow-list、类型/范围、有限数、精确整数、唯一 ID、唯一执行输入和总 transfer budget
+校验；仅修改 `uncertainty_score` 或 `tail_risk` 不会产生新的执行候选。DES 请求还会在提交前计算 Analytical 初筛、
+风险触发晋级和 top-k 保留项的合计执行预算，然后物化为 run-local `input-design-space-candidates.json`。每次运行都会
+收集 `design-space.json`；未提交 manifest 时使用后端内置的 S6-only synthetic candidates。
 
 网页中的设计空间证据固定显示 `execution_scope=S6_only`。候选 ranking 保持 `synthetic_consistency`，不会因为基础运行连接了 real-trace 或 held-out 报告而自动升级。
 

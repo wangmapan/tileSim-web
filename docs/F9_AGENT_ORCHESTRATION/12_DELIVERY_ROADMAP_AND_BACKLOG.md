@@ -67,19 +67,19 @@ flowchart LR
 退出条件：每个 agent-exposed 字段有执行证据；未执行字段不能进入推荐；profile 缺失明确 fail closed；源码与目标 runtime
 contract identity/同 key 语义无未裁决 drift（`GAP-CONTRACT-DRIFT-001` 关闭）。
 
-Phase 0B 当前状态（2026-09-08）：publication candidate 与独立 oracle 已完成，但正式 publication、immutable runtime
+Phase 0B 历史检查点（2026-09-08）：publication candidate 与独立 oracle 已完成，但正式 publication、immutable runtime
 snapshot、generated types/validators 和 Bridge endpoint 未完成；F8 v1 breaking drift 与目标源码 revision 未收口。因此本阶段
-退出条件未满足，Phase 1 DoR 为 `blocked`。
+当时退出条件未满足，Phase 1 DoR 为 `blocked`。
 
-Phase 0C 当前状态（2026-09-09）：F8 nested v1/v2 双版本矩阵、正式 Capability/Profile 契约、immutable snapshot
+Phase 0C 历史检查点（2026-09-09）：F8 nested v1/v2 双版本矩阵、正式 Capability/Profile 契约、immutable snapshot
 service/endpoint、generated types/runtime validators、Web 只读 adapter 和独立 oracle 已闭合。实现层 DoR hard gates
-达到 pre-commit ready；由于用户未授权 commit，新的 Git 可复现 revision 尚未形成，Phase 1 仍不得自动启动。
+达到 pre-commit ready；随后由 Phase 0D 完成 Git 可复现发布。
 
-Phase 0D 当前状态（2026-09-09）：八字段 execution evidence 已形成独立后端 commit
+Phase 0D 发布状态（2026-09-09）：八字段 execution evidence 已形成独立后端 commit
 `7e5a8c6a5cf738bd24608b440a61b62dee8d1881`，Catalog 八条 repository/revision/path/test_case reference 为
 8/8 verified。Web runtime/reproducibility commits `64a741f3…` / `df1f2445…` 已形成，其 snapshot revision 为
-`sha256:2411a70b…673a0`，F8 compatibility 为 28/28，oracle tests 为 5/5。Phase 0 技术 DoR 已闭合；docs/evidence
-仍待独立授权提交。本任务不启动 Phase 1。
+`sha256:2411a70b…673a0`，F8 compatibility 为 28/28，oracle tests 为 5/5；docs/evidence commit 为
+`b46b9783bdd8a8ed330cffe549327e4e381b6f03`。Phase 0 技术 DoR 已闭合。
 
 ## 6. Phase 1：当前正式参数面的自然语言草案（约 2–3 周）
 
@@ -96,6 +96,10 @@ Phase 0D 当前状态（2026-09-09）：八字段 execution evidence 已形成�
 - `WP-COMPAT-01` 与手工表单 canonical payload 等价测试。
 
 退出条件：Schema/unit/pointer/equivalence hard gates=100%；确认入口禁用；用户知道这只是草案。
+
+发布状态（2026-09-10）：Phase 1 已完成并集成本地 `main`。八字段覆盖与 canonical equivalence 均为 8/8，
+128/128 双语及混合意图评测通过；草案仍无 run 副作用。正式 Draft、Validation、Conversation、Approval、Workflow、
+RAG 和写工具 contract 继续保持 open，不自动进入 Phase 2。
 
 ## 7. Phase 2：模型、设备、并行与工作负载（约 3–5 周）
 

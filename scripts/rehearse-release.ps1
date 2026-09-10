@@ -5,25 +5,18 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+Import-Module (Join-Path $PSScriptRoot "deployment-common.psm1") -Force
 if ($Port -lt 1024 -or $Port -gt 65535 -or $Port -eq 5173) {
     throw "Release rehearsal requires an unprivileged temporary port other than 5173."
 }
 
-$webRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$webRoot = Resolve-TileSimWebRoot $PSScriptRoot
 $runtimeRoot = Join-Path $webRoot "runtime\rehearsal"
 $releasesRoot = Join-Path $runtimeRoot "releases"
-$node = "C:\Users\mapanwang\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe"
+$node = Resolve-TileSimNode
+Assert-TileSimWslDistro $WslDistro
 $activeManifestPath = (Resolve-Path -LiteralPath $DeploymentManifest).Path
 $activeManifest = Get-Content -Raw -LiteralPath $activeManifestPath | ConvertFrom-Json
-
-function Convert-ToWslPath {
-    param([string]$WindowsPath)
-    $full = [System.IO.Path]::GetFullPath($WindowsPath)
-    if ($full -notmatch '^([A-Za-z]):\\(.*)$') {
-        throw "Only absolute Windows drive paths are supported: $full"
-    }
-    return "/mnt/$($matches[1].ToLower())/$($matches[2].Replace('\', '/'))"
-}
 
 function Get-DirectoryDigest {
     param([string]$Directory, [switch]$IncludeEveryDirectory)
@@ -122,7 +115,7 @@ if ($LASTEXITCODE -ne 0 -or $webRevision -notmatch '^[0-9a-f]{40}$') {
 }
 $webSourceDigest = Get-DirectoryDigest $webRoot
 $webBuildDigest = Get-DirectoryDigest (Join-Path $webRoot "dist") -IncludeEveryDirectory
-$schemaOutput = @(& wsl.exe -d $WslDistro --exec python3 (Convert-ToWslPath (Join-Path $webRoot "bridge\server.py")) --print-schema-set-revision)
+$schemaOutput = @(& wsl.exe -d $WslDistro --exec python3 (ConvertTo-TileSimWslPath (Join-Path $webRoot "bridge\server.py")) --print-schema-set-revision)
 if ($LASTEXITCODE -ne 0) { throw "Could not calculate the Bridge schema-set revision." }
 $schemaRevision = $schemaOutput | Where-Object { $_ -match '^sha256:[0-9a-f]{64}$' } | Select-Object -Last 1
 if (-not $schemaRevision) { throw "Bridge schema-set revision was not returned." }
@@ -141,9 +134,9 @@ $rehearsalId = "run-$(Get-Date -Format 'yyyyMMdd-HHmmss')-$PID"
 $stateRoot = Join-Path $runtimeRoot $rehearsalId
 $manifestPath = Join-Path $stateRoot "backend-current.json"
 New-Item -ItemType Directory -Path $stateRoot -Force | Out-Null
-$manifestPathWsl = Convert-ToWslPath $manifestPath
-$stateRootWsl = Convert-ToWslPath $stateRoot
-$releaseRootWsl = Convert-ToWslPath $snapshot.release_root_windows
+$manifestPathWsl = ConvertTo-TileSimWslPath $manifestPath
+$stateRootWsl = ConvertTo-TileSimWslPath $stateRoot
+$releaseRootWsl = ConvertTo-TileSimWslPath $snapshot.release_root_windows
 
 $candidate = [ordered]@{}
 foreach ($property in $activeManifest.PSObject.Properties) { $candidate[$property.Name] = $property.Value }

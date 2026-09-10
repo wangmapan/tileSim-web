@@ -2,19 +2,25 @@
 import { AlertTriangle, Check, ChevronDown, CircleMinus, Layers3, ShieldCheck } from "@lucide/vue";
 import EmptyState from "../components/EmptyState.vue";
 import StatusPill from "../components/StatusPill.vue";
-import { formatPercent, statusLabel } from "../lib/format";
+import { formatPercent } from "../lib/format";
 import { useDashboard } from "../store/dashboard";
 import { useI18n } from "../i18n";
 import ArtifactEvidenceLink from "../components/ArtifactEvidenceLink.vue";
 import { validationCheckSource } from "../features/execution-inspector";
+import {
+  backendExplanationPresentation,
+  executionLayerName,
+  semanticFieldPresentation,
+} from "../features/execution-inspector";
 const { state, evidence } = useDashboard();
 const { t } = useI18n();
 
-function gapLabel(gap: string) {
-  if (gap === "Synthetic-trace validation cannot stand in for held-out real-trace fidelity claims.") {
-    return t("合成数据检查不能替代使用独立真实数据进行的可信度验证。");
-  }
-  return gap;
+function semanticField(field: string, value: unknown) {
+  return semanticFieldPresentation(field, value);
+}
+
+function backendExplanation(value: string | null | undefined) {
+  return backendExplanationPresentation(value);
 }
 </script>
 
@@ -28,17 +34,28 @@ function gapLabel(gap: string) {
   />
   <div v-else class="view-stack">
     <section class="provenance-grid" data-help-anchor="validation-scope">
-      <article data-help-anchor="validation-provenance">
-        <small>{{ t("数据来源") }}</small
-        ><StatusPill :value="evidence.sourceMode" />
+      <article data-help-anchor="validation-provenance" class="provenance-semantic">
+        <small>{{ semanticField("source_mode", evidence.sourceMode).fieldLabel }}</small>
+        <strong>{{ semanticField("source_mode", evidence.sourceMode).valueLabel }}</strong>
+        <p v-if="semanticField('source_mode', evidence.sourceMode).valueDescription">
+          {{ semanticField("source_mode", evidence.sourceMode).valueDescription }}
+        </p>
+        <code>{{ semanticField("source_mode", evidence.sourceMode).technicalText }}</code>
       </article>
-      <article>
-        <small>{{ t("校准状态") }}</small
-        ><StatusPill :value="evidence.calibration" />
-      </article>
-      <article>
-        <small>{{ t("可用范围") }}</small
-        ><StatusPill :value="evidence.claimScope" />
+      <article
+        v-for="item in [
+          { field: 'calibration_level', value: evidence.calibration },
+          { field: 'allowed_claim_scope', value: evidence.claimScope },
+        ]"
+        :key="item.field"
+        class="provenance-semantic"
+      >
+        <small>{{ semanticField(item.field, item.value).fieldLabel }}</small>
+        <strong>{{ semanticField(item.field, item.value).valueLabel }}</strong>
+        <p v-if="semanticField(item.field, item.value).valueDescription">
+          {{ semanticField(item.field, item.value).valueDescription }}
+        </p>
+        <code>{{ semanticField(item.field, item.value).technicalText }}</code>
       </article>
       <article>
         <small>{{ t("证据完整度") }}</small
@@ -56,8 +73,12 @@ function gapLabel(gap: string) {
       </header>
       <ul>
         <li v-for="(gap, index) in state.bundle.validation.open_gaps" :key="gap">
-          <span>{{ gapLabel(gap) }}</span
-          ><ArtifactEvidenceLink :source-path="'validation:/open_gaps/' + index" />
+          <span>
+            <small>{{ backendExplanation(gap).label }}</small>
+            {{ backendExplanation(gap).text }}
+            <code v-if="backendExplanation(gap).mapped">{{ t("后端原文") }}: {{ gap }}</code>
+          </span>
+          <ArtifactEvidenceLink :source-path="'validation:/open_gaps/' + index" />
         </li>
       </ul>
     </section>
@@ -81,10 +102,24 @@ function gapLabel(gap: string) {
           :key="entry.subsystem"
           class="fidelity-row"
         >
-          <strong>{{ entry.subsystem }}</strong
-          ><span>{{ statusLabel(entry.requested_fidelity) }}</span
-          ><span class="fidelity-arrow">→</span><StatusPill :value="entry.actual_fidelity" />
-          <p>{{ entry.detail }}</p>
+          <strong class="fidelity-module">
+            <span>{{ executionLayerName(entry.subsystem) }}</span>
+            <code>{{ entry.subsystem }}</code>
+          </strong>
+          <span class="fidelity-value">
+            <b>{{ semanticField("requested_fidelity", entry.requested_fidelity).valueLabel }}</b>
+            <code>requested_fidelity = {{ entry.requested_fidelity || "—" }}</code>
+          </span>
+          <span class="fidelity-arrow">→</span>
+          <span class="fidelity-value">
+            <b>{{ semanticField("actual_fidelity", entry.actual_fidelity).valueLabel }}</b>
+            <code>actual_fidelity = {{ entry.actual_fidelity || "—" }}</code>
+          </span>
+          <p>
+            <small>{{ backendExplanation(entry.detail).label }}</small>
+            {{ backendExplanation(entry.detail).text }}
+            <code v-if="backendExplanation(entry.detail).mapped">{{ t("后端原文") }}: {{ entry.detail }}</code>
+          </p>
           <ArtifactEvidenceLink :source-path="'validation:/resolution_entries/' + index" />
         </div>
       </div>
@@ -111,9 +146,13 @@ function gapLabel(gap: string) {
             <Check v-if="check.status === 'pass'" :size="16" /><CircleMinus v-else :size="16" />
           </div>
           <div>
-            <small>{{ check.subsystem }}</small
+            <small>{{ executionLayerName(check.subsystem) }} · {{ check.subsystem }}</small
             ><strong>{{ check.check_id }}</strong>
-            <p>{{ check.detail }}</p>
+            <p>
+              <small>{{ backendExplanation(check.detail).label }}</small>
+              {{ backendExplanation(check.detail).text }}
+              <code v-if="backendExplanation(check.detail).mapped">{{ t("后端原文") }}: {{ check.detail }}</code>
+            </p>
           </div>
           <StatusPill :value="check.status" />
           <ArtifactEvidenceLink

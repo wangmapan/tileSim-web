@@ -7,6 +7,7 @@ import { useI18n } from "../../../i18n";
 import ArtifactEvidenceLink from "../../../components/ArtifactEvidenceLink.vue";
 import RecordPager from "../../../components/ui/RecordPager.vue";
 import { useRecordPage } from "../../../components/ui/useRecordPage";
+import { semanticFieldPresentation, semanticValuePresentation } from "../presentation";
 
 const ExecutionChart = defineAsyncComponent(() => import("../charts/ExecutionChart.vue"));
 
@@ -63,6 +64,14 @@ function display(value: string | number | null, column: string) {
   if (props.visualization.unit === "%" || column.toLowerCase().includes("occupancy")) return formatPercent(value, 1);
   return typeof value === "number" ? formatNumber(value, 3) : value;
 }
+
+function semanticField(field: string, value: unknown) {
+  return semanticFieldPresentation(field, value);
+}
+
+function semanticValue(value: unknown) {
+  return semanticValuePresentation(value);
+}
 </script>
 
 <template>
@@ -92,7 +101,8 @@ function display(value: string | number | null, column: string) {
         <div>
           <small>{{ t("已选择图表项") }}</small>
           <strong>{{ selectedRow.label }}</strong>
-          <span v-if="selectedRow.status">{{ selectedRow.status }}</span>
+          <span v-if="selectedRow.status">{{ semanticValue(selectedRow.status).valueLabel }}</span>
+          <small v-if="selectedRow.status" class="semantic-technical">status = {{ selectedRow.status }}</small>
           <p v-if="selectedRow.detail">{{ selectedRow.detail }}</p>
         </div>
         <span v-if="selectedEvidencePaths.length" class="visualization-selection__evidence">
@@ -108,9 +118,16 @@ function display(value: string | number | null, column: string) {
     </template>
     <div v-else-if="visualization.kind === 'matrix'" class="visualization-matrix">
       <div v-for="row in visibleRecords" :key="row.label">
-        <code>{{ row.label }}</code>
-        <strong>{{ display(row.values[0], visualization.columns[0]) }}</strong>
-        <small>{{ row.sourcePath || "—" }}</small>
+        <span class="semantic-field-label">{{ semanticField(row.label, row.values[0]).fieldLabel }}</span>
+        <p v-if="semanticField(row.label, row.values[0]).fieldDescription" class="semantic-field-description">
+          {{ semanticField(row.label, row.values[0]).fieldDescription }}
+        </p>
+        <strong>{{ semanticField(row.label, row.values[0]).valueLabel }}</strong>
+        <p v-if="semanticField(row.label, row.values[0]).valueDescription" class="semantic-value-description">
+          {{ semanticField(row.label, row.values[0]).valueDescription }}
+        </p>
+        <small class="semantic-technical">{{ semanticField(row.label, row.values[0]).technicalText }}</small>
+        <code class="semantic-pointer">{{ row.sourcePath || "—" }}</code>
       </div>
     </div>
     <div v-else class="visualization-empty">
@@ -160,9 +177,13 @@ function display(value: string | number | null, column: string) {
             </dd>
           </div>
           <div>
-            <dt>derivation</dt>
+            <dt>{{ semanticField("derivation", visualization.derivation).fieldLabel }}</dt>
             <dd>
-              <code>{{ visualization.derivation }}</code>
+              <strong>{{ semanticField("derivation", visualization.derivation).valueLabel }}</strong>
+              <p v-if="semanticField('derivation', visualization.derivation).valueDescription">
+                {{ semanticField("derivation", visualization.derivation).valueDescription }}
+              </p>
+              <code>{{ semanticField("derivation", visualization.derivation).technicalText }}</code>
             </dd>
           </div>
           <div>
@@ -187,9 +208,19 @@ function display(value: string | number | null, column: string) {
             </thead>
             <tbody>
               <tr v-for="(row, rowIndex) in visibleRecords" :key="`${visualization.id}-${page}-${rowIndex}`">
-                <th scope="row">{{ row.label }}</th>
+                <th scope="row">
+                  <template v-if="visualization.kind === 'matrix'">
+                    {{ semanticField(row.label, row.values[0]).fieldLabel }}
+                    <small>{{ row.label }}</small>
+                  </template>
+                  <template v-else>{{ row.label }}</template>
+                </th>
                 <td v-for="(value, index) in row.values" :key="index">
-                  {{ display(value, visualization.columns[index]) }}
+                  <template v-if="visualization.kind === 'matrix'">
+                    {{ semanticField(row.label, value).valueLabel }}
+                    <small>{{ semanticField(row.label, value).technicalText }}</small>
+                  </template>
+                  <template v-else>{{ display(value, visualization.columns[index]) }}</template>
                   <small v-if="row.rawValues?.[index]">
                     {{ visualization.rawColumns?.[index] || "raw" }}: {{ row.rawValues[index] }}
                     {{ visualization.rawUnit }}
@@ -201,7 +232,8 @@ function display(value: string | number | null, column: string) {
                   />
                 </td>
                 <td v-if="hasStatus">
-                  <code>{{ row.status || t("未报告") }}</code>
+                  <strong>{{ row.status ? semanticValue(row.status).valueLabel : t("未报告") }}</strong>
+                  <small v-if="row.status">status = {{ row.status }}</small>
                   <small v-if="row.detail">{{ row.detail }}</small>
                 </td>
                 <td>
@@ -237,5 +269,9 @@ function display(value: string | number | null, column: string) {
 .visualization-table-scroll:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
+}
+.semantic-technical,
+.semantic-pointer {
+  overflow-wrap: anywhere;
 }
 </style>
