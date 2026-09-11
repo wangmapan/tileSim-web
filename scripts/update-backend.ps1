@@ -49,6 +49,27 @@ function Write-AtomicTextFile {
     }
 }
 
+function Write-RelativeWorktreeGitFile {
+    param([Parameter(Mandatory = $true)][string]$WorktreeRoot)
+
+    $gitFile = Join-Path $WorktreeRoot ".git"
+    $absoluteGitDir = (& git -C $WorktreeRoot rev-parse --git-dir).Trim()
+    if ($LASTEXITCODE -ne 0 -or -not $absoluteGitDir) {
+        throw "Could not resolve the Git directory for deployment worktree: $WorktreeRoot"
+    }
+    $relativeGitDir = [System.IO.Path]::GetRelativePath($WorktreeRoot, $absoluteGitDir).Replace('\', '/')
+    $originalAttributes = [System.IO.File]::GetAttributes($gitFile)
+    $blockedAttributes = [System.IO.FileAttributes]::Hidden -bor [System.IO.FileAttributes]::ReadOnly
+    try {
+        [System.IO.File]::SetAttributes($gitFile, $originalAttributes -band (-bnot $blockedAttributes))
+        [System.IO.File]::WriteAllText($gitFile, "gitdir: $relativeGitDir`n", [System.Text.UTF8Encoding]::new($false))
+    } finally {
+        if (Test-Path -LiteralPath $gitFile) {
+            [System.IO.File]::SetAttributes($gitFile, $originalAttributes)
+        }
+    }
+}
+
 function Resolve-GitCommit {
     param([string]$GitRef)
     $revision = (& git -C $repository rev-parse "$GitRef`^{commit}" 2>$null)
@@ -158,9 +179,7 @@ try {
 
     if (-not (Test-Path -LiteralPath $backend)) {
         Invoke-Checked "git" @("-C", $repository, "worktree", "add", "--detach", $backend, $targetRevision)
-        $absoluteGitDir = (& git -C $backend rev-parse --git-dir).Trim()
-        $relativeGitDir = [System.IO.Path]::GetRelativePath($backend, $absoluteGitDir).Replace('\', '/')
-        [System.IO.File]::WriteAllText((Join-Path $backend ".git"), "gitdir: $relativeGitDir`n")
+        Write-RelativeWorktreeGitFile $backend
     }
 
     $dirtyEntries = @(& git -C $backend status --porcelain)
