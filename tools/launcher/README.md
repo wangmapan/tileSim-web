@@ -15,7 +15,8 @@ py -3 .\tools\launcher\tilesim_launcher.py
 ```
 
 默认产物为前端仓库根目录下被 Git 忽略的 `启动TileSim工作台.exe`。可用 `-OutputDirectory` 和
-`-ExecutableName` 指定其他分发位置和文件名。脚本固定 PyInstaller 版本、使用隔离环境、验证 Windows GUI
+`-ExecutableName` 指定其他分发位置和文件名。脚本固定 PyInstaller 版本、使用隔离环境，将当前 Node.js
+运行时嵌入单文件 EXE，并验证 Windows GUI
 subsystem 并运行打包后自检。
 
 打包后的启动器优先从 EXE 所在目录或显式 `TILESIM_WEB_ROOT` 定位 Web checkout；源码模式从脚本所在仓库定位。

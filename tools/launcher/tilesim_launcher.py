@@ -73,6 +73,30 @@ AMBER = "#9a5b00"
 RED = "#b42318"
 
 
+def resolve_bundled_node() -> Path | None:
+    """Return the Node runtime embedded in a frozen launcher, if present."""
+    if not getattr(sys, "frozen", False):
+        return None
+    extraction_root = getattr(sys, "_MEIPASS", None)
+    if not extraction_root:
+        return None
+    candidate = Path(extraction_root) / "node.exe"
+    return candidate.resolve() if candidate.is_file() else None
+
+
+def powershell_environment() -> dict[str, str]:
+    """Provide deployment scripts with the launcher's private Node runtime."""
+    environment = os.environ.copy()
+    node = resolve_bundled_node()
+    if node is not None:
+        environment["TILESIM_NODE"] = str(node)
+        existing_path = environment.get("PATH", "")
+        environment["PATH"] = os.pathsep.join(
+            item for item in (str(node.parent), existing_path) if item
+        )
+    return environment
+
+
 def load_json_object(path: Path) -> dict[str, Any]:
     try:
         with path.open("r", encoding="utf-8-sig") as stream:
@@ -589,6 +613,7 @@ class TileSimLauncher(tk.Tk):
         process = subprocess.Popen(
             self._powershell_command(script, *arguments),
             cwd=WEB_ROOT,
+            env=powershell_environment(),
             stdin=subprocess.PIPE if stdin_text is not None else subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -769,10 +794,12 @@ class TileSimLauncher(tk.Tk):
 def check_environment(output_path: Path | None = None) -> int:
     required_files = (START_SCRIPT, UPDATE_SCRIPT, CONFIGURE_MODEL_SCRIPT, REPAIR_WSL_SCRIPT)
     missing = [str(path) for path in required_files if not path.is_file()]
+    bundled_node = resolve_bundled_node()
     result = {
         "schema_version": "tilesim.workbench_launcher_check.v1",
         "ready": not missing,
         "web_root": str(WEB_ROOT),
+        "bundled_node_runtime": bundled_node is not None,
         "deployment_manifest_present": MANIFEST_PATH.is_file(),
         "model_settings_configured": bool(load_public_model_settings().get("configured")),
         "missing_files": missing,

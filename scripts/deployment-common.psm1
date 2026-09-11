@@ -7,6 +7,15 @@ function Resolve-TileSimWebRoot {
 }
 
 function Resolve-TileSimNode {
+    $configuredPath = [Environment]::GetEnvironmentVariable("TILESIM_NODE", "Process")
+    if (-not [string]::IsNullOrWhiteSpace($configuredPath)) {
+        $candidate = [System.IO.Path]::GetFullPath($configuredPath)
+        if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+            throw "TILESIM_NODE does not point to a Node.js executable: $candidate"
+        }
+        return $candidate
+    }
+
     $command = Get-Command "node.exe" -ErrorAction SilentlyContinue
     if ($null -eq $command) {
         $command = Get-Command "node" -ErrorAction SilentlyContinue

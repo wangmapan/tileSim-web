@@ -92,6 +92,37 @@ windowsOnly("deployment portability", () => {
     expect(identities[0]).not.toBe(identities[2]);
   });
 
+  it("accepts an explicit launcher-provided Node runtime without relying on PATH", () => {
+    const modulePath = resolve("scripts/deployment-common.psm1").replaceAll("'", "''");
+    const powershell = join(
+      process.env.SystemRoot ?? "C:\\Windows",
+      "System32",
+      "WindowsPowerShell",
+      "v1.0",
+      "powershell.exe",
+    );
+    const result = spawnSync(
+      powershell,
+      [
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        `Import-Module '${modulePath}' -Force; Resolve-TileSimNode`,
+      ],
+      {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          PATH: join(process.env.SystemRoot ?? "C:\\Windows", "System32"),
+          TILESIM_NODE: process.execPath,
+        },
+      },
+    );
+    expect(result.status, result.stdout + result.stderr).toBe(0);
+    expect(result.stdout.trim().toLowerCase()).toBe(process.execPath.toLowerCase());
+  });
+
   it("fails before deployment when a catalog evidence revision is unavailable", () => {
     const fixtureRoot = mkdtempSync(join(tmpdir(), "tilesim-deployment-evidence-"));
     const backendRoot = join(fixtureRoot, "backend");

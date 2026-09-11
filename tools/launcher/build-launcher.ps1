@@ -9,6 +9,8 @@ $defaultExecutableName = "$([char]0x542F)$([char]0x52A8)TileSim$([char]0x5DE5)$(
 if ([string]::IsNullOrWhiteSpace($ExecutableName)) { $ExecutableName = $defaultExecutableName }
 $pyInstallerVersion = "6.22.2"
 $webRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+Import-Module (Join-Path $webRoot "scripts\deployment-common.psm1") -Force
+$nodeRuntime = Resolve-TileSimNode
 $source = Join-Path $PSScriptRoot "tilesim_launcher.py"
 $buildRoot = Join-Path $webRoot "runtime\launcher-build"
 $virtualEnvironment = Join-Path $buildRoot "venv"
@@ -44,6 +46,7 @@ if ($LASTEXITCODE -ne 0 -or $installedVersion.Trim() -ne $pyInstallerVersion) {
     --clean `
     --onefile `
     --windowed `
+    --add-binary "$nodeRuntime;." `
     --name $ExecutableName `
     --distpath $output `
     --workpath $workPath `
@@ -74,8 +77,8 @@ if ($checkProcess.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $checkFile)) {
     throw "The packaged launcher self-check failed."
 }
 $check = Get-Content -Raw -LiteralPath $checkFile | ConvertFrom-Json
-if ($check.ready -ne $true -or $check.web_root -ne $webRoot) {
-    throw "The packaged launcher could not locate the TileSim Web runtime."
+if ($check.ready -ne $true -or $check.web_root -ne $webRoot -or $check.bundled_node_runtime -ne $true) {
+    throw "The packaged launcher could not locate the TileSim Web checkout or its bundled Node.js runtime."
 }
 Remove-Item -LiteralPath $checkFile -Force
 
@@ -85,6 +88,7 @@ Remove-Item -LiteralPath $checkFile -Force
     pyinstaller_version = $pyInstallerVersion
     subsystem = "windows_gui"
     console_window = $false
+    bundled_node_runtime = $true
     self_check = "passed"
     size_bytes = (Get-Item -LiteralPath $executable).Length
 } | ConvertTo-Json -Compress

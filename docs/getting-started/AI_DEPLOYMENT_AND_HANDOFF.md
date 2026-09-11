@@ -81,7 +81,8 @@ pnpm preview
 默认产物为 `<tileSim-web>/启动TileSim工作台.exe`，并被 Git 忽略。打包后的 EXE 从自身目录定位前端仓库；
 不要将它放入独立的团队资料目录，否则仓库迁移或多 checkout 环境下容易指向错误版本。启动器可以启动已有 release，
 也可以拉取后端 `origin/main`、重新验证并部署。WSL 构建缓存同时绑定后端 revision 和 deployment 源码路径，
-因此不同 clone/worktree 不会复用错误的 CMake source cache。
+因此不同 clone/worktree 不会复用错误的 CMake source cache。构建脚本会把当前 Node.js 运行时嵌入 EXE；从资源管理器
+双击启动时不依赖其继承的 PATH。PowerShell 部署脚本本身仍要求 Node.js 20+。
 
 ## 4. 日常运行
 
