@@ -80,6 +80,37 @@ function Assert-TileSimWslDistro {
     }
 }
 
+function Assert-TileSimBackendEvidenceRevisions {
+    param(
+        [Parameter(Mandatory = $true)][string]$BackendRepositoryRoot,
+        [Parameter(Mandatory = $true)][string]$CatalogPath,
+        [Parameter(Mandatory = $true)][string]$GitCommand
+    )
+
+    if (-not (Test-Path -LiteralPath $CatalogPath -PathType Leaf)) {
+        throw "Agent orchestration capability catalog was not found: $CatalogPath"
+    }
+
+    $catalog = Get-Content -LiteralPath $CatalogPath -Raw | ConvertFrom-Json
+    $revisions = @(
+        $catalog.parameter_descriptors |
+            ForEach-Object { $_.execution_evidence } |
+            ForEach-Object { $_.revision } |
+            Where-Object { $_ } |
+            Sort-Object -Unique
+    )
+
+    foreach ($revision in $revisions) {
+        if ($revision -notmatch '^[0-9a-f]{40}$') {
+            throw "Capability catalog contains an invalid backend evidence revision: $revision"
+        }
+        & $GitCommand -C $BackendRepositoryRoot cat-file -e "$revision`^{commit}" 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            throw "Backend repository cannot resolve published execution-evidence revision $revision. Fetch or publish the referenced backend commit, or pass -BackendRepositoryRoot pointing to a repository that contains it. Do not bypass the evidence gate."
+        }
+    }
+}
+
 Export-ModuleMember -Function @(
     "Resolve-TileSimWebRoot",
     "Resolve-TileSimNode",
@@ -87,5 +118,6 @@ Export-ModuleMember -Function @(
     "Resolve-TileSimBackendRepositoryRoot",
     "Resolve-TileSimBackendDeploymentRoot",
     "Resolve-TileSimWslBuildRoot",
-    "Assert-TileSimWslDistro"
+    "Assert-TileSimWslDistro",
+    "Assert-TileSimBackendEvidenceRevisions"
 )

@@ -1,10 +1,19 @@
 # TileSim Web：AI 部署与接手手册
 
+> 事实日期：2026-09-11
+>
+> 当前公开发布状态：`blocked_pending_push`
+
 ## 1. 仓库交付边界
 
 本仓库包含完整前端、Python Bridge、契约、生成代码、测试和部署工具，但不复制 C++ TileSim 后端或外部大模型。完整仿真部署需要联网克隆公开后端；bootstrap 会自动完成。离线且只有 Web 仓库时，可构建和运行 fixture 测试，但不能创建真实 simulation run。
 
 外部模型只用于 Evidence Agent，是可选配置。未配置模型时，基础仿真、报告、证据和 Phase 1 本地参数草案仍可使用。
+
+截至事实日期，本地 Web `main` 已形成完整集成交付提交 `baa17f5fec1989a317b1b1016e41d43dccc4e767`，但该本地交付链
+尚未进入 Web `origin/main`；Capability Catalog 绑定的后端证据 revision
+`7e5a8c6a5cf738bd24608b440a61b62dee8d1881` 也尚未出现在任何后端远端分支。因而其他用户目前不能只从公开远端复现完整门禁。
+发布者必须先推送 Web 交付提交，并让该后端证据 revision 在公开后端可达；不得删除或跳过证据检查来伪装可部署。
 
 ## 2. 环境要求
 
@@ -31,6 +40,10 @@ Bootstrap 会验证工具链、克隆 `https://github.com/lqf0624/tileSim.git`�
 <workspace>/tileSim
 <workspace>/tileSim-backend
 ```
+
+完整部署会先核对 Capability Catalog 中每个后端 evidence revision 是否能由后端 Git 仓库解析。若默认远端尚未发布所需 revision，
+脚本会在构建前停止；维护者可以在 revision 正式发布后重试，或显式传入一个已经包含该 revision 的可信
+`-BackendRepositoryRoot`。这不是可跳过的安装检查。
 
 自定义目录：
 

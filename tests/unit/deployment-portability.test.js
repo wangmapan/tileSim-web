@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync, readdirSync } from "node:fs";
-import { resolve } from "node:path";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const windowsOnly = process.platform === "win32" ? describe : describe.skip;
@@ -55,5 +56,35 @@ windowsOnly("deployment portability", () => {
       repository: "D:\\work\\tileSim",
       deployment: "D:\\work\\tileSim-backend",
     });
+  });
+
+  it("fails before deployment when a catalog evidence revision is unavailable", () => {
+    const fixtureRoot = mkdtempSync(join(tmpdir(), "tilesim-deployment-evidence-"));
+    const backendRoot = join(fixtureRoot, "backend");
+    const catalogPath = join(fixtureRoot, "catalog.json");
+    try {
+      expect(spawnSync("git", ["init", "--quiet", backendRoot]).status).toBe(0);
+      writeFileSync(
+        catalogPath,
+        JSON.stringify({ parameter_descriptors: [{ execution_evidence: [{ revision: "f".repeat(40) }] }] }),
+        "utf8",
+      );
+      const modulePath = resolve("scripts/deployment-common.psm1").replaceAll("'", "''");
+      const result = spawnSync(
+        "powershell.exe",
+        [
+          "-NoLogo",
+          "-NoProfile",
+          "-NonInteractive",
+          "-Command",
+          `Import-Module '${modulePath}' -Force; Assert-TileSimBackendEvidenceRevisions -BackendRepositoryRoot '${backendRoot.replaceAll("'", "''")}' -CatalogPath '${catalogPath.replaceAll("'", "''")}' -GitCommand (Get-Command git).Source`,
+        ],
+        { encoding: "utf8" },
+      );
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain("cannot resolve published execution-evidence revision");
+    } finally {
+      rmSync(fixtureRoot, { recursive: true, force: true });
+    }
   });
 });

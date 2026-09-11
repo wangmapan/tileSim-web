@@ -13,6 +13,9 @@ corepack enable
 .\scripts\bootstrap-workbench.ps1
 ```
 
+对外分发前，Web 发行提交和 Capability Catalog 引用的后端 execution-evidence revision 必须已发布到相应远端；
+bootstrap 会在完整部署前验证该 revision 可达性并失败关闭。当前发布状态见[部署与接手手册](docs/getting-started/AI_DEPLOYMENT_AND_HANDOFF.md)。
+
 默认目录为同级的 `tileSim-web/`、`tileSim/` 和 `tileSim-backend/`。只验证并构建前端可运行：
 
 ```powershell

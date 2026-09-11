@@ -36,6 +36,11 @@ if (-not $BuildOnly) {
     } elseif (-not (Test-Path -LiteralPath (Join-Path $backendRepository ".git"))) {
         throw "BackendRepositoryRoot exists but is not a Git repository: $backendRepository"
     }
+
+    Assert-TileSimBackendEvidenceRevisions `
+        -BackendRepositoryRoot $backendRepository `
+        -CatalogPath (Join-Path $webRoot "bridge/contracts/agent_orchestration_capability/catalog-content.json") `
+        -GitCommand $git.Source
 }
 
 Push-Location $webRoot

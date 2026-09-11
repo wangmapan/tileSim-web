@@ -243,7 +243,7 @@ strict candidate 可执行字段：
   Evidence Provider；模型、设备、卡数、TP/PP/EP、placement、物理 KV、集合通信算法和 SLO 均 fail closed；
 - 双语或中英混合 fixture corpus 为 128/128，八字段 canonical request equivalence 为 8/8；结果只证明
   synthetic consistency 与 UI/contract 行为，不构成真实校准或独立 held-out validation；
-- 最新集成门禁为 Web 504 passed、8 skipped，桌面 fixture E2E 50 passed、6 个 deployed/live tests skipped，
+- 最新集成门禁为 Web 505 passed、8 skipped，桌面 fixture E2E 50 passed、6 个 deployed/live tests skipped，
   Bridge 为 105/105；Phase 0D 可复现性 oracle 以不可变后端 evidence revision 复跑并保持通过；
 - `GAP-COPILOT-UI-001` 已达到 `validated`；`GAP-DRAFT-001`、`GAP-VALIDATE-001`、
   `GAP-CLARIFY-001` 及 Conversation/Approval/Workflow Gap 仍为 open。

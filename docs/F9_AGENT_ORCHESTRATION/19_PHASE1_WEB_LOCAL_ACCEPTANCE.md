@@ -56,7 +56,7 @@ Phase 1 冻结的是本地 Web/domain contract：`tilesim.web.agent_orchestratio
 - Phase 1 模块窄回归：55/55；
 - 双语/中英混合 fixture corpus：128/128，其中 train 30、validation 32、test 34、held-out-adversarial 32；
 - canonical request equivalence：8/8；
-- Web 全量 Vitest：504 passed、8 skipped；
+- Web 全量 Vitest：505 passed、8 skipped；
 - Playwright fixture E2E：50 passed、6 deployed/live skipped；
 - Bridge `py_compile`：passed；
 - Bridge unittest：105/105；
