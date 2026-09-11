@@ -4,7 +4,7 @@
 
 **产品范围**：电脑网页端、local Bridge、版本化契约和 Windows/WSL 本地部署
 
-**当前状态**：Phase 1 全局 Agent 侧栏、八字段本地草案、可移植部署入口与文档治理已形成可复现本地交付点；未部署 5173
+**当前状态**：Phase 1 全局 Agent 侧栏、八字段本地草案、可移植部署入口与文档治理已发布；公开仓库干净克隆的完整部署已验证；未部署 5173
 
 ## 1. 必读
 
@@ -20,12 +20,14 @@
 
 - Vue 前端、Python Bridge、OpenAPI/JSON Schema、generated contracts、fixture/E2E 和 immutable release 工具均在本仓库。
 - 完整仿真运行仍依赖独立 TileSim 后端仓库；bootstrap 可自动克隆。Evidence Agent 外部模型为可选配置。
-- Web 本地集成交付提交为 `baa17f5fec1989a317b1b1016e41d43dccc4e767`，该本地交付链尚未进入 Web
-  `origin/main`，也未 push。
-- 后端本地 `main` 为 `a876859a44f660c4627dab495034d52b4ae61f57`，包含 `origin/main` 并领先 2 个提交；
-  Capability Catalog 引用的证据 revision `7e5a8c6a5cf738bd24608b440a61b62dee8d1881` 仅在本地分支可达。
-- 因上述提交尚未发布，公开远端部署状态为 `blocked_pending_push`；前端干净 checkout 的 `-BuildOnly` 已验证，
-  完整公开部署不得绕过后端 evidence revision gate。
+- Web 集成交付、部署可移植性修复和对应回归已进入公开 `origin/main`；公开部署功能基线为
+  `b2958e796eb8e3b7bb8bd7cc95d8972195571d4d`。
+- 后端公开 `origin/main` 为 `a876859a44f660c4627dab495034d52b4ae61f57`。Capability Catalog 引用的不可变证据
+  revision `7e5a8c6a5cf738bd24608b440a61b62dee8d1881` 可由该公开仓库解析，并保留在公开
+  `codex/phase0d-backend-evidence-clean` 分支。
+- 公开发布状态为 `published_clean_clone_verified`。2026-09-11 从 GitHub 全新克隆 Web 与后端后，完整
+  bootstrap 在 `-NoRestart` 模式通过：后端 63/63 CTest、前端 506 passed/8 skipped、生产构建与
+  immutable release 均成功；完整部署仍必须保留后端 evidence revision gate。
 - Phase 0D 已发布 Capability Catalog/Profile Schema v1；八个 `agent_exposed` 字段有 execution closure，五类真实 Profile 仍为 `0/unavailable`，没有 calibration 或 held-out validation。
 - Phase 1 右侧 Agent 栏是单轮、确定性的本地草案 Copilot，不连接模型、不创建 run、不持久化对话。它只接受正式八字段，对模型、设备、卡数、TP/PP/EP、placement、物理 KV、集合通信算法和 SLO 失败关闭。
 - Evidence Agent descriptor 保持 `tilesim.bridge.evidence_agent_descriptor.v2`；request/response/citation/snapshot 保持 v1。

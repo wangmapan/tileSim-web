@@ -2,7 +2,7 @@
 
 > 事实日期：2026-09-11
 >
-> 当前公开发布状态：`blocked_pending_push`
+> 当前公开发布状态：`published_clean_clone_verified`
 
 ## 1. 仓库交付边界
 
@@ -10,10 +10,17 @@
 
 外部模型只用于 Evidence Agent，是可选配置。未配置模型时，基础仿真、报告、证据和 Phase 1 本地参数草案仍可使用。
 
-截至事实日期，本地 Web `main` 已形成完整集成交付提交 `baa17f5fec1989a317b1b1016e41d43dccc4e767`，但该本地交付链
-尚未进入 Web `origin/main`；Capability Catalog 绑定的后端证据 revision
-`7e5a8c6a5cf738bd24608b440a61b62dee8d1881` 也尚未出现在任何后端远端分支。因而其他用户目前不能只从公开远端复现完整门禁。
-发布者必须先推送 Web 交付提交，并让该后端证据 revision 在公开后端可达；不得删除或跳过证据检查来伪装可部署。
+截至事实日期，完整 Web 交付已进入 `https://github.com/wangmapan/tileSim-web.git` 的 `main`，后端已进入
+`https://github.com/lqf0624/tileSim.git` 的 `main`。Capability Catalog 绑定的不可变后端证据 revision
+`7e5a8c6a5cf738bd24608b440a61b62dee8d1881` 可由公开后端解析，并保留在公开
+`codex/phase0d-backend-evidence-clean` 分支。其他用户可以只依赖这两个公开仓库和下述系统工具完成本地部署；
+无需维护者本机的未提交文件、运行数据或凭据。
+
+2026-09-11 已在一个全新临时目录从两个 GitHub 远端克隆并执行完整 bootstrap。验证结果为后端 63/63 CTest、
+前端 506 passed/8 skipped、生产构建和 immutable release 全部通过，最终模式为
+`validated_deployment_without_restart`。验证使用 `-NoRestart`，未启动、停止或替换 5173。Web 部署功能基线为
+`b2958e796eb8e3b7bb8bd7cc95d8972195571d4d`，后端为
+`a876859a44f660c4627dab495034d52b4ae61f57`。
 
 ## 2. 环境要求
 
@@ -41,8 +48,8 @@ Bootstrap 会验证工具链、克隆 `https://github.com/lqf0624/tileSim.git`�
 <workspace>/tileSim-backend
 ```
 
-完整部署会先核对 Capability Catalog 中每个后端 evidence revision 是否能由后端 Git 仓库解析。若默认远端尚未发布所需 revision，
-脚本会在构建前停止；维护者可以在 revision 正式发布后重试，或显式传入一个已经包含该 revision 的可信
+完整部署会先核对 Capability Catalog 中每个后端 evidence revision 是否能由后端 Git 仓库解析。当前默认公开远端已满足该门禁。
+若将来 catalog 与后端发布不同步，脚本会在构建前停止；维护者应先发布缺失 revision，或显式传入一个已经包含该 revision 的可信
 `-BackendRepositoryRoot`。这不是可跳过的安装检查。
 
 自定义目录：
