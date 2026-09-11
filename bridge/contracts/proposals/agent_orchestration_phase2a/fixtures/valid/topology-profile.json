@@ -1,0 +1,95 @@
+{
+  "fixture_status": "fixture_only",
+  "contract": {
+    "schema_identity": "tilesim.bridge.agent_orchestration_topology_profile.v2",
+    "schema_revision": "sha256:ba71752a32fcc64a24dad03cecb770ecc19c1ebba1ec2606dd3272280060fcf0",
+    "profile_family": "topology",
+    "profile_id": "fixture.topology.ring-8",
+    "profile_revision": "sha256:7d72618c62c372d8e2f0141fd70172deb486bb623cabdcca6f5a365db7ff512d",
+    "canonical_digest": "sha256:7d72618c62c372d8e2f0141fd70172deb486bb623cabdcca6f5a365db7ff512d",
+    "display": {
+      "name": "Fixture ring topology",
+      "description": "Synthetic eight-endpoint network fixture.",
+      "labels": ["fixture_only"]
+    },
+    "source_reference": "fixture.phase2a.synthetic-topology",
+    "source_kind": "synthetic_trace",
+    "license": { "spdx_id": "CC0-1.0", "redistribution_allowed": true, "notice_reference": null },
+    "valid_regime": { "description": "Synthetic consistency checks only.", "constraints": ["eight_endpoints"] },
+    "lifecycle": {
+      "introduced_at": "2026-09-11T00:00:00Z",
+      "updated_at": "2026-09-11T00:00:00Z",
+      "expires_at": null,
+      "status": "available"
+    },
+    "calibration_status": "fixture_consistency_only",
+    "calibration_binding": null,
+    "held_out_validation_status": "missing",
+    "held_out_validation_binding": null,
+    "allowed_claim_scope": "synthetic_consistency",
+    "sensitivity": "public",
+    "visibility": "project",
+    "facts": {
+      "topology_kind": {
+        "value": "ring",
+        "unit": null,
+        "provenance": {
+          "kind": "modelled",
+          "source_reference": "fixture.phase2a.synthetic-topology",
+          "source_field": "/topology_kind",
+          "observed_at": null,
+          "confidence": "1",
+          "evidence_scope": "synthetic_consistency"
+        }
+      },
+      "endpoint_count": {
+        "value": "8",
+        "unit": "endpoint",
+        "provenance": {
+          "kind": "modelled",
+          "source_reference": "fixture.phase2a.synthetic-topology",
+          "source_field": "/endpoint_count",
+          "observed_at": null,
+          "confidence": "1",
+          "evidence_scope": "synthetic_consistency"
+        }
+      },
+      "link_bandwidth_gbps": {
+        "value": "400",
+        "unit": "Gbps",
+        "provenance": {
+          "kind": "modelled",
+          "source_reference": "fixture.phase2a.synthetic-topology",
+          "source_field": "/link_bandwidth_gbps",
+          "observed_at": null,
+          "confidence": "1",
+          "evidence_scope": "synthetic_consistency"
+        }
+      },
+      "link_latency_ps": {
+        "value": "1000000",
+        "unit": "ps",
+        "provenance": {
+          "kind": "modelled",
+          "source_reference": "fixture.phase2a.synthetic-topology",
+          "source_field": "/link_latency_ps",
+          "observed_at": null,
+          "confidence": "1",
+          "evidence_scope": "synthetic_consistency"
+        }
+      },
+      "routing_policy": {
+        "value": "shortest_path",
+        "unit": null,
+        "provenance": {
+          "kind": "modelled",
+          "source_reference": "fixture.phase2a.synthetic-topology",
+          "source_field": "/routing_policy",
+          "observed_at": null,
+          "confidence": "1",
+          "evidence_scope": "synthetic_consistency"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,184 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/proposals/agent-orchestration-phase2a/calculator-receipt.schema.proposal.json",
+  "x-tilesim-contract-status": "proposal_only",
+  "x-tilesim-schema-identity": "tilesim.bridge.agent_orchestration_calculator_receipt_envelope.v1",
+  "$defs": {
+    "result": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value", "unit"],
+          "properties": {
+            "kind": { "const": "exact" },
+            "value": { "$ref": "common.schema.proposal.json#/$defs/decimal" },
+            "unit": { "type": "string", "minLength": 1 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "lower", "upper", "unit", "confidence"],
+          "properties": {
+            "kind": { "const": "interval" },
+            "lower": { "$ref": "common.schema.proposal.json#/$defs/decimal" },
+            "upper": { "$ref": "common.schema.proposal.json#/$defs/decimal" },
+            "unit": { "type": "string", "minLength": 1 },
+            "confidence": { "$ref": "common.schema.proposal.json#/$defs/decimal" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "reason_code"],
+          "properties": {
+            "kind": { "const": "unknown" },
+            "reason_code": { "$ref": "common.schema.proposal.json#/$defs/stableId" }
+          }
+        }
+      ]
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_identity",
+    "schema_revision",
+    "receipt_identity",
+    "receipt_revision",
+    "receipt_type",
+    "calculator_identity",
+    "algorithm_revision",
+    "input_references",
+    "units",
+    "result",
+    "rounding_policy",
+    "assumptions",
+    "uncertainty",
+    "rule_ids",
+    "repair_candidates",
+    "claim_scope_ceiling",
+    "typed_facts"
+  ],
+  "properties": {
+    "schema_identity": { "const": "tilesim.bridge.agent_orchestration_calculator_receipt_envelope.v1" },
+    "schema_revision": { "$ref": "common.schema.proposal.json#/$defs/sha256" },
+    "receipt_identity": { "$ref": "common.schema.proposal.json#/$defs/stableId" },
+    "receipt_revision": { "$ref": "common.schema.proposal.json#/$defs/sha256" },
+    "receipt_type": {
+      "enum": [
+        "model_weight_memory",
+        "kv_capacity",
+        "parallelism",
+        "placement",
+        "collective_network",
+        "workload_distribution",
+        "slo_budget"
+      ]
+    },
+    "calculator_identity": { "$ref": "common.schema.proposal.json#/$defs/stableId" },
+    "algorithm_revision": { "$ref": "common.schema.proposal.json#/$defs/sha256" },
+    "input_references": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "common.schema.proposal.json#/$defs/stableReference" }
+    },
+    "units": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1, "maxLength": 64 },
+      "uniqueItems": true
+    },
+    "result": { "$ref": "#/$defs/result" },
+    "rounding_policy": { "enum": ["exact", "floor", "ceiling", "half_even", "outward_interval"] },
+    "assumptions": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1, "maxLength": 500 },
+      "uniqueItems": true
+    },
+    "uncertainty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "description"],
+      "properties": {
+        "kind": { "enum": ["none", "bounded", "unbounded"] },
+        "description": { "type": "string", "minLength": 1, "maxLength": 500 }
+      }
+    },
+    "rule_ids": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "common.schema.proposal.json#/$defs/stableId" },
+      "uniqueItems": true
+    },
+    "repair_candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action_identity", "target_pointer", "safe", "description"],
+        "properties": {
+          "action_identity": { "$ref": "common.schema.proposal.json#/$defs/stableId" },
+          "target_pointer": { "type": "string", "pattern": "^/" },
+          "safe": { "type": "boolean" },
+          "description": { "type": "string", "minLength": 1, "maxLength": 500 }
+        }
+      }
+    },
+    "claim_scope_ceiling": { "$ref": "common.schema.proposal.json#/$defs/claimScope" },
+    "typed_facts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary_quantity", "constraint_status"],
+      "properties": {
+        "primary_quantity": { "type": "string", "minLength": 1 },
+        "constraint_status": { "enum": ["satisfied", "violated", "unknown"] }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "receipt_type": { "const": "model_weight_memory" },
+        "receipt_identity": { "const": "tilesim.bridge.agent_orchestration_model_weight_memory_receipt.v1" }
+      }
+    },
+    {
+      "properties": {
+        "receipt_type": { "const": "kv_capacity" },
+        "receipt_identity": { "const": "tilesim.bridge.agent_orchestration_kv_capacity_receipt.v1" }
+      }
+    },
+    {
+      "properties": {
+        "receipt_type": { "const": "parallelism" },
+        "receipt_identity": { "const": "tilesim.bridge.agent_orchestration_parallelism_receipt.v1" }
+      }
+    },
+    {
+      "properties": {
+        "receipt_type": { "const": "placement" },
+        "receipt_identity": { "const": "tilesim.bridge.agent_orchestration_placement_receipt.v1" }
+      }
+    },
+    {
+      "properties": {
+        "receipt_type": { "const": "collective_network" },
+        "receipt_identity": { "const": "tilesim.bridge.agent_orchestration_collective_network_receipt.v1" }
+      }
+    },
+    {
+      "properties": {
+        "receipt_type": { "const": "workload_distribution" },
+        "receipt_identity": { "const": "tilesim.bridge.agent_orchestration_workload_distribution_receipt.v1" }
+      }
+    },
+    {
+      "properties": {
+        "receipt_type": { "const": "slo_budget" },
+        "receipt_identity": { "const": "tilesim.bridge.agent_orchestration_slo_budget_receipt.v1" }
+      }
+    }
+  ]
+}

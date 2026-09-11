@@ -1,0 +1,46 @@
+{
+  "fixture_status": "fixture_only",
+  "contract": {
+    "schema_identity": "tilesim.bridge.agent_orchestration_profile_binding.v1",
+    "schema_revision": "sha256:65759c12a24153ab9f9adf1b0fd0a6997498c651a259c1f0bff8a5ce5c34696f",
+    "binding_id": "fixture.binding.phase2a",
+    "binding_digest": "sha256:9c2fbc6c19c93c029ebab2fa9da6a75cfdabdbcc3edeb77f713d4695b5d92700",
+    "model": {
+      "family": "model",
+      "profile_id": "fixture.model.moe-small",
+      "identity": "tilesim.bridge.agent_orchestration_model_profile.v2",
+      "revision": "sha256:2c4fa11e64fd7bec805ebeb218efb2be2db7bd0e200c86c68667790c5f05283c",
+      "digest": "sha256:2c4fa11e64fd7bec805ebeb218efb2be2db7bd0e200c86c68667790c5f05283c"
+    },
+    "engine": {
+      "family": "engine",
+      "profile_id": "fixture.engine.vllm-semantic",
+      "identity": "tilesim.bridge.agent_orchestration_engine_profile.v2",
+      "revision": "sha256:e507ac7b93b10c44406a0ec94f940bcb23a8a02c7bb0ba386861e5fda9f9bb12",
+      "digest": "sha256:e507ac7b93b10c44406a0ec94f940bcb23a8a02c7bb0ba386861e5fda9f9bb12"
+    },
+    "device": {
+      "family": "device",
+      "profile_id": "fixture.device.synthetic-80gb",
+      "identity": "tilesim.bridge.agent_orchestration_device_profile.v2",
+      "revision": "sha256:c6f4783bdf7cf3d8919f2db82c11c9e0e3cb175be30b9a296edd5b36dad56e31",
+      "digest": "sha256:c6f4783bdf7cf3d8919f2db82c11c9e0e3cb175be30b9a296edd5b36dad56e31"
+    },
+    "topology": {
+      "family": "topology",
+      "profile_id": "fixture.topology.ring-8",
+      "identity": "tilesim.bridge.agent_orchestration_topology_profile.v2",
+      "revision": "sha256:7d72618c62c372d8e2f0141fd70172deb486bb623cabdcca6f5a365db7ff512d",
+      "digest": "sha256:7d72618c62c372d8e2f0141fd70172deb486bb623cabdcca6f5a365db7ff512d"
+    },
+    "workload": {
+      "family": "workload",
+      "profile_id": "fixture.workload.poisson-small",
+      "identity": "tilesim.bridge.agent_orchestration_workload_profile.v2",
+      "revision": "sha256:1d1d3b80b5ce62101c41b50793fad13ea1c597e64e00b26fb148372e07b2ac96",
+      "digest": "sha256:1d1d3b80b5ce62101c41b50793fad13ea1c597e64e00b26fb148372e07b2ac96"
+    },
+    "fidelity": "DES",
+    "gpu_participation_mode": "gpu_free"
+  }
+}

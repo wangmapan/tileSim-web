@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/proposals/agent-orchestration-phase2a/device-profile.schema.proposal.json",
+  "x-tilesim-contract-status": "proposal_only",
+  "x-tilesim-schema-identity": "tilesim.bridge.agent_orchestration_device_profile.v2",
+  "allOf": [
+    { "$ref": "common.schema.proposal.json#/$defs/profileEnvelope" },
+    {
+      "properties": {
+        "schema_identity": { "const": "tilesim.bridge.agent_orchestration_device_profile.v2" },
+        "profile_family": { "const": "device" },
+        "facts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["device_model", "memory_capacity_bytes", "compute_profile_reference", "interconnect_endpoints"],
+          "properties": {
+            "device_model": { "$ref": "common.schema.proposal.json#/$defs/stringFact" },
+            "memory_capacity_bytes": { "$ref": "common.schema.proposal.json#/$defs/uint64Fact" },
+            "compute_profile_reference": { "$ref": "common.schema.proposal.json#/$defs/stringFact" },
+            "interconnect_endpoints": { "$ref": "common.schema.proposal.json#/$defs/uint64Fact" }
+          }
+        }
+      }
+    }
+  ]
+}

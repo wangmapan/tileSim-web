@@ -1,0 +1,95 @@
+{
+  "fixture_status": "fixture_only",
+  "contract": {
+    "schema_identity": "tilesim.bridge.agent_orchestration_workload_profile.v2",
+    "schema_revision": "sha256:bf11f12111b1b0e6cf7d5aa85b78a127823038dc9d76a7d95491e66fb7ee59a9",
+    "profile_family": "workload",
+    "profile_id": "fixture.workload.poisson-small",
+    "profile_revision": "sha256:1d1d3b80b5ce62101c41b50793fad13ea1c597e64e00b26fb148372e07b2ac96",
+    "canonical_digest": "sha256:1d1d3b80b5ce62101c41b50793fad13ea1c597e64e00b26fb148372e07b2ac96",
+    "display": {
+      "name": "Fixture request workload",
+      "description": "Synthetic request distribution fixture.",
+      "labels": ["fixture_only"]
+    },
+    "source_reference": "fixture.phase2a.synthetic-workload",
+    "source_kind": "synthetic_trace",
+    "license": { "spdx_id": "CC0-1.0", "redistribution_allowed": true, "notice_reference": null },
+    "valid_regime": { "description": "Synthetic consistency checks only.", "constraints": ["small_fixture"] },
+    "lifecycle": {
+      "introduced_at": "2026-09-11T00:00:00Z",
+      "updated_at": "2026-09-11T00:00:00Z",
+      "expires_at": null,
+      "status": "available"
+    },
+    "calibration_status": "fixture_consistency_only",
+    "calibration_binding": null,
+    "held_out_validation_status": "missing",
+    "held_out_validation_binding": null,
+    "allowed_claim_scope": "synthetic_consistency",
+    "sensitivity": "public",
+    "visibility": "project",
+    "facts": {
+      "template_kind": {
+        "value": "request_distribution",
+        "unit": null,
+        "provenance": {
+          "kind": "modelled",
+          "source_reference": "fixture.phase2a.synthetic-workload",
+          "source_field": "/template_kind",
+          "observed_at": null,
+          "confidence": "1",
+          "evidence_scope": "synthetic_consistency"
+        }
+      },
+      "request_count": {
+        "value": "8",
+        "unit": "request",
+        "provenance": {
+          "kind": "modelled",
+          "source_reference": "fixture.phase2a.synthetic-workload",
+          "source_field": "/request_count",
+          "observed_at": null,
+          "confidence": "1",
+          "evidence_scope": "synthetic_consistency"
+        }
+      },
+      "input_tokens": {
+        "value": "fixed:128",
+        "unit": "token",
+        "provenance": {
+          "kind": "modelled",
+          "source_reference": "fixture.phase2a.synthetic-workload",
+          "source_field": "/input_tokens",
+          "observed_at": null,
+          "confidence": "1",
+          "evidence_scope": "synthetic_consistency"
+        }
+      },
+      "output_tokens": {
+        "value": "fixed:32",
+        "unit": "token",
+        "provenance": {
+          "kind": "modelled",
+          "source_reference": "fixture.phase2a.synthetic-workload",
+          "source_field": "/output_tokens",
+          "observed_at": null,
+          "confidence": "1",
+          "evidence_scope": "synthetic_consistency"
+        }
+      },
+      "arrival_process": {
+        "value": "poisson:4_rps",
+        "unit": "request_per_second",
+        "provenance": {
+          "kind": "modelled",
+          "source_reference": "fixture.phase2a.synthetic-workload",
+          "source_field": "/arrival_process",
+          "observed_at": null,
+          "confidence": "1",
+          "evidence_scope": "synthetic_consistency"
+        }
+      }
+    }
+  }
+}

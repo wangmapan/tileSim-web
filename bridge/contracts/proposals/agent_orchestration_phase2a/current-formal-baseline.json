@@ -1,0 +1,48 @@
+{
+  "baseline_identity": "tilesim.fixture.agent_orchestration_phase2a.current_formal_baseline.v1",
+  "captured_at": "2026-09-11",
+  "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d",
+  "capability_catalog": {
+    "identity": "tilesim.bridge.agent_orchestration_capability_catalog.v1",
+    "revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+    "contract_package_revision": "sha256:1fa372e1fc4eafe5b819aedd29f258732b8a53fab6b9559e964f6ee1164a4fe3"
+  },
+  "create_run_identity": "tilesim.bridge.create_run_request.v1",
+  "experiment_descriptor": {
+    "identity": "tilesim.bridge.experiment_descriptor.v1",
+    "revision": "sha256:130ff231e59c5b7900dd9d4b51b590d23022b08a8ab8ad7857355a9b45632b6b"
+  },
+  "nested_design_space_identities": ["tilesim.design_space.s6_candidates.v1", "tilesim.design_space.s6_candidates.v2"],
+  "nested_identity_omission_rule": "fixed_v1_never_payload_inference",
+  "profile_v1": {
+    "model": [
+      "tilesim.bridge.agent_orchestration_model_profile.v1",
+      "sha256:e06ad8cc9519785452d8658606ee11d46b2366d4325f6b2499083e482b3d4bd4"
+    ],
+    "engine": [
+      "tilesim.bridge.agent_orchestration_engine_profile.v1",
+      "sha256:8d778f13edcc0fa8a2fac0c1414955ac4cd66477a03584a82d6daf5663cb49db"
+    ],
+    "device": [
+      "tilesim.bridge.agent_orchestration_device_profile.v1",
+      "sha256:354ca8377a64ec1b53c196b505cc156ae1d1d25cc7baf94fc0d8b984ea122c96"
+    ],
+    "topology": [
+      "tilesim.bridge.agent_orchestration_topology_profile.v1",
+      "sha256:2acb2127e3eb93d82438a32972526c75d12b6bb0eebc8cb003d691fa237b0458"
+    ],
+    "workload": [
+      "tilesim.bridge.agent_orchestration_workload_profile.v1",
+      "sha256:ab4517a4d7ba52fe7c2b80f00e0a8b0083468bc0ba88125a15f525ef0e63f836"
+    ]
+  },
+  "evidence_identities": {
+    "descriptor": "tilesim.bridge.evidence_agent_descriptor.v2",
+    "request": "tilesim.bridge.evidence_agent_request.v1",
+    "response": "tilesim.bridge.evidence_agent_response.v1",
+    "citation": "tilesim.bridge.evidence_agent_citation.v1",
+    "snapshot": "tilesim.bridge.evidence_snapshot_reference.v1",
+    "terminal_record": "tilesim.bridge.evidence_agent_terminal_record.v2"
+  },
+  "phase1_local_identity": "tilesim.web.agent_orchestration.phase1.local.v1"
+}

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/proposals/agent-orchestration-phase2a/engine-profile.schema.proposal.json",
+  "x-tilesim-contract-status": "proposal_only",
+  "x-tilesim-schema-identity": "tilesim.bridge.agent_orchestration_engine_profile.v2",
+  "allOf": [
+    { "$ref": "common.schema.proposal.json#/$defs/profileEnvelope" },
+    {
+      "properties": {
+        "schema_identity": { "const": "tilesim.bridge.agent_orchestration_engine_profile.v2" },
+        "profile_family": { "const": "engine" },
+        "facts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["engine_name", "engine_version", "semantic_profile", "batching_policy", "supported_features"],
+          "properties": {
+            "engine_name": { "$ref": "common.schema.proposal.json#/$defs/stringFact" },
+            "engine_version": { "$ref": "common.schema.proposal.json#/$defs/stringFact" },
+            "semantic_profile": { "$ref": "common.schema.proposal.json#/$defs/stringFact" },
+            "batching_policy": { "$ref": "common.schema.proposal.json#/$defs/stringFact" },
+            "supported_features": { "$ref": "common.schema.proposal.json#/$defs/stringArrayFact" }
+          }
+        }
+      }
+    }
+  ]
+}

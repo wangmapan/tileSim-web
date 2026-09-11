@@ -1,0 +1,95 @@
+{
+  "fixture_status": "fixture_only",
+  "contract": {
+    "schema_identity": "tilesim.bridge.agent_orchestration_engine_profile.v2",
+    "schema_revision": "sha256:0c54e158481304fe8143aca752a0f348edef7d74872b332a894a4e883a5f5026",
+    "profile_family": "engine",
+    "profile_id": "fixture.engine.vllm-semantic",
+    "profile_revision": "sha256:e507ac7b93b10c44406a0ec94f940bcb23a8a02c7bb0ba386861e5fda9f9bb12",
+    "canonical_digest": "sha256:e507ac7b93b10c44406a0ec94f940bcb23a8a02c7bb0ba386861e5fda9f9bb12",
+    "display": {
+      "name": "Fixture vLLM semantic profile",
+      "description": "Synthetic semantic fixture; not hardware evidence.",
+      "labels": ["fixture_only"]
+    },
+    "source_reference": "fixture.phase2a.engine-semantics",
+    "source_kind": "compatibility_harness_trace",
+    "license": { "spdx_id": "Apache-2.0", "redistribution_allowed": true, "notice_reference": null },
+    "valid_regime": { "description": "Declared fixture decisions only.", "constraints": ["no_hardware_equivalence"] },
+    "lifecycle": {
+      "introduced_at": "2026-09-11T00:00:00Z",
+      "updated_at": "2026-09-11T00:00:00Z",
+      "expires_at": null,
+      "status": "available"
+    },
+    "calibration_status": "not_applicable",
+    "calibration_binding": null,
+    "held_out_validation_status": "missing",
+    "held_out_validation_binding": null,
+    "allowed_claim_scope": "synthetic_consistency",
+    "sensitivity": "public",
+    "visibility": "project",
+    "facts": {
+      "engine_name": {
+        "value": "vllm",
+        "unit": null,
+        "provenance": {
+          "kind": "externally_specified",
+          "source_reference": "fixture.phase2a.engine-semantics",
+          "source_field": "/engine_name",
+          "observed_at": null,
+          "confidence": "1",
+          "evidence_scope": "synthetic_consistency"
+        }
+      },
+      "engine_version": {
+        "value": "0.6-fixture",
+        "unit": null,
+        "provenance": {
+          "kind": "externally_specified",
+          "source_reference": "fixture.phase2a.engine-semantics",
+          "source_field": "/engine_version",
+          "observed_at": null,
+          "confidence": "1",
+          "evidence_scope": "synthetic_consistency"
+        }
+      },
+      "semantic_profile": {
+        "value": "vllm.0.6.semantic.v1",
+        "unit": null,
+        "provenance": {
+          "kind": "modelled",
+          "source_reference": "fixture.phase2a.engine-semantics",
+          "source_field": "/semantic_profile",
+          "observed_at": null,
+          "confidence": "1",
+          "evidence_scope": "synthetic_consistency"
+        }
+      },
+      "batching_policy": {
+        "value": "continuous_batching_fixture",
+        "unit": null,
+        "provenance": {
+          "kind": "modelled",
+          "source_reference": "fixture.phase2a.engine-semantics",
+          "source_field": "/batching_policy",
+          "observed_at": null,
+          "confidence": "1",
+          "evidence_scope": "synthetic_consistency"
+        }
+      },
+      "supported_features": {
+        "value": ["prefill", "decode"],
+        "unit": null,
+        "provenance": {
+          "kind": "modelled",
+          "source_reference": "fixture.phase2a.engine-semantics",
+          "source_field": "/supported_features",
+          "observed_at": null,
+          "confidence": "1",
+          "evidence_scope": "synthetic_consistency"
+        }
+      }
+    }
+  }
+}

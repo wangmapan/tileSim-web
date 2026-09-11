@@ -1,0 +1,94 @@
+{
+  "fixture_identity": "tilesim.fixture.agent_orchestration_phase2a.schema_negative_cases.v1",
+  "fixture_status": "fixture_only",
+  "cases": [
+    {
+      "case_id": "model-field-provenance-missing",
+      "schema": "model-profile.schema.proposal.json",
+      "base_fixture": "model-profile.json",
+      "operation": "remove",
+      "pointer": "/facts/parameter_count/provenance",
+      "expected": "reject"
+    },
+    {
+      "case_id": "engine-unknown-field",
+      "schema": "engine-profile.schema.proposal.json",
+      "base_fixture": "engine-profile.json",
+      "operation": "add",
+      "pointer": "/unexpected",
+      "value": true,
+      "expected": "reject"
+    },
+    {
+      "case_id": "device-uint64-json-number",
+      "schema": "device-profile.schema.proposal.json",
+      "base_fixture": "device-profile.json",
+      "operation": "set",
+      "pointer": "/facts/memory_capacity_bytes/value",
+      "value": 85899345920,
+      "expected": "reject"
+    },
+    {
+      "case_id": "topology-decimal-exponent",
+      "schema": "topology-profile.schema.proposal.json",
+      "base_fixture": "topology-profile.json",
+      "operation": "set",
+      "pointer": "/facts/link_bandwidth_gbps/value",
+      "value": "4e2",
+      "expected": "reject"
+    },
+    {
+      "case_id": "workload-self-reported-held-out",
+      "schema": "workload-profile.schema.proposal.json",
+      "base_fixture": "workload-profile.json",
+      "operation": "set",
+      "pointer": "/held_out_validation_status",
+      "value": "self_reported",
+      "expected": "reject"
+    },
+    {
+      "case_id": "binding-missing-family",
+      "schema": "profile-binding.schema.proposal.json",
+      "base_fixture": "profile-binding.json",
+      "operation": "remove",
+      "pointer": "/device",
+      "expected": "reject"
+    },
+    {
+      "case_id": "intake-mixed-version",
+      "schema": "run-intake.schema.proposal.json",
+      "base_fixture": "run-intake.json",
+      "operation": "set",
+      "pointer": "/schema_identity",
+      "value": "tilesim.bridge.create_run_request.v1",
+      "expected": "reject"
+    },
+    {
+      "case_id": "receipt-type-identity-mismatch",
+      "schema": "calculator-receipt.schema.proposal.json",
+      "base_fixture": "calculator-receipt.json",
+      "operation": "set",
+      "pointer": "/receipt_type",
+      "value": "kv_capacity",
+      "expected": "reject"
+    },
+    {
+      "case_id": "validation-unknown-issue-category",
+      "schema": "validation-report.schema.proposal.json",
+      "base_fixture": "validation-report.json",
+      "operation": "set",
+      "pointer": "/issues/0/category",
+      "value": "maybe",
+      "expected": "reject"
+    },
+    {
+      "case_id": "retention-allows-credential",
+      "schema": "idempotency-retention-policy.schema.proposal.json",
+      "base_fixture": "idempotency-retention-policy.json",
+      "operation": "set",
+      "pointer": "/forbidden_persistence",
+      "value": ["hidden_reasoning", "raw_provider_response"],
+      "expected": "reject"
+    }
+  ]
+}

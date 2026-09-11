@@ -1,0 +1,33 @@
+{
+  "fixture_identity": "tilesim.fixture.agent_orchestration_phase2a.profile_binding_fail_closed.v1",
+  "fixture_status": "fixture_only",
+  "base_fixture": "../valid/profile-binding.json",
+  "cases": [
+    { "case": "missing", "mutation": "remove_model", "expected_error": "profile_missing" },
+    { "case": "unknown", "mutation": "unknown_model_profile_id", "expected_error": "unknown_profile" },
+    { "case": "unavailable", "mutation": "registry_marks_device_unavailable", "expected_error": "profile_unavailable" },
+    { "case": "ambiguous", "mutation": "registry_returns_two_exact_ids", "expected_error": "profile_ambiguous" },
+    { "case": "expired", "mutation": "workload_expiry_before_validation", "expected_error": "profile_expired" },
+    {
+      "case": "revision_mismatch",
+      "mutation": "engine_revision_changed",
+      "expected_error": "profile_revision_mismatch"
+    },
+    { "case": "digest_mismatch", "mutation": "topology_digest_changed", "expected_error": "profile_digest_mismatch" },
+    {
+      "case": "incompatible",
+      "mutation": "device_topology_endpoint_mismatch",
+      "expected_error": "profile_combination_incompatible"
+    },
+    {
+      "case": "calibration_missing",
+      "mutation": "claim_requires_calibration",
+      "expected_error": "calibration_missing"
+    },
+    {
+      "case": "execution_evidence_missing",
+      "mutation": "requested_fidelity_not_lowered",
+      "expected_error": "execution_evidence_missing"
+    }
+  ]
+}

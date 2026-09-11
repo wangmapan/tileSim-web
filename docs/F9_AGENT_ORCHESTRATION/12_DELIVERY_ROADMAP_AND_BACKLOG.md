@@ -124,6 +124,14 @@ versioned calculator receipt、Phase 2 Validation Report，以及 card/TP/PP/EP/
 `GAP-PROFILE-SUCCESSOR-001`、`GAP-CALCULATOR-001`、`GAP-RUN-INTAKE-001` 及相邻后端执行 Gap，再重新审计 DoR。
 证据见 [Phase 2 Definition of Ready 审计](20_PHASE2_READINESS_AUDIT.md)。
 
+Phase 2A 契约设计状态（2026-09-11）：已形成隔离的 `proposal_only` publication candidate，采用五类 Profile v2、
+保留顶层 create-run v1 并新增显式 nested run intake v2 的方案，同时冻结 Validation Report、七类 calculator
+receipt、compatibility、stale、幂等和留存语义。`GAP-PROFILE-SUCCESSOR-001`、`GAP-RUN-INTAKE-001`、
+`GAP-VALIDATE-001`、`GAP-CALCULATOR-001` 仅进入 `designing`；尚未注册正式契约、实现 Bridge runtime 或后端
+lowering，也没有真实 Profile、校准或 held-out evidence，因此完整 Phase 2 继续 `blocked`。后续必须先经 Phase 2B
+发布评审，再按 Phase 2C 建立累计执行闭环，不能直接启动 Web receipt UI。详见
+[Phase 2A 契约候选](21_PHASE2A_CONTRACT_PROPOSAL.md)。
+
 ## 8. Phase 3：正式多轮与审批（约 2–3 周）
 
 工作包：

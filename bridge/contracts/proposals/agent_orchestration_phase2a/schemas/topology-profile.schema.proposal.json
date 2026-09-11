@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/proposals/agent-orchestration-phase2a/topology-profile.schema.proposal.json",
+  "x-tilesim-contract-status": "proposal_only",
+  "x-tilesim-schema-identity": "tilesim.bridge.agent_orchestration_topology_profile.v2",
+  "allOf": [
+    { "$ref": "common.schema.proposal.json#/$defs/profileEnvelope" },
+    {
+      "properties": {
+        "schema_identity": { "const": "tilesim.bridge.agent_orchestration_topology_profile.v2" },
+        "profile_family": { "const": "topology" },
+        "facts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["topology_kind", "endpoint_count", "link_bandwidth_gbps", "link_latency_ps", "routing_policy"],
+          "properties": {
+            "topology_kind": { "$ref": "common.schema.proposal.json#/$defs/stringFact" },
+            "endpoint_count": { "$ref": "common.schema.proposal.json#/$defs/uint64Fact" },
+            "link_bandwidth_gbps": { "$ref": "common.schema.proposal.json#/$defs/decimalFact" },
+            "link_latency_ps": { "$ref": "common.schema.proposal.json#/$defs/uint64Fact" },
+            "routing_policy": { "$ref": "common.schema.proposal.json#/$defs/stringFact" }
+          }
+        }
+      }
+    }
+  ]
+}
