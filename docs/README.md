@@ -32,4 +32,6 @@
 - 新文档必须放入对应目录并从本页或模块入口可达。
 
 Windows 工作台启动器现代化的技术选择、安全边界和构建门禁见
-[`deployment/LAUNCHER_MODERNIZATION_ADR.md`](deployment/LAUNCHER_MODERNIZATION_ADR.md)。
+[`deployment/LAUNCHER_MODERNIZATION_ADR.md`](deployment/LAUNCHER_MODERNIZATION_ADR.md)。构建、发布、回滚和当前验收事实分别见
+[`deployment/LAUNCHER_BUILD_DEPLOYMENT_ROLLBACK.md`](deployment/LAUNCHER_BUILD_DEPLOYMENT_ROLLBACK.md) 与
+[`deployment/LAUNCHER_ACCEPTANCE_MATRIX.md`](deployment/LAUNCHER_ACCEPTANCE_MATRIX.md)。

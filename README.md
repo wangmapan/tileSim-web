@@ -27,10 +27,10 @@ API Key、运行结果、deployment manifest、release snapshot 和构建产物�
 需要图形启动器时，在前端仓库内执行：
 
 ```powershell
-.\tools\launcher\build-launcher.ps1
+.\tools\workbench-launcher\build-launcher.ps1
 ```
 
-产物为仓库根目录下的 `启动TileSim工作台.exe`。EXE 从自身目录定位前端，不应复制到独立的团队资料目录。
+新实现采用 Tauri 2 + Vue 3 + TypeScript + Rust；产物仍为仓库根目录下的 `启动TileSim工作台.exe`。EXE 从自身目录定位前端，不应复制到独立的团队资料目录。原生工具链和回滚说明见[启动器构建、发布与回滚](docs/deployment/LAUNCHER_BUILD_DEPLOYMENT_ROLLBACK.md)。旧 Tkinter 构建入口在新 EXE 完成原生验收前继续保留。
 
 ## AI 接手
 

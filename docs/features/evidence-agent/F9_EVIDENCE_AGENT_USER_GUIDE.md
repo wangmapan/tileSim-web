@@ -36,8 +36,8 @@ Evidence Agent 读取当前实验中已经验证、可以精确引用的结果�
 
 ### 配置模型服务
 
-推荐双击无控制台黑框的单文件 GUI 启动器
-`D:\tileSim-team\05-tools\启动TileSim工作台.exe`，在“大模型服务设置”中填写：
+推荐双击 Web checkout 根目录下无控制台黑框的 GUI 启动器
+`<tileSim-web>\启动TileSim工作台.exe`，在“模型服务”中填写：
 
 - OpenAI 兼容 Base URL；
 - 服务返回的精确模型名；
@@ -46,7 +46,7 @@ Evidence Agent 读取当前实验中已经验证、可以精确引用的结果�
 
 首次配置必须填写 Key；之后只修改 Base URL、模型名或超时时，可以让 Key 保持为空以继续使用已保存
 的值。Key 使用 Windows DPAPI 按当前用户和电脑加密，保存在被 Git 忽略的本地 runtime 配置中，
-不会进入浏览器、命令行参数或仓库。保存后点击“启动 / 重启并打开”使设置生效。HTTPS 可用于远程
+不会进入浏览器、命令行参数或仓库。保存后前往“启动与服务”，点击“启动并打开”使设置生效。HTTPS 可用于远程
 服务；明文 HTTP 只允许 localhost 或其他 loopback 地址。
 
 ## 3. 实际使用步骤
