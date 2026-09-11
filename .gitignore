@@ -11,3 +11,4 @@ test-results/
 playwright-report/
 __pycache__/
 *.pyc
+/启动TileSim工作台.exe

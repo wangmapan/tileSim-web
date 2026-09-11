@@ -14,9 +14,12 @@ py -3 .\tools\launcher\tilesim_launcher.py
 .\tools\launcher\build-launcher.ps1
 ```
 
-默认产物位于被 Git 忽略的 `runtime/launcher-dist/TileSimWorkbench.exe`。可用 `-OutputDirectory` 和 `-ExecutableName` 指定团队分发目录和中文文件名。脚本固定 PyInstaller 版本、使用隔离环境、验证 Windows GUI subsystem 并运行打包后自检。
+默认产物为前端仓库根目录下被 Git 忽略的 `启动TileSim工作台.exe`。可用 `-OutputDirectory` 和
+`-ExecutableName` 指定其他分发位置和文件名。脚本固定 PyInstaller 版本、使用隔离环境、验证 Windows GUI
+subsystem 并运行打包后自检。
 
-启动器从自身所在仓库或 `TILESIM_WEB_ROOT` 定位 Web checkout；后端源码和 deployment worktree 默认位于 Web 仓库同级的 `tileSim/`、`tileSim-backend/`，不依赖固定盘符或用户名。
+打包后的启动器优先从 EXE 所在目录或显式 `TILESIM_WEB_ROOT` 定位 Web checkout；源码模式从脚本所在仓库定位。
+后端源码和 deployment worktree 默认位于 Web 仓库同级的 `tileSim/`、`tileSim-backend/`，不依赖固定盘符或用户名。
 
 功能包括：
 

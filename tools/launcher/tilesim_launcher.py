@@ -26,11 +26,18 @@ from typing import Any, Callable
 def resolve_web_root() -> Path:
     """Locate the frontend checkout in source and frozen launcher modes."""
     source_checkout = Path(__file__).resolve().parents[2]
+    executable_checkout = Path(sys.executable).resolve().parent
     configured_text = os.environ.get("TILESIM_WEB_ROOT", "").strip()
     configured = Path(configured_text) if configured_text else None
+    frozen = getattr(sys, "frozen", False)
+    ordered_candidates = (
+        (configured, executable_checkout, source_checkout)
+        if frozen
+        else (source_checkout, configured)
+    )
     candidates = tuple(
         candidate
-        for candidate in ((configured, source_checkout) if getattr(sys, "frozen", False) else (source_checkout, configured))
+        for candidate in ordered_candidates
         if candidate is not None
     )
     for candidate in candidates:

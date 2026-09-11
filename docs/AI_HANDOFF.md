@@ -70,6 +70,8 @@ docs/archive/                    历史记录
 - Web checkout 可位于任意 Windows 目录；脚本不得写死本机用户名或盘符。
 - `scripts/bootstrap-workbench.ps1` 是干净 clone 的入口。
 - 默认后端源码和 deployment worktree 是 Web checkout 的同级 `tileSim/` 与 `tileSim-backend/`，均可通过参数覆盖。
+- Windows GUI 启动器由 `tools/launcher/build-launcher.ps1` 构建到 Web 根目录的 `启动TileSim工作台.exe`；
+  frozen launcher 从 EXE 所在目录定位 checkout，WSL build cache 同时绑定 revision 与 deployment 源码路径。
 - `runtime/`、`runs/`、`dist/`、`node_modules/` 都不进入 Git。
 - 部署脚本使用 immutable `bridge + dist` snapshot；health 必须绑定 source/build/release/schema identity。
 

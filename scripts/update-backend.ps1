@@ -199,7 +199,8 @@ try {
 
     $backendWsl = ConvertTo-TileSimWslPath $backend
     $shortRevision = $targetRevision.Substring(0, 12)
-    $buildDirWsl = "$resolvedBuildRootWsl/backend-builds/$shortRevision"
+    $backendPathIdentity = Get-TileSimPathIdentity $backend
+    $buildDirWsl = "$resolvedBuildRootWsl/backend-builds/$shortRevision-$backendPathIdentity"
     $sourceDigest = Get-SourceStateDigest $backendWsl
     $webRevision = (& git -C $webRoot rev-parse HEAD).Trim()
     if ($LASTEXITCODE -ne 0 -or $webRevision -notmatch '^[0-9a-f]{40}$') {

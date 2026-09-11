@@ -67,6 +67,20 @@ function Resolve-TileSimWslBuildRoot {
     return ([string]$result).Trim().TrimEnd("/")
 }
 
+function Get-TileSimPathIdentity {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $normalized = [System.IO.Path]::GetFullPath($Path).TrimEnd('\').Replace('\', '/').ToLowerInvariant()
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($normalized)
+        $digest = [BitConverter]::ToString($sha256.ComputeHash($bytes)).Replace('-', '').ToLowerInvariant()
+        return $digest.Substring(0, 12)
+    } finally {
+        $sha256.Dispose()
+    }
+}
+
 function Assert-TileSimWslDistro {
     param([Parameter(Mandatory = $true)][string]$WslDistro)
 
@@ -118,6 +132,7 @@ Export-ModuleMember -Function @(
     "Resolve-TileSimBackendRepositoryRoot",
     "Resolve-TileSimBackendDeploymentRoot",
     "Resolve-TileSimWslBuildRoot",
+    "Get-TileSimPathIdentity",
     "Assert-TileSimWslDistro",
     "Assert-TileSimBackendEvidenceRevisions"
 )

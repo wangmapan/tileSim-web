@@ -1,10 +1,12 @@
 param(
     [string]$OutputDirectory = "",
-    [string]$ExecutableName = "TileSimWorkbench",
+    [string]$ExecutableName = "",
     [string]$PythonLauncher = "py.exe"
 )
 
 $ErrorActionPreference = "Stop"
+$defaultExecutableName = "$([char]0x542F)$([char]0x52A8)TileSim$([char]0x5DE5)$([char]0x4F5C)$([char]0x53F0)"
+if ([string]::IsNullOrWhiteSpace($ExecutableName)) { $ExecutableName = $defaultExecutableName }
 $pyInstallerVersion = "6.22.2"
 $webRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $source = Join-Path $PSScriptRoot "tilesim_launcher.py"
@@ -16,7 +18,7 @@ $specPath = Join-Path $buildRoot "spec"
 $output = if ($OutputDirectory) {
     [System.IO.Path]::GetFullPath($OutputDirectory)
 } else {
-    Join-Path $webRoot "runtime\launcher-dist"
+    $webRoot
 }
 $executable = Join-Path $output "$ExecutableName.exe"
 $checkFile = Join-Path $buildRoot "launcher-check.json"

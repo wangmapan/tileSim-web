@@ -68,6 +68,30 @@ windowsOnly("deployment portability", () => {
     });
   });
 
+  it("isolates WSL build caches by deployment source path", () => {
+    const modulePath = resolve("scripts/deployment-common.psm1").replaceAll("'", "''");
+    const result = spawnSync(
+      "powershell.exe",
+      [
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        `Import-Module '${modulePath}' -Force; @(
+          (Get-TileSimPathIdentity 'D:\\workspace\\tileSim-backend'),
+          (Get-TileSimPathIdentity 'd:\\WORKSPACE\\tileSim-backend\\'),
+          (Get-TileSimPathIdentity 'E:\\workspace\\tileSim-backend')
+        ) | ConvertTo-Json -Compress`,
+      ],
+      { encoding: "utf8" },
+    );
+    expect(result.status, result.stdout + result.stderr).toBe(0);
+    const identities = JSON.parse(result.stdout.trim());
+    expect(identities[0]).toMatch(/^[0-9a-f]{12}$/u);
+    expect(identities[0]).toBe(identities[1]);
+    expect(identities[0]).not.toBe(identities[2]);
+  });
+
   it("fails before deployment when a catalog evidence revision is unavailable", () => {
     const fixtureRoot = mkdtempSync(join(tmpdir(), "tilesim-deployment-evidence-"));
     const backendRoot = join(fixtureRoot, "backend");

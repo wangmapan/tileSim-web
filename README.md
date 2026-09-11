@@ -24,6 +24,14 @@ bootstrap 会在完整部署前验证该 revision 可达性并失败关闭。当
 
 API Key、运行结果、deployment manifest、release snapshot 和构建产物不会进入 Git。Evidence Agent 的外部模型服务是可选能力，不影响基础工作台安装。
 
+需要图形启动器时，在前端仓库内执行：
+
+```powershell
+.\tools\launcher\build-launcher.ps1
+```
+
+产物为仓库根目录下的 `启动TileSim工作台.exe`。EXE 从自身目录定位前端，不应复制到独立的团队资料目录。
+
 ## AI 接手
 
 1. [AGENTS.md](AGENTS.md)
