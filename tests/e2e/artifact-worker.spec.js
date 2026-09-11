@@ -2,6 +2,11 @@ import { expect, test } from "@playwright/test";
 import { createLargeLineArtifact, largeArtifactFixtureSpec } from "../performance/large-artifact-fixture.mjs";
 
 test("14 MB artifact indexing and search stay off the desktop main thread", async ({ page }) => {
+  // The 30-second Playwright lifecycle is not the performance SLO for this
+  // intentionally large fixture. The assertions below remain the acceptance
+  // gates for complete Worker indexing, result correctness, search latency,
+  // and main-thread responsiveness.
+  test.slow();
   await page.route(/^https?:\/\/[^/]+\/api(?:\/|$)/, (route) =>
     route.fulfill({ status: 404, contentType: "application/json", body: '{"error":"performance-harness"}' }),
   );

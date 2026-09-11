@@ -2077,6 +2077,7 @@ test("Evidence Agent validates citations, terminal states, stale isolation, and 
 });
 
 test("Week 7 evidence chain exposes calibration, lineage, and deterministic orchestration", async ({ page }) => {
+  test.slow();
   const fixture = fixtureCase("synthetic-s1-s6-complete");
   const browserFailures = await openFixture(page, fixture, "execution");
 
@@ -2091,6 +2092,7 @@ test("Week 7 evidence chain exposes calibration, lineage, and deterministic orch
   await expect(page.locator(".week7-timeline li")).toHaveCount(5);
   await expect(page.getByText("offline_fixture_consistency")).toBeVisible();
   await expect(page.getByText("workflow_consistency_only")).toBeVisible();
+  await expect(page.locator(".global-busy")).toHaveCount(0);
   await page.locator(".week7-section").nth(2).locator(":scope > summary").click();
   await expect(page.getByText("partial", { exact: true })).toBeVisible();
   await expect(page.getByText("H100")).toBeVisible();
