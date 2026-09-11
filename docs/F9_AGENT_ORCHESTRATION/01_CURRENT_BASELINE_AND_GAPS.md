@@ -248,12 +248,27 @@ strict candidate 可执行字段：
 - `GAP-COPILOT-UI-001` 已达到 `validated`；`GAP-DRAFT-001`、`GAP-VALIDATE-001`、
   `GAP-CLARIFY-001` 及 Conversation/Approval/Workflow Gap 仍为 open。
 
+### 9.6 Phase 2 Definition of Ready 审计（2026-09-11）
+
+- 14 项 DoR 已逐项审计，完整 Phase 2 状态为 `blocked`；仅 Phase 1 已发布的八字段本地草案切片为
+  `partially_ready`，未新增任何 `agent_exposed` 字段，也未启动 Web receipt UI；
+- model、engine、device、topology、workload 五类正式 Profile 记录均为 `0/unavailable`。后端三个最小引擎语义
+  Profile 只是局部前置，不是 Capability Catalog record，也不能由 create-run v1 选择；
+- create-run 顶层仍为 `tilesim.bridge.create_run_request.v1`，没有 Phase 2 successor 或正式 workload intake；
+  正式 calculator receipt、Phase 2 Validation Report 和从新字段到执行片段、KV、集合通信、网络反馈、请求指标的累计链均未闭合；
+- 新增 `GAP-PROFILE-SUCCESSOR-001`、`GAP-CALCULATOR-001`、`GAP-RUN-INTAKE-001`，并细化
+  `GAP-VALIDATE-001` 的退出条件。完整证据和后端工作包见
+  [Phase 2 Definition of Ready 审计](20_PHASE2_READINESS_AUDIT.md)。
+
 ## 10. 优先缺口
 
 | 优先级 | Gap                                                | 原因                                      |
 | ------ | -------------------------------------------------- | ----------------------------------------- |
 | P0     | `GAP-CAP-001` 参数能力目录                         | validated；8/8 与 snapshot closure 完成   |
-| P0     | `GAP-PROFILE-001` Profile family                   | Schema 已发布；真实数据仍为独立后续 Gap   |
+| P0     | `GAP-PROFILE-001` Profile family                   | validated；v1 正确表达 0/unavailable      |
+| P0     | `GAP-PROFILE-SUCCESSOR-001` 正式 Profile successor | 缺 typed facts、来源、生命周期与真实记录  |
+| P0     | `GAP-CALCULATOR-001` deterministic calculators     | 七类 versioned receipt 尚未发布           |
+| P0     | `GAP-RUN-INTAKE-001` Phase 2 正式运行输入          | create-run v1 无 Phase 2 typed intake     |
 | P0     | `GAP-CONTRACT-DRIFT-001` 正式契约漂移              | validated；双版本与 revision closure 完成 |
 | P0     | `GAP-DRAFT-001` typed experiment draft             | LLM 输出无法安全进入正式运行面            |
 | P0     | `GAP-VALIDATE-001` deterministic validation report | 缺少跨 profile/参数的统一可行性结果       |

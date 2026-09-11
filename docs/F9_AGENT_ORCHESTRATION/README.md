@@ -2,9 +2,9 @@
 
 > 文档集 ID：`tilesim.docs.agent_orchestration.v1alpha1`
 >
-> 状态：Phase 1 Web 八字段只读草案侧栏已完成本地 Git 集成；正式写工作流仍未启动
+> 状态：Phase 1 Web 八字段只读草案侧栏已完成本地 Git 集成；Phase 2 DoR 已审计并裁决为 `blocked`
 >
-> 事实日期：2026-09-10
+> 事实日期：2026-09-11
 >
 > 后端 execution evidence commit：`7e5a8c6a5cf738bd24608b440a61b62dee8d1881`
 >
@@ -26,6 +26,8 @@ Phase 1 已在 Web 开发基线之上实现本地、单轮、无副作用的八�
 确定性意图编译、typed blocks、stale 隔离和 128 条 fixture eval 已完成。该实现不发布新的 Bridge contract，
 不创建运行，不调用 Evidence Provider，也不关闭正式 Draft、Validation、Conversation、Approval 或 Workflow Gap。
 准确验收记录见 [Phase 1 Web 本地验收](19_PHASE1_WEB_LOCAL_ACCEPTANCE.md)。
+Phase 2 的 14 项 DoR、五类空 Profile、calculator/lowering 证据和停止条件见
+[Phase 2 Definition of Ready 审计](20_PHASE2_READINESS_AUDIT.md)。
 
 本目录是一套供后续 AI Agent、开发者和评审者共同阅读的实施规范。它将总路线图拆成可独立执行的专题文档，并明确区分当前事实、拟议设计、契约缺口和远期研究项。
 
@@ -66,28 +68,29 @@ Phase 1 已在 Web 开发基线之上实现本地、单轮、无副作用的八�
 
 ## 3. 文档清单与阅读顺序
 
-| 顺序 | 文档                                                                   | 何时必读                         | 核心输出                                   |
-| ---- | ---------------------------------------------------------------------- | -------------------------------- | ------------------------------------------ |
-| 00   | [约束与术语](00_GUARDRAILS_AND_GLOSSARY.md)                            | 所有任务                         | 不可破坏边界、中文模块词汇、证据等级       |
-| 01   | [当前基线与缺口](01_CURRENT_BASELINE_AND_GAPS.md)                      | 所有任务                         | 代码事实、参数能力矩阵、gap register 入口  |
-| 02   | [产品与用户体验](02_PRODUCT_AND_USER_EXPERIENCE.md)                    | 产品、前端、交互、Demo           | 用户任务、信息架构、状态与文案规则         |
-| 03   | [目标架构与职责](03_TARGET_ARCHITECTURE_AND_OWNERSHIP.md)              | 架构、服务拆分、跨模块改动       | 组件、所有权、数据流和依赖方向             |
-| 04   | [能力与 Profile 目录](04_CAPABILITY_AND_PROFILE_CATALOG.md)            | 参数、模型、硬件、模板任务       | Profile 模型、支持状态、发布与失效规则     |
-| 05   | [会话与草案契约](05_CONVERSATION_AND_DRAFT_CONTRACTS.md)               | Schema、Bridge、generated client | contract family、状态、identity、retention |
-| 06   | [意图编译与主动澄清](06_INTENT_COMPILER_AND_CLARIFICATION.md)          | LLM、prompt、compiler、对话      | 编译流水线、slot、歧义和澄清策略           |
-| 07   | [确定性校验与实验规划](07_DETERMINISTIC_VALIDATION_AND_PLANNING.md)    | 约束、计算器、候选规划           | validators、calculators、SLO 和候选边界    |
-| 08   | [工作流、审批与执行](08_WORKFLOW_APPROVAL_AND_EXECUTION.md)            | 异步、恢复、取消、写工具         | workflow state、HITL、幂等和故障语义       |
-| 09   | [RAG、证据与记忆](09_RAG_EVIDENCE_AND_MEMORY.md)                       | 检索、引用、会话记忆             | 四类索引、retrieval ladder、retention      |
-| 10   | [工具、安全与互操作](10_TOOLS_SECURITY_AND_INTEROPERABILITY.md)        | tool calling、MCP、A2A、多 Agent | 权限矩阵、威胁模型、协议边界               |
-| 11   | [评测、可观测性与验收](11_EVALUATION_OBSERVABILITY_AND_ACCEPTANCE.md)  | 测试、上线、模型切换             | dataset、metrics、hard gates、trace        |
-| 12   | [交付路线图与工作包](12_DELIVERY_ROADMAP_AND_BACKLOG.md)               | 排期、拆任务、并行协作           | phase、依赖、DoR/DoD、backlog              |
-| 13   | [面试 Demo 与 ADR](13_INTERVIEW_DEMO_AND_ADRS.md)                      | 作品包装、技术选型               | 演示脚本、ADR 清单、简历证据               |
-| 14   | [契约缺口登记表](14_CONTRACT_GAP_REGISTER.md)                          | 任何新增能力前                   | 稳定 gap ID、owner、阻塞与退出条件         |
-| 15   | [模块边界与并行开发](15_MODULE_BOUNDARIES_AND_PARALLEL_DEVELOPMENT.md) | 拆任务、多 Agent、集成           | 独占范围、接口、共享文件和合并顺序         |
-| 16   | [全局右侧 Agent 对话栏](16_RIGHT_SIDE_AGENT_COPILOT_PANEL.md)          | App Shell、跨页面助手、对话交互  | 侧栏、页面上下文、typed blocks 和分期接入  |
-| 17   | [开发者指导 AI 实施手册](17_DEVELOPER_AI_EXECUTION_PLAYBOOK.md)        | 启动阶段、多 Agent、调试和验收   | 必读路由、提示词模板、分工和门禁           |
-| 18   | [Phase 0–7 可复制提示词包](18_COPY_READY_MULTI_AGENT_PROMPTS.md)       | 实际启动一个并行开发阶段         | 八个完整总控提示词和三路子 Agent 分工      |
-| 19   | [Phase 1 Web 本地验收](19_PHASE1_WEB_LOCAL_ACCEPTANCE.md)              | Phase 1 复核、集成和交接         | 实现边界、门禁、证据等级与 remaining Gap   |
+| 顺序 | 文档                                                                   | 何时必读                           | 核心输出                                   |
+| ---- | ---------------------------------------------------------------------- | ---------------------------------- | ------------------------------------------ |
+| 00   | [约束与术语](00_GUARDRAILS_AND_GLOSSARY.md)                            | 所有任务                           | 不可破坏边界、中文模块词汇、证据等级       |
+| 01   | [当前基线与缺口](01_CURRENT_BASELINE_AND_GAPS.md)                      | 所有任务                           | 代码事实、参数能力矩阵、gap register 入口  |
+| 02   | [产品与用户体验](02_PRODUCT_AND_USER_EXPERIENCE.md)                    | 产品、前端、交互、Demo             | 用户任务、信息架构、状态与文案规则         |
+| 03   | [目标架构与职责](03_TARGET_ARCHITECTURE_AND_OWNERSHIP.md)              | 架构、服务拆分、跨模块改动         | 组件、所有权、数据流和依赖方向             |
+| 04   | [能力与 Profile 目录](04_CAPABILITY_AND_PROFILE_CATALOG.md)            | 参数、模型、硬件、模板任务         | Profile 模型、支持状态、发布与失效规则     |
+| 05   | [会话与草案契约](05_CONVERSATION_AND_DRAFT_CONTRACTS.md)               | Schema、Bridge、generated client   | contract family、状态、identity、retention |
+| 06   | [意图编译与主动澄清](06_INTENT_COMPILER_AND_CLARIFICATION.md)          | LLM、prompt、compiler、对话        | 编译流水线、slot、歧义和澄清策略           |
+| 07   | [确定性校验与实验规划](07_DETERMINISTIC_VALIDATION_AND_PLANNING.md)    | 约束、计算器、候选规划             | validators、calculators、SLO 和候选边界    |
+| 08   | [工作流、审批与执行](08_WORKFLOW_APPROVAL_AND_EXECUTION.md)            | 异步、恢复、取消、写工具           | workflow state、HITL、幂等和故障语义       |
+| 09   | [RAG、证据与记忆](09_RAG_EVIDENCE_AND_MEMORY.md)                       | 检索、引用、会话记忆               | 四类索引、retrieval ladder、retention      |
+| 10   | [工具、安全与互操作](10_TOOLS_SECURITY_AND_INTEROPERABILITY.md)        | tool calling、MCP、A2A、多 Agent   | 权限矩阵、威胁模型、协议边界               |
+| 11   | [评测、可观测性与验收](11_EVALUATION_OBSERVABILITY_AND_ACCEPTANCE.md)  | 测试、上线、模型切换               | dataset、metrics、hard gates、trace        |
+| 12   | [交付路线图与工作包](12_DELIVERY_ROADMAP_AND_BACKLOG.md)               | 排期、拆任务、并行协作             | phase、依赖、DoR/DoD、backlog              |
+| 13   | [面试 Demo 与 ADR](13_INTERVIEW_DEMO_AND_ADRS.md)                      | 作品包装、技术选型                 | 演示脚本、ADR 清单、简历证据               |
+| 14   | [契约缺口登记表](14_CONTRACT_GAP_REGISTER.md)                          | 任何新增能力前                     | 稳定 gap ID、owner、阻塞与退出条件         |
+| 15   | [模块边界与并行开发](15_MODULE_BOUNDARIES_AND_PARALLEL_DEVELOPMENT.md) | 拆任务、多 Agent、集成             | 独占范围、接口、共享文件和合并顺序         |
+| 16   | [全局右侧 Agent 对话栏](16_RIGHT_SIDE_AGENT_COPILOT_PANEL.md)          | App Shell、跨页面助手、对话交互    | 侧栏、页面上下文、typed blocks 和分期接入  |
+| 17   | [开发者指导 AI 实施手册](17_DEVELOPER_AI_EXECUTION_PLAYBOOK.md)        | 启动阶段、多 Agent、调试和验收     | 必读路由、提示词模板、分工和门禁           |
+| 18   | [Phase 0–7 可复制提示词包](18_COPY_READY_MULTI_AGENT_PROMPTS.md)       | 实际启动一个并行开发阶段           | 八个完整总控提示词和三路子 Agent 分工      |
+| 19   | [Phase 1 Web 本地验收](19_PHASE1_WEB_LOCAL_ACCEPTANCE.md)              | Phase 1 复核、集成和交接           | 实现边界、门禁、证据等级与 remaining Gap   |
+| 20   | [Phase 2 Definition of Ready 审计](20_PHASE2_READINESS_AUDIT.md)       | Phase 2 启动、Profile 与累计链任务 | 14 项 DoR、停止裁决、Gap 与后端工作包      |
 
 ## 4. 按任务路由阅读
 
@@ -136,11 +139,11 @@ Phase 1 已在 Web 开发基线之上实现本地、单轮、无副作用的八�
 
 优先完成：
 
-1. 审计 Phase 2 的五类真实 Profile、模型/设备/引擎选择、TP/PP/EP、物理 KV、工作负载和网络累计链 DoR；
-2. 五类 Profile 的正式 Schema 保持已发布但实际数据为 0/unavailable，真实 source/licensing/calibration Gap 继续开放；
+1. Phase 2 DoR 已完成审计并裁决为 `blocked`；仅既有 Phase 1 八字段切片为 `partially_ready`，不得启动完整 Phase 2 或 Web receipt UI；
+2. 五类 Profile 的正式 Schema 保持已发布但实际数据为 0/unavailable；优先关闭 Profile successor/data、确定性 calculator、正式 run intake 与累计 lowering Gap；
 3. Phase 1 Web 只读草案侧栏已完成 `validated` 本地集成；正式 Draft、Validation、Conversation、Approval、Workflow、
    RAG 与写工具仍需新契约；
-4. 不自动启动 Phase 2，也不把本地草案能力描述成外部模型对话或正式运行能力。
+4. 只有 [AO-20](20_PHASE2_READINESS_AUDIT.md) 的阻塞条件取得正式契约、真实数据、执行证据和相应门禁后，才重新审计 DoR。
 
 当前 catalog revision 为 `sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b`，
 contract package revision 为 `sha256:1fa372e1fc4eafe5b819aedd29f258732b8a53fab6b9559e964f6ee1164a4fe3`，

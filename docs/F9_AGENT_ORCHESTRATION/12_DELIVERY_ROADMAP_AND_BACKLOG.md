@@ -117,6 +117,13 @@ RAG 和写工具 contract 继续保持 open，不自动进入 Phase 2。
 
 退出条件：不可行组合 fail closed；未知 profile 不猜；结果能累计到网络与请求指标；synthetic 不升级。
 
+DoR checkpoint（2026-09-11）：14 项审计已完成，完整 Phase 2 为 `blocked`，仅既有 Phase 1 八字段切片为
+`partially_ready`。五类正式 Profile 记录均为 `0/unavailable`，create-run successor/正式 workload intake、七类
+versioned calculator receipt、Phase 2 Validation Report，以及 card/TP/PP/EP/placement/物理 KV/集合通信/网络的
+正式累计 lowering 均未闭合。停止 `WP-PROFILE-02` 至 `WP-LOWER-01` 和 Web receipt UI 实施；先关闭
+`GAP-PROFILE-SUCCESSOR-001`、`GAP-CALCULATOR-001`、`GAP-RUN-INTAKE-001` 及相邻后端执行 Gap，再重新审计 DoR。
+证据见 [Phase 2 Definition of Ready 审计](20_PHASE2_READINESS_AUDIT.md)。
+
 ## 8. Phase 3：正式多轮与审批（约 2–3 周）
 
 工作包：
@@ -187,23 +194,24 @@ A2A、GraphRAG 和开放多 Agent 不作为面试版前置。
 
 ## 13. 优先 Backlog
 
-| 优先级 | 工作项                | 依赖                       | 交付价值              |
-| ------ | --------------------- | -------------------------- | --------------------- |
-| P0     | `WP-CAP-01/02/03`     | 后端字段审计               | 阻止推荐未执行能力    |
-| P0     | `WP-PROFILE-01`       | Profile owner              | 模型/设备等有统一真源 |
-| P0     | `WP-DRAFT-01`         | contract design            | 自然语言输出可审计    |
-| P0     | `WP-VALIDATE-01`      | capability catalog         | 不让 LLM 负责合法性   |
-| P1     | `WP-COMPILER-01`      | alias/unit registry        | 可用的自然语言入口    |
-| P1     | `WP-COPILOT-01/02`    | App Shell/context/会话契约 | 跨页面统一 Agent 入口 |
-| P1     | `WP-COMPAT-01`        | current request builder    | 证明无旁路语义        |
-| P1     | `WP-CALC-01/02`       | 完整 profiles              | 回答卡数/并行可行性   |
-| P1     | `WP-CONV-01`          | retention decision         | 正式多轮澄清          |
-| P1     | `WP-APPROVAL-01`      | auth/policy                | 安全写操作            |
-| P1     | `WP-WF-01/02`         | approval/idempotency       | 长任务恢复            |
-| P2     | `WP-RAG-01/02/04`     | index contract             | 证据化配置与分析      |
-| P2     | `WP-COMPARE-01/02`    | comparability contract     | 跨 run 迭代           |
-| P2     | `WP-MCP-01/02`        | stable internal tools      | 现代互操作展示        |
-| P3     | GraphRAG/reviewer/A2A | 独立收益证据               | 可选研究与扩展        |
+| 优先级 | 工作项                | 依赖                          | 交付价值              |
+| ------ | --------------------- | ----------------------------- | --------------------- |
+| P0     | `WP-CAP-01/02/03`     | 后端字段审计                  | 阻止推荐未执行能力    |
+| P0     | `WP-PROFILE-01`       | Profile owner                 | 模型/设备等有统一真源 |
+| P0     | `WP-DRAFT-01`         | contract design               | 自然语言输出可审计    |
+| P0     | `WP-VALIDATE-01`      | capability catalog            | 不让 LLM 负责合法性   |
+| P1     | `WP-COMPILER-01`      | alias/unit registry           | 可用的自然语言入口    |
+| P1     | `WP-COPILOT-01/02`    | App Shell/context/会话契约    | 跨页面统一 Agent 入口 |
+| P1     | `WP-COMPAT-01`        | current request builder       | 证明无旁路语义        |
+| P1     | `WP-CALC-01/02`       | 完整 profiles                 | 回答卡数/并行可行性   |
+| P1     | `WP-LOWER-01`         | Phase 2 run intake + 后端闭包 | 证明字段真实执行      |
+| P1     | `WP-CONV-01`          | retention decision            | 正式多轮澄清          |
+| P1     | `WP-APPROVAL-01`      | auth/policy                   | 安全写操作            |
+| P1     | `WP-WF-01/02`         | approval/idempotency          | 长任务恢复            |
+| P2     | `WP-RAG-01/02/04`     | index contract                | 证据化配置与分析      |
+| P2     | `WP-COMPARE-01/02`    | comparability contract        | 跨 run 迭代           |
+| P2     | `WP-MCP-01/02`        | stable internal tools         | 现代互操作展示        |
+| P3     | GraphRAG/reviewer/A2A | 独立收益证据                  | 可选研究与扩展        |
 
 ## 14. 并行与文件所有权
 

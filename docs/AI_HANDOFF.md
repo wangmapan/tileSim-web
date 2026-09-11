@@ -4,7 +4,7 @@
 
 **产品范围**：电脑网页端、local Bridge、版本化契约和 Windows/WSL 本地部署
 
-**当前状态**：Phase 1 全局 Agent 侧栏、八字段本地草案、可移植部署入口与文档治理已发布；公开仓库干净克隆的完整部署已验证；未部署 5173
+**当前状态**：Phase 1 全局 Agent 侧栏、八字段本地草案、可移植部署入口与文档治理已发布；Phase 2 DoR 已审计并裁决为 `blocked`；未部署 5173
 
 ## 1. 必读
 
@@ -30,11 +30,13 @@
   immutable release 均成功；完整部署仍必须保留后端 evidence revision gate。
 - Phase 0D 已发布 Capability Catalog/Profile Schema v1；八个 `agent_exposed` 字段有 execution closure，五类真实 Profile 仍为 `0/unavailable`，没有 calibration 或 held-out validation。
 - Phase 1 右侧 Agent 栏是单轮、确定性的本地草案 Copilot，不连接模型、不创建 run、不持久化对话。它只接受正式八字段，对模型、设备、卡数、TP/PP/EP、placement、物理 KV、集合通信算法和 SLO 失败关闭。
+- Phase 2 的 14 项 DoR 已完成审计。model、engine、device、topology、workload 五类正式 Profile 记录仍全部为 `0/unavailable`；create-run successor、确定性 calculator receipt、Validation Report 和 Phase 2 累计 lowering 均未发布，因此没有新增 `agent_exposed` 字段，也未启动 Web receipt UI。
 - Evidence Agent descriptor 保持 `tilesim.bridge.evidence_agent_descriptor.v2`；request/response/citation/snapshot 保持 v1。
 - create-run 顶层保持 `tilesim.bridge.create_run_request.v1`，nested design-space v1/v2 双版本行为不变。
 - F9 live model repetitions 仍为 0；fake/fixture 只证明 contract 和 synthetic consistency。人工 citation entailment 尚未完成。
 
-Phase 1 详细状态见 `docs/F9_AGENT_ORCHESTRATION/19_PHASE1_WEB_LOCAL_ACCEPTANCE.md`，Agent 长期路线见该目录的 README 与 Gap Register。
+Phase 1 详细状态见 `docs/F9_AGENT_ORCHESTRATION/19_PHASE1_WEB_LOCAL_ACCEPTANCE.md`，Phase 2 停止裁决见
+`docs/F9_AGENT_ORCHESTRATION/20_PHASE2_READINESS_AUDIT.md`，Agent 长期路线见该目录的 README 与 Gap Register。
 
 ## 3. 不可破坏边界
 
@@ -77,9 +79,10 @@ docs/archive/                    历史记录
 
 ## 6. 当前优先级
 
-1. 不自动进入 Phase 2。先审计五类 Profile、模型/设备/引擎选择、TP/PP/EP、物理 KV、工作负载与网络累计链 DoR。
-2. 后续正式多轮 Agent 需要 Conversation、Draft、Validation、Clarification、Approval、Workflow、RAG 和工具 contract；不要在浏览器内存模拟关闭 Gap。
-3. 文档变更继续按 `docs/README.md` 分类；结束阶段、一次性提示词和旧证据只进入 `docs/archive/`。
+1. 不自动进入 Phase 2。DoR 已审计为 `blocked`；先关闭 `GAP-PROFILE-SUCCESSOR-001`、`GAP-CALCULATOR-001`、`GAP-RUN-INTAKE-001` 及并行、KV、工作负载、网络的累计执行 Gap，再重新审计。
+2. 五类 Profile 真实记录为零时不得用产品名称、公开宣传值、LLM 常识或前端静态 JSON补造能力；关键 unknown 必须阻塞。
+3. 后续正式多轮 Agent 需要 Conversation、Draft、Validation、Clarification、Approval、Workflow、RAG 和工具 contract；不要在浏览器内存模拟关闭 Gap。
+4. 文档变更继续按 `docs/README.md` 分类；结束阶段、一次性提示词和旧证据只进入 `docs/archive/`。
 
 ## 7. 完整门禁
 
