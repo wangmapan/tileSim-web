@@ -75,8 +75,7 @@ pub fn redact(value: &str) -> String {
         r"(?i)((?:api[_-]?key|authorization|token|secret|password)\s*[:=]\s*)(?:bearer\s+)?([^\s,;]+)",
     )
     .expect("credential regex");
-    let windows_path =
-        Regex::new(r#"(?i)\b[a-z]:\\[^\r\n\t"']+"#).expect("windows path regex");
+    let windows_path = Regex::new(r#"(?i)\b[a-z]:\\[^\r\n\t"']+"#).expect("windows path regex");
     let wsl_path = Regex::new(r"/mnt/[a-z]/[^\s\r\n]+").expect("WSL path regex");
     let redacted = credential.replace_all(value, "$1<redacted>");
     let redacted = windows_path.replace_all(&redacted, "<path>");

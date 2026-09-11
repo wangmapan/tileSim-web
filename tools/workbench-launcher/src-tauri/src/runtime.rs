@@ -34,7 +34,9 @@ pub fn required_scripts() -> &'static [&'static str] {
 }
 
 fn valid_web_root(path: &Path) -> bool {
-    REQUIRED_SCRIPTS.iter().all(|relative| path.join(relative).is_file())
+    REQUIRED_SCRIPTS
+        .iter()
+        .all(|relative| path.join(relative).is_file())
 }
 
 pub fn resolve_web_root() -> Result<PathBuf, PublicError> {
@@ -48,13 +50,12 @@ pub fn resolve_web_root() -> Result<PathBuf, PublicError> {
         .flatten()
     {
         if valid_web_root(&candidate) {
-            return candidate.canonicalize().map_err(|error| {
-                PublicError::new(
-                    "无法解析 Web checkout",
-                    "确认启动器位于 TileSim Web 仓库根目录。",
-                    error.to_string(),
-                )
-            });
+            if let Ok(canonical) = candidate.canonicalize() {
+                return Ok(canonical);
+            }
+            if candidate.is_absolute() {
+                return Ok(candidate);
+            }
         }
     }
     Err(PublicError::new(
@@ -65,7 +66,10 @@ pub fn resolve_web_root() -> Result<PathBuf, PublicError> {
 }
 
 pub fn process_path_with_node(node: &Path) -> OsString {
-    let mut entries = vec![node.parent().unwrap_or_else(|| Path::new(".")).to_path_buf()];
+    let mut entries = vec![node
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .to_path_buf()];
     if let Some(existing) = env::var_os("PATH") {
         entries.extend(env::split_paths(&existing));
     }
@@ -108,6 +112,9 @@ pub fn extract_bundled_node() -> Result<PathBuf, PublicError> {
     if executable.exists() {
         if let Ok(metadata) = executable.metadata() {
             let mut permissions = metadata.permissions();
+            // The launcher is Windows-only. Clearing FILE_ATTRIBUTE_READONLY does
+            // not broaden ACLs as the equivalent Unix operation would.
+            #[allow(clippy::permissions_set_readonly_false)]
             permissions.set_readonly(false);
             let _ = fs::set_permissions(&executable, permissions);
         }

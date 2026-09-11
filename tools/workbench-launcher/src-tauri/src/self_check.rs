@@ -4,9 +4,7 @@ use std::{env, fs, path::Path, process::Command};
 use crate::{
     error::PublicError,
     platform::{webview2_version, windows_powershell},
-    runtime::{
-        bundled_node_digest, extract_bundled_node, required_scripts, resolve_web_root,
-    },
+    runtime::{bundled_node_digest, extract_bundled_node, required_scripts, resolve_web_root},
 };
 
 #[derive(Serialize)]
@@ -73,12 +71,13 @@ pub fn write_self_check(output_path: &Path) -> Result<(), PublicError> {
     let resolved_from_executable_directory = executable_parent
         .as_deref()
         .map(|parent| {
-            parent
-                .canonicalize()
-                .ok()
-                .zip(web_root.canonicalize().ok())
-                .map(|(left, right)| left == right)
-                .unwrap_or(false)
+            parent == web_root
+                || parent
+                    .canonicalize()
+                    .ok()
+                    .zip(web_root.canonicalize().ok())
+                    .map(|(left, right)| left == right)
+                    .unwrap_or(false)
         })
         .unwrap_or(false);
     let bundled_node_runtime = node.is_file();

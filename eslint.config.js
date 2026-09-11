@@ -13,6 +13,8 @@ export default [
       "runtime/**",
       "coverage/**",
       "test-results/**",
+      "tools/workbench-launcher/src-tauri/target/**",
+      "tools/workbench-launcher/src-tauri/gen/**",
       "src/contracts/generated/report-validators.js",
       "src/contracts/generated/experiment-validators.js",
       "src/contracts/generated/evidence-agent-validators.js",

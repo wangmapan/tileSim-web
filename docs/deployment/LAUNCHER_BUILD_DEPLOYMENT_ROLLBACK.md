@@ -17,6 +17,8 @@
 - Visual Studio 2022 C++ Build Tools 和 Windows SDK；
 - WebView2 Evergreen Runtime。
 
+本次本机原生验收使用 Rust/Cargo `1.98.1`、Visual Studio Build Tools 2022 `17.14.40`、Windows SDK `10.0.26100.0` 和 WebView2 `152.0.4191.66`。
+
 Tauri CLI 可只读检查本机条件：
 
 ```powershell
@@ -83,6 +85,15 @@ runtime/launcher-fallback/启动TileSim工作台.previous-<timestamp>-<pid>.exe
 - 不删除或覆盖其他 checkout 中现有的 Tkinter EXE；
 - 不把 fallback 加入 Git；
 - 不把 fixture 验收计作 native packaged 验收。
+
+本次独立工作树原生验收已完成。该工作树原先没有根目录入口，因此构建结果中的 `previous_launcher_fallback` 为 `null`；`D:\tileSim-web\启动TileSim工作台.exe` 和 `tools/launcher/` 保持原样，可继续作为主 checkout 的旧 Tkinter 回滚入口。新产物只发布到 `D:\tileSim-web-launcher-tauri-v2\启动TileSim工作台.exe`。
+
+已验收产物：
+
+- 根目录中文 EXE：`104,721,408` bytes，SHA-256 `ED3B9F608E2733F3777F17365CBBBBC8425BCE8E4025EA1B0C3035D12BC93805`；
+- NSIS：`TileSim 工作台_0.1.0_x64-setup.exe`，`26,042,426` bytes；
+- packaged self-check：`ready=true`，从 EXE 目录解析 checkout、内置 Node、无 Node PATH 和 WebView2 均通过；
+- 原生浅色与深色窗口截图：保存在被 Git 忽略的 `runtime/launcher-tauri-build/native-light.png` 与 `native-dark.png`。
 
 ## 回滚
 

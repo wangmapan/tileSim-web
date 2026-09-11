@@ -38,10 +38,7 @@ async fn pick_backend_directory(current: String) -> Result<Option<String>, Publi
 fn open_workbench() -> Result<(), PublicError> {
     #[cfg(windows)]
     {
-        use windows_sys::Win32::UI::{
-            Shell::ShellExecuteW,
-            WindowsAndMessaging::SW_SHOWNORMAL,
-        };
+        use windows_sys::Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOWNORMAL};
         let wide = |value: &str| {
             std::ffi::OsStr::new(value)
                 .encode_wide()

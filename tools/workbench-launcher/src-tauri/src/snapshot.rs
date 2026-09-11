@@ -161,7 +161,11 @@ pub async fn get_launcher_snapshot() -> Result<LauncherSnapshot, PublicError> {
     let manifest_path = runtime.join("backend-current.json");
     let manifest_present = manifest_path.is_file();
     let manifest = read_manifest(&manifest_path);
-    let health = if manifest_present { fetch_health().await } else { None };
+    let health = if manifest_present {
+        fetch_health().await
+    } else {
+        None
+    };
     let execution_ready = health
         .as_ref()
         .and_then(|value| value.get("execution_ready"))
@@ -238,7 +242,11 @@ pub async fn get_launcher_snapshot() -> Result<LauncherSnapshot, PublicError> {
         EnvironmentCheck {
             id: "git",
             label: "Git",
-            status: if git_version.is_some() { "ready" } else { "missing" },
+            status: if git_version.is_some() {
+                "ready"
+            } else {
+                "missing"
+            },
             summary: git_version.unwrap_or_else(|| "未找到 Git for Windows".into()),
             detail: None,
         },
@@ -256,14 +264,22 @@ pub async fn get_launcher_snapshot() -> Result<LauncherSnapshot, PublicError> {
         EnvironmentCheck {
             id: "node",
             label: "内置 Node",
-            status: if node_version.is_some() { "ready" } else { "missing" },
+            status: if node_version.is_some() {
+                "ready"
+            } else {
+                "missing"
+            },
             summary: node_version.unwrap_or_else(|| "内置 Node 无法执行".into()),
             detail: Some("通过 TILESIM_NODE 提供，不依赖资源管理器继承的 PATH。".into()),
         },
         EnvironmentCheck {
             id: "webview",
             label: "WebView2",
-            status: if webview.is_some() { "ready" } else { "missing" },
+            status: if webview.is_some() {
+                "ready"
+            } else {
+                "missing"
+            },
             summary: webview.unwrap_or_else(|| "未检测到 Evergreen Runtime".into()),
             detail: Some("缺失时从 Microsoft 安装 WebView2 Evergreen Runtime。".into()),
         },

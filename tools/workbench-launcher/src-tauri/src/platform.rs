@@ -2,9 +2,7 @@ use std::{env, path::PathBuf, process::Command as StdCommand};
 
 #[cfg(windows)]
 use winreg::{
-    enums::{
-        HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ, KEY_WOW64_32KEY, KEY_WOW64_64KEY,
-    },
+    enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ, KEY_WOW64_32KEY, KEY_WOW64_64KEY},
     RegKey,
 };
 
@@ -29,10 +27,16 @@ pub fn windows_powershell() -> PathBuf {
 #[cfg(windows)]
 pub fn webview2_version() -> Option<String> {
     const CLIENT: &str =
-        r"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F1E7E5BE-5A11-49B5-AFA3-65C6F4A0D9C1}";
+        r"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}";
     let roots = [
-        (RegKey::predef(HKEY_LOCAL_MACHINE), KEY_READ | KEY_WOW64_32KEY),
-        (RegKey::predef(HKEY_LOCAL_MACHINE), KEY_READ | KEY_WOW64_64KEY),
+        (
+            RegKey::predef(HKEY_LOCAL_MACHINE),
+            KEY_READ | KEY_WOW64_32KEY,
+        ),
+        (
+            RegKey::predef(HKEY_LOCAL_MACHINE),
+            KEY_READ | KEY_WOW64_64KEY,
+        ),
         (RegKey::predef(HKEY_CURRENT_USER), KEY_READ),
     ];
     roots.into_iter().find_map(|(root, flags)| {

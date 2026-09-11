@@ -83,22 +83,37 @@ $peOffset = [BitConverter]::ToInt32($bytes, 0x3c)
 $subsystem = [BitConverter]::ToUInt16($bytes, $peOffset + 24 + 68)
 if ($subsystem -ne 2) { throw "The launcher candidate is not a Windows GUI executable." }
 
-if (Test-Path -LiteralPath $checkFile) { Remove-Item -LiteralPath $checkFile -Force }
 $previousWebRoot = [Environment]::GetEnvironmentVariable("TILESIM_WEB_ROOT", "Process")
 [Environment]::SetEnvironmentVariable("TILESIM_WEB_ROOT", $null, "Process")
+$checkExitCode = $null
+$checkFilePresent = $false
 try {
-    $checkProcess = Start-Process `
-        -FilePath $candidateExecutable `
-        -ArgumentList @("--self-check-file", "`"$checkFile`"") `
-        -WindowStyle Hidden `
-        -Wait `
-        -PassThru
+    for ($selfCheckAttempt = 1; $selfCheckAttempt -le 3; $selfCheckAttempt++) {
+        if (Test-Path -LiteralPath $checkFile) { Remove-Item -LiteralPath $checkFile -Force }
+        $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+        $startInfo.FileName = $candidateExecutable
+        $startInfo.UseShellExecute = $false
+        $startInfo.CreateNoWindow = $true
+        [void]$startInfo.ArgumentList.Add("--self-check-file")
+        [void]$startInfo.ArgumentList.Add($checkFile)
+        $checkProcess = [System.Diagnostics.Process]::Start($startInfo)
+        if ($null -eq $checkProcess) { throw "The packaged launcher self-check could not be started." }
+        try {
+            $checkProcess.WaitForExit()
+            $checkExitCode = $checkProcess.ExitCode
+        } finally {
+            $checkProcess.Dispose()
+        }
+        $checkFilePresent = Test-Path -LiteralPath $checkFile -PathType Leaf
+        if ($checkExitCode -eq 0 -and $checkFilePresent) { break }
+        if ($selfCheckAttempt -lt 3) { Start-Sleep -Seconds 1 }
+    }
 } finally {
     [Environment]::SetEnvironmentVariable("TILESIM_WEB_ROOT", $previousWebRoot, "Process")
 }
-if ($checkProcess.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $checkFile -PathType Leaf)) {
+if ($checkExitCode -ne 0 -or -not $checkFilePresent) {
     Remove-Item -LiteralPath $candidateExecutable -Force -ErrorAction SilentlyContinue
-    throw "The packaged launcher self-check did not complete successfully."
+    throw "The packaged launcher self-check did not complete successfully (exit=$checkExitCode, output=$checkFilePresent)."
 }
 $check = Get-Content -Raw -LiteralPath $checkFile | ConvertFrom-Json
 $safeSelfCheck =

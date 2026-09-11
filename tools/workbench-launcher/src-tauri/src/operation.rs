@@ -44,7 +44,11 @@ impl LauncherState {
 }
 
 #[derive(Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
 pub enum OperationRequest {
     Start {
         wsl_distro: String,
@@ -189,12 +193,8 @@ fn validate_backend_repository(value: &str) -> Result<PathBuf, PublicError> {
 
 fn same_windows_path(left: &Path, right: &Path) -> bool {
     left.to_string_lossy()
-        .trim_end_matches(|character| character == '\\' || character == '/')
-        .eq_ignore_ascii_case(
-            right
-                .to_string_lossy()
-                .trim_end_matches(|character| character == '\\' || character == '/'),
-        )
+        .trim_end_matches(['\\', '/'])
+        .eq_ignore_ascii_case(right.to_string_lossy().trim_end_matches(['\\', '/']))
 }
 
 fn prepare_operation(
@@ -264,7 +264,10 @@ fn prepare_operation(
         } => {
             let api_key = api_key.map(Zeroizing::new);
             validate_model(&base_url, &model, timeout_ms)?;
-            if api_key.as_deref().map(|value| value.is_empty()).unwrap_or(true)
+            if api_key
+                .as_deref()
+                .map(|value| value.is_empty())
+                .unwrap_or(true)
                 && !keep_existing_key
             {
                 return Err(PublicError::new(
@@ -535,7 +538,9 @@ async fn execute_operation(
             )
         })?;
         if !status.success() {
-            return Err(classify_failure(&tail.into_iter().collect::<Vec<_>>().join("\n")));
+            return Err(classify_failure(
+                &tail.into_iter().collect::<Vec<_>>().join("\n"),
+            ));
         }
         Ok::<(), PublicError>(())
     }
@@ -608,7 +613,10 @@ mod tests {
             keep_existing_key: false,
         };
         let prepared = prepare_operation(root, request).expect("prepare save-model operation");
-        assert!(!prepared.arguments.iter().any(|value| value.contains("never-in-arguments")));
+        assert!(!prepared
+            .arguments
+            .iter()
+            .any(|value| value.contains("never-in-arguments")));
         assert_eq!(
             prepared.secret_stdin.as_deref().map(String::as_str),
             Some("never-in-arguments")

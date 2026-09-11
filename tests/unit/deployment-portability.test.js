@@ -125,6 +125,42 @@ windowsOnly("deployment portability", () => {
     expect(result.stdout.trim().toLowerCase()).toBe(process.execPath.toLowerCase());
   });
 
+  it("runs the packaged Node self-check under Windows PowerShell without relying on PATH", () => {
+    const modulePath = resolve("scripts/deployment-common.psm1");
+    const selfCheckPath = resolve("tools/workbench-launcher/self-check-node.ps1");
+    const powershell = join(
+      process.env.SystemRoot ?? "C:\\Windows",
+      "System32",
+      "WindowsPowerShell",
+      "v1.0",
+      "powershell.exe",
+    );
+    const result = spawnSync(
+      powershell,
+      [
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        selfCheckPath,
+        "-ModulePath",
+        modulePath,
+      ],
+      {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          PATH: join(process.env.SystemRoot ?? "C:\\Windows", "System32"),
+          TILESIM_NODE: process.execPath,
+        },
+      },
+    );
+    expect(result.status, result.stdout + result.stderr).toBe(0);
+    expect(result.stdout.trim().toLowerCase()).toBe(process.execPath.toLowerCase());
+  });
+
   it("fails before deployment when a catalog evidence revision is unavailable", () => {
     const fixtureRoot = mkdtempSync(join(tmpdir(), "tilesim-deployment-evidence-"));
     const backendRoot = join(fixtureRoot, "backend");

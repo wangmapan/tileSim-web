@@ -30,6 +30,9 @@ fn main() {
     let node = find_node();
     println!("cargo:rerun-if-env-changed=TILESIM_BUNDLED_NODE_SOURCE");
     println!("cargo:rerun-if-changed={}", node.display());
-    println!("cargo:rustc-env=TILESIM_BUNDLED_NODE_SOURCE={}", node.display());
+    println!(
+        "cargo:rustc-env=TILESIM_BUNDLED_NODE_SOURCE={}",
+        node.display()
+    );
     tauri_build::build();
 }

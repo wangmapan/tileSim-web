@@ -1,6 +1,6 @@
 # ADR：Windows 工作台启动器现代化
 
-**状态**：接受，代码实现可继续；本机原生构建门禁阻塞
+**状态**：接受；本机原生构建与打包门禁已通过
 
 **事实日期**：2026-09-11
 **范围**：Windows 本地工作台启动、部署适配、模型服务配置和环境诊断；不改变主站、Bridge、部署 manifest 或仿真契约
@@ -32,7 +32,7 @@ Rust 层只暴露固定的 typed command，并通过参数数组调用已存在�
 6. **可重复构建与 packaged self-check**：固定 pnpm 版本和 Tauri/Rust crate 版本；构建脚本验证 GUI subsystem、根目录定位、脚本集合、manifest presence、内置 Node、无 Node PATH 的 `Resolve-TileSimNode`、WebView2 检测，以及 self-check 没有读取 credential、访问 Provider 或触碰 5173。
 7. **干净 clone 可构建**：文档列出 Node/pnpm、Rust stable MSVC toolchain、Visual Studio C++ Build Tools 和 WebView2 Evergreen Runtime；构建不依赖维护者路径。旧启动器在迁移期仍可按原说明构建。
 
-上述设计满足技术可行性门禁，没有发现必须改用 PySide6 的产品级阻塞。当前电脑缺失的构建工具属于环境门禁，不改变架构结论。
+上述设计满足技术可行性门禁，没有发现必须改用 PySide6 的产品级阻塞。授权补齐 Windows 原生工具链后，Tauri production build、NSIS 和 packaged self-check 均已在本机通过，架构结论得到原生产物验证。
 
 ## 安全与留存边界
 
@@ -57,7 +57,7 @@ Rust 层只暴露固定的 typed command，并通过参数数组调用已存在�
 
 浅色和深色均沿用 TileSim 主站的 Segoe UI / Microsoft YaHei UI、低圆角、细边框、克制蓝色强调和语义状态色。800×600 时左栏收窄为短标签/可滚动区域，主要操作保持可达；更宽窗口恢复完整说明。状态同时使用文字与形状，不以颜色作为唯一信息载体。
 
-## 基线与本机构建门禁
+## 基线与本机原生验收
 
 迁移前基线 `32a8703d66d9b4acd5ca6e4661a5608f6ce33720`：
 
@@ -65,9 +65,12 @@ Rust 层只暴露固定的 typed command，并通过参数数组调用已存在�
 - 当前 `启动TileSim工作台.exe` self-check：exit 0，能定位 checkout、内置 Node 和必需脚本；
 - Node `v24.19.0`、pnpm `11.19.0`、Git `2.45.1.windows.1` 可用；
 - WSL2 `Ubuntu-24.04` 可见且正在运行；后端仓库与 deployment worktree 可发现；
-- 未发现 Rust/Cargo、Visual Studio C++ Build Tools、WebView2 Evergreen Runtime，`npx` 不在 PATH。
-
-因此可以完成源码、Web fixture、Vitest、Playwright 和文档实现，但本机暂时不能声称以下门禁通过：`cargo fmt`、`cargo clippy`、`cargo test`、Tauri production build、native window 截图、packaged self-check、新 EXE 大小与 SHA-256。不得通过未经授权安装系统依赖来掩盖这些阻塞项。
+- WebView2 Evergreen Runtime 实际版本为 `152.0.4191.66`；原探测使用了错误的 EdgeUpdate Client GUID，现已改为官方 WebView2 GUID 并由 packaged self-check 验证；
+- 经项目所有者授权，已安装 Rust stable MSVC `1.98.1`、Visual Studio Build Tools 2022 `17.14.40`、C++ x64/x86 工具与 Windows SDK `10.0.26100.0`；
+- `cargo fmt --check`、严格 clippy 和 `cargo test`（7/7）通过，`Cargo.lock` 已生成；
+- Tauri release 和 NSIS 均成功；根目录中文 EXE 为 `104,721,408` bytes，SHA-256 为 `ED3B9F608E2733F3777F17365CBBBBC8425BCE8E4025EA1B0C3035D12BC93805`；
+- packaged self-check 通过，确认从 EXE 目录解析 checkout、内置 Node、无 Node PATH、WebView2 和三个安全负面断言；
+- 原生浅色与深色窗口已逐图验收，截图保存在被 Git 忽略的 `runtime/launcher-tauri-build/`。
 
 ## 回滚
 
@@ -77,4 +80,4 @@ Rust 层只暴露固定的 typed command，并通过参数数组调用已存在�
 
 - 部署脚本、manifest schema、contract identity 和 5173 服务语义保持不变。
 - 新增一套独立 launcher 前端和 Rust command layer，以及专用 fixture/E2E。
-- 原生交付的最终验收仍依赖在具备 Rust stable MSVC、MSVC Build Tools 与 WebView2 的 Windows 机器上执行完整门禁。
+- 原生交付已在具备 Rust stable MSVC、MSVC Build Tools、Windows SDK 与 WebView2 的 Windows 机器上完成完整构建、打包和自检。

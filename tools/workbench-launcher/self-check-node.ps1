@@ -4,5 +4,5 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-Import-Module -LiteralPath $ModulePath -Force
+Import-Module -Name $ModulePath -Force
 Resolve-TileSimNode
