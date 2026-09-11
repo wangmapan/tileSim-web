@@ -178,7 +178,7 @@ try {
     if (-not $targetRevision) { throw "Could not resolve backend ref '$Ref'." }
 
     if (-not (Test-Path -LiteralPath $backend)) {
-        Invoke-Checked "git" @("-C", $repository, "worktree", "add", "--detach", $backend, $targetRevision)
+        Invoke-Checked "git" @("-c", "core.autocrlf=false", "-C", $repository, "worktree", "add", "--detach", $backend, $targetRevision)
         Write-RelativeWorktreeGitFile $backend
     }
 
@@ -195,7 +195,7 @@ try {
         }
         Write-Output "Preserving deployment-local untracked trace_gen overlay; target revision does not own that path."
     }
-    Invoke-Checked "git" @("-C", $backend, "switch", "--detach", $targetRevision)
+    Invoke-Checked "git" @("-c", "core.autocrlf=false", "-C", $backend, "switch", "--detach", $targetRevision)
 
     $backendWsl = ConvertTo-TileSimWslPath $backend
     $shortRevision = $targetRevision.Substring(0, 12)
@@ -279,7 +279,7 @@ try {
         $previousBackendRoot -eq $backend -and
         (Test-Path -LiteralPath $backend)
     ) {
-        & git -C $backend switch --detach $previousManifest.source_revision | Out-Null
+        & git -c core.autocrlf=false -C $backend switch --detach $previousManifest.source_revision | Out-Null
     }
     if ($manifestWritten -and $null -ne $previousManifestText) {
         Write-AtomicTextFile $manifestPath $previousManifestText

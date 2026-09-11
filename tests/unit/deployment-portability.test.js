@@ -38,6 +38,16 @@ windowsOnly("deployment portability", () => {
     }
   });
 
+  it("preserves repository line endings in backend deployment worktrees", () => {
+    const source = readFileSync(resolve("scripts/update-backend.ps1"), "utf8");
+    const checkoutCommands = source.match(/core\.autocrlf=false/g) ?? [];
+
+    expect(checkoutCommands).toHaveLength(3);
+    expect(source).toMatch(/core\.autocrlf=false[^\r\n]+worktree[^\r\n]+add/);
+    expect(source).toMatch(/core\.autocrlf=false[^\r\n]+switch[^\r\n]+targetRevision/);
+    expect(source).toMatch(/core\.autocrlf=false[^\r\n]+switch[^\r\n]+previousManifest\.source_revision/);
+  });
+
   it("derives repository defaults from the Web checkout", () => {
     const modulePath = resolve("scripts/deployment-common.psm1").replaceAll("'", "''");
     const result = spawnSync(
