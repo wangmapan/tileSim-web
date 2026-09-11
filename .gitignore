@@ -12,3 +12,8 @@ playwright-report/
 __pycache__/
 *.pyc
 /启动TileSim工作台.exe
+/启动TileSim工作台.tauri-candidate.exe
+tools/workbench-launcher/dist/
+tools/workbench-launcher/src-tauri/target/
+tools/workbench-launcher/src-tauri/gen/
+tools/workbench-launcher/screenshots/

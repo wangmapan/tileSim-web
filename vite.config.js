@@ -23,6 +23,6 @@ export default defineConfig({
     },
   },
   test: {
-    exclude: ["tests/e2e/**", "node_modules/**", "dist/**"],
+    exclude: ["tests/e2e/**", "tools/workbench-launcher/tests/**", "node_modules/**", "dist/**"],
   },
 });
