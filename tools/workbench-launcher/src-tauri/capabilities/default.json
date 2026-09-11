@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "TileSim launcher core window and event permissions only",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}
