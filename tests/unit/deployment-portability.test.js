@@ -11,6 +11,8 @@ const portableFiles = [
     .map((entry) => `scripts/${entry.name}`),
   "tools/launcher/build-launcher.ps1",
   "tools/launcher/tilesim_launcher.py",
+  "tools/workbench-launcher/build-launcher.ps1",
+  "tools/workbench-launcher/self-check-node.ps1",
 ];
 
 windowsOnly("deployment portability", () => {
