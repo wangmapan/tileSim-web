@@ -139,7 +139,11 @@ test("Phase 1 Agent copilot drafts only the eight-field subset without writing a
   await panel.getByRole("button", { name: "提交", exact: true }).click();
   await expect(panel).toContainText("当前能力不支持");
 
+  await panel.getByRole("button", { name: "关闭", exact: true }).click();
+  await expect(panel).toHaveAttribute("data-state", "closed");
   await page.getByRole("button", { name: "切换到深色模式", exact: true }).click();
+  await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
+  await expect(panel).toHaveAttribute("data-state", "open");
   await expect(panel).toHaveCSS("background-color", "rgb(25, 26, 28)");
   for (const width of [1100, 1440, 1920]) {
     await page.setViewportSize({ width, height: 900 });
