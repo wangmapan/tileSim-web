@@ -30,3 +30,6 @@
 - 历史报告保留原文并移入 archive，不把旧测试数字改写成当前数字。
 - 已完成的计划、一次性交接提示词和被当前路线替代的协作说明统一移入 `archive/plans/`。
 - 新文档必须放入对应目录并从本页或模块入口可达。
+
+Windows 工作台启动器现代化的技术选择、安全边界和构建门禁见
+[`deployment/LAUNCHER_MODERNIZATION_ADR.md`](deployment/LAUNCHER_MODERNIZATION_ADR.md)。
