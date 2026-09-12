@@ -102,8 +102,10 @@ function Assert-TileSimWslDistro {
     if ($null -eq $wsl) {
         throw "Windows Subsystem for Linux is required. Install WSL and an Ubuntu distribution first."
     }
-    & wsl.exe -d $WslDistro --exec true
-    if ($LASTEXITCODE -ne 0) {
+    $wslProcess = Start-Process -FilePath $wsl.Source `
+        -ArgumentList @("-d", $WslDistro, "--exec", "true") `
+        -WindowStyle Hidden -Wait -PassThru
+    if ($wslProcess.ExitCode -ne 0) {
         throw "WSL distribution '$WslDistro' is not available or cannot start."
     }
 }

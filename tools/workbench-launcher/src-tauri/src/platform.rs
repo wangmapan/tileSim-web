@@ -17,7 +17,9 @@ use winreg::{
 };
 
 pub fn command_version(program: &str, arguments: &[&str]) -> Option<String> {
-    let output = StdCommand::new(program).args(arguments).output().ok()?;
+    let mut command = StdCommand::new(program);
+    configure_hidden_std_command(&mut command);
+    let output = command.args(arguments).output().ok()?;
     if !output.status.success() {
         return None;
     }

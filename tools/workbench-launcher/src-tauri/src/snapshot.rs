@@ -255,7 +255,9 @@ pub async fn get_launcher_snapshot() -> Result<LauncherSnapshot, PublicError> {
     let backend_deployment = parent.join("tileSim-backend");
     let node_version = command_version(node.to_string_lossy().as_ref(), &["--version"]);
     let git_version = command_version("git.exe", &["--version"]);
-    let wsl_ready = Command::new("wsl.exe")
+    let mut wsl_probe = Command::new("wsl.exe");
+    configure_hidden_std_command(&mut wsl_probe);
+    let wsl_ready = wsl_probe
         .args(["-l", "-q"])
         .output()
         .map(|output| output.status.success())
