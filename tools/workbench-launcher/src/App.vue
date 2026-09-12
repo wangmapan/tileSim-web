@@ -153,6 +153,10 @@ async function runConfirmed() {
 }
 
 async function startService(event: Event) {
+  if (!snapshot.value?.deployment.manifestPresent) {
+    selectPage("deployment");
+    return;
+  }
   beginConfirmed(
     { kind: "start", wslDistro: wslDistro.value.trim() || "Ubuntu-24.04" },
     "启动或重启本地服务？",
