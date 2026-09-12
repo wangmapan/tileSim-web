@@ -4,7 +4,10 @@ use std::{fs, path::Path, process::Command, time::Duration};
 
 use crate::{
     error::PublicError,
-    platform::{command_version, webview2_version, windows_powershell},
+    platform::{
+        command_version, encode_powershell_arguments, powershell_utf8_runner, webview2_version,
+        windows_powershell, POWERSHELL_ARGUMENTS_ENV, POWERSHELL_SCRIPT_ENV,
+    },
     runtime::{extract_bundled_node, process_path_with_node, resolve_web_root},
 };
 
@@ -95,6 +98,12 @@ fn read_public_model_settings(web_root: &Path, node: &Path) -> ModelSnapshot {
             protected_key_present: false,
         };
     }
+    let arguments = vec![
+        "-Action".into(),
+        "Show".into(),
+        "-ConfigPath".into(),
+        config.to_string_lossy().into_owned(),
+    ];
     let output = Command::new(windows_powershell())
         .args([
             "-NoLogo",
@@ -102,12 +111,18 @@ fn read_public_model_settings(web_root: &Path, node: &Path) -> ModelSnapshot {
             "-NonInteractive",
             "-ExecutionPolicy",
             "Bypass",
-            "-File",
+            "-Command",
+            powershell_utf8_runner(),
         ])
-        .arg(web_root.join("scripts/configure-evidence-agent.ps1"))
-        .args(["-Action", "Show", "-ConfigPath"])
-        .arg(&config)
         .current_dir(web_root)
+        .env(
+            POWERSHELL_SCRIPT_ENV,
+            web_root.join("scripts/configure-evidence-agent.ps1"),
+        )
+        .env(
+            POWERSHELL_ARGUMENTS_ENV,
+            encode_powershell_arguments(&arguments),
+        )
         .env("TILESIM_NODE", node)
         .env("PATH", process_path_with_node(node))
         .output();

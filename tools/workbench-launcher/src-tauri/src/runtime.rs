@@ -26,11 +26,14 @@ const REQUIRED_SCRIPTS: &[&str] = &[
     "scripts/configure-evidence-agent.ps1",
     "scripts/request-wsl-repair.ps1",
     "scripts/deployment-common.psm1",
-    "tools/workbench-launcher/self-check-node.ps1",
 ];
 
 pub fn required_scripts() -> &'static [&'static str] {
     REQUIRED_SCRIPTS
+}
+
+pub fn canonicalize_compatible(path: &Path) -> std::io::Result<PathBuf> {
+    dunce::canonicalize(path)
 }
 
 fn valid_web_root(path: &Path) -> bool {
@@ -50,7 +53,7 @@ pub fn resolve_web_root() -> Result<PathBuf, PublicError> {
         .flatten()
     {
         if valid_web_root(&candidate) {
-            if let Ok(canonical) = candidate.canonicalize() {
+            if let Ok(canonical) = canonicalize_compatible(&candidate) {
                 return Ok(canonical);
             }
             if candidate.is_absolute() {
@@ -152,4 +155,25 @@ pub fn extract_bundled_node() -> Result<PathBuf, PublicError> {
         )
     })?;
     Ok(executable)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn canonical_paths_remain_compatible_with_powershell_and_wsl_conversion() {
+        let canonical = canonicalize_compatible(Path::new(env!("CARGO_MANIFEST_DIR")))
+            .expect("canonicalize launcher manifest directory");
+        let rendered = canonical.to_string_lossy();
+        assert!(canonical.is_absolute());
+        assert!(!rendered.starts_with(r"\\?\"));
+    }
+
+    #[test]
+    fn packaged_launcher_only_requires_runtime_scripts_beside_the_executable() {
+        assert!(required_scripts()
+            .iter()
+            .all(|path| !path.starts_with("tools/workbench-launcher/")));
+    }
 }

@@ -4,7 +4,10 @@ use std::{env, fs, path::Path, process::Command};
 use crate::{
     error::PublicError,
     platform::{webview2_version, windows_powershell},
-    runtime::{bundled_node_digest, extract_bundled_node, required_scripts, resolve_web_root},
+    runtime::{
+        bundled_node_digest, canonicalize_compatible, extract_bundled_node, required_scripts,
+        resolve_web_root,
+    },
 };
 
 #[derive(Serialize)]
@@ -36,12 +39,18 @@ fn verify_node_without_path(web_root: &Path, node: &Path) -> bool {
             "-NonInteractive",
             "-ExecutionPolicy",
             "Bypass",
-            "-File",
+            "-Command",
+            r#"$ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$OutputEncoding = [Console]::OutputEncoding
+Import-Module $env:TILESIM_LAUNCHER_MODULE -Force
+Resolve-TileSimNode"#,
         ])
-        .arg(web_root.join("tools/workbench-launcher/self-check-node.ps1"))
-        .args(["-ModulePath"])
-        .arg(web_root.join("scripts/deployment-common.psm1"))
         .current_dir(web_root)
+        .env(
+            "TILESIM_LAUNCHER_MODULE",
+            web_root.join("scripts/deployment-common.psm1"),
+        )
         .env("TILESIM_NODE", node)
         .env("PATH", &path)
         .output();
@@ -72,10 +81,9 @@ pub fn write_self_check(output_path: &Path) -> Result<(), PublicError> {
         .as_deref()
         .map(|parent| {
             parent == web_root
-                || parent
-                    .canonicalize()
+                || canonicalize_compatible(parent)
                     .ok()
-                    .zip(web_root.canonicalize().ok())
+                    .zip(canonicalize_compatible(&web_root).ok())
                     .map(|(left, right)| left == right)
                     .unwrap_or(false)
         })

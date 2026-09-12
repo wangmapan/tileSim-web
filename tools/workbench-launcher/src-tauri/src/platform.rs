@@ -24,6 +24,22 @@ pub fn windows_powershell() -> PathBuf {
     windows.join("System32/WindowsPowerShell/v1.0/powershell.exe")
 }
 
+pub const POWERSHELL_SCRIPT_ENV: &str = "TILESIM_LAUNCHER_SCRIPT";
+pub const POWERSHELL_ARGUMENTS_ENV: &str = "TILESIM_LAUNCHER_ARGUMENTS_JSON";
+
+pub fn powershell_utf8_runner() -> &'static str {
+    r#"$ErrorActionPreference = 'Stop'
+[Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$OutputEncoding = [Console]::OutputEncoding
+$launcherArguments = @($env:TILESIM_LAUNCHER_ARGUMENTS_JSON | ConvertFrom-Json)
+& $env:TILESIM_LAUNCHER_SCRIPT @launcherArguments"#
+}
+
+pub fn encode_powershell_arguments(arguments: &[String]) -> String {
+    serde_json::to_string(arguments).expect("PowerShell arguments serialize to JSON")
+}
+
 #[cfg(windows)]
 pub fn webview2_version() -> Option<String> {
     const CLIENT: &str =
@@ -50,4 +66,37 @@ pub fn webview2_version() -> Option<String> {
 #[cfg(not(windows))]
 pub fn webview2_version() -> Option<String> {
     None
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn powershell_runner_emits_utf8_when_output_is_redirected() {
+        let output = StdCommand::new(windows_powershell())
+            .args([
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                powershell_utf8_runner(),
+            ])
+            .env(POWERSHELL_SCRIPT_ENV, "Write-Output")
+            .env(
+                POWERSHELL_ARGUMENTS_ENV,
+                encode_powershell_arguments(&["位置".into()]),
+            )
+            .output()
+            .expect("run Windows PowerShell UTF-8 fixture");
+        assert!(output.status.success());
+        assert_eq!(
+            String::from_utf8(output.stdout)
+                .expect("PowerShell output is UTF-8")
+                .trim(),
+            "位置"
+        );
+    }
 }

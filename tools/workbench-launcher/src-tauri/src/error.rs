@@ -63,10 +63,15 @@ pub fn classify_failure(output: &str) -> PublicError {
             output,
         );
     }
+    let detail = if output.trim().is_empty() {
+        "PowerShell exited without readable output. Open the operation log and retry after refreshing the environment status."
+    } else {
+        output
+    };
     PublicError::new(
         "本地操作失败",
         "展开技术详情，按最后一条可执行提示修复后重试。",
-        output,
+        detail,
     )
 }
 
@@ -99,5 +104,12 @@ mod tests {
         assert!(!redacted.contains("person"));
         assert!(redacted.contains("<redacted>"));
         assert!(redacted.contains("<path>"));
+    }
+
+    #[test]
+    fn generic_failure_never_has_empty_technical_detail() {
+        let error = classify_failure("");
+        assert_eq!(error.category, "本地操作失败");
+        assert!(!error.technical_detail.trim().is_empty());
     }
 }

@@ -9,8 +9,6 @@ const portableFiles = [
   ...readdirSync(resolve("scripts"), { withFileTypes: true })
     .filter((entry) => entry.isFile() && /\.(?:ps1|psm1)$/u.test(entry.name))
     .map((entry) => `scripts/${entry.name}`),
-  "tools/launcher/build-launcher.ps1",
-  "tools/launcher/tilesim_launcher.py",
   "tools/workbench-launcher/build-launcher.ps1",
   "tools/workbench-launcher/self-check-node.ps1",
 ];
@@ -68,6 +66,23 @@ windowsOnly("deployment portability", () => {
       repository: "D:\\work\\tileSim",
       deployment: "D:\\work\\tileSim-backend",
     });
+  });
+
+  it("converts Rust verbatim drive paths to WSL paths", () => {
+    const modulePath = resolve("scripts/deployment-common.psm1").replaceAll("'", "''");
+    const result = spawnSync(
+      "powershell.exe",
+      [
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        `Import-Module '${modulePath}' -Force; ConvertTo-TileSimWslPath '\\\\?\\D:\\work\\TileSim Backend'`,
+      ],
+      { encoding: "utf8" },
+    );
+    expect(result.status, result.stdout + result.stderr).toBe(0);
+    expect(result.stdout.trim()).toBe("/mnt/d/work/TileSim Backend");
   });
 
   it("isolates WSL build caches by deployment source path", () => {

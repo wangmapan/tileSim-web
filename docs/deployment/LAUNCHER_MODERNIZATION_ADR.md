@@ -7,7 +7,7 @@
 
 ## 决策
 
-采用 Tauri 2、Vue 3、TypeScript、Vite、Rust command layer、Vitest、Playwright Web fixture 和 Windows WebView2。新实现放在 `tools/workbench-launcher/`，旧 `tools/launcher/` 和当前根目录 Python/Tkinter EXE 在功能对等与打包验收完成前继续保留。
+采用 Tauri 2、Vue 3、TypeScript、Vite、Rust command layer、Vitest、Playwright Web fixture 和 Windows WebView2。新实现放在 `tools/workbench-launcher/`；旧 `tools/launcher/` 与 Python/Tkinter EXE 在功能对等、原生打包和 Windows 路径兼容验收完成后退役。
 
 Rust 层只暴露固定的 typed command，并通过参数数组调用已存在的 PowerShell 入口。部署、不可变 release、manifest、DPAPI、WSL worktree 和构建缓存语义仍由现有脚本拥有；启动器不复制这些语义，也不提供任意 shell、文件系统或远程页面能力。
 
@@ -17,7 +17,7 @@ Rust 层只暴露固定的 typed command，并通过参数数组调用已存在�
 
 | 方案           | 优点                                                                                                                                     | 主要风险                                                                            | 结论                                                      |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| 当前 Tkinter   | 已部署、标准库依赖少、单文件打包已验证                                                                                                   | 交互、可访问性、响应式、主题和自动化测试能力不足；继续扩展会积累大量平台特例        | 保留为临时 fallback，不继续作为主实现扩展                 |
+| 当前 Tkinter   | 曾部署、标准库依赖少、单文件打包已验证                                                                                                   | 交互、可访问性、响应式、主题和自动化测试能力不足；继续扩展会积累大量平台特例        | 原生验收后退役，不继续作为主实现扩展                      |
 | PySide6 / Qt 6 | 原生控件成熟、离线运行直接、无需 WebView2                                                                                                | 打包体积与许可/分发复杂度更高；与现有 Vue/TypeScript 能力栈分离；Web fixture 复用弱 | 仅当 Tauri 的硬条件被事实证明无法满足时再由项目所有者决定 |
 | Tauri 2        | 安装体积和权限面小于 Electron；Vue/TypeScript 可复用；Rust 可形成窄 command allowlist；WebView2 支持成熟的键盘、DPI、主题和 fixture 测试 | Windows 构建依赖 Rust/MSVC/WebView2；需显式解决内置 Node、单 EXE 入口和关闭窗口行为 | 采用                                                      |
 | Electron       | Web 技术成熟、自动化生态完整                                                                                                             | 明确不符合项目要求；运行时与打包体积更大；扩大 Node/process 权限面                  | 拒绝                                                      |
@@ -30,7 +30,7 @@ Rust 层只暴露固定的 typed command，并通过参数数组调用已存在�
 4. **从 EXE 目录解析 checkout**：优先验证 `current_exe().parent()` 下的固定脚本集合；开发模式才回退到编译期仓库路径。无有效 checkout 时失败关闭。
 5. **不开放任意命令执行**：前端只能发送 Rust enum 定义的操作；脚本名、开关、WSL 发行版和目录均按操作单独验证。Rust 使用 `Command::args`，不拼接 shell command，不启用 Tauri shell plugin。
 6. **可重复构建与 packaged self-check**：固定 pnpm 版本和 Tauri/Rust crate 版本；构建脚本验证 GUI subsystem、根目录定位、脚本集合、manifest presence、内置 Node、无 Node PATH 的 `Resolve-TileSimNode`、WebView2 检测，以及 self-check 没有读取 credential、访问 Provider 或触碰 5173。
-7. **干净 clone 可构建**：文档列出 Node/pnpm、Rust stable MSVC toolchain、Visual Studio C++ Build Tools 和 WebView2 Evergreen Runtime；构建不依赖维护者路径。旧启动器在迁移期仍可按原说明构建。
+7. **干净 clone 可构建**：文档列出 Node/pnpm、Rust stable MSVC toolchain、Visual Studio C++ Build Tools 和 WebView2 Evergreen Runtime；构建不依赖维护者路径。
 
 上述设计满足技术可行性门禁，没有发现必须改用 PySide6 的产品级阻塞。授权补齐 Windows 原生工具链后，Tauri production build、NSIS 和 packaged self-check 均已在本机通过，架构结论得到原生产物验证。
 
@@ -67,14 +67,14 @@ Rust 层只暴露固定的 typed command，并通过参数数组调用已存在�
 - WSL2 `Ubuntu-24.04` 可见且正在运行；后端仓库与 deployment worktree 可发现；
 - WebView2 Evergreen Runtime 实际版本为 `152.0.4191.66`；原探测使用了错误的 EdgeUpdate Client GUID，现已改为官方 WebView2 GUID 并由 packaged self-check 验证；
 - 经项目所有者授权，已安装 Rust stable MSVC `1.98.1`、Visual Studio Build Tools 2022 `17.14.40`、C++ x64/x86 工具与 Windows SDK `10.0.26100.0`；
-- `cargo fmt --check`、严格 clippy 和 `cargo test`（7/7）通过，`Cargo.lock` 已生成；
-- Tauri release 和 NSIS 均成功；根目录中文 EXE 为 `104,721,408` bytes，SHA-256 为 `ED3B9F608E2733F3777F17365CBBBBC8425BCE8E4025EA1B0C3035D12BC93805`；
+- `cargo fmt --check`、严格 clippy 和 `cargo test`（12/12）通过，`Cargo.lock` 已生成；
+- Tauri release 和 NSIS 均成功；根目录中文 EXE 为 `104,747,008` bytes，SHA-256 为 `B853EFA0B507B0EE17CB8D38879584666297016566A3FE8D0AD27CCA09272507`；
 - packaged self-check 通过，确认从 EXE 目录解析 checkout、内置 Node、无 Node PATH、WebView2 和三个安全负面断言；
 - 原生浅色与深色窗口已逐图验收，截图保存在被 Git 忽略的 `runtime/launcher-tauri-build/`。
 
 ## 回滚
 
-迁移期间不覆盖或删除旧源码和旧 EXE。若新构建未通过或运行异常，继续使用由 `tools/launcher/build-launcher.ps1` 生成的 Python/Tkinter `启动TileSim工作台.exe`。新构建脚本在替换根目录入口前应将旧 EXE 移到被忽略的 `runtime/launcher-fallback/`，并提供恢复命令；该备份不进入 Git。
+Python/Tkinter 实现已退役。新构建脚本在替换根目录入口前将上一版 Tauri EXE 移到被忽略的 `runtime/launcher-fallback/`；发生回归时恢复该文件并重新执行 packaged self-check。fallback 不进入 Git。
 
 ## 影响
 

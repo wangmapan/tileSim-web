@@ -1,6 +1,6 @@
 # TileSim Web AI Handoff
 
-**事实日期**：2026-09-11
+**事实日期**：2026-09-12
 
 **产品范围**：电脑网页端、local Bridge、版本化契约和 Windows/WSL 本地部署
 
@@ -61,7 +61,6 @@ bridge/services/                 执行、capability、Evidence workflow
 bridge/providers/                固定 Provider adapter
 scripts/                         bootstrap、构建、部署、回滚和启动
 tools/workbench-launcher/        Tauri 2 Windows 工作台启动器
-tools/launcher/                  迁移期保留的 Tkinter fallback 源码
 docs/F9_AGENT_ORCHESTRATION/     Agent 编排 current baseline、Gap、路线和验收
 docs/archive/                    历史记录
 ```
@@ -72,7 +71,7 @@ docs/archive/                    历史记录
 - `scripts/bootstrap-workbench.ps1` 是干净 clone 的入口。
 - 默认后端源码和 deployment worktree 是 Web checkout 的同级 `tileSim/` 与 `tileSim-backend/`，均可通过参数覆盖。
 - Windows GUI 启动器由 `tools/workbench-launcher/build-launcher.ps1` 构建到 Web 根目录的 `启动TileSim工作台.exe`；
-  Tauri launcher 从 EXE 所在目录定位 checkout，嵌入 Node，WSL build cache 仍同时绑定 revision 与 deployment 源码路径。旧 `tools/launcher/` 在新 EXE 完成原生验收前保留为 fallback。
+  Tauri launcher 从 EXE 所在目录定位 checkout，嵌入 Node，WSL build cache 仍同时绑定 revision 与 deployment 源码路径。旧 Tkinter 实现已在原生验收后退役，回滚使用构建脚本保留的上一版 Tauri EXE。
 - `runtime/`、`runs/`、`dist/`、`node_modules/` 都不进入 Git。
 - 部署脚本使用 immutable `bridge + dist` snapshot；health 必须绑定 source/build/release/schema identity。
 

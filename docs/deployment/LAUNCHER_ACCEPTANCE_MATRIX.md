@@ -74,14 +74,14 @@
 - launcher Web production build：通过；
 - 主站 fixture Playwright：默认 5 worker 最终重跑为 45 passed / 5 个资源超时 / 6 条 deployed live skip，`pnpm test:e2e` 原命令不能记为通过；同分支早先单 worker 完整运行 50 passed / 6 skip，最终单 worker 重跑为 49 passed / 1 个 30 秒资源超时 / 6 skip；唯一超时的 14 MB Worker 用例在单独 60 秒诊断预算下 37.7 秒通过；
 - Tauri CLI config/info：可解析，WebView2 152.0.4191.66 可用；
-- 旧 launcher/deployment baseline：2 files / 10 tests 通过；旧 EXE self-check exit 0；
+- deployment portability：1 file / 9 tests 通过，包含 Rust verbatim drive path 转 WSL path 回归；
 - Rust stable MSVC 1.98.1、Visual Studio Build Tools 2022 17.14.40、Windows SDK 10.0.26100.0：安装并验证；
-- `cargo fmt --check`：通过；严格 clippy：通过；`cargo test`：7/7 通过；`Cargo.lock`：已生成；
-- Tauri production build 与 NSIS：通过；NSIS 安装包 `26,042,426` bytes；
+- `cargo fmt --check`：通过；严格 clippy：通过；`cargo test`：12/12 通过；`Cargo.lock`：已生成；
+- Tauri production build 与 NSIS：通过；NSIS 安装包 `26,052,341` bytes，SHA-256 `FD079085D577F8B123AC411B565571C75B271DB27336CD60A2833C3737F812C8`；
 - packaged self-check：通过，`ready=true`、内置 Node SHA-256 `3602f2bb1a10f2cbab4c36886218a33c1ab3db87290e73b033c46c77147d0237`、无 Node PATH 与三个安全负面断言均通过；
 - 原生 Windows 截图：浅色/深色逐图通过，保存在 ignored runtime；
-- 新 EXE：`D:\tileSim-web-launcher-tauri-v2\启动TileSim工作台.exe`，`104,721,408` bytes，SHA-256 `ED3B9F608E2733F3777F17365CBBBBC8425BCE8E4025EA1B0C3035D12BC93805`。
+- 新 EXE：`D:\tileSim-web-launcher-tauri-v2\启动TileSim工作台.exe` 与正式入口 `D:\tileSim-web\启动TileSim工作台.exe`，`104,747,008` bytes，SHA-256 `B853EFA0B507B0EE17CB8D38879584666297016566A3FE8D0AD27CCA09272507`；上一版 Tauri EXE 已原子保存在 ignored `runtime/launcher-fallback/`。
 
 ## 负面确认
 
-本轮没有部署、停止、重启或替换 `127.0.0.1:5173`；没有读取或输出任何 `TILESIM_EVIDENCE_AGENT_*` 值；没有读取 API Key、调用 live Provider 或创建正式 simulation run；没有修改主站业务页面、Router、Evidence Agent、Agent Copilot、部署 manifest/identity contract、仿真/Trace/证据语义；没有删除旧 Tkinter 源码或 `D:\tileSim-web` 中现有旧 EXE。
+本轮没有部署、停止、重启或替换 `127.0.0.1:5173`；没有读取或输出任何 `TILESIM_EVIDENCE_AGENT_*` 值；没有读取 API Key、调用 live Provider 或创建正式 simulation run；没有修改主站业务页面、Router、Evidence Agent、Agent Copilot、部署 manifest/identity contract、仿真/Trace/证据语义。经项目所有者明确授权，旧 Tkinter 源码已从分支删除；主工作树旧入口 `D:\tileSim-web\启动TileSim工作台.exe` 已在新 Tauri 路径兼容与 packaged self-check 通过后移入 Windows 回收站。

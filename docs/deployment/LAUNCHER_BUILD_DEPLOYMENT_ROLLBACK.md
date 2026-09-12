@@ -48,7 +48,7 @@ pnpm install --frozen-lockfile --config.auto-install-peers=false
 4. Tauri production build 与 NSIS bundle；
 5. Windows GUI subsystem 检查；
 6. 根目录 candidate packaged self-check；
-7. 验收通过后原子发布根目录中文 EXE，并保留旧入口。
+7. 验收通过后原子发布根目录中文 EXE，并将上一版 Tauri EXE 保留为 ignored fallback。
 
 构建产物均被 Git 忽略：Web dist、Rust target/gen、runtime 检查结果、candidate、根目录 EXE 和 fallback。
 
@@ -71,7 +71,7 @@ self-check 只检查 checkout、必需脚本、deployment manifest 是否存在�
 - `webview2_available=true`；
 - 三个安全负面字段均为 `false`。
 
-## 发布和旧启动器保留
+## 发布、旧实现退役和 Tauri fallback
 
 默认入口仍是 `<tileSim-web>/启动TileSim工作台.exe`。新 candidate 在替换前必须通过 self-check。若已有入口，构建脚本使用同卷原子替换，并将旧文件保存为：
 
@@ -79,33 +79,21 @@ self-check 只检查 checkout、必需脚本、deployment manifest 是否存在�
 runtime/launcher-fallback/启动TileSim工作台.previous-<timestamp>-<pid>.exe
 ```
 
-在新 Tauri EXE 完成本机 production build、packaged self-check、原生窗口截图和人工验收之前：
-
-- 不删除 `tools/launcher/`；
-- 不删除或覆盖其他 checkout 中现有的 Tkinter EXE；
-- 不把 fallback 加入 Git；
-- 不把 fixture 验收计作 native packaged 验收。
-
-本次独立工作树原生验收已完成。该工作树原先没有根目录入口，因此构建结果中的 `previous_launcher_fallback` 为 `null`；`D:\tileSim-web\启动TileSim工作台.exe` 和 `tools/launcher/` 保持原样，可继续作为主 checkout 的旧 Tkinter 回滚入口。新产物只发布到 `D:\tileSim-web-launcher-tauri-v2\启动TileSim工作台.exe`。
+Tauri production build、packaged self-check、原生窗口截图和 Windows 路径兼容回归已完成。经项目所有者授权，旧 `tools/launcher/` 和 `D:\tileSim-web\启动TileSim工作台.exe` 已退役；不再把 Tkinter 作为回滚路径。fallback 仍不得加入 Git，fixture 验收也不得替代 native packaged 验收。
 
 已验收产物：
 
-- 根目录中文 EXE：`104,721,408` bytes，SHA-256 `ED3B9F608E2733F3777F17365CBBBBC8425BCE8E4025EA1B0C3035D12BC93805`；
-- NSIS：`TileSim 工作台_0.1.0_x64-setup.exe`，`26,042,426` bytes；
+- 根目录中文 EXE：`104,747,008` bytes，SHA-256 `B853EFA0B507B0EE17CB8D38879584666297016566A3FE8D0AD27CCA09272507`；
+- NSIS：`TileSim 工作台_0.1.0_x64-setup.exe`，`26,052,341` bytes，SHA-256 `FD079085D577F8B123AC411B565571C75B271DB27336CD60A2833C3737F812C8`；
 - packaged self-check：`ready=true`，从 EXE 目录解析 checkout、内置 Node、无 Node PATH 和 WebView2 均通过；
+- 上一版 Tauri fallback：`runtime/launcher-fallback/启动TileSim工作台.previous-20260912-103905-25724.exe`；
 - 原生浅色与深色窗口截图：保存在被 Git 忽略的 `runtime/launcher-tauri-build/native-light.png` 与 `native-dark.png`。
 
 ## 回滚
 
 先确认没有启动器构建或部署任务正在运行。选择 `runtime/launcher-fallback/` 中需要恢复的版本，复制到根目录 candidate 名称，验证文件存在后再替换根目录入口。不要删除 fallback，直到恢复后的启动器已完成 self-check。
 
-若尚未生成 fallback，继续使用旧源码构建：
-
-```powershell
-.\tools\launcher\build-launcher.ps1
-```
-
-回滚启动器不会回滚 deployment manifest 或 release；后端 release 回滚仍使用既有部署流程。不要用启动器回滚掩盖 deployment identity 或 schema 不一致。
+若尚未生成 fallback，应从已发布的 Tauri 构建产物或对应 Git revision 重建，不得恢复已退役的 Tkinter 实现。回滚启动器不会回滚 deployment manifest 或 release；后端 release 回滚仍使用既有部署流程。不要用启动器回滚掩盖 deployment identity 或 schema 不一致。
 
 ## 安全与运维确认
 

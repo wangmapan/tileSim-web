@@ -41,4 +41,4 @@ Remove-Item Env:TILESIM_BUNDLED_NODE_SOURCE
 - `docs/deployment/LAUNCHER_BUILD_DEPLOYMENT_ROLLBACK.md`
 - `docs/deployment/LAUNCHER_ACCEPTANCE_MATRIX.md`
 
-旧 Python/Tkinter 源码继续保留在 `tools/launcher/`，直到新 EXE 完成独立原生验收。
+旧 Python/Tkinter 实现已在 Tauri 原生验收和路径兼容回归通过后退役。回滚使用 `runtime/launcher-fallback/` 中由构建脚本原子保留的上一版 Tauri EXE。

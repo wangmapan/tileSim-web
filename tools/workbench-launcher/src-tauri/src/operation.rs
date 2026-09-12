@@ -22,8 +22,13 @@ use zeroize::{Zeroize, Zeroizing};
 
 use crate::{
     error::{classify_failure, redact, PublicError},
-    platform::windows_powershell,
-    runtime::{extract_bundled_node, process_path_with_node, resolve_web_root},
+    platform::{
+        encode_powershell_arguments, powershell_utf8_runner, windows_powershell,
+        POWERSHELL_ARGUMENTS_ENV, POWERSHELL_SCRIPT_ENV,
+    },
+    runtime::{
+        canonicalize_compatible, extract_bundled_node, process_path_with_node, resolve_web_root,
+    },
 };
 
 #[derive(Clone, Default)]
@@ -174,7 +179,7 @@ fn validate_model(base_url: &str, model: &str, timeout_ms: u32) -> Result<(), Pu
 
 fn validate_backend_repository(value: &str) -> Result<PathBuf, PublicError> {
     let path = PathBuf::from(value);
-    let canonical = path.canonicalize().map_err(|error| {
+    let canonical = canonicalize_compatible(&path).map_err(|error| {
         PublicError::new(
             "后端仓库目录不可用",
             "重新选择一个存在的 TileSim Git 仓库。",
@@ -404,10 +409,27 @@ async fn relay_lines<R>(reader: R, sender: mpsc::Sender<String>)
 where
     R: AsyncRead + Unpin,
 {
-    let mut lines = BufReader::new(reader).lines();
-    while let Ok(Some(line)) = lines.next_line().await {
-        if sender.send(line).await.is_err() {
-            break;
+    let mut reader = BufReader::new(reader);
+    let mut buffer = Vec::new();
+    loop {
+        buffer.clear();
+        match reader.read_until(b'\n', &mut buffer).await {
+            Ok(0) => break,
+            Ok(_) => {
+                while matches!(buffer.last(), Some(b'\r' | b'\n')) {
+                    buffer.pop();
+                }
+                let line = String::from_utf8_lossy(&buffer).into_owned();
+                if sender.send(line).await.is_err() {
+                    break;
+                }
+            }
+            Err(error) => {
+                let _ = sender
+                    .send(format!("launcher output stream read failed: {error}"))
+                    .await;
+                break;
+            }
         }
     }
 }
@@ -449,11 +471,15 @@ async fn execute_operation(
                 "-NonInteractive",
                 "-ExecutionPolicy",
                 "Bypass",
-                "-File",
+                "-Command",
+                powershell_utf8_runner(),
             ])
-            .arg(&prepared.script)
-            .args(&prepared.arguments)
             .current_dir(&web_root)
+            .env(POWERSHELL_SCRIPT_ENV, &prepared.script)
+            .env(
+                POWERSHELL_ARGUMENTS_ENV,
+                encode_powershell_arguments(&prepared.arguments),
+            )
             .env("TILESIM_NODE", &node)
             .env("PATH", process_path_with_node(&node))
             .stdout(Stdio::piped())
@@ -675,5 +701,20 @@ mod tests {
         assert!(!state.try_begin());
         state.finish();
         assert!(state.try_begin());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn non_utf8_powershell_output_is_preserved_lossily() {
+        let (mut writer, reader) = tokio::io::duplex(64);
+        writer
+            .write_all(b"failure \xff detail\r\n")
+            .await
+            .expect("write invalid UTF-8 fixture");
+        drop(writer);
+        let (sender, mut receiver) = mpsc::channel(1);
+        relay_lines(reader, sender).await;
+        let line = receiver.recv().await.expect("relayed output");
+        assert!(line.starts_with("failure "));
+        assert!(line.ends_with(" detail"));
     }
 }

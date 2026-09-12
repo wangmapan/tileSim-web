@@ -30,6 +30,11 @@ function ConvertTo-TileSimWslPath {
     param([Parameter(Mandatory = $true)][string]$WindowsPath)
 
     $full = [System.IO.Path]::GetFullPath($WindowsPath)
+    if ($full.StartsWith('\\?\UNC\', [System.StringComparison]::OrdinalIgnoreCase)) {
+        $full = '\\' + $full.Substring(8)
+    } elseif ($full.StartsWith('\\?\', [System.StringComparison]::OrdinalIgnoreCase)) {
+        $full = $full.Substring(4)
+    }
     if ($full -notmatch '^([A-Za-z]):\\(.*)$') {
         throw "Only absolute Windows drive paths are supported: $full"
     }

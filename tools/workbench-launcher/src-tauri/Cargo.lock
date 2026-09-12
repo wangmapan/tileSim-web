@@ -3836,6 +3836,7 @@ dependencies = [
 name = "tilesim-workbench-launcher"
 version = "0.1.0"
 dependencies = [
+ "dunce",
  "hex",
  "regex",
  "reqwest 0.12.28",
