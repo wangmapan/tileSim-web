@@ -280,6 +280,13 @@ async function closeTransient() {
   }
 }
 
+async function closeLauncherAfterPrompt() {
+  closeBlocked.value = false;
+  if (!("__TAURI_INTERNALS__" in window)) return;
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  await getCurrentWindow().destroy();
+}
+
 onMounted(async () => {
   document.documentElement.dataset.appearance = theme.value;
   unlisten.value = await bridge.onOperationEvent(handleOperationEvent);
@@ -681,10 +688,10 @@ onBeforeUnmount(() => {
     <ConfirmDialog
       v-if="closeBlocked"
       title="当前任务仍在运行"
-      description="现有脚本没有安全取消契约。请等待任务完成后再关闭，部署进程不会被静默终止。"
-      confirm-label="我知道了"
+      description="现有脚本没有安全取消契约。可以继续等待，也可以关闭窗口让后台任务继续运行；启动器不会静默终止部署进程。"
+      confirm-label="关闭窗口，任务继续"
       @cancel="closeBlocked = false"
-      @confirm="closeBlocked = false"
+      @confirm="closeLauncherAfterPrompt"
     />
   </div>
 </template>
