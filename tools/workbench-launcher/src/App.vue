@@ -45,6 +45,7 @@ const timeoutMs = ref(30_000);
 const formErrors = reactive<Record<string, string>>({});
 const unlisten = ref<() => void>();
 const lastTrigger = ref<HTMLElement>();
+const lastOperationKind = ref<OperationRequest["kind"] | null>(null);
 const confirm = ref<{
   title: string;
   description: string;
@@ -141,11 +142,13 @@ async function runConfirmed() {
   const pending = confirm.value;
   confirm.value = null;
   if (!pending || active.value) return;
+  lastOperationKind.value = pending.request.kind;
   markOperationPending("正在建立安全操作上下文…");
   try {
     const result = await bridge.runOperation(pending.request);
     operation.operationId ??= result.operationId;
   } catch (error) {
+    lastOperationKind.value = null;
     await markOperationBlocked(error);
   }
 }
@@ -254,7 +257,19 @@ function handleOperationEvent(event: Parameters<typeof reduceOperation>[1]) {
   Object.assign(operation, reduceOperation({ ...operation }, event));
   if (event.logLine) logs.value = appendBoundedLog(logs.value, event.logLine);
   if (previousActive && !isOperationActive(event.phase)) {
+    const completedKind = lastOperationKind.value;
+    lastOperationKind.value = null;
     void refreshSnapshot();
+    if (event.phase === "succeeded" && completedKind === "start") {
+      // The start script waits for the bridge health check, so opening the
+      // browser after the terminal event avoids racing the local service.
+      window.setTimeout(() => {
+        void bridge.openWorkbench().catch((error) => {
+          refreshError.value = `服务已启动，但无法自动打开浏览器。请点击“只打开网页”重试。${String(error)}`;
+        });
+        void refreshSnapshot();
+      }, 350);
+    }
     nextTick(() => lastTrigger.value?.focus());
   }
 }

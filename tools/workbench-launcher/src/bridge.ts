@@ -111,6 +111,13 @@ function createFixtureBridge(): LauncherBridge {
                   elapsedMs: phases.length * 220,
                 },
           );
+          if (!shouldFail && request.kind === "start") {
+            fixtureSnapshot.service = {
+              state: "ready",
+              label: "服务已就绪",
+              guidance: "可以直接打开工作台；当前服务与 deployment identity 一致。",
+            };
+          }
           fixtureActive = false;
         },
         phases.length * 40 + 20,

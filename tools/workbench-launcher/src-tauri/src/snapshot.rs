@@ -156,19 +156,23 @@ fn read_public_model_settings(web_root: &Path, node: &Path) -> ModelSnapshot {
 }
 
 async fn fetch_health() -> Option<Value> {
-    reqwest::Client::builder()
+    let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(2))
         .build()
-        .ok()?
-        .get("http://127.0.0.1:5173/api/health")
-        .send()
-        .await
-        .ok()?
-        .error_for_status()
-        .ok()?
-        .json::<Value>()
-        .await
-        .ok()
+        .ok()?;
+    for attempt in 0..3 {
+        if let Ok(response) = client.get("http://127.0.0.1:5173/api/health").send().await {
+            if let Ok(response) = response.error_for_status() {
+                if let Ok(payload) = response.json::<Value>().await {
+                    return Some(payload);
+                }
+            }
+        }
+        if attempt < 2 {
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        }
+    }
+    None
 }
 
 #[tauri::command]

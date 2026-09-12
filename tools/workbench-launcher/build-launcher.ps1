@@ -94,8 +94,15 @@ try {
         $startInfo.FileName = $candidateExecutable
         $startInfo.UseShellExecute = $false
         $startInfo.CreateNoWindow = $true
-        [void]$startInfo.ArgumentList.Add("--self-check-file")
-        [void]$startInfo.ArgumentList.Add($checkFile)
+        if ($null -ne $startInfo.ArgumentList) {
+            [void]$startInfo.ArgumentList.Add("--self-check-file")
+            [void]$startInfo.ArgumentList.Add($checkFile)
+        } else {
+            # Windows PowerShell 5.1/.NET Framework does not expose
+            # ProcessStartInfo.ArgumentList; retain a quoted fallback for the
+            # same self-check invocation.
+            $startInfo.Arguments = "--self-check-file `"$checkFile`""
+        }
         $checkProcess = [System.Diagnostics.Process]::Start($startInfo)
         if ($null -eq $checkProcess) { throw "The packaged launcher self-check could not be started." }
         try {
