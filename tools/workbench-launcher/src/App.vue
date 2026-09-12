@@ -44,7 +44,6 @@ const modelName = ref("gpt-5.6-sol");
 const timeoutMs = ref(30_000);
 const formErrors = reactive<Record<string, string>>({});
 const unlisten = ref<() => void>();
-const closeUnlisten = ref<() => void>();
 const lastTrigger = ref<HTMLElement>();
 const confirm = ref<{
   title: string;
@@ -53,7 +52,6 @@ const confirm = ref<{
   dangerous?: boolean;
   request: OperationRequest;
 } | null>(null);
-const closeBlocked = ref(false);
 
 const active = computed(() => isOperationActive(operation.phase));
 const elapsed = computed(() => `${(operation.elapsedMs / 1000).toFixed(1)} 秒`);
@@ -279,36 +277,17 @@ async function closeTransient() {
     confirm.value = null;
     await nextTick();
     lastTrigger.value?.focus();
-  } else {
-    closeBlocked.value = false;
   }
-}
-
-async function closeLauncherAfterPrompt() {
-  closeBlocked.value = false;
-  if (!("__TAURI_INTERNALS__" in window)) return;
-  const { getCurrentWindow } = await import("@tauri-apps/api/window");
-  await getCurrentWindow().destroy();
 }
 
 onMounted(async () => {
   document.documentElement.dataset.appearance = theme.value;
   unlisten.value = await bridge.onOperationEvent(handleOperationEvent);
   await refreshSnapshot();
-  if ("__TAURI_INTERNALS__" in window) {
-    const { getCurrentWindow } = await import("@tauri-apps/api/window");
-    closeUnlisten.value = await getCurrentWindow().onCloseRequested((event) => {
-      if (active.value) {
-        event.preventDefault();
-        closeBlocked.value = true;
-      }
-    });
-  }
 });
 
 onBeforeUnmount(() => {
   unlisten.value?.();
-  closeUnlisten.value?.();
 });
 </script>
 
@@ -688,14 +667,6 @@ onBeforeUnmount(() => {
       :dangerous="confirm.dangerous"
       @cancel="closeTransient"
       @confirm="runConfirmed"
-    />
-    <ConfirmDialog
-      v-if="closeBlocked"
-      title="当前任务仍在运行"
-      description="现有脚本没有安全取消契约。可以继续等待，也可以关闭窗口让后台任务继续运行；启动器不会静默终止部署进程。"
-      confirm-label="关闭窗口，任务继续"
-      @cancel="closeBlocked = false"
-      @confirm="closeLauncherAfterPrompt"
     />
   </div>
 </template>
