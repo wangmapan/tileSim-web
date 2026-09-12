@@ -82,5 +82,3 @@
     "gpu_participation_mode": { "enum": ["gpu_free", "gpu_assisted_trace", "gpu_in_loop"] }
   }
 }
-
-

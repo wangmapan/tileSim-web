@@ -1,5 +1,21 @@
 # 能力与 Profile 目录规范
 
+## Phase 2D registry 数据收口（2026-09-12）
+
+Capability Catalog/Profile v1 保持冻结：五类实际 profile 仍为 `0/unavailable`，其 identity、digest
+和 agent-exposed closure 不变。Phase 2D 通过独立 registry 发布五条 Profile v2 数据记录（model、engine、
+device、topology、workload），并为每个事实保留 source reference、source field、provenance kind 与
+evidence scope。
+
+registry 记录的 lifecycle 为 `available` 仅表示记录可被审计查询；其 `runtime_status=unavailable`、
+`execution_status=missing`、`agent_exposed=false`、`calculator_eligible=false`、
+`ranking_eligible=false`。因此查询/snapshot/binding 可用不等于 run intake、lowering 或 calculator 可执行。
+校准与独立 held-out 均为 `missing`，synthetic/compatibility 记录最高只能声明
+`synthetic_consistency`。未知、过期、撤销、来源/license/regime/provenance/digest/revision 不完整的记录
+均 fail closed。
+
+具体 profile id、来源和测试矩阵见 [Phase 2D Profile Data Acceptance](24_PHASE2D_PROFILE_DATA_ACCEPTANCE.md)。
+
 > Phase 0D 发布状态（2026-09-09）：正式 catalog/snapshot/parameter descriptor 与五类 Profile v1 Schema 已进入
 > Schema/OpenAPI/manifest/generated/runtime validator。Catalog revision 为
 > sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b，contract package revision 为

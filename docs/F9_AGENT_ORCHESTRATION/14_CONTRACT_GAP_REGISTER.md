@@ -1,5 +1,28 @@
 # 契约与能力缺口登记表
 
+## Phase 2D 状态更新（2026-09-12）
+
+`GAP-PROFILE-SUCCESSOR-001` 已完成一个受限的数据发布切片：五类 Profile v2 registry record、来源目录、
+字段 provenance、canonical digest、生命周期过滤、snapshot stale 检测和完整 binding 校验均已具备，
+达到 `pre_commit_ready`。该状态不关闭真实 profile、校准、held-out、runtime lowering 或 calculator 缺口：
+所有记录仍 `runtime_status=unavailable`、`agent_exposed=false`，synthetic/compatibility 证据不升级 claim
+scope。Phase 2C 的 `profile_missing` 等 fail-closed 语义保持不变；未知/过期/撤销/漂移记录不得进入排序或执行。
+
+## Phase 2E DoR 审计状态（2026-09-12）
+
+Phase 2E calculator、Validation Report 和 typed receipt 启动条件裁决为
+`blocked_data` + `blocked_calibration` + `blocked_contract` + `blocked_backend`：
+
+- `GAP-PROFILE-SUCCESSOR-001`：registry entry 可追溯但均 unavailable；model reviewed-registry facts 存在 `observed`/claim-scope 与 calibration 状态不一致，不能升级为真实校准证据；
+- `GAP-CALIBRATION-001`、`GAP-HELDOUT-001`：五类 Profile 均 missing，仍无真实分层校准和独立 held-out；
+- `GAP-CALCULATOR-001`：只有 published schema、strict validator 和 fixture，缺 algorithm implementation、golden/property/boundary/risk-combination、receipt consumer 与执行证据；
+- `GAP-VALIDATE-001`：Validation Report schema 未绑定 approval，runtime validator/service 未闭合 input/profile/capability/backend/schema/policy/calculator/compiled request digest；
+- `GAP-RUN-INTAKE-001`、`GAP-ENGINE-001`、`GAP-PARALLEL-001`、`GAP-KV-001`、`GAP-WORKLOAD-001`、`GAP-NETWORK-001`、`GAP-SLO-001`：Phase 2C/局部模块原语不能证明 Phase 2E receipt 到执行、网络、请求指标和 evidence 的累计闭包。
+
+审计材料为 `25_PHASE2E_DOR_AUDIT.md` 与 `bridge/contracts/agent_orchestration_phase2/tests/test_phase2e_dor_audit.py`。
+在上述 Gap 未关闭前，不得进入 Phase 2E 实现或 Phase 2F；不得以 synthetic consistency、CI、局部性能、
+组合拼接、ranking 或部署说明替代真实 Profile/calibration/held-out evidence。
+
 > 文档 ID：`AO-14`
 >
 > 类型：规范性缺口台账（持续更新）

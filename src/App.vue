@@ -32,9 +32,13 @@ import {
 import { compileIntent } from "./features/agent-intent-compiler";
 import type { ExperimentAgentContextPublication } from "./features/run-experiment";
 import { getAgentOrchestrationCapabilitySnapshot } from "./lib/api/agent-orchestration-capabilities";
+import { LightweightWorkbenchShell } from "./features/lightweight-workbench";
 
 const activeRoute = useRoute();
-const { state, initialize, synchronizeNavigation } = useDashboard();
+const { state, initialize, synchronizeNavigation, checkBridge } = useDashboard();
+const isEntryRoute = computed(() => activeRoute.meta.layout === "entry");
+const isLightweightRoute = computed(() => activeRoute.meta.workspace === "lightweight");
+const dashboardInitialized = ref(false);
 const unsupported = computed(() => unsupportedSchemaReports(state.bundle));
 const rejectedUnsupported = computed(
   () => state.artifactManifest?.rejected_artifacts.filter((item) => item.reason === "unsupported_schema") || [],
@@ -42,7 +46,7 @@ const rejectedUnsupported = computed(
 const showUnsupported = computed(
   () =>
     (unsupported.value.length > 0 || rejectedUnsupported.value.length > 0) &&
-    !["experiment", "history", "evidence_lab"].includes(state.view),
+    !["experiment", "history", "evidence_lab", "lightweight"].includes(state.view),
 );
 const { t, isEnglish } = useI18n();
 const evidenceSelection = useEvidenceSelectionStore();
@@ -199,7 +203,12 @@ const navigationUnavailable = computed(
 function navigationSnapshot() {
   const value = Array.isArray(activeRoute.query.run) ? activeRoute.query.run[0] : activeRoute.query.run;
   return {
-    view: typeof activeRoute.name === "string" ? activeRoute.name : "overview",
+    view:
+      activeRoute.meta.workspace === "lightweight"
+        ? "lightweight"
+        : typeof activeRoute.name === "string"
+          ? activeRoute.name
+          : "overview",
     runId: typeof value === "string" && /^run-[\w-]+$/.test(value) ? value : null,
   };
 }
@@ -207,9 +216,20 @@ function navigationSnapshot() {
 watch(
   () => activeRoute.fullPath,
   () => {
+    if (isEntryRoute.value) return;
+    if (isLightweightRoute.value) {
+      // The lightweight shell has its own URL navigation. Keep the existing
+      // professional workspace snapshot intact; L1b does not resolve runs.
+      return;
+    }
     synchronizeAgentRouteContext();
     const navigation = navigationSnapshot();
-    void synchronizeNavigation(navigation.view, navigation.runId);
+    if (!dashboardInitialized.value) {
+      dashboardInitialized.value = true;
+      void initialize({ ...navigation, runId: navigation.runId || state.runId });
+    } else {
+      void synchronizeNavigation(navigation.view, navigation.runId);
+    }
   },
 );
 watch(
@@ -229,7 +249,18 @@ watch(
   ([runId, requestId]) => evidenceSelection.synchronizeRoute(runId, requestId),
   { immediate: true },
 );
-onMounted(() => initialize(navigationSnapshot()));
+onMounted(() => {
+  if (isEntryRoute.value) {
+    void checkBridge({ refresh: false });
+    return;
+  }
+  if (isLightweightRoute.value && !requestedRunId.value) {
+    return;
+  }
+  dashboardInitialized.value = true;
+  const navigation = navigationSnapshot();
+  void initialize({ ...navigation, runId: navigation.runId || state.runId });
+});
 onBeforeUnmount(() => {
   unsubscribeAgentContext();
   unregisterAgentContext();
@@ -237,23 +268,27 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="app-shell" :style="agentDockStyle" :data-agent-copilot-state="agentPanelState">
-    <AppSidebar />
-    <main class="app-main">
-      <AppHeader>
-        <PagePrimer v-if="currentGuide" :guide="currentGuide" />
-      </AppHeader>
-      <div class="workspace">
-        <section v-if="navigationUnavailable" class="navigation-error" role="alert">
-          <strong>{{ t("无法载入链接中的运行") }}</strong>
-          <span>{{
-            t("本地 Bridge 当前未连接，因此没有展示 {runId} 的证据；下方仍是先前已验证的内容。", {
-              runId: requestedRunId || "—",
-            })
-          }}</span>
-        </section>
-        <EvidenceStrip v-if="!['experiment', 'evidence_lab', 'history'].includes(state.view)" />
-        <RouterView v-slot="{ Component, route }">
+  <RouterView v-slot="{ Component, route }">
+    <component :is="Component" v-if="isEntryRoute" :key="String(route.name)" />
+    <LightweightWorkbenchShell v-else-if="isLightweightRoute">
+      <component :is="Component" :key="String(route.name)" />
+    </LightweightWorkbenchShell>
+    <div v-else class="app-shell" :style="agentDockStyle" :data-agent-copilot-state="agentPanelState">
+      <AppSidebar />
+      <main class="app-main">
+        <AppHeader>
+          <PagePrimer v-if="currentGuide" :guide="currentGuide" />
+        </AppHeader>
+        <div class="workspace">
+          <section v-if="navigationUnavailable" class="navigation-error" role="alert">
+            <strong>{{ t("无法载入链接中的运行") }}</strong>
+            <span>{{
+              t("本地 Bridge 当前未连接，因此没有展示 {runId} 的证据；下方仍是先前已验证的内容。", {
+                runId: requestedRunId || "—",
+              })
+            }}</span>
+          </section>
+          <EvidenceStrip v-if="!['experiment', 'evidence_lab', 'history'].includes(state.view)" />
           <KeepAlive include="ExperimentView">
             <component
               :is="showUnsupported ? UnsupportedSchemaView : Component"
@@ -261,22 +296,22 @@ onBeforeUnmount(() => {
               v-bind="route.name === 'experiment' ? { agentContextPublisher: publishExperimentAgentContext } : {}"
             />
           </KeepAlive>
-        </RouterView>
-      </div>
-    </main>
-    <GuidedHelpHost :default-guide-id="currentGuideId" />
-    <AgentCopilotEntry
-      v-model="agentPanelState"
-      :context="agentContext"
-      :blocks="agentBlocks"
-      :current-task="agentContext?.display_label || '当前页面助手'"
-      :status-label="agentStatus"
-      :initial-width="agentPanelWidth"
-      @resize="agentPanelWidth = $event"
-      @submit="submitAgentInstruction"
-      @answer="answerAgentClarification"
-    />
-    <ToastStack />
-    <div v-if="state.busy" class="global-busy" role="status" :aria-label="t('正在载入')"><span></span></div>
-  </div>
+        </div>
+      </main>
+      <GuidedHelpHost :default-guide-id="currentGuideId" />
+      <AgentCopilotEntry
+        v-model="agentPanelState"
+        :context="agentContext"
+        :blocks="agentBlocks"
+        :current-task="agentContext?.display_label || '当前页面助手'"
+        :status-label="agentStatus"
+        :initial-width="agentPanelWidth"
+        @resize="agentPanelWidth = $event"
+        @submit="submitAgentInstruction"
+        @answer="answerAgentClarification"
+      />
+      <ToastStack />
+      <div v-if="state.busy" class="global-busy" role="status" :aria-label="t('正在载入')"><span></span></div>
+    </div>
+  </RouterView>
 </template>

@@ -1,0 +1,28 @@
+{
+  "fixture_identity": "tilesim.fixture.agent_orchestration_phase2e_dor_audit.v1",
+  "phase": "2E",
+  "expected_status": "blocked_data",
+  "allowed_blockers": ["blocked_data", "blocked_calibration", "blocked_contract", "blocked_backend"],
+  "families": ["model", "engine", "device", "topology", "workload"],
+  "required_findings": [
+    "profile_runtime_unavailable",
+    "calibration_missing",
+    "held_out_missing",
+    "provenance_kind_mismatch",
+    "claim_scope_mismatch",
+    "calculator_contract_only",
+    "validation_report_contract_only",
+    "binding_does_not_prove_executability",
+    "lowering_not_closed",
+    "uint64_validator_boundary_gap",
+    "no_phase2_frontend_mock_or_exposure"
+  ],
+  "forbidden_claims": [
+    "agent_exposed",
+    "performance_ranking",
+    "absolute_performance",
+    "deployment_guarantee",
+    "real_calibrated_validation",
+    "held_out_validation"
+  ]
+}

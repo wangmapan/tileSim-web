@@ -34,15 +34,27 @@
     "agentOrchestrationCapabilitySnapshot": {
       "$ref": "../agent_orchestration_capability/schemas/capability-snapshot.schema.json"
     },
-    "agentOrchestrationProfileBindingV1": { "$ref": "../agent_orchestration_phase2/schemas/profile-binding.schema.json" },
+    "agentOrchestrationProfileBindingV1": {
+      "$ref": "../agent_orchestration_phase2/schemas/profile-binding.schema.json"
+    },
     "agentOrchestrationRunIntakeV2": { "$ref": "../agent_orchestration_phase2/schemas/run-intake.schema.json" },
-    "agentOrchestrationValidationReportV1": { "$ref": "../agent_orchestration_phase2/schemas/validation-report.schema.json" },
-    "agentOrchestrationCalculatorReceiptV1": { "$ref": "../agent_orchestration_phase2/schemas/calculator-receipt.schema.json" },
-    "agentOrchestrationIdempotencyRetentionPolicyV1": { "$ref": "../agent_orchestration_phase2/schemas/idempotency-retention-policy.schema.json" },
+    "agentOrchestrationValidationReportV1": {
+      "$ref": "../agent_orchestration_phase2/schemas/validation-report.schema.json"
+    },
+    "agentOrchestrationCalculatorReceiptV1": {
+      "$ref": "../agent_orchestration_phase2/schemas/calculator-receipt.schema.json"
+    },
+    "agentOrchestrationIdempotencyRetentionPolicyV1": {
+      "$ref": "../agent_orchestration_phase2/schemas/idempotency-retention-policy.schema.json"
+    },
     "agentOrchestrationModelProfileV2": { "$ref": "../agent_orchestration_phase2/schemas/model-profile.schema.json" },
     "agentOrchestrationEngineProfileV2": { "$ref": "../agent_orchestration_phase2/schemas/engine-profile.schema.json" },
     "agentOrchestrationDeviceProfileV2": { "$ref": "../agent_orchestration_phase2/schemas/device-profile.schema.json" },
-    "agentOrchestrationTopologyProfileV2": { "$ref": "../agent_orchestration_phase2/schemas/topology-profile.schema.json" },
-    "agentOrchestrationWorkloadProfileV2": { "$ref": "../agent_orchestration_phase2/schemas/workload-profile.schema.json" }
+    "agentOrchestrationTopologyProfileV2": {
+      "$ref": "../agent_orchestration_phase2/schemas/topology-profile.schema.json"
+    },
+    "agentOrchestrationWorkloadProfileV2": {
+      "$ref": "../agent_orchestration_phase2/schemas/workload-profile.schema.json"
+    }
   }
 }

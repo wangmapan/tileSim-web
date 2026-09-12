@@ -78,8 +78,12 @@ if ($manifest.web_release_root_windows) {
     $webStateRootWsl = $webRootWsl
 }
 
-& wsl.exe -d $WslDistro --exec sh -lc "fuser -k 5173/tcp >/dev/null 2>&1 || true"
-if ($LASTEXITCODE -ne 0) { throw "Could not stop the previous TileSim Web bridge on port 5173." }
+$stopProcess = Start-Process -FilePath $wslCommand.Source `
+    -ArgumentList @("-d", $WslDistro, "--exec", "sh", "-lc", "fuser -k 5173/tcp >/dev/null 2>&1 || true") `
+    -WindowStyle Hidden -Wait -PassThru
+if ($stopProcess.ExitCode -ne 0 -and (Get-NetTCPConnection -LocalPort 5173 -State Listen -ErrorAction SilentlyContinue)) {
+    throw "Could not stop the previous TileSim Web bridge on port 5173."
+}
 Start-Sleep -Milliseconds 350
 
 $arguments = @(
