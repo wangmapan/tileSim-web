@@ -83,8 +83,8 @@ Tauri production build、packaged self-check、原生窗口截图和 Windows 路
 
 已验收产物：
 
-- 根目录中文 EXE：`104,747,008` bytes，SHA-256 `B853EFA0B507B0EE17CB8D38879584666297016566A3FE8D0AD27CCA09272507`；
-- NSIS：`TileSim 工作台_0.1.0_x64-setup.exe`，`26,052,341` bytes，SHA-256 `FD079085D577F8B123AC411B565571C75B271DB27336CD60A2833C3737F812C8`；
+- 根目录中文 EXE：`104,746,496` bytes，SHA-256 `F9E1BA2A3BD7882AC2EEBDF26C2ED324A9E9717CA63A14398D4AF79428807DD8`；
+- NSIS：`TileSim 工作台_0.1.0_x64-setup.exe`，`26,040,697` bytes，SHA-256 `182462A2A6F4608CA535BF0A53E2B9F333FBC24342A597E7CB14BAA7F795DE6F`；
 - packaged self-check：`ready=true`，从 EXE 目录解析 checkout、内置 Node、无 Node PATH 和 WebView2 均通过；
 - 上一版 Tauri fallback：`runtime/launcher-fallback/启动TileSim工作台.previous-20260912-103905-25724.exe`；
 - 原生浅色与深色窗口截图：保存在被 Git 忽略的 `runtime/launcher-tauri-build/native-light.png` 与 `native-dark.png`。

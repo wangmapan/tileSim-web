@@ -77,10 +77,10 @@
 - deployment portability：1 file / 9 tests 通过，包含 Rust verbatim drive path 转 WSL path 回归；
 - Rust stable MSVC 1.98.1、Visual Studio Build Tools 2022 17.14.40、Windows SDK 10.0.26100.0：安装并验证；
 - `cargo fmt --check`：通过；严格 clippy：通过；`cargo test`：12/12 通过；`Cargo.lock`：已生成；
-- Tauri production build 与 NSIS：通过；NSIS 安装包 `26,052,341` bytes，SHA-256 `FD079085D577F8B123AC411B565571C75B271DB27336CD60A2833C3737F812C8`；
+- Tauri production build 与 NSIS：通过；NSIS 安装包 `26,040,697` bytes，SHA-256 `182462A2A6F4608CA535BF0A53E2B9F333FBC24342A597E7CB14BAA7F795DE6F`；
 - packaged self-check：通过，`ready=true`、内置 Node SHA-256 `3602f2bb1a10f2cbab4c36886218a33c1ab3db87290e73b033c46c77147d0237`、无 Node PATH 与三个安全负面断言均通过；
 - 原生 Windows 截图：浅色/深色逐图通过，保存在 ignored runtime；
-- 新 EXE：`D:\tileSim-web-launcher-tauri-v2\启动TileSim工作台.exe` 与正式入口 `D:\tileSim-web\启动TileSim工作台.exe`，`104,747,008` bytes，SHA-256 `B853EFA0B507B0EE17CB8D38879584666297016566A3FE8D0AD27CCA09272507`；上一版 Tauri EXE 已原子保存在 ignored `runtime/launcher-fallback/`。
+- 新 EXE：`D:\tileSim-web-launcher-tauri-v2\启动TileSim工作台.exe` 与正式入口 `D:\tileSim-web\启动TileSim工作台.exe`，`104,746,496` bytes，SHA-256 `F9E1BA2A3BD7882AC2EEBDF26C2ED324A9E9717CA63A14398D4AF79428807DD8`；上一版 Tauri EXE 已原子保存在 ignored `runtime/launcher-fallback/`。
 
 ## 负面确认
 

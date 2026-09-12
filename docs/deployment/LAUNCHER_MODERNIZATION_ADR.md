@@ -68,7 +68,7 @@ Rust 层只暴露固定的 typed command，并通过参数数组调用已存在�
 - WebView2 Evergreen Runtime 实际版本为 `152.0.4191.66`；原探测使用了错误的 EdgeUpdate Client GUID，现已改为官方 WebView2 GUID 并由 packaged self-check 验证；
 - 经项目所有者授权，已安装 Rust stable MSVC `1.98.1`、Visual Studio Build Tools 2022 `17.14.40`、C++ x64/x86 工具与 Windows SDK `10.0.26100.0`；
 - `cargo fmt --check`、严格 clippy 和 `cargo test`（12/12）通过，`Cargo.lock` 已生成；
-- Tauri release 和 NSIS 均成功；根目录中文 EXE 为 `104,747,008` bytes，SHA-256 为 `B853EFA0B507B0EE17CB8D38879584666297016566A3FE8D0AD27CCA09272507`；
+- Tauri release 和 NSIS 均成功；根目录中文 EXE 为 `104,746,496` bytes，SHA-256 为 `F9E1BA2A3BD7882AC2EEBDF26C2ED324A9E9717CA63A14398D4AF79428807DD8`；
 - packaged self-check 通过，确认从 EXE 目录解析 checkout、内置 Node、无 Node PATH、WebView2 和三个安全负面断言；
 - 原生浅色与深色窗口已逐图验收，截图保存在被 Git 忽略的 `runtime/launcher-tauri-build/`。
 
