@@ -42,8 +42,19 @@ pub fn powershell_utf8_runner() -> &'static str {
 [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $OutputEncoding = [Console]::OutputEncoding
-$launcherArguments = @($env:TILESIM_LAUNCHER_ARGUMENTS_JSON | ConvertFrom-Json)
-& $env:TILESIM_LAUNCHER_SCRIPT @launcherArguments"#
+$launcherArguments = ConvertFrom-Json -InputObject $env:TILESIM_LAUNCHER_ARGUMENTS_JSON
+$namedArguments = @{}
+for ($index = 0; $index -lt $launcherArguments.Count; $index++) {
+    $key = [string]$launcherArguments[$index]
+    if (-not $key.StartsWith('-')) { throw "Invalid launcher argument key: $key" }
+    $key = $key.TrimStart('-')
+    if ($index + 1 -lt $launcherArguments.Count -and -not ([string]$launcherArguments[$index + 1]).StartsWith('-')) {
+        $namedArguments[$key] = [string]$launcherArguments[++$index]
+    } else {
+        $namedArguments[$key] = $true
+    }
+}
+& $env:TILESIM_LAUNCHER_SCRIPT @namedArguments"#
 }
 
 pub fn encode_powershell_arguments(arguments: &[String]) -> String {
@@ -97,7 +108,7 @@ mod tests {
             .env(POWERSHELL_SCRIPT_ENV, "Write-Output")
             .env(
                 POWERSHELL_ARGUMENTS_ENV,
-                encode_powershell_arguments(&["位置".into()]),
+                encode_powershell_arguments(&["-InputObject".into(), "位置".into()]),
             )
             .output()
             .expect("run Windows PowerShell UTF-8 fixture");
