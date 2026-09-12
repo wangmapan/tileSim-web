@@ -120,6 +120,386 @@ export type S7RunBoundDesEvidenceV1 = {
     provenance: Provenance;
   };
 };
+export type HttpsTilesimLocalContractsAgentOrchestrationPhase2RunIntakeSchemaJson = {
+  [k: string]: unknown;
+} & {
+  schema_identity: "tilesim.bridge.agent_orchestration_run_intake.v2";
+  schema_revision: string;
+  intake_id: string;
+  canonical_digest: string;
+  profile_binding: HttpsTilesimLocalContractsAgentOrchestrationPhase2ProfileBindingSchemaJson;
+  device_count: string;
+  parallelism: {
+    tensor: string;
+    pipeline: string;
+    expert: string;
+  };
+  placement: {
+    policy_identity: string;
+    policy_revision: string;
+    /**
+     * @minItems 1
+     */
+    assignments: [
+      {
+        rank: string;
+        device_id: string;
+        endpoint_id: string;
+      },
+      ...{
+        rank: string;
+        device_id: string;
+        endpoint_id: string;
+      }[],
+    ];
+  };
+  kv_cache: {
+    policy_reference: StableReference;
+    capacity_bytes: string;
+  };
+  collective_policy: StableReference;
+  workload: {
+    template_reference: ProfileReference & {
+      family?: "workload";
+      identity?: "tilesim.bridge.agent_orchestration_workload_profile.v2";
+      [k: string]: unknown;
+    };
+    allowed_overrides: {
+      pointer: string;
+      value: string;
+      unit: string | null;
+      provenance_kind: "user_supplied";
+    }[];
+  };
+  topology_network_binding: {
+    topology_reference: ProfileReference & {
+      family?: "topology";
+      identity?: "tilesim.bridge.agent_orchestration_topology_profile.v2";
+      [k: string]: unknown;
+    };
+    network_policy_reference: StableReference;
+  };
+  requested_fidelity: "Analytical" | "DES" | "Cycle";
+  gpu_participation_mode: "gpu_free" | "gpu_assisted_trace" | "gpu_in_loop";
+  trace_source: {
+    mode: "real_trace" | "synthetic_trace" | "compatibility_harness_trace";
+    reference: StableReference;
+    allowed_claim_scope:
+      | "exploration"
+      | "synthetic_consistency"
+      | "limited_extrapolation"
+      | "similar_regime_conditional_prediction"
+      | "real_calibrated_validation";
+  };
+  slos: {
+    metric_identity: string;
+    scope: "request" | "run" | "network";
+    operator: "lte" | "gte";
+    target: string;
+    unit: string;
+    window: string;
+  }[];
+  budget: {
+    candidate_count: string;
+    run_count: string;
+    simulation_time_ps: string;
+    wall_time_ps: string;
+  };
+};
+export type HttpsTilesimLocalContractsAgentOrchestrationPhase2CalculatorReceiptSchemaJson = {
+  schema_identity: "tilesim.bridge.agent_orchestration_calculator_receipt_envelope.v1";
+  schema_revision: string;
+  receipt_identity: string;
+  receipt_revision: string;
+  receipt_type:
+    | "model_weight_memory"
+    | "kv_capacity"
+    | "parallelism"
+    | "placement"
+    | "collective_network"
+    | "workload_distribution"
+    | "slo_budget";
+  calculator_identity: string;
+  algorithm_revision: string;
+  /**
+   * @minItems 1
+   */
+  input_references: [StableReference, ...StableReference[]];
+  /**
+   * @minItems 1
+   */
+  units: [string, ...string[]];
+  result:
+    | {
+        kind: "exact";
+        value: string;
+        unit: string;
+      }
+    | {
+        kind: "interval";
+        lower: string;
+        upper: string;
+        unit: string;
+        confidence: string;
+      }
+    | {
+        kind: "unknown";
+        reason_code: string;
+      };
+  rounding_policy: "exact" | "floor" | "ceiling" | "half_even" | "outward_interval";
+  assumptions: string[];
+  uncertainty: {
+    kind: "none" | "bounded" | "unbounded";
+    description: string;
+  };
+  /**
+   * @minItems 1
+   */
+  rule_ids: [string, ...string[]];
+  repair_candidates: {
+    action_identity: string;
+    target_pointer: string;
+    safe: boolean;
+    description: string;
+  }[];
+  claim_scope_ceiling:
+    | "exploration"
+    | "synthetic_consistency"
+    | "limited_extrapolation"
+    | "similar_regime_conditional_prediction"
+    | "real_calibrated_validation";
+  typed_facts: {
+    primary_quantity: string;
+    constraint_status: "satisfied" | "violated" | "unknown";
+  };
+} & (
+  | {
+      receipt_type?: "model_weight_memory";
+      receipt_identity?: "tilesim.bridge.agent_orchestration_model_weight_memory_receipt.v1";
+      [k: string]: unknown;
+    }
+  | {
+      receipt_type?: "kv_capacity";
+      receipt_identity?: "tilesim.bridge.agent_orchestration_kv_capacity_receipt.v1";
+      [k: string]: unknown;
+    }
+  | {
+      receipt_type?: "parallelism";
+      receipt_identity?: "tilesim.bridge.agent_orchestration_parallelism_receipt.v1";
+      [k: string]: unknown;
+    }
+  | {
+      receipt_type?: "placement";
+      receipt_identity?: "tilesim.bridge.agent_orchestration_placement_receipt.v1";
+      [k: string]: unknown;
+    }
+  | {
+      receipt_type?: "collective_network";
+      receipt_identity?: "tilesim.bridge.agent_orchestration_collective_network_receipt.v1";
+      [k: string]: unknown;
+    }
+  | {
+      receipt_type?: "workload_distribution";
+      receipt_identity?: "tilesim.bridge.agent_orchestration_workload_distribution_receipt.v1";
+      [k: string]: unknown;
+    }
+  | {
+      receipt_type?: "slo_budget";
+      receipt_identity?: "tilesim.bridge.agent_orchestration_slo_budget_receipt.v1";
+      [k: string]: unknown;
+    }
+);
+export type HttpsTilesimLocalContractsAgentOrchestrationPhase2ModelProfileSchemaJson = ProfileEnvelope & {
+  schema_identity?: "tilesim.bridge.agent_orchestration_model_profile.v2";
+  profile_family?: "model";
+  facts?: {
+    architecture: Fact & {
+      value?: string;
+      [k: string]: unknown;
+    };
+    parameter_count: Fact & {
+      value?: string;
+      [k: string]: unknown;
+    };
+    layer_count: Fact & {
+      value?: string;
+      [k: string]: unknown;
+    };
+    hidden_size: Fact & {
+      value?: string;
+      [k: string]: unknown;
+    };
+    expert_structure: Fact & {
+      value?: string;
+      [k: string]: unknown;
+    };
+    tensor_layout: Fact & {
+      value?: string;
+      [k: string]: unknown;
+    };
+  };
+  [k: string]: unknown;
+};
+export type ProfileEnvelope = {
+  [k: string]: unknown;
+} & {
+  schema_identity: string;
+  schema_revision: string;
+  profile_family: "model" | "engine" | "device" | "topology" | "workload";
+  profile_id: string;
+  profile_revision: string;
+  canonical_digest: string;
+  display: {
+    name: string;
+    description: string;
+    labels: string[];
+  };
+  source_reference: string;
+  source_kind:
+    | "real_trace"
+    | "synthetic_trace"
+    | "compatibility_harness_trace"
+    | "reviewed_registry"
+    | "vendor_specification"
+    | "user_input";
+  license: {
+    spdx_id: string;
+    redistribution_allowed: boolean;
+    notice_reference?: string | null;
+  };
+  valid_regime: {
+    description: string;
+    /**
+     * @minItems 1
+     */
+    constraints: [string, ...string[]];
+  };
+  lifecycle: {
+    introduced_at: string;
+    updated_at: string;
+    expires_at: string | null;
+    status: "available" | "deprecated" | "expired" | "revoked" | "unavailable";
+  };
+  calibration_status: "not_applicable" | "missing" | "fixture_consistency_only" | "calibrated";
+  calibration_binding: StableReference | null;
+  held_out_validation_status: "missing" | "fixture_consistency_only" | "validated";
+  held_out_validation_binding: StableReference | null;
+  allowed_claim_scope:
+    | "exploration"
+    | "synthetic_consistency"
+    | "limited_extrapolation"
+    | "similar_regime_conditional_prediction"
+    | "real_calibrated_validation";
+  sensitivity: "public" | "internal" | "restricted";
+  visibility: "catalog" | "project" | "private";
+  facts: {
+    [k: string]: unknown;
+  };
+};
+export type HttpsTilesimLocalContractsAgentOrchestrationPhase2EngineProfileSchemaJson = ProfileEnvelope & {
+  schema_identity?: "tilesim.bridge.agent_orchestration_engine_profile.v2";
+  profile_family?: "engine";
+  facts?: {
+    engine_name: Fact & {
+      value?: string;
+      [k: string]: unknown;
+    };
+    engine_version: Fact & {
+      value?: string;
+      [k: string]: unknown;
+    };
+    semantic_profile: Fact & {
+      value?: string;
+      [k: string]: unknown;
+    };
+    batching_policy: Fact & {
+      value?: string;
+      [k: string]: unknown;
+    };
+    supported_features: Fact & {
+      value?: string[];
+      [k: string]: unknown;
+    };
+  };
+  [k: string]: unknown;
+};
+export type HttpsTilesimLocalContractsAgentOrchestrationPhase2DeviceProfileSchemaJson = ProfileEnvelope & {
+  schema_identity?: "tilesim.bridge.agent_orchestration_device_profile.v2";
+  profile_family?: "device";
+  facts?: {
+    device_model: Fact & {
+      value?: string;
+      [k: string]: unknown;
+    };
+    memory_capacity_bytes: Fact & {
+      value?: string;
+      [k: string]: unknown;
+    };
+    compute_profile_reference: Fact & {
+      value?: string;
+      [k: string]: unknown;
+    };
+    interconnect_endpoints: Fact & {
+      value?: string;
+      [k: string]: unknown;
+    };
+  };
+  [k: string]: unknown;
+};
+export type HttpsTilesimLocalContractsAgentOrchestrationPhase2TopologyProfileSchemaJson = ProfileEnvelope & {
+  schema_identity?: "tilesim.bridge.agent_orchestration_topology_profile.v2";
+  profile_family?: "topology";
+  facts?: {
+    topology_kind: Fact & {
+      value?: string;
+      [k: string]: unknown;
+    };
+    endpoint_count: Fact & {
+      value?: string;
+      [k: string]: unknown;
+    };
+    link_bandwidth_gbps: Fact & {
+      value?: string;
+      [k: string]: unknown;
+    };
+    link_latency_ps: Fact & {
+      value?: string;
+      [k: string]: unknown;
+    };
+    routing_policy: Fact & {
+      value?: string;
+      [k: string]: unknown;
+    };
+  };
+  [k: string]: unknown;
+};
+export type HttpsTilesimLocalContractsAgentOrchestrationPhase2WorkloadProfileSchemaJson = ProfileEnvelope & {
+  schema_identity?: "tilesim.bridge.agent_orchestration_workload_profile.v2";
+  profile_family?: "workload";
+  facts?: {
+    template_kind: Fact & {
+      value?: string;
+      [k: string]: unknown;
+    };
+    request_count: Fact & {
+      value?: string;
+      [k: string]: unknown;
+    };
+    input_tokens: Fact & {
+      value?: string;
+      [k: string]: unknown;
+    };
+    output_tokens: Fact & {
+      value?: string;
+      [k: string]: unknown;
+    };
+    arrival_process: Fact & {
+      value?: string;
+      [k: string]: unknown;
+    };
+  };
+  [k: string]: unknown;
+};
 
 export interface BridgeApiContracts {
   manifest?: ApiManifestResponse;
@@ -149,6 +529,16 @@ export interface BridgeApiContracts {
   evidenceAgentResponse?: EvidenceAgentResponse;
   evidenceAgentCitation?: EvidenceAgentCitation;
   agentOrchestrationCapabilitySnapshot?: AgentOrchestrationCapabilitySnapshot;
+  agentOrchestrationProfileBindingV1?: HttpsTilesimLocalContractsAgentOrchestrationPhase2ProfileBindingSchemaJson;
+  agentOrchestrationRunIntakeV2?: HttpsTilesimLocalContractsAgentOrchestrationPhase2RunIntakeSchemaJson;
+  agentOrchestrationValidationReportV1?: HttpsTilesimLocalContractsAgentOrchestrationPhase2ValidationReportSchemaJson;
+  agentOrchestrationCalculatorReceiptV1?: HttpsTilesimLocalContractsAgentOrchestrationPhase2CalculatorReceiptSchemaJson;
+  agentOrchestrationIdempotencyRetentionPolicyV1?: HttpsTilesimLocalContractsAgentOrchestrationPhase2IdempotencyRetentionPolicySchemaJson;
+  agentOrchestrationModelProfileV2?: HttpsTilesimLocalContractsAgentOrchestrationPhase2ModelProfileSchemaJson;
+  agentOrchestrationEngineProfileV2?: HttpsTilesimLocalContractsAgentOrchestrationPhase2EngineProfileSchemaJson;
+  agentOrchestrationDeviceProfileV2?: HttpsTilesimLocalContractsAgentOrchestrationPhase2DeviceProfileSchemaJson;
+  agentOrchestrationTopologyProfileV2?: HttpsTilesimLocalContractsAgentOrchestrationPhase2TopologyProfileSchemaJson;
+  agentOrchestrationWorkloadProfileV2?: HttpsTilesimLocalContractsAgentOrchestrationPhase2WorkloadProfileSchemaJson;
 }
 export interface ApiManifestResponse {
   schema_version: "tilesim.bridge.manifest.v1";
@@ -1942,6 +2332,203 @@ export interface NotExposedCapability {
     | "slo";
   state: "not_exposed";
   reason_code: "not_exposed_to_agent";
+}
+export interface HttpsTilesimLocalContractsAgentOrchestrationPhase2ProfileBindingSchemaJson {
+  schema_identity: "tilesim.bridge.agent_orchestration_profile_binding.v1";
+  schema_revision: string;
+  binding_id: string;
+  binding_digest: string;
+  model: ProfileReference & {
+    family?: "model";
+    identity?: "tilesim.bridge.agent_orchestration_model_profile.v2";
+    [k: string]: unknown;
+  };
+  engine: ProfileReference & {
+    family?: "engine";
+    identity?: "tilesim.bridge.agent_orchestration_engine_profile.v2";
+    [k: string]: unknown;
+  };
+  device: ProfileReference & {
+    family?: "device";
+    identity?: "tilesim.bridge.agent_orchestration_device_profile.v2";
+    [k: string]: unknown;
+  };
+  topology: ProfileReference & {
+    family?: "topology";
+    identity?: "tilesim.bridge.agent_orchestration_topology_profile.v2";
+    [k: string]: unknown;
+  };
+  workload: ProfileReference & {
+    family?: "workload";
+    identity?: "tilesim.bridge.agent_orchestration_workload_profile.v2";
+    [k: string]: unknown;
+  };
+  fidelity: "Analytical" | "DES" | "Cycle";
+  gpu_participation_mode: "gpu_free" | "gpu_assisted_trace" | "gpu_in_loop";
+}
+export interface ProfileReference {
+  family: "model" | "engine" | "device" | "topology" | "workload";
+  profile_id: string;
+  identity: string;
+  revision: string;
+  digest: string;
+}
+export interface StableReference {
+  identity: string;
+  revision: string;
+  digest: string;
+}
+export interface HttpsTilesimLocalContractsAgentOrchestrationPhase2ValidationReportSchemaJson {
+  schema_identity: "tilesim.bridge.agent_orchestration_validation_report.v1";
+  schema_revision: string;
+  report_id: string;
+  report_digest: string;
+  input_binding: {
+    kind: "draft" | "run_intake";
+    identity: string;
+    revision: string;
+    digest: string;
+  };
+  profile_snapshot_binding: StableReference;
+  capability_snapshot_binding: StableReference;
+  backend_binding: {
+    backend_revision: string;
+    schema_set_revision: string;
+  };
+  validation_policy_revision: string;
+  overall_status: "valid" | "invalid" | "infeasible" | "unsupported" | "unknown" | "stale" | "internal_failure";
+  issues: Issue[];
+  /**
+   * @minItems 1
+   */
+  calculator_receipts: [
+    HttpsTilesimLocalContractsAgentOrchestrationPhase2CalculatorReceiptSchemaJson,
+    ...HttpsTilesimLocalContractsAgentOrchestrationPhase2CalculatorReceiptSchemaJson[],
+  ];
+  compiled_request_preview: {
+    target_identity: string;
+    target_revision: string;
+    canonical_payload_digest: string;
+    redacted_payload: {
+      [k: string]: unknown;
+    };
+  };
+  field_to_pointer_map: {
+    source_field: string;
+    target_pointer: string;
+  }[];
+  candidate_plan: {
+    candidate_count: string;
+    run_count: string;
+    planning_status: "ready" | "blocked" | "unknown";
+  };
+  budget: {
+    requested_runs: string;
+    accepted_runs: string;
+    wall_time_ps: string;
+    status: "within_budget" | "exceeded" | "unknown";
+  };
+  claim_scope_ceiling:
+    | "exploration"
+    | "synthetic_consistency"
+    | "limited_extrapolation"
+    | "similar_regime_conditional_prediction"
+    | "real_calibrated_validation";
+  stale_binding: {
+    is_stale: boolean;
+    reasons: (
+      | "profile_revision_or_digest_changed"
+      | "capability_snapshot_changed"
+      | "backend_or_schema_revision_changed"
+      | "validation_policy_changed"
+      | "calculator_algorithm_changed"
+      | "workload_template_changed"
+      | "compiled_request_changed"
+      | "approval_missing_or_expired"
+    )[];
+    /**
+     * @minItems 8
+     */
+    checked_bindings: [string, string, string, string, string, string, string, string, ...string[]];
+  };
+}
+export interface Issue {
+  rule_id: string;
+  category:
+    | "invalid"
+    | "infeasible"
+    | "unsupported"
+    | "unknown"
+    | "stale"
+    | "profile_missing"
+    | "revision_mismatch"
+    | "calibration_missing"
+    | "evidence_scope_insufficient"
+    | "lowering_missing"
+    | "budget_exceeded"
+    | "calculator_unavailable"
+    | "internal_failure";
+  severity: "info" | "warning" | "error" | "fatal";
+  blocking: boolean;
+  status: "open" | "resolved" | "waived" | "not_applicable";
+  field_references: string[];
+  profile_references: ProfileReference[];
+  facts: {
+    [k: string]: string | boolean | null;
+  };
+  repair_candidates: {
+    action_identity: string;
+    description: string;
+    safe: boolean;
+  }[];
+  supporting_receipt: StableReference | null;
+  retryable: boolean;
+  safe_next_action: string;
+}
+export interface HttpsTilesimLocalContractsAgentOrchestrationPhase2IdempotencyRetentionPolicySchemaJson {
+  schema_identity: "tilesim.bridge.agent_orchestration_idempotency_retention_policy.v1";
+  schema_revision: string;
+  canonicalization_identity: "tilesim.bridge.canonical_json.v1";
+  idempotency: {
+    same_key_same_payload: "exact_replay_or_terminal_not_retained";
+    same_key_different_payload: "reject_409_idempotency_payload_mismatch";
+    version_change: "different_payload_reject_same_key";
+    profile_revision_change: "different_payload_reject_same_key";
+    crash_retry: "resume_or_terminalize_without_duplicate_side_effect";
+  };
+  retention: {
+    retained_result: "exact_replay_with_original_contract_identity";
+    not_retained_result: "reject_terminal_not_retained";
+    delete: "tombstone_key_without_payload_or_result";
+    expiry: "tombstone_key_without_payload_or_result";
+  };
+  /**
+   * @minItems 3
+   */
+  forbidden_persistence: [
+    "credential" | "hidden_reasoning" | "raw_provider_response",
+    "credential" | "hidden_reasoning" | "raw_provider_response",
+    "credential" | "hidden_reasoning" | "raw_provider_response",
+    ...("credential" | "hidden_reasoning" | "raw_provider_response")[],
+  ];
+}
+export interface Fact {
+  value: unknown;
+  unit: string | null;
+  provenance: FieldProvenance;
+}
+export interface FieldProvenance {
+  kind: "observed" | "externally_specified" | "inferred" | "modelled" | "user_supplied";
+  source_reference: string;
+  source_field: string;
+  observed_at?: string | null;
+  confidence?: string;
+  evidence_scope:
+    | "exploration"
+    | "synthetic_consistency"
+    | "limited_extrapolation"
+    | "similar_regime_conditional_prediction"
+    | "real_calibrated_validation";
 }
 
 export interface HealthResponse {

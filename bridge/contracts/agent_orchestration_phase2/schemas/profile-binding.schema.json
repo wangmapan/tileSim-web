@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/agent-orchestration-phase2/profile-binding.schema.json",
+  "x-tilesim-contract-status": "published",
+  "x-tilesim-schema-identity": "tilesim.bridge.agent_orchestration_profile_binding.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_identity",
+    "schema_revision",
+    "binding_id",
+    "binding_digest",
+    "model",
+    "engine",
+    "device",
+    "topology",
+    "workload",
+    "fidelity",
+    "gpu_participation_mode"
+  ],
+  "properties": {
+    "schema_identity": { "const": "tilesim.bridge.agent_orchestration_profile_binding.v1" },
+    "schema_revision": { "$ref": "common.schema.json#/$defs/sha256" },
+    "binding_id": { "$ref": "common.schema.json#/$defs/stableId" },
+    "binding_digest": { "$ref": "common.schema.json#/$defs/sha256" },
+    "model": {
+      "allOf": [
+        { "$ref": "common.schema.json#/$defs/profileReference" },
+        {
+          "properties": {
+            "family": { "const": "model" },
+            "identity": { "const": "tilesim.bridge.agent_orchestration_model_profile.v2" }
+          }
+        }
+      ]
+    },
+    "engine": {
+      "allOf": [
+        { "$ref": "common.schema.json#/$defs/profileReference" },
+        {
+          "properties": {
+            "family": { "const": "engine" },
+            "identity": { "const": "tilesim.bridge.agent_orchestration_engine_profile.v2" }
+          }
+        }
+      ]
+    },
+    "device": {
+      "allOf": [
+        { "$ref": "common.schema.json#/$defs/profileReference" },
+        {
+          "properties": {
+            "family": { "const": "device" },
+            "identity": { "const": "tilesim.bridge.agent_orchestration_device_profile.v2" }
+          }
+        }
+      ]
+    },
+    "topology": {
+      "allOf": [
+        { "$ref": "common.schema.json#/$defs/profileReference" },
+        {
+          "properties": {
+            "family": { "const": "topology" },
+            "identity": { "const": "tilesim.bridge.agent_orchestration_topology_profile.v2" }
+          }
+        }
+      ]
+    },
+    "workload": {
+      "allOf": [
+        { "$ref": "common.schema.json#/$defs/profileReference" },
+        {
+          "properties": {
+            "family": { "const": "workload" },
+            "identity": { "const": "tilesim.bridge.agent_orchestration_workload_profile.v2" }
+          }
+        }
+      ]
+    },
+    "fidelity": { "enum": ["Analytical", "DES", "Cycle"] },
+    "gpu_participation_mode": { "enum": ["gpu_free", "gpu_assisted_trace", "gpu_in_loop"] }
+  }
+}
+
+

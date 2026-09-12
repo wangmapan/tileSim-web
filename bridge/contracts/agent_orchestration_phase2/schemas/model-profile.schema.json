@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/agent-orchestration-phase2/model-profile.schema.json",
+  "x-tilesim-contract-status": "published",
+  "x-tilesim-schema-identity": "tilesim.bridge.agent_orchestration_model_profile.v2",
+  "allOf": [
+    { "$ref": "common.schema.json#/$defs/profileEnvelope" },
+    {
+      "properties": {
+        "schema_identity": { "const": "tilesim.bridge.agent_orchestration_model_profile.v2" },
+        "profile_family": { "const": "model" },
+        "facts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "architecture",
+            "parameter_count",
+            "layer_count",
+            "hidden_size",
+            "expert_structure",
+            "tensor_layout"
+          ],
+          "properties": {
+            "architecture": { "$ref": "common.schema.json#/$defs/stringFact" },
+            "parameter_count": { "$ref": "common.schema.json#/$defs/uint64Fact" },
+            "layer_count": { "$ref": "common.schema.json#/$defs/uint64Fact" },
+            "hidden_size": { "$ref": "common.schema.json#/$defs/uint64Fact" },
+            "expert_structure": { "$ref": "common.schema.json#/$defs/stringFact" },
+            "tensor_layout": { "$ref": "common.schema.json#/$defs/stringFact" }
+          }
+        }
+      }
+    }
+  ]
+}

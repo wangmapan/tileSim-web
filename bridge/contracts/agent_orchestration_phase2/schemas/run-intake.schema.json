@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/agent-orchestration-phase2/run-intake.schema.json",
+  "x-tilesim-contract-status": "published",
+  "x-tilesim-schema-identity": "tilesim.bridge.agent_orchestration_run_intake.v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_identity",
+    "schema_revision",
+    "intake_id",
+    "canonical_digest",
+    "profile_binding",
+    "device_count",
+    "parallelism",
+    "placement",
+    "kv_cache",
+    "collective_policy",
+    "workload",
+    "topology_network_binding",
+    "requested_fidelity",
+    "gpu_participation_mode",
+    "trace_source",
+    "slos",
+    "budget"
+  ],
+  "properties": {
+    "schema_identity": { "const": "tilesim.bridge.agent_orchestration_run_intake.v2" },
+    "schema_revision": { "$ref": "common.schema.json#/$defs/sha256" },
+    "intake_id": { "$ref": "common.schema.json#/$defs/stableId" },
+    "canonical_digest": { "$ref": "common.schema.json#/$defs/sha256" },
+    "profile_binding": { "$ref": "profile-binding.schema.json" },
+    "device_count": { "$ref": "common.schema.json#/$defs/positiveUint64" },
+    "parallelism": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tensor", "pipeline", "expert"],
+      "properties": {
+        "tensor": { "$ref": "common.schema.json#/$defs/positiveUint64" },
+        "pipeline": { "$ref": "common.schema.json#/$defs/positiveUint64" },
+        "expert": { "$ref": "common.schema.json#/$defs/positiveUint64" }
+      }
+    },
+    "placement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy_identity", "policy_revision", "assignments"],
+      "properties": {
+        "policy_identity": { "$ref": "common.schema.json#/$defs/stableId" },
+        "policy_revision": { "$ref": "common.schema.json#/$defs/sha256" },
+        "assignments": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["rank", "device_id", "endpoint_id"],
+            "properties": {
+              "rank": { "$ref": "common.schema.json#/$defs/uint64" },
+              "device_id": { "$ref": "common.schema.json#/$defs/stableId" },
+              "endpoint_id": { "$ref": "common.schema.json#/$defs/stableId" }
+            }
+          }
+        }
+      }
+    },
+    "kv_cache": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy_reference", "capacity_bytes"],
+      "properties": {
+        "policy_reference": { "$ref": "common.schema.json#/$defs/stableReference" },
+        "capacity_bytes": { "$ref": "common.schema.json#/$defs/uint64" }
+      }
+    },
+    "collective_policy": { "$ref": "common.schema.json#/$defs/stableReference" },
+    "workload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["template_reference", "allowed_overrides"],
+      "properties": {
+        "template_reference": {
+          "allOf": [
+            { "$ref": "common.schema.json#/$defs/profileReference" },
+            {
+              "properties": {
+                "family": { "const": "workload" },
+                "identity": { "const": "tilesim.bridge.agent_orchestration_workload_profile.v2" }
+              }
+            }
+          ]
+        },
+        "allowed_overrides": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["pointer", "value", "unit", "provenance_kind"],
+            "properties": {
+              "pointer": { "type": "string", "pattern": "^/" },
+              "value": { "type": "string", "minLength": 1 },
+              "unit": { "type": ["string", "null"] },
+              "provenance_kind": { "const": "user_supplied" }
+            }
+          }
+        }
+      }
+    },
+    "topology_network_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["topology_reference", "network_policy_reference"],
+      "properties": {
+        "topology_reference": {
+          "allOf": [
+            { "$ref": "common.schema.json#/$defs/profileReference" },
+            {
+              "properties": {
+                "family": { "const": "topology" },
+                "identity": { "const": "tilesim.bridge.agent_orchestration_topology_profile.v2" }
+              }
+            }
+          ]
+        },
+        "network_policy_reference": { "$ref": "common.schema.json#/$defs/stableReference" }
+      }
+    },
+    "requested_fidelity": { "enum": ["Analytical", "DES", "Cycle"] },
+    "gpu_participation_mode": { "enum": ["gpu_free", "gpu_assisted_trace", "gpu_in_loop"] },
+    "trace_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "reference", "allowed_claim_scope"],
+      "properties": {
+        "mode": { "enum": ["real_trace", "synthetic_trace", "compatibility_harness_trace"] },
+        "reference": { "$ref": "common.schema.json#/$defs/stableReference" },
+        "allowed_claim_scope": { "$ref": "common.schema.json#/$defs/claimScope" }
+      }
+    },
+    "slos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["metric_identity", "scope", "operator", "target", "unit", "window"],
+        "properties": {
+          "metric_identity": { "$ref": "common.schema.json#/$defs/stableId" },
+          "scope": { "enum": ["request", "run", "network"] },
+          "operator": { "enum": ["lte", "gte"] },
+          "target": { "$ref": "common.schema.json#/$defs/decimal" },
+          "unit": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "window": { "type": "string", "minLength": 1, "maxLength": 160 }
+        }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate_count", "run_count", "simulation_time_ps", "wall_time_ps"],
+      "properties": {
+        "candidate_count": { "$ref": "common.schema.json#/$defs/uint64" },
+        "run_count": { "$ref": "common.schema.json#/$defs/uint64" },
+        "simulation_time_ps": { "$ref": "common.schema.json#/$defs/uint64" },
+        "wall_time_ps": { "$ref": "common.schema.json#/$defs/uint64" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "trace_source": { "properties": { "mode": { "enum": ["synthetic_trace", "compatibility_harness_trace"] } } }
+        }
+      },
+      "then": {
+        "properties": {
+          "trace_source": {
+            "properties": { "allowed_claim_scope": { "enum": ["exploration", "synthetic_consistency"] } }
+          }
+        }
+      }
+    }
+  ]
+}
+
+

@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/agent-orchestration-phase2/idempotency-retention-policy.schema.json",
+  "x-tilesim-contract-status": "published",
+  "x-tilesim-schema-identity": "tilesim.bridge.agent_orchestration_idempotency_retention_policy.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_identity",
+    "schema_revision",
+    "canonicalization_identity",
+    "idempotency",
+    "retention",
+    "forbidden_persistence"
+  ],
+  "properties": {
+    "schema_identity": { "const": "tilesim.bridge.agent_orchestration_idempotency_retention_policy.v1" },
+    "schema_revision": { "$ref": "common.schema.json#/$defs/sha256" },
+    "canonicalization_identity": { "const": "tilesim.bridge.canonical_json.v1" },
+    "idempotency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "same_key_same_payload",
+        "same_key_different_payload",
+        "version_change",
+        "profile_revision_change",
+        "crash_retry"
+      ],
+      "properties": {
+        "same_key_same_payload": { "const": "exact_replay_or_terminal_not_retained" },
+        "same_key_different_payload": { "const": "reject_409_idempotency_payload_mismatch" },
+        "version_change": { "const": "different_payload_reject_same_key" },
+        "profile_revision_change": { "const": "different_payload_reject_same_key" },
+        "crash_retry": { "const": "resume_or_terminalize_without_duplicate_side_effect" }
+      }
+    },
+    "retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["retained_result", "not_retained_result", "delete", "expiry"],
+      "properties": {
+        "retained_result": { "const": "exact_replay_with_original_contract_identity" },
+        "not_retained_result": { "const": "reject_terminal_not_retained" },
+        "delete": { "const": "tombstone_key_without_payload_or_result" },
+        "expiry": { "const": "tombstone_key_without_payload_or_result" }
+      }
+    },
+    "forbidden_persistence": {
+      "type": "array",
+      "minItems": 3,
+      "contains": { "const": "credential" },
+      "items": { "enum": ["credential", "hidden_reasoning", "raw_provider_response"] },
+      "uniqueItems": true
+    }
+  }
+}
+
+

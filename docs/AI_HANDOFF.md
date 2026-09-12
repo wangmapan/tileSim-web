@@ -96,3 +96,9 @@ docs/archive/                    历史记录
 - fixture/live/calibration/held-out 各自状态；
 - 全部门禁和 skipped 项；
 - 是否操作 5173、credential、Provider、run、commit 和 push。
+
+## 9. Phase 2B Bridge 发布状态
+
+- Phase 2B 契约包已发布到 `bridge/contracts/agent_orchestration_phase2/`，包含五类 Profile v2、Binding、Run Intake、Validation、Calculator Receipt 与幂等/留存 policy。
+- 发布仅覆盖 Schema、严格 validator、manifest 与生成 TypeScript/Ajv；当前 `/api/runs` 不接受 Run Intake v2，真实 Profile、calculator、lowering、calibration 与 held-out validation 仍 unavailable。
+- 本次未操作 5173、credential、Provider 或正式 run，未 commit/push/deploy；交接状态为 `pre_commit_ready`。

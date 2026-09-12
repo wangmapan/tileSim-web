@@ -25,6 +25,7 @@ const agentOrchestrationCapabilityValidatorsOutputPath = resolve(
   "src/contracts/generated/agent-orchestration-capability-validators.js",
 );
 const evidenceAgentValidatorsOutputPath = resolve(root, "src/contracts/generated/evidence-agent-validators.js");
+const agentOrchestrationPhase2ValidatorsOutputPath = resolve(root, "src/contracts/generated/agent-orchestration-phase2-validators.js");
 const openapi = JSON.parse(await readFile(openapiPath, "utf8"));
 const createRunSchema = JSON.parse(await readFile(createRunSchemaPath, "utf8"));
 const experimentDescriptorSchema = JSON.parse(await readFile(experimentDescriptorSchemaPath, "utf8"));
@@ -301,6 +302,25 @@ const nextAgentOrchestrationCapabilityValidators = await format(
   },
 );
 
+const phase2SchemaDirectory = resolve(root, "bridge/contracts/agent_orchestration_phase2/schemas");
+const phase2SchemaNames = ["common.schema.json", "model-profile.schema.json", "engine-profile.schema.json", "device-profile.schema.json", "topology-profile.schema.json", "workload-profile.schema.json", "profile-binding.schema.json", "run-intake.schema.json", "validation-report.schema.json", "calculator-receipt.schema.json", "idempotency-retention-policy.schema.json"];
+const phase2Schemas = await Promise.all(phase2SchemaNames.map(async (name) => JSON.parse(await readFile(resolve(phase2SchemaDirectory, name), "utf8"))));
+const phase2Ajv = new Ajv2020({ allErrors: true, strict: false, code: { source: true, esm: true } });
+for (const schema of phase2Schemas) phase2Ajv.addSchema(schema);
+const phase2ValidatorIds = {
+  modelProfileV2: "https://tilesim.local/contracts/agent-orchestration-phase2/model-profile.schema.json",
+  engineProfileV2: "https://tilesim.local/contracts/agent-orchestration-phase2/engine-profile.schema.json",
+  deviceProfileV2: "https://tilesim.local/contracts/agent-orchestration-phase2/device-profile.schema.json",
+  topologyProfileV2: "https://tilesim.local/contracts/agent-orchestration-phase2/topology-profile.schema.json",
+  workloadProfileV2: "https://tilesim.local/contracts/agent-orchestration-phase2/workload-profile.schema.json",
+  profileBindingV1: "https://tilesim.local/contracts/agent-orchestration-phase2/profile-binding.schema.json",
+  runIntakeV2: "https://tilesim.local/contracts/agent-orchestration-phase2/run-intake.schema.json",
+  validationReportV1: "https://tilesim.local/contracts/agent-orchestration-phase2/validation-report.schema.json",
+  calculatorReceiptV1: "https://tilesim.local/contracts/agent-orchestration-phase2/calculator-receipt.schema.json",
+  idempotencyRetentionPolicyV1: "https://tilesim.local/contracts/agent-orchestration-phase2/idempotency-retention-policy.schema.json",
+};
+const nextPhase2Validators = await format("// Generated Ajv standalone Phase 2B validators. Do not edit by hand.\n/* eslint-disable */\n" + standaloneCode(phase2Ajv, phase2ValidatorIds).replace(/const (\w+) = require\(("[^"]+")\)\.default;/g, "import $1 from $2;"), { ...prettierConfig, filepath: agentOrchestrationPhase2ValidatorsOutputPath });
+
 function hasGeneratedDrift(current, generated) {
   return current.replaceAll("\r\n", "\n") !== generated.replaceAll("\r\n", "\n");
 }
@@ -312,6 +332,7 @@ if (process.argv.includes("--check")) {
   let currentExperimentValidators = "";
   let currentEvidenceAgentValidators = "";
   let currentAgentOrchestrationCapabilityValidators = "";
+  let currentPhase2Validators = "";
   try {
     currentTypes = await readFile(typesOutputPath, "utf8");
     currentClient = await readFile(clientOutputPath, "utf8");
@@ -322,6 +343,7 @@ if (process.argv.includes("--check")) {
       agentOrchestrationCapabilityValidatorsOutputPath,
       "utf8",
     );
+    currentPhase2Validators = await readFile(agentOrchestrationPhase2ValidatorsOutputPath, "utf8");
   } catch {
     // Missing output is reported as drift below.
   }
@@ -331,7 +353,8 @@ if (process.argv.includes("--check")) {
     hasGeneratedDrift(currentCreateRunSchema, nextCreateRunSchema) ||
     hasGeneratedDrift(currentExperimentValidators, nextExperimentValidators) ||
     hasGeneratedDrift(currentEvidenceAgentValidators, nextEvidenceAgentValidators) ||
-    hasGeneratedDrift(currentAgentOrchestrationCapabilityValidators, nextAgentOrchestrationCapabilityValidators)
+    hasGeneratedDrift(currentAgentOrchestrationCapabilityValidators, nextAgentOrchestrationCapabilityValidators) ||
+    hasGeneratedDrift(currentPhase2Validators, nextPhase2Validators)
   ) {
     process.stderr.write("Generated Bridge client is stale. Run pnpm contracts:generate.\n");
     process.exitCode = 1;
@@ -344,10 +367,12 @@ if (process.argv.includes("--check")) {
   await writeFile(experimentValidatorsOutputPath, nextExperimentValidators, "utf8");
   await writeFile(evidenceAgentValidatorsOutputPath, nextEvidenceAgentValidators, "utf8");
   await writeFile(agentOrchestrationCapabilityValidatorsOutputPath, nextAgentOrchestrationCapabilityValidators, "utf8");
+  await writeFile(agentOrchestrationPhase2ValidatorsOutputPath, nextPhase2Validators, "utf8");
   process.stdout.write(`Generated ${typesOutputPath}\n`);
   process.stdout.write(`Generated ${clientOutputPath}\n`);
   process.stdout.write(`Generated ${createRunSchemaOutputPath}\n`);
   process.stdout.write(`Generated ${experimentValidatorsOutputPath}\n`);
   process.stdout.write(`Generated ${evidenceAgentValidatorsOutputPath}\n`);
   process.stdout.write(`Generated ${agentOrchestrationCapabilityValidatorsOutputPath}\n`);
+  process.stdout.write(`Generated ${agentOrchestrationPhase2ValidatorsOutputPath}\n`);
 }

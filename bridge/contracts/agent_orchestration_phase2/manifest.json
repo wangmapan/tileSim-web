@@ -1,0 +1,21 @@
+{
+  "package_identity": "tilesim.bridge.agent_orchestration_phase2",
+  "publication_status": "published",
+  "package_revision": "sha256:59373c713f9570db857fabed29ff078e9458f7eeb28f8d559936cc95a3ecc8b6",
+  "runtime_status": "contract_only",
+  "create_run_acceptance": "not_accepted_by_current_api",
+  "calculator_status": "receipt_contract_only",
+  "validation_report_status": "schema_and_validator_only",
+  "profile_families": ["model", "engine", "device", "topology", "workload"],
+  "profile_records": {"model": [], "engine": [], "device": [], "topology": [], "workload": []},
+  "typed_receipt_identities": [
+    "tilesim.bridge.agent_orchestration_model_weight_memory_receipt.v1",
+    "tilesim.bridge.agent_orchestration_kv_capacity_receipt.v1",
+    "tilesim.bridge.agent_orchestration_parallelism_receipt.v1",
+    "tilesim.bridge.agent_orchestration_placement_receipt.v1",
+    "tilesim.bridge.agent_orchestration_collective_network_receipt.v1",
+    "tilesim.bridge.agent_orchestration_workload_distribution_receipt.v1",
+    "tilesim.bridge.agent_orchestration_slo_budget_receipt.v1"
+  ],
+  "blocked_runtime_enforcement": ["lowering_missing", "calculator_unavailable", "runtime_execution_unavailable", "calibration_missing", "held_out_validation_missing"]
+}

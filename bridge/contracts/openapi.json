@@ -142,6 +142,27 @@
       ],
       "catalog_revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
       "contract_package_revision": "sha256:1fa372e1fc4eafe5b819aedd29f258732b8a53fab6b9559e964f6ee1164a4fe3"
+    },
+    "agent_orchestration_phase2": {
+      "package_identity": "tilesim.bridge.agent_orchestration_phase2",
+      "package_revision": "sha256:59373c713f9570db857fabed29ff078e9458f7eeb28f8d559936cc95a3ecc8b6",
+      "publication_status": "published",
+      "runtime_status": "contract_only",
+      "create_run_acceptance": "not_accepted_by_current_api",
+      "profile_schema_identities": [
+        "tilesim.bridge.agent_orchestration_model_profile.v2",
+        "tilesim.bridge.agent_orchestration_engine_profile.v2",
+        "tilesim.bridge.agent_orchestration_device_profile.v2",
+        "tilesim.bridge.agent_orchestration_topology_profile.v2",
+        "tilesim.bridge.agent_orchestration_workload_profile.v2"
+      ],
+      "contract_schema_identities": [
+        "tilesim.bridge.agent_orchestration_profile_binding.v1",
+        "tilesim.bridge.agent_orchestration_run_intake.v2",
+        "tilesim.bridge.agent_orchestration_validation_report.v1",
+        "tilesim.bridge.agent_orchestration_calculator_receipt_envelope.v1",
+        "tilesim.bridge.agent_orchestration_idempotency_retention_policy.v1"
+      ]
     }
   },
   "paths": {
