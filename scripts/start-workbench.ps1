@@ -36,11 +36,24 @@ if ($ValidateOnly) {
 }
 
 if (-not $WithoutEvidenceAgent -and (Test-Path -LiteralPath $EvidenceAgentConfigPath)) {
-    & (Join-Path $PSScriptRoot "start-evidence-agent.ps1") `
-        -ConfigPath $EvidenceAgentConfigPath `
-        -ManifestPath $ManifestPath `
-        -TracePackageRoot $TracePackageRoot `
-        -WslDistro $WslDistro
+    try {
+        & (Join-Path $PSScriptRoot "start-evidence-agent.ps1") `
+            -ConfigPath $EvidenceAgentConfigPath `
+            -ManifestPath $ManifestPath `
+            -TracePackageRoot $TracePackageRoot `
+            -WslDistro $WslDistro
+    } catch {
+        $message = [string]$_.Exception.Message
+        if ($message -like "*authenticated capability probe*") {
+            [ordered]@{
+                availability = "mismatch"
+                configured = $true
+                warning = "The authenticated capability probe did not match the configured Provider, model, and revision. TileSim Web started without Evidence Agent; correct the model service settings and restart to enable it."
+            } | ConvertTo-Json -Compress
+            exit 0
+        }
+        throw
+    }
 } else {
     & (Join-Path $PSScriptRoot "start-backend.ps1") `
         -ManifestPath $ManifestPath `
