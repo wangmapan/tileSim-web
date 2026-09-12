@@ -22,6 +22,8 @@
 | `archive/`                | 已结束阶段、旧提示词和 dated evidence    | 无                              |
 | `development/`            | 旧链接兼容入口                           | 无                              |
 
+轻量工作台说明见 [`features/lightweight-workbench/README.md`](features/lightweight-workbench/README.md)。
+
 ## 更新规则
 
 - 当前状态只写入 `AI_HANDOFF.md` 和对应模块 current baseline。

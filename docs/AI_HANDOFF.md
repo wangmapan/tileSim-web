@@ -1,10 +1,21 @@
 # TileSim Web AI Handoff
 
-**事实日期**：2026-09-11
+**事实日期**：2026-09-12
 
 **产品范围**：电脑网页端、local Bridge、版本化契约和 Windows/WSL 本地部署
 
-**当前状态**：Phase 1 全局 Agent 侧栏、八字段本地草案、可移植部署入口与文档治理已发布；Phase 2 DoR 已审计并裁决为 `blocked`；未部署 5173
+**当前状态**：Phase 1 全局 Agent 侧栏、八字段本地草案、可移植部署入口与文档治理已发布；Phase 2B/2C 已发布并提交，Phase 2D Profile v2 registry 已达到 `pre_commit_ready`；未部署 5173。双工作台（轻量版 + 专业版）当前仅完成方案文档，状态为 `proposal / redesign_required`，等待产品确认后再实现。
+
+## 双工作台方案状态
+
+`docs/features/lightweight-workbench/` 已整理主页双入口、轻量独立 shell、信息架构、竞品调研、Agent 边界、状态/路由、安全留存、无障碍、验收和分阶段实施计划。现有轻量 feature/view 原型只能作为探索草稿；在方案确认前不得继续扩展其功能或把它当作最终产品。专业版现有路由、表单、Agent、Evidence 和 run 状态仍是回归基线。
+
+## Phase 2D handoff
+
+- 新增 `bridge/contracts/agent_orchestration_phase2/registry.py` 与 registry tests；它独立于 v1 Capability Catalog，发布五类 source-backed Profile v2 record、snapshot 和完整 binding。
+- 所有记录均 `runtime_status=unavailable`、`agent_exposed=false`、calculator/ranking 不可用；校准和 held-out 缺失，Phase 2C lowering 继续 fail closed。
+- registry 校验 source/license/regime、字段 provenance、生命周期、visibility/sensitivity、canonical digest、revision drift 和 stale snapshot；不得把 synthetic/compatibility 记录升级为真实校准证据。
+- 不新增 calculator、前端 UI、RAG、多轮、审批、Workflow、SSE/cancellation；不操作 5173、不读取 credential、不调用 Provider、不创建正式 run。Phase 2E 不启动。
 
 ## 1. 必读
 
@@ -102,3 +113,8 @@ docs/archive/                    历史记录
 - Phase 2B 契约包已发布到 `bridge/contracts/agent_orchestration_phase2/`，包含五类 Profile v2、Binding、Run Intake、Validation、Calculator Receipt 与幂等/留存 policy。
 - 发布仅覆盖 Schema、严格 validator、manifest 与生成 TypeScript/Ajv；当前 `/api/runs` 不接受 Run Intake v2，真实 Profile、calculator、lowering、calibration 与 held-out validation 仍 unavailable。
 - 本次未操作 5173、credential、Provider 或正式 run，未 commit/push/deploy；交接状态为 `pre_commit_ready`。
+
+## 10. Phase 2C 后端状态
+
+- 后端已接入 Run Intake v2 的严格 parser、placement/并行校验和只读 lowering preview；五类 Profile records 仍为 `0/unavailable`，因此 runtime 继续 fail closed。
+- 后端 `validate-run-intake` 不创建正式 run；物理 KV、workload template registry、真实 Profile、calculator、calibration、held-out validation 和 Phase 2D 仍未开放。

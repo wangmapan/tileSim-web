@@ -1,5 +1,21 @@
 # 交付路线图与工作包
 
+## Phase 2D 收口（2026-09-12）
+
+Phase 2D 已达到 `pre_commit_ready`：独立 Profile v2 registry/snapshot/binding 与 provenance、
+lifecycle、source/license/regime、visibility/sensitivity、stale/digest/revision fail-closed
+校验已实现并有模块测试。五类记录仍为 conditional/unavailable，未进入 Phase 2C runtime、calculator、
+ranking 或 agent exposure。Phase 2E 不在本阶段启动；后续必须先取得真实 calibration 与独立 held-out
+资产，再重审执行闭合度。
+
+## Phase 2E DoR 审计（2026-09-12）
+
+审计结论为 `blocked_data`，并列 `blocked_calibration`、`blocked_contract`、`blocked_backend`。五类
+registry entry 均 unavailable，calibration/held-out 缺失；calculator、Validation Report 和 typed receipt
+仍为 schema/validator/fixture-only，没有进入 lowering、执行、指标和 evidence 闭环。审计还发现 model
+reviewed-registry facts 的 provenance/claim-scope 不一致，以及 Python typed-fact uint64 overflow boundary
+不足；事实未被修改，Phase 2E implementation 与 Phase 2F 均不得启动。详见 [Phase 2E DoR 审计](25_PHASE2E_DOR_AUDIT.md)。
+
 > 文档 ID：`AO-12`
 >
 > 类型：实施计划（`proposed`）

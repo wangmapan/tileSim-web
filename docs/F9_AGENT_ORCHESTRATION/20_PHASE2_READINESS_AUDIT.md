@@ -5,6 +5,10 @@
 > 事实日期：2026-09-11
 >
 > 阶段状态：`blocked`（仅既有 Phase 1 八字段切片为 `partially_ready`）
+
+> 后续复审：Phase 2D registry 虽已达到 `pre_commit_ready`，Phase 2E DoR 复审仍为
+> `blocked_data`/`blocked_calibration`/`blocked_contract`/`blocked_backend`；见
+> [Phase 2E DoR 审计](25_PHASE2E_DOR_AUDIT.md)。
 >
 > Web 审计基线：`32a8703d66d9b4acd5ca6e4661a5608f6ce33720`
 >

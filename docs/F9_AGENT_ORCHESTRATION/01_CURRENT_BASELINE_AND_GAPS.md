@@ -36,6 +36,13 @@
 
 ## 2. 后端当前闭合程度
 
+### 2.0 Phase 2D 数据事实（2026-09-12）
+
+- 独立 `tilesim.bridge.agent_orchestration_profile_registry.v1` 已形成五条 source-backed Profile v2 record；v1 Capability Catalog 的五类实际 profile 仍为 `0/unavailable`。
+- registry 为每个字段保存 provenance，并校验 source kind、license、valid regime、lifecycle、canonical digest、snapshot revision 和完整五类 binding。
+- 当前五条记录均为 `conditional`、`runtime_status=unavailable`、`agent_exposed=false`、calculator/ranking 不可用；没有把 registry 数据升级为 Phase 2C 可执行 lowering。
+- synthetic/compatibility 记录仅允许 `synthetic_consistency`，calibration 和 held-out 均为 `missing`。详细验收见 [Phase 2D](24_PHASE2D_PROFILE_DATA_ACCEPTANCE.md)。
+
 ### 2.1 已有能力
 
 - Analytical 端到端功能闭环；

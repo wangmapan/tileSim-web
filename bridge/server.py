@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from api import responses
 from infra import identity
@@ -35,6 +35,11 @@ from providers import evidence_agent as evidence_agent_provider_contract
 
 from contracts import evidence_agent
 from contracts.agent_orchestration_capability import load_catalog
+from contracts.agent_orchestration_phase2.registry import (
+    build_snapshot as build_profile_snapshot,
+    load_registry as load_profile_registry,
+    query_profiles as query_profile_registry,
+)
 from contracts.experiment_descriptor import (
     DESIGN_SPACE_MODES,
     DESCRIPTOR_REVISION,
@@ -619,6 +624,21 @@ class BridgeHandler(SimpleHTTPRequestHandler):
                     retryable=False,
                 )
             return write_json(self, HTTPStatus.OK, snapshot)
+        if path == "/api/agent/orchestration-profiles":
+            query = parse_qs(urlparse(self.path).query)
+            family = query.get("family", [None])[0]
+            visibility = query.get("visibility", ["catalog"])[0]
+            sensitivity = query.get("sensitivity", ["public"])[0]
+            return write_json(self, HTTPStatus.OK, {
+                "schema_identity": "tilesim.bridge.agent_orchestration_profile_registry.v1",
+                "registry": load_profile_registry(),
+                "profiles": query_profile_registry(
+                    family=family, visibility=visibility, sensitivity=sensitivity,
+                    include_unavailable=True,
+                ),
+            })
+        if path == "/api/agent/orchestration-profile-snapshot":
+            return write_json(self, HTTPStatus.OK, build_profile_snapshot())
         if path == "/api/week7/evidence-map":
             return self.run_week7_operation("evidence_map")
         parts = path.strip("/").split("/")
