@@ -157,7 +157,9 @@ fn read_public_model_settings(web_root: &Path, node: &Path) -> ModelSnapshot {
 
 async fn fetch_health() -> Option<Value> {
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(2))
+        // WSL localhost relay can take several seconds to return the first
+        // response while the bridge warms its immutable-release checks.
+        .timeout(Duration::from_secs(10))
         .build()
         .ok()?;
     for attempt in 0..3 {
