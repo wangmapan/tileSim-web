@@ -63,6 +63,13 @@ pub fn classify_failure(output: &str) -> PublicError {
             output,
         );
     }
+    if lowered.contains("authenticated capability probe") {
+        return PublicError::new(
+            "模型服务能力校验未通过",
+            "打开“模型服务”，确认 Base URL、模型名和模型 revision 与 Provider 返回值完全一致后重新保存。若暂时不使用 Evidence Agent，请移除本地 Evidence Agent 配置后再启动。",
+            output,
+        );
+    }
     let detail = if output.trim().is_empty() {
         "PowerShell exited without readable output. Open the operation log and retry after refreshing the environment status."
     } else {
@@ -111,5 +118,14 @@ mod tests {
         let error = classify_failure("");
         assert_eq!(error.category, "本地操作失败");
         assert!(!error.technical_detail.trim().is_empty());
+    }
+
+    #[test]
+    fn capability_probe_failure_has_model_configuration_guidance() {
+        let error = classify_failure(
+            "The authenticated capability probe did not match the configured Provider, model, and revision.",
+        );
+        assert_eq!(error.category, "模型服务能力校验未通过");
+        assert!(error.action.contains("模型名"));
     }
 }
