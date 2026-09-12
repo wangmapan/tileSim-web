@@ -211,7 +211,15 @@ fn prepare_operation(
     match request {
         OperationRequest::Start { wsl_distro } => Ok(PreparedOperation {
             script: scripts.join("start-workbench.ps1"),
-            arguments: vec!["-WslDistro".into(), validate_wsl_distro(&wsl_distro)?],
+            arguments: vec![
+                "-ManifestPath".into(),
+                web_root
+                    .join("runtime/backend-current.json")
+                    .to_string_lossy()
+                    .into_owned(),
+                "-WslDistro".into(),
+                validate_wsl_distro(&wsl_distro)?,
+            ],
             secret_stdin: None,
             initial_phase: OperationPhase::Validating,
         }),

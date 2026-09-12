@@ -10,7 +10,12 @@ param(
 $ErrorActionPreference = "Stop"
 
 if (-not (Test-Path -LiteralPath $ManifestPath)) {
-    throw "No deployment manifest is available. Deploy a validated origin/main release before starting TileSim Web."
+    $fallbackManifestPath = Join-Path $PSScriptRoot "..\runtime\backend-current.json"
+    if (Test-Path -LiteralPath $fallbackManifestPath) {
+        $ManifestPath = $fallbackManifestPath
+    } else {
+        throw "No deployment manifest is available. Deploy a validated origin/main release before starting TileSim Web."
+    }
 }
 
 if ($ValidateOnly) {
