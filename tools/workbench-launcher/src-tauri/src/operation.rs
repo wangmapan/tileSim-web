@@ -10,6 +10,7 @@ use std::{
     },
     time::Instant,
 };
+
 use tauri::{AppHandle, Emitter, State};
 use tokio::{
     io::{AsyncBufReadExt, AsyncRead, AsyncWriteExt, BufReader},
@@ -464,6 +465,8 @@ async fn execute_operation(
         );
 
         let mut command = Command::new(windows_powershell());
+        #[cfg(windows)]
+        command.creation_flags(crate::platform::CREATE_NO_WINDOW);
         command
             .args([
                 "-NoLogo",

@@ -3,7 +3,7 @@ use std::{env, fs, path::Path, process::Command};
 
 use crate::{
     error::PublicError,
-    platform::{webview2_version, windows_powershell},
+    platform::{configure_hidden_std_command, webview2_version, windows_powershell},
     runtime::{
         bundled_node_digest, canonicalize_compatible, extract_bundled_node, required_scripts,
         resolve_web_root,
@@ -32,7 +32,9 @@ struct SelfCheckResult {
 fn verify_node_without_path(web_root: &Path, node: &Path) -> bool {
     let system_root = env::var_os("SYSTEMROOT").unwrap_or_else(|| "C:\\Windows".into());
     let path = Path::new(&system_root).join("System32");
-    let output = Command::new(windows_powershell())
+    let mut command = Command::new(windows_powershell());
+    configure_hidden_std_command(&mut command);
+    let output = command
         .args([
             "-NoLogo",
             "-NoProfile",

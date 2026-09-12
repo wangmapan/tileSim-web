@@ -5,8 +5,9 @@ use std::{fs, path::Path, process::Command, time::Duration};
 use crate::{
     error::PublicError,
     platform::{
-        command_version, encode_powershell_arguments, powershell_utf8_runner, webview2_version,
-        windows_powershell, POWERSHELL_ARGUMENTS_ENV, POWERSHELL_SCRIPT_ENV,
+        command_version, configure_hidden_std_command, encode_powershell_arguments,
+        powershell_utf8_runner, webview2_version, windows_powershell, POWERSHELL_ARGUMENTS_ENV,
+        POWERSHELL_SCRIPT_ENV,
     },
     runtime::{extract_bundled_node, process_path_with_node, resolve_web_root},
 };
@@ -104,7 +105,9 @@ fn read_public_model_settings(web_root: &Path, node: &Path) -> ModelSnapshot {
         "-ConfigPath".into(),
         config.to_string_lossy().into_owned(),
     ];
-    let output = Command::new(windows_powershell())
+    let mut command = Command::new(windows_powershell());
+    configure_hidden_std_command(&mut command);
+    let output = command
         .args([
             "-NoLogo",
             "-NoProfile",

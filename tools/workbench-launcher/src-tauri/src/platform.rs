@@ -1,6 +1,16 @@
 use std::{env, path::PathBuf, process::Command as StdCommand};
 
 #[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
+pub const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+pub fn configure_hidden_std_command(command: &mut StdCommand) {
+    #[cfg(windows)]
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(windows)]
 use winreg::{
     enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ, KEY_WOW64_32KEY, KEY_WOW64_64KEY},
     RegKey,
