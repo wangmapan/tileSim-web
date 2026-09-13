@@ -166,6 +166,15 @@ async function startService(event: Event) {
   );
 }
 
+async function stopService(event: Event) {
+  beginConfirmed(
+    { kind: "stop", wslDistro: wslDistro.value.trim() || "Ubuntu-24.04" },
+    "停止本地服务？",
+    "只停止 TileSim Web 的 127.0.0.1:5173 桥接服务，不关闭 WSL，也不修改部署文件。",
+    event,
+  );
+}
+
 async function deploy(event: Event) {
   if (!backendRepository.value.trim()) {
     formErrors.backendRepository = "请选择后端仓库目录。";
@@ -453,8 +462,17 @@ onBeforeUnmount(() => {
               </div>
               <div class="button-row">
                 <button type="button" class="button button--secondary" @click="bridge.openWorkbench">只打开网页</button>
+                <button
+                  v-if="snapshot.service.state === 'ready' || snapshot.service.state === 'degraded'"
+                  type="button"
+                  class="button button--secondary"
+                  :disabled="active"
+                  @click="stopService"
+                >
+                  停止服务
+                </button>
                 <button type="button" class="button button--primary" :disabled="active" @click="startService">
-                  启动并打开
+                  {{ snapshot.service.state === "ready" ? "重新启动并打开" : "启动并打开" }}
                 </button>
               </div>
             </section>
@@ -473,7 +491,7 @@ onBeforeUnmount(() => {
             <header class="page-header">
               <p class="eyebrow">版本维护</p>
               <h2 id="deployment-heading">更新并部署后端 main</h2>
-              <p>获取、构建、测试、发布与重启保持为不同阶段；部署脚本语义没有改变。</p>
+              <p>获取、构建、测试、发布与重启保持为不同阶段；已有部署时再次执行就是重新部署并重启。</p>
             </header>
             <div class="form-grid">
               <label class="field field--wide">

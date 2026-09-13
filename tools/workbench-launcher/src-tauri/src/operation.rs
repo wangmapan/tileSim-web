@@ -59,6 +59,9 @@ pub enum OperationRequest {
     Start {
         wsl_distro: String,
     },
+    Stop {
+        wsl_distro: String,
+    },
     Deploy {
         backend_repository: String,
         backend_deployment: String,
@@ -222,6 +225,12 @@ fn prepare_operation(
             ],
             secret_stdin: None,
             initial_phase: OperationPhase::Validating,
+        }),
+        OperationRequest::Stop { wsl_distro } => Ok(PreparedOperation {
+            script: scripts.join("stop-workbench.ps1"),
+            arguments: vec!["-WslDistro".into(), validate_wsl_distro(&wsl_distro)?],
+            secret_stdin: None,
+            initial_phase: OperationPhase::Restarting,
         }),
         OperationRequest::RepairWsl { wsl_distro } => Ok(PreparedOperation {
             script: scripts.join("request-wsl-repair.ps1"),

@@ -22,6 +22,7 @@ fn extracted_node_is_valid(path: &Path) -> bool {
 
 const REQUIRED_SCRIPTS: &[&str] = &[
     "scripts/start-workbench.ps1",
+    "scripts/stop-workbench.ps1",
     "scripts/update-backend.ps1",
     "scripts/configure-evidence-agent.ps1",
     "scripts/request-wsl-repair.ps1",

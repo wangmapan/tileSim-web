@@ -61,6 +61,7 @@ export interface EnvironmentCheck {
 
 export type OperationRequest =
   | { kind: "start"; wslDistro: string }
+  | { kind: "stop"; wslDistro: string }
   | {
       kind: "deploy";
       backendRepository: string;

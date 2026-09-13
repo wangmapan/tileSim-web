@@ -74,7 +74,9 @@ function createFixtureBridge(): LauncherBridge {
             ] as const)
           : request.kind === "start"
             ? (["validating", "starting", "restarting"] as const)
-            : (["checking_environment"] as const);
+            : request.kind === "stop"
+              ? (["restarting"] as const)
+              : (["checking_environment"] as const);
       phases.forEach((phase, index) => {
         window.setTimeout(() => {
           emitFixture({
@@ -116,6 +118,13 @@ function createFixtureBridge(): LauncherBridge {
               state: "ready",
               label: "服务已就绪",
               guidance: "可以直接打开工作台；当前服务与 deployment identity 一致。",
+            };
+          }
+          if (!shouldFail && request.kind === "stop") {
+            fixtureSnapshot.service = {
+              state: "stopped",
+              label: "服务未启动",
+              guidance: "已有验证部署，可启动服务；也可以先查看环境诊断。",
             };
           }
           fixtureActive = false;
