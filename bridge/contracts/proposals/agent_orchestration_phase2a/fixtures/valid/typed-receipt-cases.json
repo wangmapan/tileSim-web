@@ -1,0 +1,22 @@
+{
+  "fixture_identity": "tilesim.fixture.agent_orchestration_phase2a.typed_receipts.v1",
+  "fixture_status": "fixture_only",
+  "cases": [
+    {
+      "receipt_type": "model_weight_memory",
+      "receipt_identity": "tilesim.bridge.agent_orchestration_model_weight_memory_receipt.v1"
+    },
+    { "receipt_type": "kv_capacity", "receipt_identity": "tilesim.bridge.agent_orchestration_kv_capacity_receipt.v1" },
+    { "receipt_type": "parallelism", "receipt_identity": "tilesim.bridge.agent_orchestration_parallelism_receipt.v1" },
+    { "receipt_type": "placement", "receipt_identity": "tilesim.bridge.agent_orchestration_placement_receipt.v1" },
+    {
+      "receipt_type": "collective_network",
+      "receipt_identity": "tilesim.bridge.agent_orchestration_collective_network_receipt.v1"
+    },
+    {
+      "receipt_type": "workload_distribution",
+      "receipt_identity": "tilesim.bridge.agent_orchestration_workload_distribution_receipt.v1"
+    },
+    { "receipt_type": "slo_budget", "receipt_identity": "tilesim.bridge.agent_orchestration_slo_budget_receipt.v1" }
+  ]
+}

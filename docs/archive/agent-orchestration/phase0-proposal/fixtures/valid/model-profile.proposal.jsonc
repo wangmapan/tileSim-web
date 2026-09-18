@@ -1,0 +1,233 @@
+{
+  "schema_version": "tilesim.proposal.agent_orchestration.model_profile.v1alpha1",
+  "contract_status": "proposal_only",
+  "profile_family": "model",
+  "profile_id": "phase0.fixture.model.unknown",
+  "profile_revision": "sha256:2111111111111111111111111111111111111111111111111111111111111111",
+  "canonical_digest": "sha256:64b5cc23893c0749fb79fb366c1a879023db51a4caa80655f223568e3b7787a2",
+  "canonicalization": {
+    "identity": "tilesim.bridge.canonical_json.v1",
+    "algorithm": "sha256",
+    "text_encoding": "utf-8",
+    "object_key_order": "unicode_code_point_ascending",
+    "array_order": "preserved",
+    "number_policy": "lossless_integer_tokens_decimal_strings_no_binary_float"
+  },
+  "digest_material_fields": [
+    "profile_family",
+    "profile_id",
+    "status"
+  ],
+  "aliases": [],
+  "owner_module": "工作负载抽象与负载描述语言模块",
+  "status": "profile_missing",
+  "reason_code": "profile_missing",
+  "sources": [
+    {
+      "source_id": "phase0.fixture.source.model",
+      "source_kind": "synthetic_fixture",
+      "revision": "sha256:2111111111111111111111111111111111111111111111111111111111111111",
+      "digest": "sha256:2111111111111111111111111111111111111111111111111111111111111111",
+      "field_class": "modelled",
+      "claim_scope": "contract_fixture_only"
+    }
+  ],
+  "valid_regimes": [
+    {
+      "regime_id": "phase0.fixture.contract-only",
+      "source_modes": [
+        "synthetic_trace"
+      ],
+      "gpu_participation_modes": [
+        "gpu_free"
+      ],
+      "fidelity_tiers": [
+        "Analytical"
+      ],
+      "limitations": [
+        "Contract shape only; no model facts or fidelity claim."
+      ]
+    }
+  ],
+  "field_provenance": {
+    "observed_fields": [],
+    "inferred_fields": [],
+    "modelled_fields": [],
+    "unknown_fields": [
+      "/provider_organization",
+      "/model_family",
+      "/model_version",
+      "/architecture_kind",
+      "/layer_count",
+      "/hidden_size",
+      "/attention_head_count",
+      "/kv_head_count",
+      "/head_dimension",
+      "/parameter_count",
+      "/active_parameter_count",
+      "/expert_count",
+      "/expert_top_k",
+      "/supported_dtypes",
+      "/supported_quantization",
+      "/weight_bytes_inputs",
+      "/context_limit_tokens",
+      "/kv_bytes_per_token_inputs",
+      "/tokenizer_reference",
+      "/license"
+    ]
+  },
+  "lifecycle": {
+    "state": "active",
+    "introduced_revision": "sha256:2111111111111111111111111111111111111111111111111111111111111111",
+    "deprecated_revision": null,
+    "removal_revision": null,
+    "replacement_identity": null
+  },
+  "compatibility": {
+    "policy": "additive_optional",
+    "unknown_identity_behavior": "fail_closed",
+    "unknown_revision_behavior": "fail_closed",
+    "predecessor_identity": null,
+    "successor_identity": null
+  },
+  "provider_organization": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "model_family": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "model_version": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "architecture_kind": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "layer_count": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "hidden_size": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "attention_head_count": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "kv_head_count": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "head_dimension": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "parameter_count": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "active_parameter_count": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "expert_count": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "expert_top_k": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "supported_dtypes": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "supported_quantization": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "weight_bytes_inputs": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "context_limit_tokens": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "kv_bytes_per_token_inputs": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "tokenizer_reference": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "license": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  }
+}

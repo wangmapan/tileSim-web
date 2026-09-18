@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tilesim.web.compat.report-identities.v1",
+  "title": "TileSimCompatibilityReport",
+  "description": "Frontend compatibility schema derived from versioned Week 6 examples. This is not a canonical backend schema.",
+  "oneOf": [
+    { "$ref": "#/$defs/run" },
+    { "$ref": "#/$defs/metrics" },
+    { "$ref": "#/$defs/validation" },
+    { "$ref": "#/$defs/tail" },
+    { "$ref": "#/$defs/designSpace" },
+    { "$ref": "#/$defs/executionEnvelope" }
+  ],
+  "$defs": {
+    "run": {
+      "title": "RunReportContract",
+      "type": "object",
+      "required": ["report_kind", "contract_version", "summary"],
+      "properties": {
+        "report_kind": { "const": "wind_tunnel_run_result" },
+        "contract_version": { "const": "wind_tunnel.run.v1alpha1" },
+        "status": { "type": "string" },
+        "summary": {
+          "type": "object",
+          "required": ["trace_name", "range_label"],
+          "properties": {
+            "trace_name": { "type": "string" },
+            "range_label": { "type": "string" },
+            "end_to_end_latency_us": { "type": "number" },
+            "runtime_event_count": { "type": "integer", "minimum": 0 },
+            "fabric_record_count": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "metrics": {
+      "title": "MetricsReportContract",
+      "type": "object",
+      "required": ["report_id", "summary"],
+      "properties": {
+        "report_id": { "type": "string", "pattern": "-metrics$" },
+        "schema_version": { "type": "string" },
+        "contract_version": { "type": "string" },
+        "summary": { "type": "object", "additionalProperties": true },
+        "request_metrics": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+      },
+      "additionalProperties": true
+    },
+    "validation": {
+      "title": "ValidationReportContract",
+      "type": "object",
+      "required": ["report_id", "validation_lane"],
+      "properties": {
+        "report_id": { "type": "string", "pattern": "-validation$" },
+        "schema_version": { "type": "string" },
+        "contract_version": { "type": "string" },
+        "validation_lane": { "type": "string" },
+        "checks": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+      },
+      "additionalProperties": true
+    },
+    "tail": {
+      "title": "TailReportContract",
+      "type": "object",
+      "required": ["report_id"],
+      "properties": {
+        "report_id": { "type": "string", "pattern": "tail-cause" },
+        "schema_version": { "type": "string" },
+        "contract_version": { "type": "string" },
+        "cause_chain": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+      },
+      "additionalProperties": true
+    },
+    "designSpace": {
+      "title": "DesignSpaceReportContract",
+      "type": "object",
+      "required": ["report_kind", "contract_version", "execution_scope", "ranking"],
+      "properties": {
+        "report_kind": { "const": "design_space_report" },
+        "contract_version": { "const": "design_space.report.v1alpha1" },
+        "execution_scope": { "const": "S6_only" },
+        "ranking": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+      },
+      "additionalProperties": true
+    },
+    "executionEnvelope": {
+      "title": "ExecutionEnvelopeContract",
+      "type": "object",
+      "required": ["envelope_id", "host_path", "stages"],
+      "properties": {
+        "envelope_id": { "type": "string" },
+        "schema_version": { "type": "string" },
+        "contract_version": { "type": "string" },
+        "host_path": { "const": "S7" },
+        "stages": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+      },
+      "additionalProperties": true
+    }
+  }
+}

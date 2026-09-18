@@ -1,0 +1,14 @@
+{
+  "printWidth": 120,
+  "semi": true,
+  "singleQuote": false,
+  "vueIndentScriptAndStyle": false,
+  "overrides": [
+    {
+      "files": "**/*.proposal.jsonc",
+      "options": {
+        "parser": "json-stringify"
+      }
+    }
+  ]
+}

@@ -1,0 +1,103 @@
+{
+  "fixture_status": "fixture_only",
+  "contract": {
+    "schema_identity": "tilesim.bridge.agent_orchestration_validation_report.v1",
+    "schema_revision": "sha256:b6a1eb9e42ecc972d431ae4eac56deb3f2cd5f14d397cd7ceff825949cabcdaf",
+    "report_id": "fixture.validation.phase2a",
+    "report_digest": "sha256:d524d69f4ee6de392e95776512f516ce05edb8a3be6d6ae6c81791ebf4e6f478",
+    "input_binding": {
+      "kind": "run_intake",
+      "identity": "tilesim.bridge.agent_orchestration_run_intake.v2",
+      "revision": "sha256:563e3e5f819c5697a9d2ffaab7cab7570ad435bfe8052ecf4fa15b4bdb2d48f2",
+      "digest": "sha256:cbfed82769f0d257c2a36c87c01d1636f8435c9d8f21e9d5856efd9ff915f1f9"
+    },
+    "profile_snapshot_binding": {
+      "identity": "tilesim.bridge.agent_orchestration_profile_snapshot.v1",
+      "revision": "sha256:2424242424242424242424242424242424242424242424242424242424242424",
+      "digest": "sha256:2525252525252525252525252525252525252525252525252525252525252525"
+    },
+    "capability_snapshot_binding": {
+      "identity": "tilesim.bridge.agent_orchestration_capability_snapshot.v1",
+      "revision": "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
+      "digest": "sha256:2626262626262626262626262626262626262626262626262626262626262626"
+    },
+    "backend_binding": {
+      "backend_revision": "a876859a00000000000000000000000000000000",
+      "schema_set_revision": "sha256:3211d2df2e166a0ebc62f0f08ad014bf15fee8fb4bda79f3372897be3c28c15d"
+    },
+    "validation_policy_revision": "sha256:2727272727272727272727272727272727272727272727272727272727272727",
+    "overall_status": "unknown",
+    "issues": [
+      {
+        "rule_id": "VALIDATE.LOWERING.MISSING.V1",
+        "category": "lowering_missing",
+        "severity": "error",
+        "blocking": true,
+        "status": "open",
+        "field_references": ["/parallelism"],
+        "profile_references": [],
+        "facts": { "reason_code": "phase2c_not_implemented" },
+        "repair_candidates": [],
+        "supporting_receipt": null,
+        "retryable": false,
+        "safe_next_action": "Wait for the reviewed Phase 2C lowering implementation."
+      }
+    ],
+    "calculator_receipts": [
+      {
+        "schema_identity": "tilesim.bridge.agent_orchestration_calculator_receipt_envelope.v1",
+        "schema_revision": "sha256:c908763518a35904aa36092a120a43acb9cd37d2a7c37d144639ef435f09c265",
+        "receipt_identity": "tilesim.bridge.agent_orchestration_model_weight_memory_receipt.v1",
+        "receipt_revision": "sha256:2121212121212121212121212121212121212121212121212121212121212121",
+        "receipt_type": "model_weight_memory",
+        "calculator_identity": "tilesim.calculator.model_weight_memory.v1",
+        "algorithm_revision": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "input_references": [
+          {
+            "identity": "tilesim.bridge.agent_orchestration_model_profile.v2",
+            "revision": "sha256:2c4fa11e64fd7bec805ebeb218efb2be2db7bd0e200c86c68667790c5f05283c",
+            "digest": "sha256:2c4fa11e64fd7bec805ebeb218efb2be2db7bd0e200c86c68667790c5f05283c"
+          }
+        ],
+        "units": ["byte"],
+        "result": { "kind": "exact", "value": "2000000000", "unit": "byte" },
+        "rounding_policy": "exact",
+        "assumptions": ["two_bytes_per_parameter_fixture"],
+        "uncertainty": { "kind": "none", "description": "Deterministic fixture arithmetic only." },
+        "rule_ids": ["CALC.MODEL.WEIGHT.BYTES.V1"],
+        "repair_candidates": [],
+        "claim_scope_ceiling": "synthetic_consistency",
+        "typed_facts": { "primary_quantity": "model_weight_bytes", "constraint_status": "satisfied" }
+      }
+    ],
+    "compiled_request_preview": {
+      "target_identity": "tilesim.bridge.agent_orchestration_run_intake.v2",
+      "target_revision": "sha256:563e3e5f819c5697a9d2ffaab7cab7570ad435bfe8052ecf4fa15b4bdb2d48f2",
+      "canonical_payload_digest": "sha256:cbfed82769f0d257c2a36c87c01d1636f8435c9d8f21e9d5856efd9ff915f1f9",
+      "redacted_payload": { "intake_id": "fixture.intake.phase2a" }
+    },
+    "field_to_pointer_map": [{ "source_field": "parallelism.tensor", "target_pointer": "/parallelism/tensor" }],
+    "candidate_plan": { "candidate_count": "1", "run_count": "1", "planning_status": "blocked" },
+    "budget": {
+      "requested_runs": "1",
+      "accepted_runs": "0",
+      "wall_time_ps": "600000000000",
+      "status": "within_budget"
+    },
+    "claim_scope_ceiling": "synthetic_consistency",
+    "stale_binding": {
+      "is_stale": false,
+      "reasons": [],
+      "checked_bindings": [
+        "profile_revision_and_digest",
+        "capability_snapshot",
+        "backend_and_schema_revision",
+        "validation_policy",
+        "calculator_algorithm",
+        "workload_template",
+        "compiled_request",
+        "approval"
+      ]
+    }
+  }
+}

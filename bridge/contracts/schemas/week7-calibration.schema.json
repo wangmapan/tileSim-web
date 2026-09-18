@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/week7-calibration.schema.json",
+  "title": "Week7CalibrationResponse",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "report_id",
+    "manifest_id",
+    "status",
+    "evidence_tier",
+    "allowed_claim_scope",
+    "scopes",
+    "errors"
+  ],
+  "properties": {
+    "schema_version": { "const": "tilesim.calibration.workflow_report.v1alpha1" },
+    "report_id": { "type": "string" },
+    "manifest_id": { "type": "string" },
+    "status": { "type": "string" },
+    "evidence_tier": { "type": "string" },
+    "allowed_claim_scope": { "type": "string" },
+    "scopes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "subsystem",
+          "fit_scope",
+          "input_unit",
+          "observed_unit",
+          "operating_region",
+          "calibration_sample_count",
+          "held_out_sample_count",
+          "selected_model",
+          "held_out_mae",
+          "held_out_p95_relative_error",
+          "held_out_max_relative_error",
+          "relative_error_budget",
+          "error_budget_passed",
+          "calibration_asset_ids",
+          "calibration_asset_sha256",
+          "held_out_asset_ids",
+          "held_out_asset_sha256"
+        ],
+        "properties": {
+          "subsystem": { "type": "string" },
+          "fit_scope": { "type": "string" },
+          "input_unit": { "type": "string" },
+          "observed_unit": { "type": "string" },
+          "operating_region": { "type": "object", "additionalProperties": { "type": "string" } },
+          "calibration_sample_count": { "type": "integer", "minimum": 0 },
+          "held_out_sample_count": { "type": "integer", "minimum": 0 },
+          "selected_model": {
+            "type": "object",
+            "required": ["model_kind", "slope", "intercept", "selection_mae"],
+            "properties": {
+              "model_kind": { "type": "string" },
+              "slope": { "type": "number" },
+              "intercept": { "type": "number" },
+              "selection_mae": { "type": "number" }
+            },
+            "additionalProperties": true
+          },
+          "held_out_mae": { "type": "number" },
+          "held_out_p95_relative_error": { "type": "number" },
+          "held_out_max_relative_error": { "type": "number" },
+          "relative_error_budget": { "type": "number" },
+          "error_budget_passed": { "type": "boolean" },
+          "calibration_asset_ids": { "type": "array", "items": { "type": "string" } },
+          "calibration_asset_sha256": { "type": "array", "items": { "type": "string" } },
+          "held_out_asset_ids": { "type": "array", "items": { "type": "string" } },
+          "held_out_asset_sha256": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": true
+      }
+    },
+    "errors": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+  },
+  "additionalProperties": true
+}

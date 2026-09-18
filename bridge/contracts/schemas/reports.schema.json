@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/reports.schema.json",
+  "title": "ReportsResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["run_id", "reports"],
+  "properties": {
+    "run_id": { "type": "string" },
+    "reports": { "type": "object", "additionalProperties": true }
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "fixture_identity": "tilesim.fixture.agent_orchestration_phase2a.canonical_vectors.v1",
+  "fixture_status": "fixture_only",
+  "canonicalization_identity": "tilesim.bridge.canonical_json.v1",
+  "vectors": [
+    {
+      "case_id": "unicode-and-uint64-string",
+      "value": { "z": "18446744073709551615", "a": ["汉字", "😀", "0"] },
+      "expected_canonical_json": "{\"a\":[\"汉字\",\"😀\",\"0\"],\"z\":\"18446744073709551615\"}",
+      "expected_sha256": "sha256:4a6ee74d8b1f60eeade6cd8b3acc66dc11c4d946b228fe604e8de3917f1d443b"
+    },
+    {
+      "case_id": "decimal-and-unit",
+      "value": {
+        "unit": "Gbps",
+        "upper": "400.000",
+        "lower": "0.125",
+        "negative_zero_forbidden_by_decimal_schema": "0"
+      },
+      "expected_canonical_json": "{\"lower\":\"0.125\",\"negative_zero_forbidden_by_decimal_schema\":\"0\",\"unit\":\"Gbps\",\"upper\":\"400.000\"}",
+      "expected_sha256": "sha256:b10480fe4b6065d00bbe328ad82f3edc287988af00ca4def0f6a6f536046e33f"
+    },
+    {
+      "case_id": "identity-participates-in-payload",
+      "value": {
+        "schema_identity": "tilesim.bridge.agent_orchestration_run_intake.v2",
+        "device_count": "8",
+        "requested_fidelity": "DES"
+      },
+      "expected_canonical_json": "{\"device_count\":\"8\",\"requested_fidelity\":\"DES\",\"schema_identity\":\"tilesim.bridge.agent_orchestration_run_intake.v2\"}",
+      "expected_sha256": "sha256:70c328aeb89a7f79fe9ed3367991c84d62285a4814dd2e7d95b68eb82cce04eb"
+    }
+  ],
+  "uint64_cases": [
+    { "value": "0", "expected": "accept" },
+    { "value": "18446744073709551615", "expected": "accept" },
+    { "value": "18446744073709551616", "expected": "reject_overflow" },
+    { "value": "01", "expected": "reject_noncanonical" },
+    { "value": 9007199254740992, "expected": "reject_json_number" },
+    { "value": "-1", "expected": "reject_noncanonical" }
+  ],
+  "decimal_cases": [
+    { "value": "0", "unit": "ratio", "expected": "accept" },
+    { "value": "0.125", "unit": "ratio", "expected": "accept" },
+    { "value": "01.0", "unit": "ratio", "expected": "reject_noncanonical" },
+    { "value": "1e-3", "unit": "ratio", "expected": "reject_exponent" },
+    { "value": 0.125, "unit": "ratio", "expected": "reject_json_number" },
+    { "value": "1", "unit": "unknown_unit", "expected": "reject_unknown_unit" }
+  ],
+  "unit_allow_list": ["byte", "ps", "Gbps", "ratio", "parameter", "request", "token", "device", "run"]
+}

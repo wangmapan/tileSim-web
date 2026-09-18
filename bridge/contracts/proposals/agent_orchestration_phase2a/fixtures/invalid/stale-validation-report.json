@@ -1,0 +1,16 @@
+{
+  "fixture_identity": "tilesim.fixture.agent_orchestration_phase2a.stale_validation_report.v1",
+  "fixture_status": "fixture_only",
+  "base_fixture": "../valid/validation-report.json",
+  "expected_overall_status": "stale",
+  "cases": [
+    { "mutation": "profile_revision_or_digest_changed", "expected_error": "validation_report_stale" },
+    { "mutation": "capability_snapshot_changed", "expected_error": "validation_report_stale" },
+    { "mutation": "backend_or_schema_revision_changed", "expected_error": "validation_report_stale" },
+    { "mutation": "validation_policy_changed", "expected_error": "validation_report_stale" },
+    { "mutation": "calculator_algorithm_changed", "expected_error": "validation_report_stale" },
+    { "mutation": "workload_template_changed", "expected_error": "validation_report_stale" },
+    { "mutation": "compiled_request_changed", "expected_error": "validation_report_stale" },
+    { "mutation": "approval_missing_or_expired", "expected_error": "validation_report_stale" }
+  ]
+}

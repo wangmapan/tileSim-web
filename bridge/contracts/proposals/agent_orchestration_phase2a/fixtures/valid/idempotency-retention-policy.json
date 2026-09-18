@@ -1,0 +1,22 @@
+{
+  "fixture_status": "fixture_only",
+  "contract": {
+    "schema_identity": "tilesim.bridge.agent_orchestration_idempotency_retention_policy.v1",
+    "schema_revision": "sha256:7c7263c3463bc767b524a9c8527ebda24f0286dccadeaabbb01f0ce0bfb77d32",
+    "canonicalization_identity": "tilesim.bridge.canonical_json.v1",
+    "idempotency": {
+      "same_key_same_payload": "exact_replay_or_terminal_not_retained",
+      "same_key_different_payload": "reject_409_idempotency_payload_mismatch",
+      "version_change": "different_payload_reject_same_key",
+      "profile_revision_change": "different_payload_reject_same_key",
+      "crash_retry": "resume_or_terminalize_without_duplicate_side_effect"
+    },
+    "retention": {
+      "retained_result": "exact_replay_with_original_contract_identity",
+      "not_retained_result": "reject_terminal_not_retained",
+      "delete": "tombstone_key_without_payload_or_result",
+      "expiry": "tombstone_key_without_payload_or_result"
+    },
+    "forbidden_persistence": ["credential", "hidden_reasoning", "raw_provider_response"]
+  }
+}

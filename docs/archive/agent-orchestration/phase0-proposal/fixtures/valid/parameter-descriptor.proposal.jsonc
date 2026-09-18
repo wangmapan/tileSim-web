@@ -1,0 +1,177 @@
+{
+  "schema_version": "tilesim.proposal.agent_orchestration.parameter_descriptor.v1alpha1",
+  "contract_status": "proposal_only",
+  "descriptor_id": "phase0.fixture.s1.runtime.max_batch_size",
+  "descriptor_revision": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "canonical_digest": "sha256:2540eae86a34117d42711a8499fa99fd01cf4cd3adf0173936b714a3e8bb1ca6",
+  "canonicalization": {
+    "identity": "tilesim.bridge.canonical_json.v1",
+    "algorithm": "sha256",
+    "text_encoding": "utf-8",
+    "object_key_order": "unicode_code_point_ascending",
+    "array_order": "preserved",
+    "number_policy": "lossless_integer_tokens_decimal_strings_no_binary_float"
+  },
+  "digest_material_fields": [
+    "field_id",
+    "status",
+    "dimensions",
+    "request_target"
+  ],
+  "field_id": "s1.runtime.max_batch_size",
+  "aliases": [
+    {
+      "locale": "en-US",
+      "term": "max batch size"
+    },
+    {
+      "locale": "zh-CN",
+      "term": "最大批大小"
+    }
+  ],
+  "owner_module": "推理引擎与服务运行时模块",
+  "compatibility_subsystem": "S1",
+  "value_type": "int",
+  "canonical_unit": "requests_per_batch",
+  "accepted_units": [
+    {
+      "unit": "requests_per_batch",
+      "scale_decimal": "1",
+      "case_sensitive": false
+    }
+  ],
+  "constraints": {
+    "minimum_decimal": "1",
+    "maximum_decimal": "64",
+    "step_decimal": "1",
+    "enum_values": [],
+    "minimum_items": null,
+    "maximum_items": null,
+    "relation_rule_ids": []
+  },
+  "applicability": {
+    "mode": "conditional",
+    "condition_ids": [
+      "scenario.s1_des_example"
+    ],
+    "not_applicable_reason_codes": [
+      "not_applicable"
+    ]
+  },
+  "default_policy": {
+    "kind": "none",
+    "source_identity": null,
+    "source_revision": null
+  },
+  "request_target": {
+    "request_schema_identity": "tilesim.bridge.create_run_request.v1",
+    "json_pointer": "/overrides/runtime/max_batch_size"
+  },
+  "lowering": null,
+  "evidence_outputs": [],
+  "sensitivity": "public",
+  "status": "unresolved_not_executed",
+  "status_reason_code": "execution_evidence_missing",
+  "blocking_dependencies": [
+    "gap-cap-001.backend-traceability"
+  ],
+  "alternatives": [],
+  "dimensions": {
+    "described": {
+      "state": "affirmed",
+      "reason_code": "formal_descriptor_evidence",
+      "evidence_refs": [
+        {
+          "kind": "runtime_descriptor",
+          "identity": "tilesim.bridge.experiment_descriptor.v1",
+          "revision": "sha256:de97e5fe0aae2ae1c5ffeeda7a0a56fd23c6a56aa28c3746eead00d89c68d059",
+          "digest": "sha256:de97e5fe0aae2ae1c5ffeeda7a0a56fd23c6a56aa28c3746eead00d89c68d059",
+          "json_pointer": "/parameter_descriptors"
+        }
+      ]
+    },
+    "accepted": {
+      "state": "affirmed",
+      "reason_code": "formal_request_schema_evidence",
+      "evidence_refs": [
+        {
+          "kind": "formal_contract",
+          "identity": "tilesim.bridge.create_run_request.v1",
+          "revision": "sha256:eb6c0dc921faa53789c053dfef99b82d1a5eb0499cb244e364178eab43e7095c",
+          "digest": "sha256:eb6c0dc921faa53789c053dfef99b82d1a5eb0499cb244e364178eab43e7095c",
+          "json_pointer": "/overrides/runtime/max_batch_size"
+        }
+      ]
+    },
+    "validated": {
+      "state": "affirmed",
+      "reason_code": "deterministic_validation_evidence",
+      "evidence_refs": [
+        {
+          "kind": "formal_contract",
+          "identity": "tilesim.bridge.create_run_request.v1",
+          "revision": "sha256:eb6c0dc921faa53789c053dfef99b82d1a5eb0499cb244e364178eab43e7095c",
+          "digest": "sha256:eb6c0dc921faa53789c053dfef99b82d1a5eb0499cb244e364178eab43e7095c",
+          "json_pointer": "/overrides/runtime/max_batch_size"
+        }
+      ]
+    },
+    "lowered": {
+      "state": "unknown",
+      "reason_code": "lowering_missing",
+      "evidence_refs": []
+    },
+    "executed": {
+      "state": "unknown",
+      "reason_code": "execution_evidence_missing",
+      "evidence_refs": []
+    },
+    "observable": {
+      "state": "unknown",
+      "reason_code": "observable_evidence_missing",
+      "evidence_refs": []
+    },
+    "calibrated": {
+      "state": "unknown",
+      "reason_code": "calibration_missing",
+      "evidence_refs": []
+    },
+    "held_out_validated": {
+      "state": "unknown",
+      "reason_code": "held_out_validation_missing",
+      "evidence_refs": []
+    },
+    "ui_exposed": {
+      "state": "affirmed",
+      "reason_code": "ui_surface_evidence",
+      "evidence_refs": [
+        {
+          "kind": "runtime_descriptor",
+          "identity": "tilesim.bridge.experiment_descriptor.v1",
+          "revision": "sha256:de97e5fe0aae2ae1c5ffeeda7a0a56fd23c6a56aa28c3746eead00d89c68d059",
+          "digest": "sha256:de97e5fe0aae2ae1c5ffeeda7a0a56fd23c6a56aa28c3746eead00d89c68d059",
+          "json_pointer": "/parameter_descriptors"
+        }
+      ]
+    },
+    "agent_exposed": {
+      "state": "denied",
+      "reason_code": "not_exposed_to_agent",
+      "evidence_refs": []
+    }
+  },
+  "lifecycle": {
+    "state": "active",
+    "introduced_revision": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "deprecated_revision": null,
+    "removal_revision": null,
+    "replacement_identity": null
+  },
+  "compatibility": {
+    "policy": "additive_optional",
+    "unknown_identity_behavior": "fail_closed",
+    "unknown_revision_behavior": "fail_closed",
+    "predecessor_identity": null,
+    "successor_identity": null
+  }
+}

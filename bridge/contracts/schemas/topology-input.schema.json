@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/topology-input.schema.json",
+  "title": "S6TopologyInputV1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "run_id", "provenance", "topology"],
+  "properties": {
+    "schema_version": { "const": "tilesim.s6_topology_input.v1" },
+    "run_id": { "type": "string", "minLength": 1 },
+    "provenance": { "$ref": "f6b-common.schema.json#/$defs/provenance" },
+    "topology": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["topology_name", "devices", "module_bindings", "domains"],
+      "properties": {
+        "topology_name": { "type": "string", "minLength": 1 },
+        "devices": { "type": "array", "items": { "type": "object" } },
+        "module_bindings": { "type": "array", "items": { "type": "object" } },
+        "domains": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["domain_id", "domain_type", "domain_kind", "subject", "json_pointer", "provenance"],
+            "properties": {
+              "domain_id": { "type": "string", "minLength": 1 },
+              "domain_type": { "type": "string", "minLength": 1 },
+              "domain_kind": { "type": "string", "minLength": 1 },
+              "subject": { "$ref": "f6b-common.schema.json#/$defs/subjectRef" },
+              "json_pointer": { "type": "string", "pattern": "^/topology/domains/[0-9]+$" },
+              "provenance": { "$ref": "f6b-common.schema.json#/$defs/provenance" },
+              "member_devices": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 },
+                "uniqueItems": true
+              },
+              "module_binding": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/proposals/agent-orchestration-phase0/topology-profile.schema.json",
+  "x-tilesim-contract-status": "proposal_only",
+  "x-tilesim-schema-identity": "tilesim.proposal.agent_orchestration.topology_profile.v1alpha1",
+  "title": "Phase0TopologyProfileProposal",
+  "allOf": [
+    {
+      "$ref": "profile-common.schema.json#/$defs/profileEnvelope"
+    },
+    {
+      "type": "object",
+      "required": [
+        "devices",
+        "endpoints",
+        "domains",
+        "links",
+        "ports",
+        "network_classes",
+        "link_characteristics",
+        "routing_binding",
+        "transport_binding",
+        "collective_binding",
+        "placement_constraints",
+        "disabled_resources",
+        "applicable_scale",
+        "calibration_receipt",
+        "demand_execution_ownership"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "tilesim.proposal.agent_orchestration.topology_profile.v1alpha1"
+        },
+        "profile_family": {
+          "const": "topology"
+        },
+        "devices": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "endpoints": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "domains": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "links": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "ports": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "network_classes": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "link_characteristics": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "routing_binding": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "transport_binding": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "collective_binding": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "placement_constraints": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "disabled_resources": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "applicable_scale": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "calibration_receipt": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "demand_execution_ownership": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "communication_demand_owner",
+            "path_queue_congestion_completion_owner"
+          ],
+          "properties": {
+            "communication_demand_owner": {
+              "const": "集合通信语义模块"
+            },
+            "path_queue_congestion_completion_owner": {
+              "const": "网络与硬件资源模块"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "unevaluatedProperties": false
+}

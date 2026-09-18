@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/publication-candidates/agent-orchestration-phase0b/model-profile.schema.json",
+  "x-tilesim-contract-status": "publication_candidate",
+  "x-tilesim-schema-identity": "tilesim.bridge.agent_orchestration_model_profile.v1",
+  "title": "AgentOrchestrationModelProfile",
+  "allOf": [
+    {
+      "$ref": "common.schema.json#/$defs/profileEnvelope"
+    },
+    {
+      "type": "object",
+      "required": [
+        "model_identity",
+        "provider_organization",
+        "architecture_kind",
+        "layer_count",
+        "hidden_size",
+        "attention_heads",
+        "kv_heads",
+        "head_dimension",
+        "parameter_count",
+        "active_parameter_count",
+        "expert_count",
+        "expert_top_k",
+        "supported_dtypes",
+        "supported_quantization",
+        "context_limit_tokens",
+        "kv_bytes_per_token_source",
+        "tokenizer_reference",
+        "license"
+      ],
+      "properties": {
+        "schema_identity": {
+          "const": "tilesim.bridge.agent_orchestration_model_profile.v1"
+        },
+        "profile_family": {
+          "const": "model"
+        },
+        "model_identity": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "provider_organization": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "architecture_kind": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "layer_count": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "hidden_size": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "attention_heads": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "kv_heads": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "head_dimension": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "parameter_count": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "active_parameter_count": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "expert_count": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "expert_top_k": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "supported_dtypes": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "supported_quantization": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "context_limit_tokens": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "kv_bytes_per_token_source": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "tokenizer_reference": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        },
+        "license": {
+          "$ref": "common.schema.json#/$defs/factAssertion"
+        }
+      }
+    }
+  ],
+  "unevaluatedProperties": false
+}

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/execution-envelope.schema.json",
+  "title": "S7ExecutionEnvelopeV1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "run_id", "evidence_refs", "stages"],
+  "properties": {
+    "schema_version": { "const": "tilesim.s7_execution_envelope.v1" },
+    "run_id": { "type": "string", "minLength": 1 },
+    "evidence_refs": { "type": "array", "items": { "$ref": "f6b-common.schema.json#/$defs/evidenceRef" } },
+    "stages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["stage_id", "subject_refs", "evidence_refs"],
+        "properties": {
+          "stage_id": { "type": "string", "minLength": 1 },
+          "subject_refs": { "type": "array", "items": { "$ref": "f6b-common.schema.json#/$defs/subjectRef" } },
+          "evidence_refs": { "type": "array", "items": { "$ref": "f6b-common.schema.json#/$defs/evidenceRef" } }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "manifest_identity": "tilesim.bridge.agent_orchestration_phase2a_contract_proposal.v1",
+  "publication_status": "proposal_only",
+  "canonicalization_identity": "tilesim.bridge.canonical_json.v1",
+  "shared_schema": {
+    "schema_file": "schemas/common.schema.proposal.json",
+    "schema_revision": "sha256:92a704d1e4598e85a8a0349834d640c3fc78d10f042b3ec3ed674d5509528a2c"
+  },
+  "successor_strategy": "create_run_v1_with_explicit_versioned_nested_intake",
+  "contracts": [
+    {
+      "identity": "tilesim.bridge.agent_orchestration_model_profile.v2",
+      "schema_file": "schemas/model-profile.schema.proposal.json",
+      "schema_revision": "sha256:6a81665563ad59a1220dd18d01b6c00828fe21dcfcb5e61bf7384c6c10c52f10"
+    },
+    {
+      "identity": "tilesim.bridge.agent_orchestration_engine_profile.v2",
+      "schema_file": "schemas/engine-profile.schema.proposal.json",
+      "schema_revision": "sha256:0c54e158481304fe8143aca752a0f348edef7d74872b332a894a4e883a5f5026"
+    },
+    {
+      "identity": "tilesim.bridge.agent_orchestration_device_profile.v2",
+      "schema_file": "schemas/device-profile.schema.proposal.json",
+      "schema_revision": "sha256:fbea82b900c39887d071974677aa9b3b54008eccb9d03551af5c41421ca786ee"
+    },
+    {
+      "identity": "tilesim.bridge.agent_orchestration_topology_profile.v2",
+      "schema_file": "schemas/topology-profile.schema.proposal.json",
+      "schema_revision": "sha256:ba71752a32fcc64a24dad03cecb770ecc19c1ebba1ec2606dd3272280060fcf0"
+    },
+    {
+      "identity": "tilesim.bridge.agent_orchestration_workload_profile.v2",
+      "schema_file": "schemas/workload-profile.schema.proposal.json",
+      "schema_revision": "sha256:bf11f12111b1b0e6cf7d5aa85b78a127823038dc9d76a7d95491e66fb7ee59a9"
+    },
+    {
+      "identity": "tilesim.bridge.agent_orchestration_profile_binding.v1",
+      "schema_file": "schemas/profile-binding.schema.proposal.json",
+      "schema_revision": "sha256:65759c12a24153ab9f9adf1b0fd0a6997498c651a259c1f0bff8a5ce5c34696f"
+    },
+    {
+      "identity": "tilesim.bridge.agent_orchestration_run_intake.v2",
+      "schema_file": "schemas/run-intake.schema.proposal.json",
+      "schema_revision": "sha256:563e3e5f819c5697a9d2ffaab7cab7570ad435bfe8052ecf4fa15b4bdb2d48f2"
+    },
+    {
+      "identity": "tilesim.bridge.agent_orchestration_validation_report.v1",
+      "schema_file": "schemas/validation-report.schema.proposal.json",
+      "schema_revision": "sha256:b6a1eb9e42ecc972d431ae4eac56deb3f2cd5f14d397cd7ceff825949cabcdaf"
+    },
+    {
+      "identity": "tilesim.bridge.agent_orchestration_calculator_receipt_envelope.v1",
+      "schema_file": "schemas/calculator-receipt.schema.proposal.json",
+      "schema_revision": "sha256:c908763518a35904aa36092a120a43acb9cd37d2a7c37d144639ef435f09c265"
+    },
+    {
+      "identity": "tilesim.bridge.agent_orchestration_idempotency_retention_policy.v1",
+      "schema_file": "schemas/idempotency-retention-policy.schema.proposal.json",
+      "schema_revision": "sha256:7c7263c3463bc767b524a9c8527ebda24f0286dccadeaabbb01f0ce0bfb77d32"
+    }
+  ],
+  "typed_receipt_identities": [
+    "tilesim.bridge.agent_orchestration_model_weight_memory_receipt.v1",
+    "tilesim.bridge.agent_orchestration_kv_capacity_receipt.v1",
+    "tilesim.bridge.agent_orchestration_parallelism_receipt.v1",
+    "tilesim.bridge.agent_orchestration_placement_receipt.v1",
+    "tilesim.bridge.agent_orchestration_collective_network_receipt.v1",
+    "tilesim.bridge.agent_orchestration_workload_distribution_receipt.v1",
+    "tilesim.bridge.agent_orchestration_slo_budget_receipt.v1"
+  ],
+  "registration_exclusions": [
+    "bridge/contracts/openapi.json",
+    "bridge/contracts/schemas",
+    "bridge/contracts/agent_orchestration_capability",
+    "src/contracts/generated",
+    "bridge/routes",
+    "bridge/services",
+    "bridge/repositories"
+  ]
+}

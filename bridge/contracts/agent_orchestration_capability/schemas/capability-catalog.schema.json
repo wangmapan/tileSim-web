@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/agent-orchestration-capability/v1/capability-catalog.schema.json",
+  "x-tilesim-contract-status": "published",
+  "x-tilesim-schema-identity": "tilesim.bridge.agent_orchestration_capability_catalog.v1",
+  "title": "AgentOrchestrationCapabilityCatalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_identity",
+    "publication_status",
+    "catalog_id",
+    "catalog_revision",
+    "catalog_digest",
+    "contract_package_revision",
+    "parameter_descriptor_schema_identity",
+    "parameter_descriptor_schema_revision",
+    "parameter_descriptor_schema_digest",
+    "parameter_descriptors",
+    "profile_families",
+    "profile_records",
+    "agent_exposed_field_ids",
+    "not_exposed_capabilities",
+    "claim_scope_ceiling"
+  ],
+  "properties": {
+    "schema_identity": {
+      "const": "tilesim.bridge.agent_orchestration_capability_catalog.v1"
+    },
+    "publication_status": { "const": "published" },
+    "catalog_id": { "$ref": "common.schema.json#/$defs/stableId" },
+    "catalog_revision": { "$ref": "common.schema.json#/$defs/sha256" },
+    "catalog_digest": { "$ref": "common.schema.json#/$defs/sha256" },
+    "contract_package_revision": { "$ref": "common.schema.json#/$defs/sha256" },
+    "parameter_descriptor_schema_identity": {
+      "const": "tilesim.bridge.agent_orchestration_parameter_descriptor.v1"
+    },
+    "parameter_descriptor_schema_revision": {
+      "$ref": "common.schema.json#/$defs/sha256"
+    },
+    "parameter_descriptor_schema_digest": {
+      "$ref": "common.schema.json#/$defs/sha256"
+    },
+    "parameter_descriptors": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "items": { "$ref": "parameter-descriptor.schema.json" }
+    },
+    "profile_families": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": { "$ref": "common.schema.json#/$defs/profileAvailability" }
+    },
+    "profile_records": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "engine", "device", "topology", "workload"],
+      "properties": {
+        "model": { "type": "array", "maxItems": 0 },
+        "engine": { "type": "array", "maxItems": 0 },
+        "device": { "type": "array", "maxItems": 0 },
+        "topology": { "type": "array", "maxItems": 0 },
+        "workload": { "type": "array", "maxItems": 0 }
+      }
+    },
+    "agent_exposed_field_ids": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "items": { "$ref": "common.schema.json#/$defs/stableId" },
+      "uniqueItems": true
+    },
+    "not_exposed_capabilities": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "items": { "$ref": "common.schema.json#/$defs/notExposedCapability" }
+    },
+    "claim_scope_ceiling": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [{ "const": "exploration" }, { "const": "synthetic_consistency" }]
+    }
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/proposals/agent-orchestration-phase0/model-profile.schema.json",
+  "x-tilesim-contract-status": "proposal_only",
+  "x-tilesim-schema-identity": "tilesim.proposal.agent_orchestration.model_profile.v1alpha1",
+  "title": "Phase0ModelProfileProposal",
+  "allOf": [
+    {
+      "$ref": "profile-common.schema.json#/$defs/profileEnvelope"
+    },
+    {
+      "type": "object",
+      "required": [
+        "provider_organization",
+        "model_family",
+        "model_version",
+        "architecture_kind",
+        "layer_count",
+        "hidden_size",
+        "attention_head_count",
+        "kv_head_count",
+        "head_dimension",
+        "parameter_count",
+        "active_parameter_count",
+        "expert_count",
+        "expert_top_k",
+        "supported_dtypes",
+        "supported_quantization",
+        "weight_bytes_inputs",
+        "context_limit_tokens",
+        "kv_bytes_per_token_inputs",
+        "tokenizer_reference",
+        "license"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "tilesim.proposal.agent_orchestration.model_profile.v1alpha1"
+        },
+        "profile_family": {
+          "const": "model"
+        },
+        "provider_organization": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "model_family": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "model_version": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "architecture_kind": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "layer_count": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "hidden_size": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "attention_head_count": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "kv_head_count": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "head_dimension": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "parameter_count": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "active_parameter_count": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "expert_count": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "expert_top_k": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "supported_dtypes": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "supported_quantization": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "weight_bytes_inputs": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "context_limit_tokens": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "kv_bytes_per_token_inputs": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "tokenizer_reference": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "license": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        }
+      }
+    }
+  ],
+  "unevaluatedProperties": false
+}

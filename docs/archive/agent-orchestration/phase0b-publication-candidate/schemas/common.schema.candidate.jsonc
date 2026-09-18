@@ -1,0 +1,493 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/publication-candidates/agent-orchestration-phase0b/common.schema.json",
+  "x-tilesim-contract-status": "publication_candidate",
+  "$defs": {
+    "stableId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,191}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "jsonPointer": {
+      "type": "string",
+      "pattern": "^/"
+    },
+    "ownerModule": {
+      "enum": [
+        "工作负载抽象与负载描述语言模块",
+        "推理引擎与服务运行时模块",
+        "执行语义建模模块",
+        "KV Cache 建模模块",
+        "设备性能建模模块",
+        "集合通信语义模块",
+        "网络与硬件资源模块",
+        "统一仿真内核模块",
+        "场景与探索编排模块",
+        "校准验证与指标归因模块",
+        "基于 Agent 的仿真编排模块"
+      ]
+    },
+    "supportState": {
+      "enum": [
+        "available",
+        "conditional",
+        "unavailable",
+        "profile_missing",
+        "calibration_missing",
+        "held_out_validation_missing",
+        "not_exposed",
+        "unsupported",
+        "deprecated"
+      ]
+    },
+    "reasonCode": {
+      "enum": [
+        "execution_closure_proven",
+        "gap_kv_001_logical_admission_only",
+        "profile_missing",
+        "minimal_engine_profiles_not_catalog_published",
+        "create_run_engine_selection_not_exposed",
+        "calibration_missing",
+        "held_out_validation_missing",
+        "binding_compatibility_review_pending",
+        "source_target_revision_pending",
+        "identity_approval_pending",
+        "not_exposed_to_agent",
+        "resolved_scale_out_analytical",
+        "unknown_identity",
+        "unknown_revision",
+        "binding_revision_mismatch",
+        "catalog_revision_mismatch",
+        "source_evidence",
+        "not_applicable"
+      ]
+    },
+    "dimension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "reason_code"],
+      "properties": {
+        "state": {
+          "enum": ["affirmed", "denied"]
+        },
+        "reason_code": {
+          "$ref": "#/$defs/reasonCode"
+        }
+      }
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "backend_identity",
+        "backend_revision",
+        "schema_set_revision",
+        "experiment_descriptor_identity",
+        "experiment_descriptor_revision",
+        "create_run_identity"
+      ],
+      "properties": {
+        "backend_identity": {
+          "$ref": "#/$defs/stableId"
+        },
+        "backend_revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "schema_set_revision": {
+          "$ref": "#/$defs/sha256"
+        },
+        "experiment_descriptor_identity": {
+          "const": "tilesim.bridge.experiment_descriptor.v1"
+        },
+        "experiment_descriptor_revision": {
+          "$ref": "#/$defs/sha256"
+        },
+        "create_run_identity": {
+          "const": "tilesim.bridge.create_run_request.v1"
+        }
+      }
+    },
+    "evidenceReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "revision",
+        "path",
+        "test_case",
+        "evidence_class"
+      ],
+      "properties": {
+        "repository": {
+          "enum": ["D:/tileSim", "D:/tileSim-web"]
+        },
+        "revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "test_case": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_class": {
+          "enum": [
+            "contract",
+            "lowering",
+            "synthetic_deterministic_execution",
+            "artifact_observation"
+          ]
+        },
+        "artifact_pointers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "profileAvailability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "schema_identity",
+        "schema_revision",
+        "schema_digest",
+        "schema_status",
+        "actual_profile_count",
+        "data_status",
+        "runtime_availability",
+        "reason_codes",
+        "calibration_status",
+        "held_out_validation_status"
+      ],
+      "properties": {
+        "family": {
+          "enum": ["model", "engine", "device", "topology", "workload"]
+        },
+        "schema_identity": {
+          "$ref": "#/$defs/stableId"
+        },
+        "schema_revision": {
+          "$ref": "#/$defs/sha256"
+        },
+        "schema_digest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "schema_status": {
+          "const": "publication_candidate"
+        },
+        "actual_profile_count": {
+          "const": 0
+        },
+        "data_status": {
+          "$ref": "#/$defs/supportState"
+        },
+        "runtime_availability": {
+          "const": "unavailable"
+        },
+        "reason_codes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/reasonCode"
+          },
+          "uniqueItems": true
+        },
+        "calibration_status": {
+          "const": "calibration_missing"
+        },
+        "held_out_validation_status": {
+          "const": "held_out_validation_missing"
+        }
+      }
+    },
+    "factAssertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "knowledge_state",
+        "value",
+        "field_class",
+        "evidence_refs",
+        "reason_code"
+      ],
+      "properties": {
+        "knowledge_state": {
+          "enum": ["known", "unknown", "not_applicable"]
+        },
+        "value": {},
+        "field_class": {
+          "enum": ["observed", "inferred", "modelled", "unknown"]
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidenceReference"
+          }
+        },
+        "reason_code": {
+          "$ref": "#/$defs/reasonCode"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "knowledge_state": {
+                "const": "known"
+              }
+            },
+            "required": ["knowledge_state"]
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "not": {
+                  "type": "null"
+                }
+              },
+              "field_class": {
+                "enum": ["observed", "inferred", "modelled"]
+              },
+              "evidence_refs": {
+                "minItems": 1
+              },
+              "reason_code": {
+                "const": "source_evidence"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "knowledge_state": {
+                "const": "unknown"
+              }
+            },
+            "required": ["knowledge_state"]
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "type": "null"
+              },
+              "field_class": {
+                "const": "unknown"
+              },
+              "reason_code": {
+                "enum": [
+                  "profile_missing",
+                  "calibration_missing",
+                  "held_out_validation_missing"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "knowledge_state": {
+                "const": "not_applicable"
+              }
+            },
+            "required": ["knowledge_state"]
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "type": "null"
+              },
+              "reason_code": {
+                "const": "not_applicable"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "profileEnvelope": {
+      "type": "object",
+      "required": [
+        "schema_identity",
+        "profile_family",
+        "profile_id",
+        "profile_revision",
+        "canonical_digest",
+        "profile_status",
+        "reason_codes",
+        "owner_module",
+        "source_records",
+        "valid_regimes",
+        "calibration_status",
+        "held_out_validation_status",
+        "lifecycle"
+      ],
+      "properties": {
+        "schema_identity": {
+          "$ref": "#/$defs/stableId"
+        },
+        "profile_family": {
+          "enum": ["model", "engine", "device", "topology", "workload"]
+        },
+        "profile_id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "profile_revision": {
+          "$ref": "#/$defs/sha256"
+        },
+        "canonical_digest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "profile_status": {
+          "$ref": "#/$defs/supportState"
+        },
+        "reason_codes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/reasonCode"
+          },
+          "uniqueItems": true
+        },
+        "owner_module": {
+          "$ref": "#/$defs/ownerModule"
+        },
+        "source_records": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "source_identity",
+              "source_revision",
+              "source_mode",
+              "field_class",
+              "claim_scope"
+            ],
+            "properties": {
+              "source_identity": {
+                "$ref": "#/$defs/stableId"
+              },
+              "source_revision": {
+                "$ref": "#/$defs/sha256"
+              },
+              "source_mode": {
+                "enum": [
+                  "real_trace",
+                  "synthetic_trace",
+                  "compatibility_harness_trace",
+                  "reviewed_registry"
+                ]
+              },
+              "field_class": {
+                "enum": ["observed", "inferred", "modelled"]
+              },
+              "claim_scope": {
+                "enum": [
+                  "exploration",
+                  "synthetic_consistency",
+                  "limited_extrapolation",
+                  "similar_regime_conditional_prediction",
+                  "real_calibrated_validation"
+                ]
+              }
+            }
+          }
+        },
+        "valid_regimes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "regime_id",
+              "source_modes",
+              "gpu_participation_modes",
+              "fidelity_tiers",
+              "limitations"
+            ],
+            "properties": {
+              "regime_id": {
+                "$ref": "#/$defs/stableId"
+              },
+              "source_modes": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "real_trace",
+                    "synthetic_trace",
+                    "compatibility_harness_trace"
+                  ]
+                },
+                "uniqueItems": true
+              },
+              "gpu_participation_modes": {
+                "type": "array",
+                "items": {
+                  "enum": ["gpu_free", "gpu_assisted_trace", "gpu_in_loop"]
+                },
+                "uniqueItems": true
+              },
+              "fidelity_tiers": {
+                "type": "array",
+                "items": {
+                  "enum": ["Analytical", "DES", "Cycle"]
+                },
+                "uniqueItems": true
+              },
+              "limitations": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "uniqueItems": true
+              }
+            }
+          }
+        },
+        "calibration_status": {
+          "enum": ["calibration_missing", "available"]
+        },
+        "held_out_validation_status": {
+          "enum": ["held_out_validation_missing", "available"]
+        },
+        "lifecycle": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state", "replacement_identity"],
+          "properties": {
+            "state": {
+              "enum": ["active", "deprecated", "withdrawn"]
+            },
+            "replacement_identity": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/stableId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

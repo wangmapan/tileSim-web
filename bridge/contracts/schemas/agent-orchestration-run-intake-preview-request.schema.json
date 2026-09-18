@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/agent-orchestration-run-intake-preview-request.schema.json",
+  "x-tilesim-contract-status": "published",
+  "x-tilesim-schema-identity": "tilesim.bridge.agent_orchestration_run_intake_preview_request.v1",
+  "title": "AgentOrchestrationRunIntakePreviewRequest",
+  "description": "Request envelope for the read-only Run Intake v2 preview endpoint. It carries only what the browser legitimately owns: the nested Run Intake v2 payload exactly as it would appear inside a create-run v1 body, or an explicit null for a create-run request that has no nested Agent orchestration payload. Every judging input that could forge an accepted verdict is server-owned and therefore not accepted here: expected_revision, registered revisions, profile_records, backend lowering issues, claim_requires_calibration and the dispatcher route are all fixed by the server. additionalProperties is false so a client that tries to supply one of those fields is rejected instead of silently ignored.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["intake"],
+  "properties": {
+    "intake": {
+      "description": "The nested Agent orchestration submission. An explicit null is the expected-absence case: the create-run v1 accept set is unchanged because no nested payload is present. Omitting the key is a request-validation failure, not an expected absence.",
+      "oneOf": [{ "type": "null" }, { "$ref": "../agent_orchestration_phase2/schemas/run-intake.schema.json" }]
+    }
+  }
+}

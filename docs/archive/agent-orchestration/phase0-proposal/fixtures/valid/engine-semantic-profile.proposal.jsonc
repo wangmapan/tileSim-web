@@ -1,0 +1,238 @@
+{
+  "schema_version": "tilesim.proposal.agent_orchestration.engine_semantic_profile.v1alpha1",
+  "contract_status": "proposal_only",
+  "profile_family": "engine",
+  "profile_id": "phase0.fixture.engine.unknown",
+  "profile_revision": "sha256:4111111111111111111111111111111111111111111111111111111111111111",
+  "canonical_digest": "sha256:ecad9ceb63491e9900cf7377858945b57e7611b51110b90b55100a65d1cb7373",
+  "canonicalization": {
+    "identity": "tilesim.bridge.canonical_json.v1",
+    "algorithm": "sha256",
+    "text_encoding": "utf-8",
+    "object_key_order": "unicode_code_point_ascending",
+    "array_order": "preserved",
+    "number_policy": "lossless_integer_tokens_decimal_strings_no_binary_float"
+  },
+  "digest_material_fields": [
+    "profile_family",
+    "profile_id",
+    "status"
+  ],
+  "aliases": [],
+  "owner_module": "推理引擎与服务运行时模块",
+  "status": "profile_missing",
+  "reason_code": "profile_missing",
+  "sources": [
+    {
+      "source_id": "phase0.fixture.source.engine",
+      "source_kind": "synthetic_fixture",
+      "revision": "sha256:4111111111111111111111111111111111111111111111111111111111111111",
+      "digest": "sha256:4111111111111111111111111111111111111111111111111111111111111111",
+      "field_class": "modelled",
+      "claim_scope": "contract_fixture_only"
+    }
+  ],
+  "valid_regimes": [
+    {
+      "regime_id": "phase0.fixture.contract-only",
+      "source_modes": [
+        "synthetic_trace"
+      ],
+      "gpu_participation_modes": [
+        "gpu_free"
+      ],
+      "fidelity_tiers": [
+        "Analytical"
+      ],
+      "limitations": [
+        "Contract shape only; no engine behavior claim."
+      ]
+    }
+  ],
+  "field_provenance": {
+    "observed_fields": [],
+    "inferred_fields": [],
+    "modelled_fields": [],
+    "unknown_fields": [
+      "/engine_family",
+      "/software_version_range",
+      "/semantic_profile_identity",
+      "/semantic_profile_revision",
+      "/triggers",
+      "/owned_state",
+      "/ordered_decisions",
+      "/tie_breaking",
+      "/batching",
+      "/prefill_decode",
+      "/preemption",
+      "/prefix_kv_interaction",
+      "/feature_support",
+      "/output_events",
+      "/adjacent_module_interfaces",
+      "/trace_replay_support",
+      "/dynamic_state_machine_support"
+    ]
+  },
+  "lifecycle": {
+    "state": "active",
+    "introduced_revision": "sha256:4111111111111111111111111111111111111111111111111111111111111111",
+    "deprecated_revision": null,
+    "removal_revision": null,
+    "replacement_identity": null
+  },
+  "compatibility": {
+    "policy": "additive_optional",
+    "unknown_identity_behavior": "fail_closed",
+    "unknown_revision_behavior": "fail_closed",
+    "predecessor_identity": null,
+    "successor_identity": null
+  },
+  "engine_family": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "software_version_range": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "semantic_profile_identity": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "semantic_profile_revision": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "triggers": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "owned_state": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "ordered_decisions": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "tie_breaking": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "batching": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "prefill_decode": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "preemption": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "prefix_kv_interaction": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "feature_support": {
+    "tp": {
+      "status": "profile_missing",
+      "reason_code": "profile_missing",
+      "conditions": [],
+      "evidence_refs": []
+    },
+    "pp": {
+      "status": "profile_missing",
+      "reason_code": "profile_missing",
+      "conditions": [],
+      "evidence_refs": []
+    },
+    "ep": {
+      "status": "profile_missing",
+      "reason_code": "profile_missing",
+      "conditions": [],
+      "evidence_refs": []
+    },
+    "moe": {
+      "status": "profile_missing",
+      "reason_code": "profile_missing",
+      "conditions": [],
+      "evidence_refs": []
+    },
+    "disaggregation": {
+      "status": "profile_missing",
+      "reason_code": "profile_missing",
+      "conditions": [],
+      "evidence_refs": []
+    },
+    "speculative_decode": {
+      "status": "profile_missing",
+      "reason_code": "profile_missing",
+      "conditions": [],
+      "evidence_refs": []
+    }
+  },
+  "output_events": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "adjacent_module_interfaces": {
+    "knowledge_state": "unknown",
+    "value": null,
+    "field_class": "unknown",
+    "evidence_refs": [],
+    "reason_code": "profile_missing"
+  },
+  "trace_replay_support": {
+    "status": "profile_missing",
+    "reason_code": "profile_missing",
+    "conditions": [],
+    "evidence_refs": []
+  },
+  "dynamic_state_machine_support": {
+    "status": "profile_missing",
+    "reason_code": "profile_missing",
+    "conditions": [],
+    "evidence_refs": []
+  }
+}

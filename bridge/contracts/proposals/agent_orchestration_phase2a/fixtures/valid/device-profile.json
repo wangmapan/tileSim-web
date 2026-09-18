@@ -1,0 +1,83 @@
+{
+  "fixture_status": "fixture_only",
+  "contract": {
+    "schema_identity": "tilesim.bridge.agent_orchestration_device_profile.v2",
+    "schema_revision": "sha256:fbea82b900c39887d071974677aa9b3b54008eccb9d03551af5c41421ca786ee",
+    "profile_family": "device",
+    "profile_id": "fixture.device.synthetic-80gb",
+    "profile_revision": "sha256:c6f4783bdf7cf3d8919f2db82c11c9e0e3cb175be30b9a296edd5b36dad56e31",
+    "canonical_digest": "sha256:c6f4783bdf7cf3d8919f2db82c11c9e0e3cb175be30b9a296edd5b36dad56e31",
+    "display": {
+      "name": "Fixture 80 GiB device",
+      "description": "Uncalibrated synthetic device fixture.",
+      "labels": ["fixture_only"]
+    },
+    "source_reference": "fixture.phase2a.synthetic-device",
+    "source_kind": "synthetic_trace",
+    "license": { "spdx_id": "CC0-1.0", "redistribution_allowed": true, "notice_reference": null },
+    "valid_regime": { "description": "Contract consistency only.", "constraints": ["uncalibrated"] },
+    "lifecycle": {
+      "introduced_at": "2026-09-11T00:00:00Z",
+      "updated_at": "2026-09-11T00:00:00Z",
+      "expires_at": null,
+      "status": "available"
+    },
+    "calibration_status": "fixture_consistency_only",
+    "calibration_binding": null,
+    "held_out_validation_status": "missing",
+    "held_out_validation_binding": null,
+    "allowed_claim_scope": "synthetic_consistency",
+    "sensitivity": "public",
+    "visibility": "project",
+    "facts": {
+      "device_model": {
+        "value": "synthetic_device",
+        "unit": null,
+        "provenance": {
+          "kind": "modelled",
+          "source_reference": "fixture.phase2a.synthetic-device",
+          "source_field": "/device_model",
+          "observed_at": null,
+          "confidence": "1",
+          "evidence_scope": "synthetic_consistency"
+        }
+      },
+      "memory_capacity_bytes": {
+        "value": "85899345920",
+        "unit": "byte",
+        "provenance": {
+          "kind": "externally_specified",
+          "source_reference": "fixture.phase2a.synthetic-device",
+          "source_field": "/memory_capacity_bytes",
+          "observed_at": null,
+          "confidence": "1",
+          "evidence_scope": "synthetic_consistency"
+        }
+      },
+      "compute_profile_reference": {
+        "value": "fixture.compute.uncalibrated",
+        "unit": null,
+        "provenance": {
+          "kind": "modelled",
+          "source_reference": "fixture.phase2a.synthetic-device",
+          "source_field": "/compute_profile_reference",
+          "observed_at": null,
+          "confidence": "1",
+          "evidence_scope": "synthetic_consistency"
+        }
+      },
+      "interconnect_endpoints": {
+        "value": "8",
+        "unit": "endpoint",
+        "provenance": {
+          "kind": "modelled",
+          "source_reference": "fixture.phase2a.synthetic-device",
+          "source_field": "/interconnect_endpoints",
+          "observed_at": null,
+          "confidence": "1",
+          "evidence_scope": "synthetic_consistency"
+        }
+      }
+    }
+  }
+}

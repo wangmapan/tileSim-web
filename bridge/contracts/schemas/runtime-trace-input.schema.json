@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/runtime-trace-input.schema.json",
+  "x-tilesim-schema-identity": "tilesim.bridge.s1_runtime_trace_input.v1",
+  "title": "Controlled S1 runtime trace request input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["policy", "requests"],
+  "properties": {
+    "trace_name": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "trace_provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_mode", "calibration_level", "allowed_claim_scope"],
+      "properties": {
+        "source_mode": { "const": "synthetic_trace" },
+        "calibration_level": { "enum": ["uncalibrated", "partially_calibrated"] },
+        "allowed_claim_scope": {
+          "enum": [
+            "exploratory",
+            "exploratory_s6_only",
+            "synthetic_consistency",
+            "synthetic_consistency_only",
+            "workflow_consistency_only"
+          ]
+        },
+        "source_id": { "type": "string", "maxLength": 512 },
+        "generation_path": { "type": "string", "maxLength": 512 },
+        "capture_or_generation_time": { "type": "string", "maxLength": 160 },
+        "upstream_tooling": { "type": "string", "maxLength": 160 },
+        "trace_kind": { "type": "string", "maxLength": 160 },
+        "notes": { "type": "array", "items": { "type": "string", "maxLength": 512 }, "maxItems": 64 }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kv_capacity_tokens": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "initial_kv_tokens": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "max_active_requests": { "type": "integer", "minimum": 0, "maximum": 1024 },
+        "max_batch_size": { "type": "integer", "minimum": 0, "maximum": 1024 },
+        "batch_scheduler": { "enum": ["fifo", "decode_priority", "fabric_backpressure_aware"] },
+        "prefill_starvation_threshold_ps": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "pd_handoff_delay_ps": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "pd_handoff_queue_service_ps": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "kv_page_size_tokens": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "kv_fragmentation_overhead": { "type": "number", "minimum": 0 },
+        "kv_admission_watermark": { "type": "number", "minimum": 0, "maximum": 1 },
+        "fabric_backpressure_active": { "type": "boolean" },
+        "fabric_backpressure_delay_us": { "type": "number", "minimum": 0 },
+        "fabric_backpressure_throttle_threshold_us": { "type": "number", "minimum": 0 },
+        "fabric_backpressure_prefill_batch_limit": { "type": "integer", "minimum": 0, "maximum": 1024 },
+        "long_context_threshold_tokens": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "decode_penalty_per_threshold": { "type": "number", "minimum": 0 }
+      }
+    },
+    "requests": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1024,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["request_id"],
+        "properties": {
+          "request_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+          "model_id": { "type": "string", "maxLength": 256 },
+          "arrival_time_ps": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "phase": { "enum": ["prefill", "decode"] },
+          "prompt_tokens": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "decode_tokens": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "kv_tokens": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "priority_class": { "type": "integer" },
+          "tp_degree": { "type": "integer", "minimum": 1, "maximum": 1024 },
+          "participants": { "type": "array", "items": { "type": "string", "minLength": 1 }, "maxItems": 1024 },
+          "collective_type": { "type": "string", "maxLength": 160 },
+          "message_size_bytes": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "placement_group_id": { "type": "string", "maxLength": 256 },
+          "disaggregation_group_id": { "type": "string", "maxLength": 256 },
+          "kv_handoff_id": { "type": "string", "maxLength": 256 }
+        }
+      }
+    }
+  }
+}

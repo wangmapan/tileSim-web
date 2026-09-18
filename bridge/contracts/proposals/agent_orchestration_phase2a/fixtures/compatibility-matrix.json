@@ -1,0 +1,22 @@
+{
+  "fixture_identity": "tilesim.fixture.agent_orchestration_phase2a.compatibility_matrix.v1",
+  "fixture_status": "fixture_only",
+  "cases": [
+    { "scenario": "old_client_to_new_server", "expected": "accept_v1_unchanged", "error_code": null },
+    { "scenario": "new_client_to_old_server", "expected": "reject", "error_code": "unknown_nested_identity" },
+    {
+      "scenario": "v1_to_successor",
+      "expected": "reject_no_implicit_upgrade",
+      "error_code": "explicit_migration_required"
+    },
+    { "scenario": "successor_to_v1", "expected": "reject_no_downgrade", "error_code": "unsupported_contract_identity" },
+    { "scenario": "identity_missing", "expected": "reject", "error_code": "missing_contract_identity" },
+    { "scenario": "unknown_identity", "expected": "reject", "error_code": "unknown_contract_identity" },
+    { "scenario": "unknown_revision", "expected": "reject", "error_code": "unknown_contract_revision" },
+    { "scenario": "mixed_version_payload", "expected": "reject", "error_code": "mixed_contract_version" },
+    { "scenario": "exact_replay", "expected": "accept_exact_replay", "error_code": null },
+    { "scenario": "payload_mismatch", "expected": "reject", "error_code": "idempotency_payload_mismatch" },
+    { "scenario": "retained_historical_run", "expected": "accept_exact_replay_original_identity", "error_code": null },
+    { "scenario": "stale_profile_binding", "expected": "reject", "error_code": "validation_report_stale" }
+  ]
+}

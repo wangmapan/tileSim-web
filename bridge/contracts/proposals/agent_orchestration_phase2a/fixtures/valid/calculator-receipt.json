@@ -1,0 +1,28 @@
+{
+  "fixture_status": "fixture_only",
+  "contract": {
+    "schema_identity": "tilesim.bridge.agent_orchestration_calculator_receipt_envelope.v1",
+    "schema_revision": "sha256:c908763518a35904aa36092a120a43acb9cd37d2a7c37d144639ef435f09c265",
+    "receipt_identity": "tilesim.bridge.agent_orchestration_model_weight_memory_receipt.v1",
+    "receipt_revision": "sha256:2121212121212121212121212121212121212121212121212121212121212121",
+    "receipt_type": "model_weight_memory",
+    "calculator_identity": "tilesim.calculator.model_weight_memory.v1",
+    "algorithm_revision": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "input_references": [
+      {
+        "identity": "tilesim.bridge.agent_orchestration_model_profile.v2",
+        "revision": "sha256:2c4fa11e64fd7bec805ebeb218efb2be2db7bd0e200c86c68667790c5f05283c",
+        "digest": "sha256:2c4fa11e64fd7bec805ebeb218efb2be2db7bd0e200c86c68667790c5f05283c"
+      }
+    ],
+    "units": ["byte"],
+    "result": { "kind": "exact", "value": "2000000000", "unit": "byte" },
+    "rounding_policy": "exact",
+    "assumptions": ["two_bytes_per_parameter_fixture"],
+    "uncertainty": { "kind": "none", "description": "Deterministic fixture arithmetic only." },
+    "rule_ids": ["CALC.MODEL.WEIGHT.BYTES.V1"],
+    "repair_candidates": [],
+    "claim_scope_ceiling": "synthetic_consistency",
+    "typed_facts": { "primary_quantity": "model_weight_bytes", "constraint_status": "satisfied" }
+  }
+}

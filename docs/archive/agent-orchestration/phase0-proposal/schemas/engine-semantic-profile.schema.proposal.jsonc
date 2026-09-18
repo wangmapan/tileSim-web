@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/proposals/agent-orchestration-phase0/engine-semantic-profile.schema.json",
+  "x-tilesim-contract-status": "proposal_only",
+  "x-tilesim-schema-identity": "tilesim.proposal.agent_orchestration.engine_semantic_profile.v1alpha1",
+  "title": "Phase0EngineSemanticProfileProposal",
+  "allOf": [
+    {
+      "$ref": "profile-common.schema.json#/$defs/profileEnvelope"
+    },
+    {
+      "type": "object",
+      "required": [
+        "engine_family",
+        "software_version_range",
+        "semantic_profile_identity",
+        "semantic_profile_revision",
+        "triggers",
+        "owned_state",
+        "ordered_decisions",
+        "tie_breaking",
+        "batching",
+        "prefill_decode",
+        "preemption",
+        "prefix_kv_interaction",
+        "feature_support",
+        "output_events",
+        "adjacent_module_interfaces",
+        "trace_replay_support",
+        "dynamic_state_machine_support"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "tilesim.proposal.agent_orchestration.engine_semantic_profile.v1alpha1"
+        },
+        "profile_family": {
+          "const": "engine"
+        },
+        "engine_family": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "software_version_range": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "semantic_profile_identity": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "semantic_profile_revision": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "triggers": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "owned_state": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "ordered_decisions": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "tie_breaking": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "batching": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "prefill_decode": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "preemption": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "prefix_kv_interaction": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "feature_support": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "tp",
+            "pp",
+            "ep",
+            "moe",
+            "disaggregation",
+            "speculative_decode"
+          ],
+          "properties": {
+            "tp": {
+              "$ref": "profile-common.schema.json#/$defs/featureSupport"
+            },
+            "pp": {
+              "$ref": "profile-common.schema.json#/$defs/featureSupport"
+            },
+            "ep": {
+              "$ref": "profile-common.schema.json#/$defs/featureSupport"
+            },
+            "moe": {
+              "$ref": "profile-common.schema.json#/$defs/featureSupport"
+            },
+            "disaggregation": {
+              "$ref": "profile-common.schema.json#/$defs/featureSupport"
+            },
+            "speculative_decode": {
+              "$ref": "profile-common.schema.json#/$defs/featureSupport"
+            }
+          }
+        },
+        "output_events": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "adjacent_module_interfaces": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "trace_replay_support": {
+          "$ref": "profile-common.schema.json#/$defs/featureSupport"
+        },
+        "dynamic_state_machine_support": {
+          "$ref": "profile-common.schema.json#/$defs/featureSupport"
+        }
+      }
+    }
+  ],
+  "unevaluatedProperties": false
+}

@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/metrics-report.schema.json",
+  "title": "MetricsReportV1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "run_id", "request_metrics", "percentile_subjects", "system_summary"],
+  "properties": {
+    "schema_version": { "const": "tilesim.metrics_report.v1" },
+    "run_id": { "type": "string", "minLength": 1 },
+    "request_metrics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["request_id"],
+        "properties": { "request_id": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "percentile_subjects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "metric_kind",
+          "percentile",
+          "value_ps",
+          "selection_rule",
+          "selection_semantics",
+          "selected_request_id",
+          "member_request_ids",
+          "subject_refs"
+        ],
+        "properties": {
+          "metric_kind": { "enum": ["ttft_ps", "tpot_ps", "end_to_end_latency_ps"] },
+          "percentile": { "enum": [50, 95, 99] },
+          "value_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+          "selection_rule": { "type": "string", "minLength": 1 },
+          "selection_semantics": { "enum": ["single_request", "tie_no_single_request", "not_applicable"] },
+          "selected_request_id": { "type": "string" },
+          "member_request_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+          "subject_refs": { "type": "array", "items": { "$ref": "f6b-common.schema.json#/$defs/subjectRef" } }
+        }
+      }
+    },
+    "system_summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["fabric_domain_utilization", "phase_fabric_contributions"],
+      "properties": {
+        "fabric_domain_utilization": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "domain_id",
+              "record_count",
+              "busy_time_ps",
+              "observation_window_ps",
+              "subject_refs",
+              "topology_domain_ref"
+            ],
+            "properties": {
+              "domain_id": { "type": "string", "minLength": 1 },
+              "record_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+              "busy_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+              "observation_window_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+              "subject_refs": {
+                "type": "array",
+                "minItems": 1,
+                "items": { "$ref": "f6b-common.schema.json#/$defs/subjectRef" }
+              },
+              "topology_domain_ref": {
+                "$ref": "f6b-common.schema.json#/$defs/evidenceRef"
+              }
+            }
+          }
+        },
+        "phase_fabric_contributions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "request_id",
+              "phase_id",
+              "memory_event_id",
+              "device_task_id",
+              "collective_id",
+              "not_s5_collective"
+            ],
+            "properties": {
+              "request_id": { "type": "string" },
+              "phase_id": { "type": "string", "minLength": 1 },
+              "memory_event_id": { "type": "string" },
+              "device_task_id": { "type": "string" },
+              "collective_id": { "type": "string" },
+              "not_s5_collective": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

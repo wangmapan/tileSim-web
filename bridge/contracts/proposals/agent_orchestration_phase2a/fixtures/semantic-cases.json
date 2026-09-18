@@ -1,0 +1,41 @@
+{
+  "fixture_identity": "tilesim.fixture.agent_orchestration_phase2a.semantic_cases.v1",
+  "fixture_status": "fixture_only",
+  "profile_binding_fail_closed": [
+    { "case": "missing", "error_code": "profile_missing" },
+    { "case": "unknown", "error_code": "unknown_profile" },
+    { "case": "unavailable", "error_code": "profile_unavailable" },
+    { "case": "ambiguous", "error_code": "profile_ambiguous" },
+    { "case": "expired", "error_code": "profile_expired" },
+    { "case": "revision_mismatch", "error_code": "profile_revision_mismatch" },
+    { "case": "digest_mismatch", "error_code": "profile_digest_mismatch" },
+    { "case": "incompatible", "error_code": "profile_combination_incompatible" },
+    { "case": "calibration_missing", "error_code": "calibration_missing" },
+    { "case": "execution_evidence_missing", "error_code": "execution_evidence_missing" }
+  ],
+  "stale_triggers": [
+    "profile_revision_or_digest_changed",
+    "capability_snapshot_changed",
+    "backend_or_schema_revision_changed",
+    "validation_policy_changed",
+    "calculator_algorithm_changed",
+    "workload_template_changed",
+    "compiled_request_changed",
+    "approval_missing_or_expired"
+  ],
+  "provenance_rejections": [
+    { "case": "synthetic_to_real_calibrated_validation", "error_code": "evidence_scope_promotion_denied" },
+    { "case": "compatibility_to_held_out_validated", "error_code": "evidence_scope_promotion_denied" },
+    { "case": "self_reported_calibration", "error_code": "calibration_attestation_required" },
+    { "case": "self_reported_held_out", "error_code": "held_out_attestation_required" }
+  ],
+  "idempotency_cases": [
+    { "case": "same_key_same_canonical_payload", "expected": "exact_replay_or_terminal_not_retained" },
+    { "case": "same_key_different_payload", "expected": "reject_409_idempotency_payload_mismatch" },
+    { "case": "version_changed", "expected": "different_payload_reject_same_key" },
+    { "case": "profile_revision_changed", "expected": "different_payload_reject_same_key" },
+    { "case": "crash_retry", "expected": "resume_or_terminalize_without_duplicate_side_effect" },
+    { "case": "delete_or_expiry", "expected": "tombstone_key_without_payload_or_result" }
+  ],
+  "forbidden_persistence": ["credential", "hidden_reasoning", "raw_provider_response"]
+}

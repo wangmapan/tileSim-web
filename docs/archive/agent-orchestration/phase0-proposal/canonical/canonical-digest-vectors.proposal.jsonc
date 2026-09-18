@@ -1,0 +1,67 @@
+{
+  "schema_version": "tilesim.proposal.agent_orchestration.canonical_digest_vectors.v1",
+  "canonicalization": "tilesim.bridge.canonical_json.v1",
+  "cases": [
+    {
+      "id": "unicode-code-point-order-and-uint64-max",
+      "value": {
+        "😀": "astral",
+        "": "bmp",
+        "a": [
+          3,
+          "汉字"
+        ],
+        "bytes": "18446744073709551615"
+      },
+      "integer_json_pointers": [
+        "/bytes"
+      ],
+      "expected_canonical_json": "{\"a\":[3,\"汉字\"],\"bytes\":18446744073709551615,\"\":\"bmp\",\"😀\":\"astral\"}",
+      "expected_sha256": "sha256:d2572b15491b90bd42379bace3fca4e60cb7a74d95be27f637b1d8aadca20cb4"
+    },
+    {
+      "id": "capability-dimensions-remain-independent",
+      "value": {
+        "field_id": "s1.runtime.max_batch_size",
+        "dimensions": {
+          "described": "affirmed",
+          "accepted": "affirmed",
+          "validated": "affirmed",
+          "lowered": "unknown",
+          "executed": "unknown",
+          "observable": "unknown",
+          "calibrated": "unknown",
+          "held_out_validated": "unknown",
+          "ui_exposed": "affirmed",
+          "agent_exposed": "denied"
+        },
+        "count": "9007199254740993"
+      },
+      "integer_json_pointers": [
+        "/count"
+      ],
+      "expected_canonical_json": "{\"count\":9007199254740993,\"dimensions\":{\"accepted\":\"affirmed\",\"agent_exposed\":\"denied\",\"calibrated\":\"unknown\",\"described\":\"affirmed\",\"executed\":\"unknown\",\"held_out_validated\":\"unknown\",\"lowered\":\"unknown\",\"observable\":\"unknown\",\"ui_exposed\":\"affirmed\",\"validated\":\"affirmed\"},\"field_id\":\"s1.runtime.max_batch_size\"}",
+      "expected_sha256": "sha256:249a7803f03469e5b300d0e1e97a31b5eb6b85c7d52251b788b4b407f516579f"
+    },
+    {
+      "id": "array-order-and-binding-identity",
+      "value": {
+        "bindings": {
+          "schema_set_revision": "sha256:eb6c0dc921faa53789c053dfef99b82d1a5eb0499cb244e364178eab43e7095c",
+          "create_run_schema_identity": "tilesim.bridge.create_run_request.v1"
+        },
+        "profile_ids": [
+          "workload",
+          "topology",
+          "device",
+          "engine",
+          "model"
+        ],
+        "zero": 0
+      },
+      "integer_json_pointers": [],
+      "expected_canonical_json": "{\"bindings\":{\"create_run_schema_identity\":\"tilesim.bridge.create_run_request.v1\",\"schema_set_revision\":\"sha256:eb6c0dc921faa53789c053dfef99b82d1a5eb0499cb244e364178eab43e7095c\"},\"profile_ids\":[\"workload\",\"topology\",\"device\",\"engine\",\"model\"],\"zero\":0}",
+      "expected_sha256": "sha256:5699274142351579452cd3706aab99bff0deea1d2de18a0ffd3b115b977d4ca2"
+    }
+  ]
+}

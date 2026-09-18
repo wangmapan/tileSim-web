@@ -1,0 +1,17 @@
+.DS_Store
+.idea/
+.venv/
+node_modules/
+dist/
+runs/
+runtime/
+.vite/
+coverage/
+test-results/
+playwright-report/
+.playwright-cli/
+output/
+.workbuddy/
+__pycache__/
+*.pyc
+/启动TileSim工作台.exe

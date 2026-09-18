@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/proposals/agent-orchestration-phase2a/workload-profile.schema.proposal.json",
+  "x-tilesim-contract-status": "proposal_only",
+  "x-tilesim-schema-identity": "tilesim.bridge.agent_orchestration_workload_profile.v2",
+  "allOf": [
+    { "$ref": "common.schema.proposal.json#/$defs/profileEnvelope" },
+    {
+      "properties": {
+        "schema_identity": { "const": "tilesim.bridge.agent_orchestration_workload_profile.v2" },
+        "profile_family": { "const": "workload" },
+        "facts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["template_kind", "request_count", "input_tokens", "output_tokens", "arrival_process"],
+          "properties": {
+            "template_kind": { "$ref": "common.schema.proposal.json#/$defs/stringFact" },
+            "request_count": { "$ref": "common.schema.proposal.json#/$defs/uint64Fact" },
+            "input_tokens": { "$ref": "common.schema.proposal.json#/$defs/stringFact" },
+            "output_tokens": { "$ref": "common.schema.proposal.json#/$defs/stringFact" },
+            "arrival_process": { "$ref": "common.schema.proposal.json#/$defs/stringFact" }
+          }
+        }
+      }
+    }
+  ]
+}

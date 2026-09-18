@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/evidence-agent-citation.schema.json",
+  "x-tilesim-schema-identity": "tilesim.bridge.evidence_agent_citation.v1",
+  "title": "EvidenceAgentCitation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "artifact_id",
+    "schema_identity",
+    "sha256",
+    "json_pointer",
+    "subject",
+    "citation_role",
+    "availability"
+  ],
+  "properties": {
+    "schema_version": { "const": "tilesim.bridge.evidence_agent_citation.v1" },
+    "run_id": { "type": "string", "pattern": "^run-[A-Za-z0-9._-]+$" },
+    "artifact_id": { "type": "string", "minLength": 1 },
+    "schema_identity": { "type": "string", "minLength": 1 },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "json_pointer": { "type": "string", "pattern": "^/" },
+    "subject": { "$ref": "#/$defs/subject" },
+    "citation_role": {
+      "enum": [
+        "direct_fact",
+        "reported_attribution",
+        "validation_boundary",
+        "provenance_constraint",
+        "fidelity_constraint",
+        "conditional_recommendation_basis"
+      ]
+    },
+    "availability": {
+      "enum": ["available", "missing", "expected_absence", "not_covered", "unsupported_schema", "not_applicable"]
+    },
+    "value": { "$ref": "#/$defs/losslessNumber" },
+    "unit": { "type": "string", "minLength": 1 }
+  },
+  "dependentRequired": { "value": ["unit"], "unit": ["value"] },
+  "$defs": {
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "run",
+            "request",
+            "fabric_phase",
+            "memory_event",
+            "device_task",
+            "collective",
+            "cause",
+            "attribution",
+            "stage",
+            "check",
+            "candidate",
+            "fabric_domain",
+            "objective",
+            "executed_s6_knob"
+          ]
+        },
+        "id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "losslessNumber": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["encoding", "numeric_kind", "decimal"],
+      "properties": {
+        "encoding": { "const": "decimal_string" },
+        "numeric_kind": { "enum": ["uint64", "sint64", "decimal"] },
+        "decimal": { "type": "string", "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$" }
+      }
+    }
+  }
+}

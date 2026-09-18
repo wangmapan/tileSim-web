@@ -1,0 +1,262 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/publication-candidates/agent-orchestration-phase0b/capability-snapshot.schema.json",
+  "x-tilesim-contract-status": "publication_candidate",
+  "x-tilesim-schema-identity": "tilesim.bridge.agent_orchestration_capability_snapshot.v1",
+  "title": "AgentOrchestrationCapabilitySnapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_identity",
+    "publication_status",
+    "snapshot_id",
+    "snapshot_revision",
+    "snapshot_digest",
+    "canonicalization_identity",
+    "activation",
+    "evidence_binding",
+    "source_target_binding",
+    "observed_non_target_runtime_binding",
+    "catalog",
+    "evidence_agent_bindings",
+    "excluded_agent_domains",
+    "drift_policy"
+  ],
+  "properties": {
+    "schema_identity": {
+      "const": "tilesim.bridge.agent_orchestration_capability_snapshot.v1"
+    },
+    "publication_status": {
+      "const": "publication_candidate"
+    },
+    "snapshot_id": {
+      "$ref": "common.schema.json#/$defs/stableId"
+    },
+    "snapshot_revision": {
+      "$ref": "common.schema.json#/$defs/sha256"
+    },
+    "snapshot_digest": {
+      "$ref": "common.schema.json#/$defs/sha256"
+    },
+    "canonicalization_identity": {
+      "const": "tilesim.bridge.canonical_json.v1"
+    },
+    "activation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "reason_codes"],
+      "properties": {
+        "status": {
+          "const": "unavailable"
+        },
+        "reason_codes": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "$ref": "common.schema.json#/$defs/reasonCode"
+          },
+          "contains": {
+            "const": "identity_approval_pending"
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "evidence_binding": {
+      "$ref": "common.schema.json#/$defs/binding"
+    },
+    "source_target_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "runtime_availability", "reason_codes"],
+      "properties": {
+        "status": {
+          "const": "target_pending"
+        },
+        "runtime_availability": {
+          "const": "unavailable"
+        },
+        "reason_codes": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "$ref": "common.schema.json#/$defs/reasonCode"
+          },
+          "contains": {
+            "const": "source_target_revision_pending"
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "observed_non_target_runtime_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "reason_code", "binding"],
+      "properties": {
+        "status": {
+          "const": "not_publishable"
+        },
+        "reason_code": {
+          "const": "binding_compatibility_review_pending"
+        },
+        "binding": {
+          "$ref": "common.schema.json#/$defs/binding"
+        }
+      }
+    },
+    "catalog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "catalog_identity",
+        "catalog_revision",
+        "catalog_digest",
+        "contract_package_revision",
+        "parameter_descriptor_schema_identity",
+        "parameter_descriptor_schema_revision",
+        "parameter_descriptor_schema_digest",
+        "parameter_descriptors",
+        "profile_families",
+        "agent_exposed_field_ids",
+        "claim_scope_ceiling"
+      ],
+      "properties": {
+        "catalog_identity": {
+          "const": "tilesim.bridge.agent_orchestration_capability_catalog.v1"
+        },
+        "catalog_revision": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "catalog_digest": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "contract_package_revision": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "parameter_descriptor_schema_identity": {
+          "const": "tilesim.bridge.agent_orchestration_parameter_descriptor.v1"
+        },
+        "parameter_descriptor_schema_revision": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "parameter_descriptor_schema_digest": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "parameter_descriptors": {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 8,
+          "items": {
+            "$ref": "parameter-descriptor.schema.json"
+          }
+        },
+        "profile_families": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "items": {
+            "$ref": "common.schema.json#/$defs/profileAvailability"
+          }
+        },
+        "agent_exposed_field_ids": {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 8,
+          "items": {
+            "$ref": "common.schema.json#/$defs/stableId"
+          },
+          "uniqueItems": true
+        },
+        "claim_scope_ceiling": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": ["exploration", "synthetic_consistency"]
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "evidence_agent_bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "descriptor_identity",
+        "descriptor_revision",
+        "request_identity",
+        "response_identity",
+        "citation_identity",
+        "snapshot_reference_identity"
+      ],
+      "properties": {
+        "descriptor_identity": {
+          "const": "tilesim.bridge.evidence_agent_descriptor.v2"
+        },
+        "descriptor_revision": {
+          "const": "sha256:5f78ed33e20c131f672af53368c5ca950f41d63fd2e8f5301757d1f42debe357"
+        },
+        "request_identity": {
+          "const": "tilesim.bridge.evidence_agent_request.v1"
+        },
+        "response_identity": {
+          "const": "tilesim.bridge.evidence_agent_response.v1"
+        },
+        "citation_identity": {
+          "const": "tilesim.bridge.evidence_agent_citation.v1"
+        },
+        "snapshot_reference_identity": {
+          "const": "tilesim.bridge.evidence_snapshot_reference.v1"
+        }
+      }
+    },
+    "excluded_agent_domains": {
+      "type": "array",
+      "minItems": 7,
+      "items": {
+        "enum": [
+          "model_selection",
+          "device_selection",
+          "engine_selection",
+          "tp_pp_ep",
+          "physical_kv_policy",
+          "collective_algorithm",
+          "slo"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "drift_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "backend_revision_mismatch",
+        "schema_set_revision_mismatch",
+        "experiment_descriptor_revision_mismatch",
+        "catalog_revision_mismatch",
+        "unknown_identity_or_status",
+        "stale_action"
+      ],
+      "properties": {
+        "backend_revision_mismatch": {
+          "const": "fail_closed"
+        },
+        "schema_set_revision_mismatch": {
+          "const": "fail_closed"
+        },
+        "experiment_descriptor_revision_mismatch": {
+          "const": "fail_closed"
+        },
+        "catalog_revision_mismatch": {
+          "const": "fail_closed"
+        },
+        "unknown_identity_or_status": {
+          "const": "fail_closed"
+        },
+        "stale_action": {
+          "const": "hide_agent_exposed_projection_and_require_refetch"
+        }
+      }
+    }
+  }
+}

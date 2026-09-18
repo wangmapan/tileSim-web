@@ -1,0 +1,118 @@
+{
+  "schema_version": "tilesim.web.field_audit.v1",
+  "fixture_id": "synthetic-s1-s6-complete",
+  "entries": [
+    {
+      "ui_field": "overview.end_to_end_latency_us",
+      "artifact": "run",
+      "json_pointer": "/summary/end_to_end_latency_us",
+      "unit": "us",
+      "derivation": "identity",
+      "expected": 10649.5
+    },
+    {
+      "ui_field": "overview.throughput_requests_per_second",
+      "artifact": "metrics",
+      "json_pointer": "/summary/throughput_requests_per_second",
+      "unit": "request_per_second",
+      "derivation": "identity",
+      "expected": 282.97
+    },
+    {
+      "ui_field": "overview.runtime_event_count",
+      "artifact": "run",
+      "json_pointer": "/summary/runtime_event_count",
+      "unit": "count",
+      "derivation": "identity",
+      "expected": 151
+    },
+    {
+      "ui_field": "metrics.ttft_p95_ps",
+      "artifact": "metrics",
+      "json_pointer": "/tail_latency_summary/ttft_ps/p95_ps",
+      "unit": "ps",
+      "derivation": "identity",
+      "expected": 26
+    },
+    {
+      "ui_field": "metrics.tpot_p95_ps",
+      "artifact": "metrics",
+      "json_pointer": "/tail_latency_summary/tpot_ps/p95_ps",
+      "unit": "ps",
+      "derivation": "identity_preserve_zero",
+      "expected": 0
+    },
+    {
+      "ui_field": "validation.source_mode",
+      "artifact": "validation",
+      "json_pointer": "/trace_provenance/source_mode",
+      "unit": "enum",
+      "derivation": "identity",
+      "expected": "synthetic_trace"
+    },
+    {
+      "ui_field": "validation.allowed_claim_scope",
+      "artifact": "validation",
+      "json_pointer": "/trace_provenance/allowed_claim_scope",
+      "unit": "enum",
+      "derivation": "identity",
+      "expected": "exploratory"
+    },
+    {
+      "ui_field": "S3.memory_event_count",
+      "artifact": "metrics",
+      "json_pointer": "/system_summary/phase_fabric_contributions",
+      "unit": "count",
+      "derivation": "unique_nonempty(memory_event_id)",
+      "expected": 1
+    },
+    {
+      "ui_field": "S4.device_task_count",
+      "artifact": "metrics",
+      "json_pointer": "/system_summary/phase_fabric_contributions",
+      "unit": "count",
+      "derivation": "unique_nonempty(device_task_id)",
+      "expected": 1
+    },
+    {
+      "ui_field": "S5.collective_count",
+      "artifact": "metrics",
+      "json_pointer": "/system_summary/phase_fabric_contributions",
+      "unit": "count",
+      "derivation": "unique_nonempty(collective_id)",
+      "expected": 1
+    },
+    {
+      "ui_field": "S6.fabric_record_count",
+      "artifact": "metrics",
+      "json_pointer": "/system_summary/fabric_record_count",
+      "unit": "count",
+      "derivation": "identity",
+      "expected": 2
+    },
+    {
+      "ui_field": "S7.stage_count",
+      "artifact": "execution_envelope",
+      "json_pointer": "/stages",
+      "unit": "count",
+      "derivation": "array_length",
+      "expected": 3
+    },
+    {
+      "ui_field": "design_space.candidate_count",
+      "artifact": "design_space",
+      "json_pointer": "/candidate_count",
+      "unit": "count",
+      "derivation": "identity",
+      "expected": 1
+    },
+    {
+      "ui_field": "design_space.execution_scope",
+      "artifact": "design_space",
+      "json_pointer": "/execution_scope",
+      "unit": "enum",
+      "derivation": "identity",
+      "expected": "S6_only"
+    }
+  ]
+}

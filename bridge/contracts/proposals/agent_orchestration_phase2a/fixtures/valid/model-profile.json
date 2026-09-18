@@ -1,0 +1,110 @@
+{
+  "fixture_status": "fixture_only",
+  "contract": {
+    "schema_identity": "tilesim.bridge.agent_orchestration_model_profile.v2",
+    "schema_revision": "sha256:6a81665563ad59a1220dd18d01b6c00828fe21dcfcb5e61bf7384c6c10c52f10",
+    "profile_family": "model",
+    "profile_id": "fixture.model.moe-small",
+    "profile_revision": "sha256:2c4fa11e64fd7bec805ebeb218efb2be2db7bd0e200c86c68667790c5f05283c",
+    "canonical_digest": "sha256:2c4fa11e64fd7bec805ebeb218efb2be2db7bd0e200c86c68667790c5f05283c",
+    "display": {
+      "name": "Fixture MoE model",
+      "description": "Synthetic consistency fixture; not a real model profile.",
+      "labels": ["fixture_only"]
+    },
+    "source_reference": "fixture.phase2a.synthetic-model",
+    "source_kind": "synthetic_trace",
+    "license": { "spdx_id": "CC0-1.0", "redistribution_allowed": true, "notice_reference": null },
+    "valid_regime": {
+      "description": "Schema and deterministic consistency tests only.",
+      "constraints": ["not_for_fidelity_claims"]
+    },
+    "lifecycle": {
+      "introduced_at": "2026-09-11T00:00:00Z",
+      "updated_at": "2026-09-11T00:00:00Z",
+      "expires_at": null,
+      "status": "available"
+    },
+    "calibration_status": "fixture_consistency_only",
+    "calibration_binding": null,
+    "held_out_validation_status": "missing",
+    "held_out_validation_binding": null,
+    "allowed_claim_scope": "synthetic_consistency",
+    "sensitivity": "public",
+    "visibility": "project",
+    "facts": {
+      "architecture": {
+        "value": "fixture_moe",
+        "unit": null,
+        "provenance": {
+          "kind": "modelled",
+          "source_reference": "fixture.phase2a.synthetic-model",
+          "source_field": "/architecture",
+          "observed_at": null,
+          "confidence": "1",
+          "evidence_scope": "synthetic_consistency"
+        }
+      },
+      "parameter_count": {
+        "value": "1000000000",
+        "unit": "parameter",
+        "provenance": {
+          "kind": "modelled",
+          "source_reference": "fixture.phase2a.synthetic-model",
+          "source_field": "/parameter_count",
+          "observed_at": null,
+          "confidence": "1",
+          "evidence_scope": "synthetic_consistency"
+        }
+      },
+      "layer_count": {
+        "value": "16",
+        "unit": "layer",
+        "provenance": {
+          "kind": "modelled",
+          "source_reference": "fixture.phase2a.synthetic-model",
+          "source_field": "/layer_count",
+          "observed_at": null,
+          "confidence": "1",
+          "evidence_scope": "synthetic_consistency"
+        }
+      },
+      "hidden_size": {
+        "value": "2048",
+        "unit": "element",
+        "provenance": {
+          "kind": "modelled",
+          "source_reference": "fixture.phase2a.synthetic-model",
+          "source_field": "/hidden_size",
+          "observed_at": null,
+          "confidence": "1",
+          "evidence_scope": "synthetic_consistency"
+        }
+      },
+      "expert_structure": {
+        "value": "8_total_2_active",
+        "unit": null,
+        "provenance": {
+          "kind": "modelled",
+          "source_reference": "fixture.phase2a.synthetic-model",
+          "source_field": "/expert_structure",
+          "observed_at": null,
+          "confidence": "1",
+          "evidence_scope": "synthetic_consistency"
+        }
+      },
+      "tensor_layout": {
+        "value": "bf16_fixture",
+        "unit": null,
+        "provenance": {
+          "kind": "externally_specified",
+          "source_reference": "fixture.phase2a.synthetic-model",
+          "source_field": "/tensor_layout",
+          "observed_at": null,
+          "confidence": "1",
+          "evidence_scope": "synthetic_consistency"
+        }
+      }
+    }
+  }
+}

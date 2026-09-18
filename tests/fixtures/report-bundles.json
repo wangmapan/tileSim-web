@@ -1,0 +1,725 @@
+{
+  "schema_version": "tilesim.web.fixture.bundles.v1",
+  "cases": [
+    {
+      "id": "synthetic-s1-s6-complete",
+      "description": "Compact fixture derived from the Week 6 S1->S6 synthetic output shape.",
+      "expected": {
+        "source_mode": "synthetic_trace",
+        "validation_lane": "synthetic_consistency",
+        "evidence_tier": "synthetic_consistency_with_resource_convergence",
+        "claim_scope": "exploratory",
+        "complete_bundle": true,
+        "memory_events": 1,
+        "device_tasks": 1,
+        "collectives": 1
+      },
+      "inputs": {
+        "runtime_trace": {
+          "trace_name": "fixture-synthetic::events",
+          "policy": {
+            "batch_scheduler": "decode_priority",
+            "max_batch_size": 2,
+            "max_active_requests": 4,
+            "kv_capacity_tokens": 4096,
+            "fabric_backpressure_active": false
+          },
+          "requests": [
+            {
+              "request_id": "req-0",
+              "phase": "prefill",
+              "model_id": "fixture-model",
+              "prompt_tokens": 128,
+              "decode_tokens": 16,
+              "kv_tokens": 144,
+              "priority_class": "normal",
+              "collective_type": "AllGather",
+              "tp_degree": 2,
+              "message_size_bytes": 1048576
+            }
+          ]
+        },
+        "topology": {
+          "topology_id": "fixture-topology"
+        }
+      },
+      "reports": {
+        "run": {
+          "report_kind": "wind_tunnel_run_result",
+          "contract_version": "wind_tunnel.run.v1alpha1",
+          "status": "partial",
+          "cause": "Synthetic evidence is bounded.",
+          "summary": {
+            "trace_name": "fixture-synthetic::events",
+            "range_label": "S1->S6",
+            "host_path": "S7",
+            "execution_path": "hosted",
+            "end_to_end_latency_us": 10649.5,
+            "runtime_event_count": 151,
+            "fabric_record_count": 2,
+            "validation_completeness": 0.95,
+            "has_tail_attribution": true
+          },
+          "multi_granularity_profile": {
+            "entries": [
+              {
+                "subsystem": "S1",
+                "effective_tier": "des",
+                "des_status": "implemented",
+                "cycle_status": "not_requested"
+              }
+            ]
+          },
+          "bottleneck_report": {
+            "primary_subsystem": "S6",
+            "title": "Queue delay dominates",
+            "detail": "Fixture S6 queue evidence is dominant."
+          }
+        },
+        "metrics": {
+          "report_id": "fixture-synthetic::events-metrics",
+          "trace_name": "fixture-synthetic::events",
+          "metric_lane": "synthetic_consistency",
+          "evidence_tier": "synthetic_consistency_with_resource_convergence",
+          "claim_scope_summary": "Synthetic consistency only.",
+          "trace_provenance": {
+            "source_mode": "synthetic_trace",
+            "calibration_level": "uncalibrated",
+            "allowed_claim_scope": "exploratory",
+            "source_id": "fixture:synthetic-s1-s6",
+            "trace_kind": "s1_runtime"
+          },
+          "summary": {
+            "request_count": 1,
+            "completed_request_count": 1,
+            "rejected_request_count": 0,
+            "throughput_requests_per_second": 282.97
+          },
+          "tail_latency_summary": {
+            "ttft_ps": {
+              "sample_count": 1,
+              "p50_ps": 0,
+              "p95_ps": 26,
+              "p99_ps": 26,
+              "max_ps": 26
+            },
+            "tpot_ps": {
+              "sample_count": 1,
+              "p50_ps": 0,
+              "p95_ps": 0,
+              "p99_ps": 0,
+              "max_ps": 0
+            },
+            "end_to_end_latency_ps": {
+              "sample_count": 1,
+              "p50_ps": 31,
+              "p95_ps": 31,
+              "p99_ps": 31,
+              "max_ps": 31
+            }
+          },
+          "request_metrics": [
+            {
+              "request_id": "req-0",
+              "status": "completed",
+              "ttft_ps": 0,
+              "tpot_ps": 0,
+              "end_to_end_latency_ps": 31,
+              "decode_step_count": 16,
+              "batch_issue_count": 16
+            }
+          ],
+          "resource_convergence": {
+            "has_evidence": true,
+            "collective_phase_count": 2,
+            "converged_request_count": 1,
+            "missing_memory_event_count": 0,
+            "missing_device_task_count": 0
+          },
+          "system_summary": {
+            "fabric_record_count": 2,
+            "active_fabric_domain_count": 1,
+            "fabric_utilization_ratio": 0.5,
+            "max_fabric_backpressure_delay_us": 4.5,
+            "dominant_fabric_backpressure_domain_id": "scale-up",
+            "dominant_fabric_backpressure_kind": "queue_delay",
+            "fabric_backpressure_event_count": 1,
+            "fabric_observation_window_ps": 31000000,
+            "fabric_domain_utilization": [
+              {
+                "domain_id": "scale-up",
+                "record_count": 2,
+                "utilization_ratio": 0.5,
+                "queue_delay_us": 4.5,
+                "congestion_delay_us": 1.5,
+                "runtime_us": 10
+              }
+            ],
+            "request_fabric_contributions": [
+              {
+                "request_id": "req-0",
+                "record_count": 2,
+                "runtime_us": 10,
+                "queue_delay_us": 4.5,
+                "congestion_delay_us": 1.5,
+                "queue_delay_ratio": 0.45,
+                "congestion_delay_ratio": 0.15,
+                "dominant_domain_id": "scale-up",
+                "dominant_delay_kind": "queue_delay",
+                "dominant_collective_id": "collective-0",
+                "dominant_phase_id": "phase-0"
+              }
+            ],
+            "phase_fabric_contributions": [
+              {
+                "request_id": "req-0",
+                "collective_id": "collective-0",
+                "phase_id": "phase-0",
+                "domain_id": "scale-up",
+                "transfer_kind": "AllGather",
+                "runtime_us": 6,
+                "queue_delay_us": 3,
+                "congestion_delay_us": 1,
+                "memory_event_id": "memory-0",
+                "memory_operation": "kv_growth",
+                "memory_match_status": "matched",
+                "memory_latency_us": 2.25,
+                "device_task_id": "device-0",
+                "device_profile": "analytical_default",
+                "device_stream_id": "stream-0",
+                "device_match_status": "matched",
+                "device_latency_us": 6.19,
+                "device_occupancy_ratio": 0.5,
+                "device_contention_delay_us": 0.5,
+                "resource_convergence_status": "complete"
+              },
+              {
+                "request_id": "req-0",
+                "collective_id": "collective-0",
+                "phase_id": "phase-1",
+                "domain_id": "scale-up",
+                "transfer_kind": "AllGather",
+                "runtime_us": 4,
+                "queue_delay_us": 1.5,
+                "congestion_delay_us": 0.5,
+                "memory_event_id": "memory-0",
+                "memory_operation": "kv_growth",
+                "memory_match_status": "matched",
+                "memory_latency_us": 2.25,
+                "device_task_id": "device-0",
+                "device_profile": "analytical_default",
+                "device_stream_id": "stream-0",
+                "device_match_status": "matched",
+                "device_latency_us": 6.19,
+                "device_occupancy_ratio": 0.5,
+                "device_contention_delay_us": 0.5,
+                "resource_convergence_status": "complete"
+              }
+            ]
+          }
+        },
+        "validation": {
+          "report_id": "fixture-synthetic::events-validation",
+          "trace_name": "fixture-synthetic::events",
+          "validation_lane": "synthetic_consistency",
+          "evidence_tier": "synthetic_consistency",
+          "claim_scope_summary": "Synthetic consistency only.",
+          "trace_provenance": {
+            "source_mode": "synthetic_trace",
+            "calibration_level": "uncalibrated",
+            "allowed_claim_scope": "exploratory",
+            "source_id": "fixture:synthetic-s1-s6",
+            "trace_kind": "s1_runtime"
+          },
+          "completeness": 0.95,
+          "resolution_entries": [
+            {
+              "subsystem": "S0",
+              "requested_fidelity": "des",
+              "actual_fidelity": "expected_absence",
+              "resolution": "expected_absence",
+              "expected_absence": true,
+              "detail": "The run starts from S1."
+            },
+            {
+              "subsystem": "S1",
+              "requested_fidelity": "des",
+              "actual_fidelity": "des",
+              "resolution": "covered",
+              "detail": "Runtime DES evidence is present."
+            },
+            {
+              "subsystem": "S2",
+              "requested_fidelity": "des",
+              "actual_fidelity": "analytical",
+              "resolution": "covered",
+              "detail": "Execution lowering evidence is present."
+            },
+            {
+              "subsystem": "S3",
+              "requested_fidelity": "des",
+              "actual_fidelity": "des",
+              "resolution": "covered",
+              "detail": "Memory evidence is present."
+            },
+            {
+              "subsystem": "S4",
+              "requested_fidelity": "des",
+              "actual_fidelity": "des",
+              "resolution": "covered",
+              "detail": "Device evidence is present."
+            },
+            {
+              "subsystem": "S5",
+              "requested_fidelity": "des",
+              "actual_fidelity": "des",
+              "resolution": "covered",
+              "detail": "Collective evidence is present."
+            },
+            {
+              "subsystem": "S6",
+              "requested_fidelity": "des",
+              "actual_fidelity": "des",
+              "resolution": "covered",
+              "detail": "Fabric evidence is present."
+            }
+          ],
+          "checks": [
+            {
+              "check_id": "trace_provenance_scope",
+              "subsystem": "S8",
+              "status": "partial",
+              "detail": "Synthetic evidence cannot support held-out claims."
+            }
+          ],
+          "open_gaps": ["Synthetic-trace validation cannot stand in for held-out real-trace fidelity claims."]
+        },
+        "tail": {
+          "report_id": "fixture-synthetic::events-tail-cause",
+          "trace_name": "fixture-synthetic::events",
+          "explained_entity": {
+            "kind": "request",
+            "id": "req-0"
+          },
+          "cause_chain": [
+            {
+              "subsystem": "S1",
+              "cause_code": "runtime_batching_delay",
+              "title": "Runtime batching delay",
+              "evidence": "Request waited before its first batch."
+            },
+            {
+              "subsystem": "S6",
+              "cause_code": "fabric_queue_delay",
+              "title": "Fabric queue delay",
+              "evidence": "Queue delay dominated the fixture phase."
+            }
+          ],
+          "attribution_ranking": [
+            {
+              "rank": 1,
+              "subsystem": "S6",
+              "component_code": "fabric_queue_delay",
+              "detail": "Fixture queue contribution.",
+              "score_ps": 4500000,
+              "share": 0.6,
+              "evidence_link": "MetricsReport:/system_summary/phase_fabric_contributions/0"
+            }
+          ],
+          "attribution_audit": {
+            "status": "degraded",
+            "evidence_tier": "partial_attribution",
+            "score_total_ps": 7500000,
+            "share_sum": 1,
+            "conserved": true,
+            "propagation_complete": false,
+            "issues": ["required_propagation_node_missing_or_unresolved"]
+          },
+          "confidence": 0.75,
+          "completeness": 0.85
+        },
+        "design_space": {
+          "report_kind": "design_space_report",
+          "contract_version": "design_space.report.v1alpha1",
+          "report_id": "fixture-synthetic::events-design-space",
+          "trace_name": "fixture-synthetic::events",
+          "design_space_lane": "synthetic_consistency",
+          "execution_scope": "S6_only",
+          "candidate_source_mode": "synthetic_trace",
+          "candidate_calibration_level": "uncalibrated",
+          "candidate_allowed_claim_scope": "exploratory_s6_only",
+          "manifest_id": "fixture-s6-candidates",
+          "manifest_validation_status": "pass",
+          "manifest_validation_detail": "Fixture manifest passed strict S6 validation.",
+          "resolved_fidelity_scope_status": "pass",
+          "resolved_fidelity_dominant_resolution": "expected_absence",
+          "resolved_fidelity_dominant_subsystem": "S0",
+          "validation_lane": "synthetic_consistency",
+          "evidence_tier": "synthetic_consistency",
+          "claim_scope_summary": "S6-only exploratory comparison.",
+          "candidate_count": 1,
+          "promoted_candidate_count": 1,
+          "ranking": [
+            {
+              "candidate_id": "candidate-0",
+              "name": "Fixture candidate",
+              "screening_tier": "Analytical",
+              "requested_fidelity": "des",
+              "final_rank": 1,
+              "analytical_rank": 1,
+              "resolved_fidelity": "des",
+              "promoted_to_des": true,
+              "screening_score": 14.25,
+              "analytical_run_instance_id": "fixture-analytical-0",
+              "des_run_instance_id": "fixture-des-0",
+              "metric_source": "candidate_run_instance",
+              "metric_availability": { "ttft": false, "tpot": false },
+              "projected_p95_latency_us": 12.5,
+              "projected_p99_latency_us": 13.5,
+              "projected_throughput_requests_per_second": 64000,
+              "deterministic_bounds_us": {
+                "method": "single_deterministic_run",
+                "p95": { "lower": 12.5, "upper": 12.5 },
+                "p99": { "lower": 13.5, "upper": 13.5 }
+              },
+              "promotion_reason": "top_k",
+              "promotion_hint": "tail_risk",
+              "first_state_divergence": {
+                "present": true,
+                "index": 0,
+                "state_schema": "tilesim.candidate.s6_common_state.v1"
+              },
+              "runtime_scheduler": "unresolved_not_executed",
+              "kv_policy": "unresolved_not_executed",
+              "device_profile": "unresolved_not_executed",
+              "topology_scale": "fixed_two_endpoint_s6",
+              "moe_expert_count": 0,
+              "moe_placement": "unresolved_not_executed",
+              "stop_reason": "budget_complete",
+              "candidate_provenance": "fixture-manifest#candidate-0",
+              "validation_lane": "synthetic_consistency",
+              "evidence_tier": "synthetic_consistency",
+              "claim_scope_summary": "S6-only fixture candidate evidence.",
+              "des_refinement_link": "CandidateRun:fixture-des-0",
+              "validation_link": "ValidationReport:fixture-validation",
+              "metrics_link": "MetricsReport:fixture-metrics",
+              "tail_attribution_link": "TailCauseChainReport:fixture-tail",
+              "subsystem_attribution": [
+                {
+                  "subsystem": "S6",
+                  "reason": "fabric_candidate",
+                  "detail": "Only S6 Fabric parameters are executed.",
+                  "score_ps": 12500000
+                }
+              ]
+            }
+          ],
+          "analytical_vs_des_disagreements": []
+        },
+        "execution_envelope": {
+          "envelope_id": "fixture-synthetic::events-envelope",
+          "trace_name": "fixture-synthetic::events",
+          "host_path": "S7",
+          "range_label": "S1->S6",
+          "start_time_ps": 100,
+          "end_time_ps": 31000100,
+          "stages": [
+            {
+              "stage_id": "runtime",
+              "subsystem": "S1",
+              "title": "runtime event window",
+              "start_time_ps": 100,
+              "end_time_ps": 1000,
+              "detail": "Fixture runtime stage."
+            },
+            {
+              "stage_id": "resource",
+              "subsystem": "S3/S4/S5",
+              "title": "resource convergence",
+              "start_time_ps": 1000,
+              "end_time_ps": 2000,
+              "detail": "Fixture peer resource stage."
+            },
+            {
+              "stage_id": "fabric",
+              "subsystem": "S6",
+              "title": "fabric realization",
+              "start_time_ps": 2000,
+              "end_time_ps": 31000100,
+              "detail": "Fixture Fabric stage."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "held-out-s1-s6",
+      "description": "Compact fixture derived from the backend held-out output-plane example.",
+      "expected": {
+        "source_mode": "real_trace",
+        "validation_lane": "held_out_real_trace",
+        "evidence_tier": "held_out_metric_with_resource_convergence",
+        "claim_scope": "held_out_validation",
+        "complete_bundle": true
+      },
+      "inputs": {
+        "runtime_trace": null,
+        "topology": null
+      },
+      "reports": {
+        "run": {
+          "report_kind": "wind_tunnel_run_result",
+          "contract_version": "wind_tunnel.run.v1alpha1",
+          "status": "success",
+          "summary": {
+            "trace_name": "fixture-held-out::events",
+            "range_label": "S1->S6",
+            "host_path": "S7",
+            "end_to_end_latency_us": 10649.5,
+            "runtime_event_count": 151,
+            "fabric_record_count": 147,
+            "validation_completeness": 0.95
+          }
+        },
+        "metrics": {
+          "report_id": "fixture-held-out::events-metrics",
+          "trace_name": "fixture-held-out::events",
+          "metric_lane": "held_out_real_trace",
+          "evidence_tier": "held_out_metric_with_resource_convergence",
+          "trace_provenance": {
+            "source_mode": "real_trace",
+            "calibration_level": "held_out_validated",
+            "allowed_claim_scope": "held_out_validation",
+            "source_id": "backend-example:held-out-s1"
+          },
+          "summary": {
+            "request_count": 3,
+            "completed_request_count": 3,
+            "rejected_request_count": 0,
+            "throughput_requests_per_second": 282.97
+          },
+          "request_metrics": []
+        },
+        "validation": {
+          "report_id": "fixture-held-out::events-validation",
+          "trace_name": "fixture-held-out::events",
+          "validation_lane": "held_out_real_trace",
+          "evidence_tier": "held_out_validation",
+          "trace_provenance": {
+            "source_mode": "real_trace",
+            "calibration_level": "held_out_validated",
+            "allowed_claim_scope": "held_out_validation",
+            "source_id": "backend-example:held-out-s1"
+          },
+          "completeness": 0.95,
+          "checks": [
+            {
+              "check_id": "trace_provenance_scope",
+              "subsystem": "S8",
+              "status": "pass",
+              "detail": "Held-out provenance is present."
+            }
+          ],
+          "open_gaps": []
+        },
+        "tail": {
+          "report_id": "fixture-held-out::events-tail-cause",
+          "trace_name": "fixture-held-out::events",
+          "explained_entity": {
+            "kind": "request",
+            "id": "req-0"
+          },
+          "cause_chain": [],
+          "attribution_ranking": [],
+          "confidence": 0.75,
+          "completeness": 0.85
+        }
+      }
+    },
+    {
+      "id": "boundary-expected-absence",
+      "description": "Boundary fixture with explicit expected absence and no end-to-end metrics.",
+      "expected": {
+        "source_mode": "synthetic_trace",
+        "validation_lane": "synthetic_consistency",
+        "claim_scope": "boundary_consistency",
+        "complete_bundle": false,
+        "end_to_end_available": false,
+        "real_zero_field": 0
+      },
+      "inputs": {
+        "runtime_trace": null,
+        "topology": null
+      },
+      "reports": {
+        "run": {
+          "report_kind": "wind_tunnel_run_result",
+          "contract_version": "wind_tunnel.run.v1alpha1",
+          "status": "success",
+          "summary": {
+            "trace_name": "fixture-boundary::events",
+            "range_label": "S2->S5",
+            "host_path": "S7",
+            "runtime_event_count": 0,
+            "fabric_record_count": 0,
+            "validation_completeness": 1
+          }
+        },
+        "metrics": {
+          "report_id": "fixture-boundary::events-metrics",
+          "trace_name": "fixture-boundary::events",
+          "metric_lane": "synthetic_consistency",
+          "evidence_tier": "boundary_consistency",
+          "trace_provenance": {
+            "source_mode": "synthetic_trace",
+            "calibration_level": "uncalibrated",
+            "allowed_claim_scope": "boundary_consistency"
+          },
+          "summary": {
+            "request_count": 0,
+            "completed_request_count": 0,
+            "rejected_request_count": 0
+          },
+          "boundary_notes": ["This boundary does not produce TTFT, TPOT, throughput, or tail attribution."]
+        },
+        "validation": {
+          "report_id": "fixture-boundary::events-validation",
+          "trace_name": "fixture-boundary::events",
+          "validation_lane": "synthetic_consistency",
+          "evidence_tier": "boundary_consistency",
+          "trace_provenance": {
+            "source_mode": "synthetic_trace",
+            "calibration_level": "uncalibrated",
+            "allowed_claim_scope": "boundary_consistency"
+          },
+          "completeness": 1,
+          "resolution_entries": [
+            {
+              "subsystem": "S0",
+              "actual_fidelity": "expected_absence",
+              "resolution": "expected_absence",
+              "expected_absence": true,
+              "detail": "Outside the requested boundary."
+            },
+            {
+              "subsystem": "S1",
+              "actual_fidelity": "expected_absence",
+              "resolution": "expected_absence",
+              "expected_absence": true,
+              "detail": "Outside the requested boundary."
+            },
+            {
+              "subsystem": "S2",
+              "actual_fidelity": "analytical",
+              "resolution": "covered",
+              "detail": "Boundary entry is covered."
+            },
+            {
+              "subsystem": "S5",
+              "actual_fidelity": "des",
+              "resolution": "covered",
+              "detail": "Boundary exit is covered."
+            },
+            {
+              "subsystem": "S6",
+              "actual_fidelity": "expected_absence",
+              "resolution": "expected_absence",
+              "expected_absence": true,
+              "detail": "Outside the requested boundary."
+            }
+          ],
+          "checks": [],
+          "open_gaps": []
+        },
+        "execution_envelope": {
+          "envelope_id": "fixture-boundary::events-envelope",
+          "trace_name": "fixture-boundary::events",
+          "host_path": "S7",
+          "range_label": "S2->S5",
+          "start_time_ps": 100,
+          "end_time_ps": 200,
+          "stages": []
+        }
+      }
+    },
+    {
+      "id": "legacy-missing-optional",
+      "description": "Legacy unversioned four-report bundle without execution-envelope or design-space.",
+      "expected": {
+        "source_mode": "synthetic_trace",
+        "validation_lane": "synthetic_consistency",
+        "claim_scope": "exploratory",
+        "complete_bundle": true,
+        "optional_reports_absent": true
+      },
+      "inputs": {
+        "runtime_trace": null,
+        "topology": null
+      },
+      "reports": {
+        "run": {
+          "status": "partial",
+          "summary": {
+            "trace_name": "fixture-legacy::events",
+            "range_label": "S1->S6"
+          }
+        },
+        "metrics": {
+          "report_id": "fixture-legacy::events-metrics",
+          "trace_name": "fixture-legacy::events",
+          "metric_lane": "synthetic_consistency",
+          "evidence_tier": "synthetic_consistency",
+          "summary": {
+            "request_count": 1,
+            "completed_request_count": 1,
+            "rejected_request_count": 0,
+            "throughput_requests_per_second": 1
+          }
+        },
+        "validation": {
+          "report_id": "fixture-legacy::events-validation",
+          "trace_name": "fixture-legacy::events",
+          "validation_lane": "synthetic_consistency",
+          "evidence_tier": "synthetic_consistency",
+          "trace_provenance": {
+            "source_mode": "synthetic_trace",
+            "calibration_level": "uncalibrated",
+            "allowed_claim_scope": "exploratory"
+          },
+          "checks": []
+        },
+        "tail": {
+          "report_id": "fixture-legacy::events-tail-cause",
+          "trace_name": "fixture-legacy::events",
+          "attribution_ranking": []
+        }
+      }
+    },
+    {
+      "id": "unknown-run-schema",
+      "description": "Known report kind with an unsupported explicit contract version.",
+      "expected": {
+        "unsupported_kind": "run",
+        "unsupported_schema": "wind_tunnel.run.v999",
+        "unknown_field": "must-remain-visible",
+        "complete_bundle": false
+      },
+      "inputs": {
+        "runtime_trace": null,
+        "topology": null
+      },
+      "reports": {
+        "run": {
+          "report_kind": "wind_tunnel_run_result",
+          "contract_version": "wind_tunnel.run.v999",
+          "status": "success",
+          "summary": {
+            "trace_name": "fixture-unknown::events",
+            "range_label": "S1->S6"
+          },
+          "future_contract_field": "must-remain-visible"
+        }
+      }
+    }
+  ]
+}

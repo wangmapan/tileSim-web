@@ -1,0 +1,156 @@
+{
+  "schema_version": "tilesim.proposal.agent_orchestration.capability_snapshot.v1alpha1",
+  "contract_status": "proposal_only",
+  "snapshot_id": "phase0.fixture.capability-snapshot",
+  "snapshot_revision": "sha256:7111111111111111111111111111111111111111111111111111111111111111",
+  "canonical_digest": "sha256:c34b6d1af5b307cfdd3aa54729f37fcc8a99a39131edd7f48e17b93a112620f4",
+  "canonicalization": {
+    "identity": "tilesim.bridge.canonical_json.v1",
+    "algorithm": "sha256",
+    "text_encoding": "utf-8",
+    "object_key_order": "unicode_code_point_ascending",
+    "array_order": "preserved",
+    "number_policy": "lossless_integer_tokens_decimal_strings_no_binary_float"
+  },
+  "digest_material_fields": [
+    "bindings",
+    "catalog_revision",
+    "parameter_descriptors",
+    "profiles",
+    "combination_resolution"
+  ],
+  "bindings": {
+    "backend_identity": "tilesim.backend.audit-baseline.09c22c0e",
+    "schema_set_revision": "sha256:eb6c0dc921faa53789c053dfef99b82d1a5eb0499cb244e364178eab43e7095c",
+    "experiment_descriptor_identity": "tilesim.bridge.experiment_descriptor.v1",
+    "experiment_descriptor_revision": "sha256:de97e5fe0aae2ae1c5ffeeda7a0a56fd23c6a56aa28c3746eead00d89c68d059",
+    "create_run_schema_identity": "tilesim.bridge.create_run_request.v1",
+    "evidence_agent_descriptor_identity": "tilesim.bridge.evidence_agent_descriptor.v2",
+    "evidence_agent_descriptor_revision": "sha256:5f78ed33e20c131f672af53368c5ca950f41d63fd2e8f5301757d1f42debe357",
+    "evidence_agent_request_identity": "tilesim.bridge.evidence_agent_request.v1",
+    "evidence_agent_response_identity": "tilesim.bridge.evidence_agent_response.v1",
+    "evidence_agent_citation_identity": "tilesim.bridge.evidence_agent_citation.v1",
+    "evidence_agent_snapshot_identity": "tilesim.bridge.evidence_snapshot_reference.v1"
+  },
+  "catalog_revision": "sha256:8111111111111111111111111111111111111111111111111111111111111111",
+  "catalog_digest": "sha256:8111111111111111111111111111111111111111111111111111111111111111",
+  "parameter_descriptors": [
+    {
+      "field_id": "s1.runtime.max_batch_size",
+      "descriptor_id": "phase0.fixture.s1.runtime.max_batch_size",
+      "descriptor_revision": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "canonical_digest": "sha256:2540eae86a34117d42711a8499fa99fd01cf4cd3adf0173936b714a3e8bb1ca6",
+      "status": "unresolved_not_executed",
+      "reason_code": "execution_evidence_missing"
+    }
+  ],
+  "profiles": {
+    "model": [
+      {
+        "profile_id": "phase0.fixture.model.unknown",
+        "profile_revision": "sha256:2111111111111111111111111111111111111111111111111111111111111111",
+        "canonical_digest": "sha256:64b5cc23893c0749fb79fb366c1a879023db51a4caa80655f223568e3b7787a2"
+      }
+    ],
+    "engine": [
+      {
+        "profile_id": "phase0.fixture.engine.unknown",
+        "profile_revision": "sha256:4111111111111111111111111111111111111111111111111111111111111111",
+        "canonical_digest": "sha256:ecad9ceb63491e9900cf7377858945b57e7611b51110b90b55100a65d1cb7373"
+      }
+    ],
+    "device": [
+      {
+        "profile_id": "phase0.fixture.device.unknown",
+        "profile_revision": "sha256:3111111111111111111111111111111111111111111111111111111111111111",
+        "canonical_digest": "sha256:09c26739621225c82b3b16edfb153626bc698a2ddeb71b2a5132c0049db5d8f6"
+      }
+    ],
+    "topology": [
+      {
+        "profile_id": "phase0.fixture.topology.unknown",
+        "profile_revision": "sha256:5111111111111111111111111111111111111111111111111111111111111111",
+        "canonical_digest": "sha256:1aea769e2dd623dedfb2d49fdfc0fa83b1cc6ee1797ae48fbdb30de21b5b0b91"
+      }
+    ],
+    "workload": [
+      {
+        "profile_id": "phase0.fixture.workload.synthetic",
+        "profile_revision": "sha256:6111111111111111111111111111111111111111111111111111111111111111",
+        "canonical_digest": "sha256:a6280edb0b52f0908999bfcb76af581d157ba168aa20b1d50bd0b1cdfae387e2"
+      }
+    ]
+  },
+  "alias_resolution": [
+    {
+      "locale": "zh-CN",
+      "alias": "示例",
+      "state": "ambiguous",
+      "candidate_ids": [
+        "phase0.fixture.model.unknown",
+        "phase0.fixture.device.unknown"
+      ],
+      "reason_code": "ambiguous_alias"
+    }
+  ],
+  "combination_resolution": {
+    "status": "profile_missing",
+    "reason_codes": [
+      "profile_missing",
+      "combination_unresolved"
+    ],
+    "selected_profiles": {
+      "model": {
+        "profile_id": "phase0.fixture.model.unknown",
+        "profile_revision": "sha256:2111111111111111111111111111111111111111111111111111111111111111",
+        "canonical_digest": "sha256:64b5cc23893c0749fb79fb366c1a879023db51a4caa80655f223568e3b7787a2"
+      },
+      "engine": {
+        "profile_id": "phase0.fixture.engine.unknown",
+        "profile_revision": "sha256:4111111111111111111111111111111111111111111111111111111111111111",
+        "canonical_digest": "sha256:ecad9ceb63491e9900cf7377858945b57e7611b51110b90b55100a65d1cb7373"
+      },
+      "device": {
+        "profile_id": "phase0.fixture.device.unknown",
+        "profile_revision": "sha256:3111111111111111111111111111111111111111111111111111111111111111",
+        "canonical_digest": "sha256:09c26739621225c82b3b16edfb153626bc698a2ddeb71b2a5132c0049db5d8f6"
+      },
+      "topology": {
+        "profile_id": "phase0.fixture.topology.unknown",
+        "profile_revision": "sha256:5111111111111111111111111111111111111111111111111111111111111111",
+        "canonical_digest": "sha256:1aea769e2dd623dedfb2d49fdfc0fa83b1cc6ee1797ae48fbdb30de21b5b0b91"
+      },
+      "workload": {
+        "profile_id": "phase0.fixture.workload.synthetic",
+        "profile_revision": "sha256:6111111111111111111111111111111111111111111111111111111111111111",
+        "canonical_digest": "sha256:a6280edb0b52f0908999bfcb76af581d157ba168aa20b1d50bd0b1cdfae387e2"
+      }
+    },
+    "source_mode": "synthetic_trace",
+    "gpu_participation_mode": "gpu_free",
+    "requested_fidelity": "DES",
+    "lowering_path_ids": [],
+    "parameter_field_ids": [],
+    "unresolved_modules": [
+      "工作负载抽象与负载描述语言模块",
+      "推理引擎与服务运行时模块",
+      "设备性能建模模块",
+      "网络与硬件资源模块"
+    ],
+    "claim_scope_ceiling": "contract_fixture_only"
+  },
+  "lifecycle": {
+    "state": "active",
+    "introduced_revision": "sha256:7111111111111111111111111111111111111111111111111111111111111111",
+    "deprecated_revision": null,
+    "removal_revision": null,
+    "replacement_identity": null
+  },
+  "compatibility": {
+    "policy": "additive_optional",
+    "unknown_identity_behavior": "fail_closed",
+    "unknown_revision_behavior": "fail_closed",
+    "predecessor_identity": null,
+    "successor_identity": null
+  }
+}

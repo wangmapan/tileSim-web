@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/artifact-manifest.schema.json",
+  "title": "ArtifactManifestResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "api_version", "schema_set_revision", "run_id", "artifacts", "rejected_artifacts"],
+  "properties": {
+    "schema_version": { "const": "tilesim.bridge.artifact_manifest.v2" },
+    "api_version": { "const": "tilesim.bridge.api.v1" },
+    "schema_set_revision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "run_id": { "type": "string", "pattern": "^run-[A-Za-z0-9._-]+$" },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "title": "ArtifactManifestEntry",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "artifact_id",
+          "report_kind",
+          "file_name",
+          "media_type",
+          "bytes",
+          "sha256",
+          "schema_identity",
+          "contract_status"
+        ],
+        "properties": {
+          "artifact_id": { "type": "string", "minLength": 1 },
+          "report_kind": { "type": ["string", "null"] },
+          "file_name": { "type": "string", "pattern": "^[^/\\\\]+\\.json$" },
+          "media_type": { "const": "application/json" },
+          "bytes": { "type": "integer", "minimum": 0 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "schema_identity": { "type": "string" },
+          "contract_status": { "enum": ["supported", "legacy_compatibility", "not_applicable"] }
+        }
+      }
+    },
+    "rejected_artifacts": {
+      "type": "array",
+      "items": {
+        "title": "RejectedArtifactManifestEntry",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["artifact_id", "file_name", "reason", "schema_identity", "json_pointer"],
+        "properties": {
+          "artifact_id": { "type": "string", "minLength": 1 },
+          "file_name": { "type": "string", "pattern": "^[^/\\\\]+\\.json$" },
+          "reason": {
+            "enum": [
+              "invalid_json",
+              "unsupported_schema",
+              "run_binding_mismatch",
+              "self_hash_cycle",
+              "contract_violation"
+            ]
+          },
+          "schema_identity": { "type": "string" },
+          "json_pointer": { "type": "string" }
+        }
+      }
+    }
+  }
+}

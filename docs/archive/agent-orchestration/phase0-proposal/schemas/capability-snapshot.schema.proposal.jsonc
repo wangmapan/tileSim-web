@@ -1,0 +1,484 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/proposals/agent-orchestration-phase0/capability-snapshot.schema.json",
+  "x-tilesim-contract-status": "proposal_only",
+  "x-tilesim-schema-identity": "tilesim.proposal.agent_orchestration.capability_snapshot.v1alpha1",
+  "title": "Phase0CapabilitySnapshotProposal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "contract_status",
+    "snapshot_id",
+    "snapshot_revision",
+    "canonical_digest",
+    "canonicalization",
+    "digest_material_fields",
+    "bindings",
+    "catalog_revision",
+    "catalog_digest",
+    "parameter_descriptors",
+    "profiles",
+    "alias_resolution",
+    "combination_resolution",
+    "lifecycle",
+    "compatibility"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "tilesim.proposal.agent_orchestration.capability_snapshot.v1alpha1"
+    },
+    "contract_status": {
+      "const": "proposal_only"
+    },
+    "snapshot_id": {
+      "$ref": "common.schema.json#/$defs/stableId"
+    },
+    "snapshot_revision": {
+      "$ref": "common.schema.json#/$defs/revision"
+    },
+    "canonical_digest": {
+      "$ref": "common.schema.json#/$defs/revision"
+    },
+    "canonicalization": {
+      "$ref": "common.schema.json#/$defs/canonicalization"
+    },
+    "digest_material_fields": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "uniqueItems": true,
+      "not": {
+        "contains": {
+          "const": "canonical_digest"
+        }
+      }
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "backend_identity",
+        "schema_set_revision",
+        "experiment_descriptor_identity",
+        "experiment_descriptor_revision",
+        "create_run_schema_identity",
+        "evidence_agent_descriptor_identity",
+        "evidence_agent_descriptor_revision",
+        "evidence_agent_request_identity",
+        "evidence_agent_response_identity",
+        "evidence_agent_citation_identity",
+        "evidence_agent_snapshot_identity"
+      ],
+      "properties": {
+        "backend_identity": {
+          "$ref": "common.schema.json#/$defs/stableId"
+        },
+        "schema_set_revision": {
+          "$ref": "common.schema.json#/$defs/revision"
+        },
+        "experiment_descriptor_identity": {
+          "const": "tilesim.bridge.experiment_descriptor.v1"
+        },
+        "experiment_descriptor_revision": {
+          "const": "sha256:de97e5fe0aae2ae1c5ffeeda7a0a56fd23c6a56aa28c3746eead00d89c68d059"
+        },
+        "create_run_schema_identity": {
+          "const": "tilesim.bridge.create_run_request.v1"
+        },
+        "evidence_agent_descriptor_identity": {
+          "const": "tilesim.bridge.evidence_agent_descriptor.v2"
+        },
+        "evidence_agent_descriptor_revision": {
+          "const": "sha256:5f78ed33e20c131f672af53368c5ca950f41d63fd2e8f5301757d1f42debe357"
+        },
+        "evidence_agent_request_identity": {
+          "const": "tilesim.bridge.evidence_agent_request.v1"
+        },
+        "evidence_agent_response_identity": {
+          "const": "tilesim.bridge.evidence_agent_response.v1"
+        },
+        "evidence_agent_citation_identity": {
+          "const": "tilesim.bridge.evidence_agent_citation.v1"
+        },
+        "evidence_agent_snapshot_identity": {
+          "const": "tilesim.bridge.evidence_snapshot_reference.v1"
+        }
+      }
+    },
+    "catalog_revision": {
+      "$ref": "common.schema.json#/$defs/revision"
+    },
+    "catalog_digest": {
+      "$ref": "common.schema.json#/$defs/revision"
+    },
+    "parameter_descriptors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "field_id",
+          "descriptor_id",
+          "descriptor_revision",
+          "canonical_digest",
+          "status",
+          "reason_code"
+        ],
+        "properties": {
+          "field_id": {
+            "$ref": "common.schema.json#/$defs/stableId"
+          },
+          "descriptor_id": {
+            "$ref": "common.schema.json#/$defs/stableId"
+          },
+          "descriptor_revision": {
+            "$ref": "common.schema.json#/$defs/revision"
+          },
+          "canonical_digest": {
+            "$ref": "common.schema.json#/$defs/revision"
+          },
+          "status": {
+            "$ref": "common.schema.json#/$defs/supportStatus"
+          },
+          "reason_code": {
+            "$ref": "common.schema.json#/$defs/reasonCode"
+          }
+        }
+      }
+    },
+    "profiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model",
+        "engine",
+        "device",
+        "topology",
+        "workload"
+      ],
+      "properties": {
+        "model": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/profileReference"
+          }
+        },
+        "engine": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/profileReference"
+          }
+        },
+        "device": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/profileReference"
+          }
+        },
+        "topology": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/profileReference"
+          }
+        },
+        "workload": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/profileReference"
+          }
+        }
+      }
+    },
+    "alias_resolution": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "locale",
+          "alias",
+          "state",
+          "candidate_ids",
+          "reason_code"
+        ],
+        "properties": {
+          "locale": {
+            "enum": [
+              "en-US",
+              "zh-CN"
+            ]
+          },
+          "alias": {
+            "type": "string",
+            "minLength": 1
+          },
+          "state": {
+            "enum": [
+              "unique",
+              "ambiguous",
+              "not_found"
+            ]
+          },
+          "candidate_ids": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/stableId"
+            },
+            "uniqueItems": true
+          },
+          "reason_code": {
+            "$ref": "common.schema.json#/$defs/reasonCode"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "state": {
+                  "const": "ambiguous"
+                }
+              },
+              "required": [
+                "state"
+              ]
+            },
+            "then": {
+              "properties": {
+                "candidate_ids": {
+                  "minItems": 2
+                },
+                "reason_code": {
+                  "const": "ambiguous_alias"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "combination_resolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "reason_codes",
+        "selected_profiles",
+        "source_mode",
+        "gpu_participation_mode",
+        "requested_fidelity",
+        "lowering_path_ids",
+        "parameter_field_ids",
+        "unresolved_modules",
+        "claim_scope_ceiling"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "available",
+            "conditional",
+            "unsupported",
+            "unresolved",
+            "profile_missing",
+            "drifted",
+            "temporarily_unavailable",
+            "deprecated"
+          ]
+        },
+        "reason_codes": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/reasonCode"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "selected_profiles": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "model",
+            "engine",
+            "device",
+            "topology",
+            "workload"
+          ],
+          "properties": {
+            "model": {
+              "oneOf": [
+                {
+                  "$ref": "common.schema.json#/$defs/profileReference"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "engine": {
+              "oneOf": [
+                {
+                  "$ref": "common.schema.json#/$defs/profileReference"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "device": {
+              "oneOf": [
+                {
+                  "$ref": "common.schema.json#/$defs/profileReference"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "topology": {
+              "oneOf": [
+                {
+                  "$ref": "common.schema.json#/$defs/profileReference"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "workload": {
+              "oneOf": [
+                {
+                  "$ref": "common.schema.json#/$defs/profileReference"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "source_mode": {
+          "enum": [
+            "real_trace",
+            "synthetic_trace",
+            "compatibility_harness_trace"
+          ]
+        },
+        "gpu_participation_mode": {
+          "enum": [
+            "gpu_free",
+            "gpu_assisted_trace",
+            "gpu_in_loop"
+          ]
+        },
+        "requested_fidelity": {
+          "enum": [
+            "Analytical",
+            "DES",
+            "Cycle"
+          ]
+        },
+        "lowering_path_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/stableId"
+          },
+          "uniqueItems": true
+        },
+        "parameter_field_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/stableId"
+          },
+          "uniqueItems": true
+        },
+        "unresolved_modules": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/ownerModule"
+          },
+          "uniqueItems": true
+        },
+        "claim_scope_ceiling": {
+          "enum": [
+            "contract_fixture_only",
+            "exploration",
+            "synthetic_consistency",
+            "limited_extrapolation",
+            "similar_regime_conditional_prediction",
+            "real_calibrated_validation"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "available"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "selected_profiles": {
+                "properties": {
+                  "model": {
+                    "type": "object"
+                  },
+                  "engine": {
+                    "type": "object"
+                  },
+                  "device": {
+                    "type": "object"
+                  },
+                  "topology": {
+                    "type": "object"
+                  },
+                  "workload": {
+                    "type": "object"
+                  }
+                }
+              },
+              "unresolved_modules": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "profile_missing"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason_codes": {
+                "contains": {
+                  "const": "profile_missing"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "lifecycle": {
+      "$ref": "common.schema.json#/$defs/lifecycle"
+    },
+    "compatibility": {
+      "$ref": "common.schema.json#/$defs/compatibility"
+    }
+  }
+}

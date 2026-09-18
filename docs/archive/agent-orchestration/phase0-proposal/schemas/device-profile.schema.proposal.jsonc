@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/proposals/agent-orchestration-phase0/device-profile.schema.json",
+  "x-tilesim-contract-status": "proposal_only",
+  "x-tilesim-schema-identity": "tilesim.proposal.agent_orchestration.device_profile.v1alpha1",
+  "title": "Phase0DeviceProfileProposal",
+  "allOf": [
+    {
+      "$ref": "profile-common.schema.json#/$defs/profileEnvelope"
+    },
+    {
+      "type": "object",
+      "required": [
+        "device_identity",
+        "vendor_model_revision",
+        "memory_capacity_bytes",
+        "memory_type",
+        "theoretical_compute_capabilities",
+        "measured_effective_compute",
+        "theoretical_memory_capabilities",
+        "measured_effective_memory",
+        "interconnect_capabilities",
+        "supported_dtypes",
+        "topology_ports",
+        "timing_resource_model",
+        "measurement_conditions",
+        "uncertainty",
+        "software_stack",
+        "calibration_receipt",
+        "gpu_participation_compatibility"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "tilesim.proposal.agent_orchestration.device_profile.v1alpha1"
+        },
+        "profile_family": {
+          "const": "device"
+        },
+        "device_identity": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "vendor_model_revision": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "memory_capacity_bytes": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "memory_type": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "theoretical_compute_capabilities": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "measured_effective_compute": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "theoretical_memory_capabilities": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "measured_effective_memory": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "interconnect_capabilities": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "supported_dtypes": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "topology_ports": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "timing_resource_model": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "measurement_conditions": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "uncertainty": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "software_stack": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "calibration_receipt": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        },
+        "gpu_participation_compatibility": {
+          "$ref": "common.schema.json#/$defs/assertion"
+        }
+      }
+    }
+  ],
+  "unevaluatedProperties": false
+}

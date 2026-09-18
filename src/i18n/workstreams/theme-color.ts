@@ -1,0 +1,22 @@
+export const themeColorEnglishCatalog: Readonly<Record<string, string>> = {
+  设置主题颜色: "Set theme color",
+  换肤: "Color",
+  主题颜色: "Theme color",
+  关闭配色面板: "Close color panel",
+  重置颜色: "Reset color",
+  自定义颜色: "Custom color",
+  自定义主题色: "Custom theme color",
+  "红色（R）": "Red (R)",
+  "绿色（G）": "Green (G)",
+  "蓝色（B）": "Blue (B)",
+  "请输入 3 位或 6 位 HEX 颜色。": "Enter a 3- or 6-digit HEX color.",
+  "RGB 数值应为 0–255 的整数。": "RGB values must be integers from 0 to 255.",
+  色相: "Hue",
+  "HEX 颜色": "HEX color",
+  主题色预览: "Theme color preview",
+  链接文字: "Link text",
+  按钮预览: "Button preview",
+  "颜色应用于导航、按钮和选中区域；告警与图表颜色保持不变。":
+    "Applies to navigation, buttons and selection. Alert and chart colors stay unchanged.",
+  应用自定义颜色: "Apply custom color",
+};
