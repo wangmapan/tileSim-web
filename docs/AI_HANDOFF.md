@@ -10,34 +10,41 @@ Run Intake Lowering 已落地，Bridge 侧 Run Intake v2 **只读预览**端点�
 
 ## 2026-09-19 仓库与基线更正（**优先于下文所有 revision 与测试数字**）
 
-本节由 2026-09-19 的只读盘点得出，未改动任何代码、契约或运行态。**下文所有 `HEAD`/revision 表述与门禁数字均为历史记录，读取时以本节为准。**
+本节由 2026-09-19 的盘点、文档修正与推送处置得出，未改动任何代码、契约或运行态。**下文所有 `HEAD`/revision 表述与门禁数字均为历史记录，读取时以本节为准。**
 
-### git 真实状态（2026-09-18「本地历史不可恢复」的表述需收窄）
+### git 真实状态与推送处置（2026-09-19）
 
-- 实际 `HEAD` = `11cef6b`（`chore(recovery): restore phase 2 docs, registry test and launcher-safe deployment scripts`），
-  其父为 `c303ac2`（`feat(workbench): restore lightweight workbench shell, topology editor and 2026-09-17 work`）。
-  本地仅有这两个提交，`c303ac2` 是根提交。
-- **已发布的远端历史在本机对象库里是完好的**：`refs/remotes/origin/main` = `4d7f9fa` 可解析（`git log origin/main` 正常，
-  其树含 636 个受跟踪文件）。即 2026-09-18 那次对象库清空**没有**毁掉已发布历史。
-- 真正丢失且**不可恢复**的是当时尚未推送的 3 个本地提交：`446f21d`、`290d1c8`、`9b2d39b`。
-  已实测救援目录 `C:\Users\mapanwang\_tilesim_rescue`：`tilesim-web-backup.git` 只含 `refs/heads/main = 11cef6b`
-  （恢复之后才建立的镜像），`dotgit_backup/.git` 不含任何 ref —— **两处备份都没有这三个提交**。
-- 本地 `main` 与 `origin/main` **没有共同祖先**（`git merge-base` 为空）。文件层面本地是严格超集：
-  `git diff --diff-filter=D origin/main main` 命中 **0** 个文件，本地相对远端新增 100 个文件、182 个文件改动；
-  `git ls-tree -r` 计数为本地 736 / 远端 636。**后续任何 push 决策都必须先处理这两条无关联历史。**
-- `git worktree list` 现只剩 `D:/tileSim-web`；工作树 clean；其余 `origin/codex/*` 分支引用仍在。
+- **推送已完成**：修复前本地是一条与远端**无共同祖先**的孤儿线（`c303ac2` → `11cef6b`），直接推送会被
+  `non-fast-forward` 拒绝。处置方式是**把重建线以新提交接回 `origin/main` 主线**，全程快进、**未使用 `force`**：
+  - `515e39d` `chore(recovery): reintroduce locally rebuilt work tree onto origin/main` —— 树 = 原 `11cef6b` 的树，**逐字节相同**；
+  - `7c477d1` `docs(handoff): correct stale revision refs and drop leftover conflict markers`；
+  - 结果：`origin/main` 由 `4d7f9fa` **快进**到 `7c477d1`，随后本节所在的文档修正提交继续追加在其后；
+    历史始终是一条直线，**未使用 `force`**。
+- **重建线的原始提交未丢**：`11cef6b`（含其父 `c303ac2`）已作为远端分支 `recovery/orphan-main-11cef6b` 推送保留，
+  因此在远端**仍可解析、仍可追溯**。
+- 接回前已核验差异（相对 `4d7f9fa`）：**100 新增 / 78 修改 / 4 改名 / 0 删除**，`+26033 / −597`；
+  删除行均为有意改动，**无换行符污染**（`.gitattributes` = `* text=auto eol=lf`）。工作区文件零丢失，
+  接回前后 `git status` 均为 clean、工作区内容未发生任何变化。
+- **历史事故本身（背景，2026-09-18）**：本机 `.git` 对象库被外部清空。**已发布的远端历史未受损**
+  （`4d7f9fa` 一直可解析，其树含 636 个受跟踪文件）。**永久丢失且不可恢复**的是当时尚未推送的 3 个本地提交
+  `446f21d` / `290d1c8` / `9b2d39b`：已实测救援目录 `C:\Users\mapanwang\_tilesim_rescue`，
+  `tilesim-web-backup.git` 只含 `refs/heads/main = 11cef6b`（恢复之后才建立的镜像）、`dotgit_backup/.git` 不含任何 ref，
+  **两处备份都没有这三个提交**。这三个提交的**内容**已随工作区快照一并进入远端，只有提交边界与提交信息不可恢复。
+- `git worktree list` 现只剩 `D:/tileSim-web`；其余 `origin/codex/*` 分支引用仍在。
+- 后端仓库 `D:\tileSim` 未见同类问题（本地领先其 `origin/main` 2 个提交、有共同祖先）；**本轮未推送后端**。
 
 ### 文档卫生
 
 - 本文件此前残留两个合并冲突标记（`>>>>>>> Stashed changes` 与 `<<<<<<< Updated upstream`），已随本节同一批次清除；
   它们也是本文件唯一的 prettier 不合规来源。紧随本节的「双工作台方案状态」与「Phase 2D handoff」两节来自当时的
   stash 侧内容，属**历史阶段记录**。
-- 以下文件仍引用本机已不可解析的提交号 `446f21d` / `4d7f9fa` / `290d1c8` / `9b2d39b`，应作为历史证据阅读，
-  **不要**用它们做 `git` 定位：本文件、`AGENTS.md`、`docs/getting-started/AI_DEPLOYMENT_AND_HANDOFF.md`、
+- 以下文件引用了**已不可解析**的提交号 `446f21d` / `290d1c8` / `9b2d39b`，应作为历史证据阅读，**不要**用它们做
+  `git` 定位：本文件、`AGENTS.md`、`docs/getting-started/AI_DEPLOYMENT_AND_HANDOFF.md`、
   `docs/architecture/BACKEND_SIMULATION_FLOW_UI_COVERAGE.md`、`docs/F9_AGENT_ORCHESTRATION/` 下的 `01`、`12`、
   `14`、`24` 与 `README.md`，以及 `docs/archive/agent-orchestration/phase-records/` 下的 `21`、`22`。
+  其中 `4d7f9fa`（`origin/main` 在 2026-09-19 之前的位置）与 `11cef6b`（恢复线）**仍可解析**，可以照常使用。
 
-### 2026-09-19 实测门禁（本机，`HEAD` = `11cef6b`，工作树 clean）
+### 2026-09-19 实测门禁（本机，工作树 clean；测量点在重建线上，接回 `origin/main` 只新增文档改动，未触碰代码与契约）
 
 | 门禁                                              | 实测                                                       | 本文下文历史值    |
 | ------------------------------------------------- | ---------------------------------------------------------- | ----------------- |

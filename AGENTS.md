@@ -17,12 +17,14 @@
 ## 2. 当前状态
 
 - **2026-09-19 实测（本节其余 revision 表述与测试数字均为历史记录，以本条与 `docs/AI_HANDOFF.md` 的
-  「2026-09-19 仓库与基线更正」为准）**：本机 `HEAD` = `11cef6b`（父提交 `c303ac2`），工作树 clean；
-  `446f21d` / `290d1c8` / `9b2d39b` 三个提交号在本机对象库中**不可解析**（2026-09-18 本地对象库被清空，
-  这三个未推送提交不可恢复），`4d7f9fa`（`origin/main`）仍可解析。实测门禁：Web Vitest
-  **721 passed / 8 skipped（79 files）**、Bridge `unittest` **143 passed / OK**、`contracts:check` /
-  `docs:check`（62 篇）/ `deps:check`（290 源文件）/ `vue-tsc --noEmit` 全部 exit 0；全量 e2e 本轮
-  **not-run**；`127.0.0.1:5173` **未监听**。
+  「2026-09-19 仓库与基线更正」为准）**：2026-09-18 本地对象库被清空后重建的孤儿线**已接回并推送完成** ——
+  远端 `main` 已由 `4d7f9fa` **快进**到 2026-09-19 本地线的最新提交（历史为一条直线，**未使用 `force`**）；
+  重建线的原始提交 `11cef6b` / `c303ac2` 已作为远端分支 `recovery/orphan-main-11cef6b` 保留、**仍可解析**；
+  `446f21d` / `290d1c8` / `9b2d39b` 三个未推送提交**不可解析且不可恢复**（其内容已随快照进入远端）。
+  实测门禁：Web Vitest **721 passed / 8 skipped（79 files）**、Bridge `unittest` **143 passed / OK**、
+  `contracts:check` / `docs:check`（62 篇）/ `deps:check`（290 源文件）/ `vue-tsc --noEmit` 全部 exit 0；
+  全量 e2e 本轮 **not-run**；`127.0.0.1:5173` **未监听**。后端仓库 `D:\tileSim` 本地领先其 `origin/main`
+  2 个提交，**本轮未推送后端**。
 - F0-F8 与 F10 发布机制已验证；F9 descriptor v2 已部署且 authenticated capability probe 返回 available，live Provider acceptance 与人工 citation entailment review 尚未执行。F9 Phase 1 侧栏、Phase 2A/2B 契约与后端 Phase 2C lowering 已完成，Bridge 侧 Run Intake v2 路由尚未接线。
 - 当前门禁基线（2026-09-18 实测；该批工作包已于同日**本地提交**，`HEAD` = `446f21d`，但**推送被本机网络策略阻断**——详见 `docs/AI_HANDOFF.md` 的 2026-09-18 发布批次条目）：Web Vitest **596 passed / 8 skipped**（70 files）、Bridge `unittest` **143 passed**、`vue-tsc` / `vite build` / `contracts:check` / `docs:check`（43 篇）/ `deps:check`（255 源文件）/ `git diff --check` passed。`dashboard.spec.js:2079` 的 busy 泄漏竞态 `DEF-BUSY-RACE-001` 已由 `WP-2D-04` 修复并关闭（`state.busy` 全仓唯一写点收敛到 `src/store/dashboard-state.ts:63`）。`WP-2D-05`（2026-09-18）后再次取得干净 tally：`--workers=1 --reporter=list` → **51 passed / 6 skipped / 0 failed，exit 0，6.4m，无 worker 强杀**，覆盖全部 57 条（含 `large-artifact-worker`）。**但 worker 收尾卡死是间歇性既有环境缺陷、未根除**：同一会话另有 3 次运行在用例全部零失败后出现 `worker-1 process did not exit within 300000ms after stop, force-killed it`，其中 1 次是把 `WP-2D-05` 改动**逆操作回退**后跑的 A/B 对照（现象完全相同）→ 与代码改动无关；卡死落在 `desktop → large-artifact-worker` 项目切换处时该 1 条会 `not-reached`，须另起一次完整运行覆盖，不得当作通过。**纪律：全量 e2e 不得与其它重量级门禁并发跑**（并发曾致 `:2079` 的 URL 断言偶发失败，空载定向 ×3 全绿）。后端 CTest 与 fixture Playwright 全量本轮未复跑（本机无 C++ 工具链），按 `not-run` 报告。F9 live model repetitions 仍为 0。
 - 工作台展示覆盖度（C0 36 项 + 第 7b 条）已由 `WP-2D-01` 补齐并验收，五态 `availability` 语义已恢复；判定见 `docs/architecture/BACKEND_SIMULATION_FLOW_UI_COVERAGE.md` §6.1.1。五态语义残留收口（行级 `cell()`、`LayerRecordTable`）与缺陷 `DEF-BUSY-RACE-001` 由 `WP-2D-04` 完成，判定见同文档 §6.4.1。§6.4.1 登记的「导出 HTML 状态列」经 §6.4.2 裁定为真缺陷，**已由 `WP-2D-05` 修复并验收（判定见 §6.5.1）**：导出状态列改为与屏幕同规则（已报告状态走 `statusLabel()` + `statusTone()`；未报告 / `unknown` 走共享 `missing` 态，不再出 `—` 或裸 `unknown`）。同批另两条残留（裸字典二元渲染、`buildList()` 容器口径）已裁定**维持现状**，口径见 §6.4.2，**不得**以「统一五态」为由改动。
