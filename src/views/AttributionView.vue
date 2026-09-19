@@ -19,6 +19,7 @@ import {
   semanticFieldPresentation,
 } from "../features/execution-inspector";
 import { useEvidenceSelectionStore } from "../stores/evidence-selection";
+import { ReportCoveragePanel } from "../features/report-coverage";
 const { state } = useDashboard();
 const { t, isEnglish } = useI18n();
 const evidenceSelection = useEvidenceSelectionStore();
@@ -444,6 +445,8 @@ function semanticField(field: string, value: unknown) {
             >{{ t("未覆盖的系统行为应继续保留为 unresolved gap；归因排序不能替代真实系统实验。") }}
           </p>
         </div>
+
+        <ReportCoveragePanel section="tail" :bundle="state.bundle" />
       </template>
     </template>
   </div>

@@ -12,6 +12,7 @@ import {
   executionLayerName,
   semanticFieldPresentation,
 } from "../features/execution-inspector";
+import { ReportCoveragePanel } from "../features/report-coverage";
 const { state, evidence } = useDashboard();
 const { t } = useI18n();
 
@@ -161,5 +162,7 @@ function backendExplanation(value: string | null | undefined) {
         </div>
       </div>
     </details>
+
+    <ReportCoveragePanel section="validation" :bundle="state.bundle" />
   </div>
 </template>

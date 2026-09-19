@@ -42,6 +42,7 @@ export interface ReportSummary {
   range_label?: string;
   host_path?: string;
   execution_path?: string;
+  preferred_entrypoint?: string;
   end_to_end_latency_us?: number;
   runtime_event_count?: number;
   fabric_record_count?: number;
@@ -55,13 +56,34 @@ export interface FidelityResolution {
   actual_fidelity?: string;
   resolution?: string;
   state?: string;
+  downgraded?: boolean;
+  fallback?: boolean;
   expected_absence?: boolean;
   not_covered?: boolean;
+  claim_scope_impact?: string;
   detail?: string;
+}
+
+/**
+ * Serialized by `WindTunnel.cpp` `to_json(const ResolvedFidelityProfile &)`
+ * (backend struct `include/Core/WindTunnel.h:76-84`).
+ */
+export interface ResolvedFidelityProfile {
+  range_label?: string;
+  has_downgrades?: boolean;
+  has_fallbacks?: boolean;
+  has_not_covered?: boolean;
+  has_expected_absence?: boolean;
+  claim_scope_summary?: string;
+  entries?: FidelityResolution[];
+
+  [key: string]: unknown;
 }
 
 export interface ImplementationEntry {
   subsystem: string;
+  subsystem_name?: string;
+  analytical_status?: string;
   effective_tier?: string;
   des_status?: string;
   cycle_status?: string;
@@ -69,15 +91,84 @@ export interface ImplementationEntry {
   gap?: string;
 }
 
+/**
+ * Serialized by `WindTunnel.cpp` `to_json(const MultiGranularityProfile &)`
+ * (backend struct `include/Core/WindTunnel.h:254-269`).
+ */
+export interface CapabilityRegistryEntry {
+  subsystem?: string;
+  subsystem_name?: string;
+  analytical_capability?: string;
+  des_capability?: string;
+  cycle_capability?: string;
+  des_contract_role?: string;
+  des_required_for_host_contract?: boolean;
+
+  [key: string]: unknown;
+}
+
+export interface MultiGranularityProfile {
+  requested_tier?: string;
+  capability_registry?: { registry_version?: string; entries?: CapabilityRegistryEntry[] };
+  requested_tier_state?: string;
+  unsupported_reason?: string;
+  des_completion_state?: string;
+  des_contract_state?: string;
+  des_required_subsystem_count?: number;
+  des_satisfied_subsystem_count?: number;
+  des_contract_gaps?: string[];
+  has_des_gap?: boolean;
+  has_cycle_gap?: boolean;
+  summary?: string;
+  entries?: ImplementationEntry[];
+
+  [key: string]: unknown;
+}
+
+/**
+ * The backend field is named `partial_artifacts` but `WindTunnel.cpp`
+ * `to_json(const WindTunnelRunResult &)` writes it under the JSON key
+ * `artifacts` (only `artifact_id` / `state` / `evidence_requirement` /
+ * `absence_reason` / `detail`; `payload_json` is not serialized there).
+ */
+export interface PartialArtifactDescriptor {
+  artifact_id?: string;
+  state?: string;
+  evidence_requirement?: string;
+  absence_reason?: string;
+  detail?: string;
+  payload_json?: unknown;
+
+  [key: string]: unknown;
+}
+
+export interface BottleneckReport {
+  primary_subsystem?: string;
+  title?: string;
+  detail?: string;
+  supporting_artifacts?: string[];
+
+  [key: string]: unknown;
+}
+
 export interface RunReport extends Omit<RunReportContract, "summary"> {
   report_kind: "wind_tunnel_run_result";
   contract_version: "wind_tunnel.run.v1alpha1";
   status?: string;
+  error_code?: string;
   cause?: string;
+  /**
+   * Authoritative backend remediation guidance written next to `cause`
+   * (`WindTunnel.h:284`, values built at `WindTunnel.cpp:6315-6362`).
+   * Display verbatim; never rewrite, summarize or soften it.
+   */
+  next_action?: string;
+  completeness?: number;
   summary: ReportSummary;
-  resolved_fidelity_profile?: { entries?: FidelityResolution[] };
-  multi_granularity_profile?: { entries?: ImplementationEntry[] };
-  bottleneck_report?: { primary_subsystem?: string; title?: string; detail?: string };
+  resolved_fidelity_profile?: ResolvedFidelityProfile;
+  multi_granularity_profile?: MultiGranularityProfile;
+  bottleneck_report?: BottleneckReport;
+  artifacts?: PartialArtifactDescriptor[];
   [key: string]: unknown;
 }
 
@@ -86,12 +177,30 @@ export interface PercentileSummary {
   p99_ps?: LosslessInteger;
 }
 
+/**
+ * `SimulationTypes.cpp:160-170` `metric_distribution_to_json`.
+ * `p50_ps` and `max_ps` are part of the serialized shape.
+ */
+export interface MetricDistributionSummary extends PercentileSummary {
+  sample_count?: LosslessInteger;
+  p50_ps?: LosslessInteger;
+  max_ps?: LosslessInteger;
+  [key: string]: unknown;
+}
+
 export interface RequestMetric {
   request_id: string;
   status?: string;
+  arrival_time_ps?: LosslessInteger;
+  first_token_time_ps?: LosslessInteger;
+  completion_time_ps?: LosslessInteger;
   ttft_ps?: LosslessInteger;
   tpot_ps?: LosslessInteger;
   end_to_end_latency_ps?: LosslessInteger;
+  has_first_token_time?: boolean;
+  has_ttft_sample?: boolean;
+  has_tpot_sample?: boolean;
+  has_end_to_end_latency_sample?: boolean;
   decode_step_count?: number;
   batch_issue_count?: number;
   [key: string]: unknown;
@@ -171,6 +280,104 @@ export interface ResourceConvergence {
   [key: string]: unknown;
 }
 
+/** `SimulationTypes.cpp:407-422` `resource_boundary_evidence_to_json`. */
+export interface ResourceBoundaryEvidenceSummary {
+  source_subsystem?: string;
+  trace_kind?: string;
+  evidence_count?: LosslessInteger;
+  total_bytes?: LosslessInteger;
+  peak_bytes?: LosslessInteger;
+  total_estimated_latency_us?: number;
+  max_estimated_latency_us?: number;
+  dominant_evidence_id?: string;
+  dominant_operation?: string;
+  dominant_profile?: string;
+
+  [key: string]: unknown;
+}
+
+export interface ResourceBoundaryEvidence {
+  has_evidence?: boolean;
+  summary?: ResourceBoundaryEvidenceSummary;
+
+  [key: string]: unknown;
+}
+
+/** `SimulationTypes.cpp:362-387` `pd_disaggregation_summary_to_json`. */
+export interface PdDisaggregationSummary {
+  has_handoff_evidence?: boolean;
+  handoff_record_count?: LosslessInteger;
+  handoff_busy_time_ps?: LosslessInteger;
+  handoff_latency_us?: number;
+  handoff_queue_delay_us?: number;
+  handoff_congestion_delay_us?: number;
+  handoff_runtime_us?: number;
+  handoff_ready_event_count?: LosslessInteger;
+  decode_wait_for_handoff_ps?: LosslessInteger;
+  decode_wait_after_handoff_ps?: LosslessInteger;
+  max_decode_wait_for_handoff_ps?: LosslessInteger;
+  max_decode_wait_after_handoff_ps?: LosslessInteger;
+  dominant_runtime_handoff_request_id?: string;
+  dominant_runtime_handoff_id?: string;
+  dominant_handoff_request_id?: string;
+  dominant_handoff_phase_id?: string;
+  dominant_handoff_domain_id?: string;
+  dominant_handoff_id?: string;
+  dominant_source_placement_group_id?: string;
+  dominant_destination_placement_group_id?: string;
+
+  [key: string]: unknown;
+}
+
+/**
+ * `SimulationTypes.cpp:2140-2155` / `WindTunnel.cpp:2950-2975`
+ * `resolution_control` block. Shared by the metrics and validation reports.
+ */
+export interface ResolutionControl {
+  range_label?: string;
+  has_downgrades?: boolean;
+  has_fallbacks?: boolean;
+  has_not_covered?: boolean;
+  has_expected_absence?: boolean;
+  downgrade_count?: LosslessInteger;
+  fallback_count?: LosslessInteger;
+  not_covered_count?: LosslessInteger;
+  expected_absence_count?: LosslessInteger;
+  dominant_resolution?: string;
+  dominant_subsystem?: string;
+  dominant_detail?: string;
+  claim_scope_summary?: string;
+
+  [key: string]: unknown;
+}
+
+/** `SimulationTypes.cpp:2158-2172` / `WindTunnel.cpp:2940-2949` `des_contract` block. */
+export interface DesContractSummary {
+  des_contract_state?: string;
+  des_required_subsystem_count?: LosslessInteger;
+  des_satisfied_subsystem_count?: LosslessInteger;
+  des_contract_gaps?: string[];
+
+  [key: string]: unknown;
+}
+
+export interface FidelityControl {
+  requested_tier?: string;
+  requested_tier_state?: string;
+  unsupported_reason?: string;
+  capability_registry_version?: string;
+  capability_registry_entry_count?: LosslessInteger;
+  des_required_capability_count?: LosslessInteger;
+
+  [key: string]: unknown;
+}
+
+export interface ObservationWindow {
+  start_time_ps?: LosslessInteger;
+  end_time_ps?: LosslessInteger;
+  [key: string]: unknown;
+}
+
 export interface MetricsReport extends Omit<MetricsReportContract, "summary" | "request_metrics"> {
   report_id: string;
   schema_version?: string;
@@ -185,29 +392,40 @@ export interface MetricsReport extends Omit<MetricsReportContract, "summary" | "
     rejected_request_count?: number;
   };
   tail_latency_summary?: {
-    ttft_ps?: PercentileSummary;
-    tpot_ps?: PercentileSummary;
-    end_to_end_latency_ps?: PercentileSummary;
+    ttft_ps?: MetricDistributionSummary;
+    tpot_ps?: MetricDistributionSummary;
+    end_to_end_latency_ps?: MetricDistributionSummary;
   };
   request_metrics?: RequestMetric[];
   percentile_subjects?: PercentileSubject[];
   run_id?: string;
   resolution_entries?: FidelityResolution[];
+  resolution_control?: ResolutionControl;
+  fidelity_control?: FidelityControl;
+  des_contract?: DesContractSummary;
   trace_provenance?: TraceProvenance;
   resource_convergence?: ResourceConvergence;
-  observation_window?: Record<string, unknown>;
+  resource_boundary_evidence?: ResourceBoundaryEvidence;
+  observation_window?: ObservationWindow;
+  /** Backend-authored boundary statements (`SimulationTypes.cpp:2224-2229`). */
+  boundary_notes?: string[];
+  metric_scope?: string;
   system_summary?: {
+    has_fabric_timeline?: boolean;
     fabric_record_count?: number;
     active_fabric_domain_count?: number;
+    fabric_busy_time_ps?: LosslessInteger;
+    fabric_observation_window_ps?: LosslessInteger;
     fabric_utilization_ratio?: number;
+    has_fabric_backpressure_signal?: boolean;
+    fabric_backpressure_event_count?: number;
     max_fabric_backpressure_delay_us?: number;
     dominant_fabric_backpressure_domain_id?: string;
     dominant_fabric_backpressure_kind?: string;
-    fabric_backpressure_event_count?: number;
-    fabric_observation_window_ps?: LosslessInteger;
     phase_fabric_contributions?: PhaseFabricContribution[];
     request_fabric_contributions?: RequestFabricContribution[];
     fabric_domain_utilization?: FabricDomainUtilization[];
+    pd_disaggregation?: PdDisaggregationSummary;
   };
   [key: string]: unknown;
 }
@@ -216,7 +434,25 @@ export interface TraceProvenance {
   source_mode?: string;
   calibration_level?: string;
   allowed_claim_scope?: string;
+  source_id?: string;
+  generation_path?: string;
+  capture_or_generation_time?: string;
+  upstream_tooling?: string;
   trace_kind?: string;
+  notes?: string[];
+  [key: string]: unknown;
+}
+
+/** `WindTunnel.cpp:2997-2999` `LayerErrorBudgetEntry`. */
+export interface ErrorBudgetEntry {
+  metric_id?: string;
+  subsystem?: string;
+  observed_value?: number;
+  expected_value?: number;
+  absolute_error?: number;
+  tolerance?: number;
+  unit?: string;
+  status?: string;
   [key: string]: unknown;
 }
 
@@ -234,10 +470,18 @@ export interface ValidationReport extends Omit<ValidationReportContract, "checks
   report_id: string;
   schema_version?: string;
   contract_version?: string;
+  validation_scope?: string;
   validation_lane?: string;
   evidence_tier?: string;
+  claim_scope_summary?: string;
   completeness?: number;
   trace_provenance?: TraceProvenance;
+  baseline_package_id?: string;
+  benchmark_manifests?: string[];
+  calibration_inputs?: string[];
+  error_budget?: ErrorBudgetEntry[];
+  des_contract?: DesContractSummary;
+  resolution_control?: ResolutionControl;
   resolution_entries?: FidelityResolution[];
   checks?: ValidationCheck[];
   open_gaps?: string[];
@@ -281,17 +525,34 @@ export interface AttributionAudit {
   [key: string]: unknown;
 }
 
+/** `SimulationTypes.cpp:1969-1979` `contributing_factors[]` entries. */
+export interface ContributingFactor {
+  subsystem?: string;
+  factor_code?: string;
+  detail?: string;
+  score?: number;
+  [key: string]: unknown;
+}
+
 export interface TailReport extends Omit<TailReportContract, "cause_chain"> {
   report_id: string;
   schema_version?: string;
   contract_version?: string;
   run_id?: string;
+  /** Backend-authored one-line symptom statement (`SimulationTypes.h:539`). */
+  symptom?: string;
   explained_entity?: { kind?: string; id?: string };
+  observation_window?: ObservationWindow;
   confidence?: number;
   completeness?: number;
   cause_chain?: CauseItem[];
+  contributing_factors?: ContributingFactor[];
   attribution_ranking?: AttributionItem[];
   attribution_audit?: AttributionAudit;
+  validation_links?: string[];
+  metric_evidence_links?: string[];
+  resource_evidence_links?: string[];
+  unresolved_gaps?: string[];
   [key: string]: unknown;
 }
 
@@ -312,9 +573,21 @@ export interface ExecutionEnvelopeReport extends Omit<ExecutionEnvelopeContract,
   run_id?: string;
   schema_version?: string;
   contract_version?: string;
+  trace_name?: string;
   host_path?: "S7";
+  range_label?: string;
+  trace_provenance?: TraceProvenance;
+  start_time_ps?: LosslessInteger;
+  end_time_ps?: LosslessInteger;
+  end_to_end_latency_us?: number;
+  runtime_event_count?: number;
+  fabric_record_count?: number;
+  /** Boolean fact only: a `false` value must never be styled as "captured". */
+  has_runtime_event_trace?: boolean;
+  has_tail_cause_chain_report?: boolean;
   stages: ExecutionStage[];
   evidence_refs?: EvidenceRef[];
+  notes?: string[];
   [key: string]: unknown;
 }
 

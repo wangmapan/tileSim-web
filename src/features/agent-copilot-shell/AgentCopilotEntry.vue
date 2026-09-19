@@ -185,6 +185,14 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   max-width: 100vw;
+  /* The fixed host can retain the panel's intrinsic width while the panel
+     itself is collapsed to a narrow rail. Let clicks pass through that
+     transparent host area so workspace controls underneath remain usable. */
+  pointer-events: none;
+}
+
+.agent-copilot-entry > * {
+  pointer-events: auto;
 }
 
 .agent-copilot-entry__trigger {
@@ -211,6 +219,14 @@ onMounted(() => {
 .agent-copilot-entry__panel-host {
   min-width: 0;
   height: 100dvh;
+}
+
+/* v-show keeps the shell mounted while it is collapsed. Constrain the flex
+   host to the rail width as well; otherwise its old open width remains a
+   pointer-event surface over the workspace controls beneath it. */
+.agent-copilot-entry[data-state="collapsed"] .agent-copilot-entry__panel-host {
+  flex: 0 0 52px;
+  width: 52px;
 }
 
 .agent-copilot-entry__loading,

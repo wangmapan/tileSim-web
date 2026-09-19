@@ -1,4 +1,4 @@
-export const routedGuideIds = [
+export const professionalRoutedGuideIds = [
   "overview",
   "experiment",
   "execution",
@@ -12,12 +12,38 @@ export const routedGuideIds = [
   "evidence_lab",
 ] as const;
 
+export const lightweightRoutedGuideIds = [
+  "lightweight",
+  "lightweight_prepare",
+  "lightweight_run",
+  "lightweight_results",
+] as const;
+
+export const routedGuideIds = [...professionalRoutedGuideIds, ...lightweightRoutedGuideIds] as const;
+
 export const embeddedGuideIds = ["unsupported_schema", "raw_evidence"] as const;
 
 export type RoutedGuideId = (typeof routedGuideIds)[number];
 export type EmbeddedGuideId = (typeof embeddedGuideIds)[number];
 export type GuideId = RoutedGuideId | EmbeddedGuideId;
 export type GuidedView = RoutedGuideId;
+export type GuideScope = "professional" | "lightweight";
+
+export const professionalGuideIds = [...professionalRoutedGuideIds, ...embeddedGuideIds] as const;
+export const lightweightGuideIds = [...lightweightRoutedGuideIds] as const;
+
+const guideIdsByScope = {
+  professional: professionalGuideIds,
+  lightweight: lightweightGuideIds,
+} as const satisfies Readonly<Record<GuideScope, readonly GuideId[]>>;
+
+export function guideIdsForScope(scope: GuideScope): readonly GuideId[] {
+  return guideIdsByScope[scope];
+}
+
+export function isGuideInScope(guideId: GuideId, scope: GuideScope): boolean {
+  return (guideIdsByScope[scope] as readonly GuideId[]).includes(guideId);
+}
 
 export type HelpAnchor = `${GuideId}-${string}`;
 

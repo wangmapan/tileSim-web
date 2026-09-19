@@ -11,6 +11,8 @@ import { networkReviewEnglishCatalog } from "../../src/i18n/workstreams/network-
 import { attributionReviewEnglishCatalog } from "../../src/i18n/workstreams/attribution-review";
 import { workbenchReviewEnglishCatalog } from "../../src/i18n/workstreams/workbench-review";
 import { semanticGlossaryEnglishCatalog } from "../../src/i18n/workstreams/semantic-glossary";
+import { reportCoverageEnglishCatalog } from "../../src/i18n/workstreams/report-coverage";
+import { lightweightWorkbenchEnglishCatalog } from "../../src/i18n/workstreams/lightweight-workbench";
 
 const modelFiles = [
   "src/features/execution-inspector/model/records.ts",
@@ -28,6 +30,8 @@ const catalogs = {
   attributionReview: attributionReviewEnglishCatalog,
   workbenchReview: workbenchReviewEnglishCatalog,
   semanticGlossary: semanticGlossaryEnglishCatalog,
+  reportCoverage: reportCoverageEnglishCatalog,
+  lightweightWorkbench: lightweightWorkbenchEnglishCatalog,
 };
 
 function chineseStringLiterals(file) {
@@ -65,7 +69,30 @@ describe("run-bound evidence English coverage", () => {
     "src/features/run-bound-evidence/percentile-navigation.ts",
     "src/features/run-bound-evidence/week8-execution.ts",
     "src/features/run-bound-evidence/components/RunBoundEvidencePanel.vue",
+    "src/features/run-bound-evidence/components/Week8StreamRecords.vue",
     "src/features/run-bound-evidence/components/RequestEvidenceAction.vue",
+  ];
+
+  it.each(files)("translates every Chinese interface literal in %s", (file) => {
+    const source = readFileSync(resolve(process.cwd(), file), "utf8");
+    const literals = [...source.matchAll(/["']([^"'\r\n]*[\u3400-\u9fff][^"'\r\n]*)["']/gu)].map((match) => match[1]);
+    const missing = [...new Set(literals)].filter((value) => !hasEnglishTranslation(value));
+    expect(missing).toEqual([]);
+  });
+});
+
+describe("report coverage English coverage", () => {
+  const files = [
+    "src/features/report-coverage/availability.ts",
+    "src/features/report-coverage/model/shared.ts",
+    "src/features/report-coverage/model/run.ts",
+    "src/features/report-coverage/model/metrics.ts",
+    "src/features/report-coverage/model/validation.ts",
+    "src/features/report-coverage/model/tail.ts",
+    "src/features/report-coverage/model/envelope.ts",
+    "src/features/report-coverage/components/CoveragePanel.vue",
+    "src/features/report-coverage/components/CoverageListTable.vue",
+    "src/features/report-coverage/components/ReportCoveragePanel.vue",
   ];
 
   it.each(files)("translates every Chinese interface literal in %s", (file) => {

@@ -1,3 +1,4 @@
+import ast
 import hashlib
 import json
 import math
@@ -10,6 +11,10 @@ from pathlib import Path
 from unittest import mock
 
 import server
+from contracts.agent_orchestration_phase2 import registry as run_intake_registry
+from contracts.agent_orchestration_phase2.validator import ContractValidationError
+from contracts.validation import RequestValidationError
+from services import run_intake as run_intake_service
 
 
 def trace_package_inspect_report(
@@ -3163,6 +3168,1766 @@ class BridgeApiContractTest(unittest.TestCase):
         self.assertTrue(catalog["hard_gate_default"])
         self.assertEqual(len(catalog["cases"]), 36)
         self.assertEqual(fixture_ids, server.evidence_agent.EVALUATION_CASE_IDS)
+
+
+class RunIntakeLoweringCliCallServiceTest(unittest.TestCase):
+    """WP-2C-02 service layer: the read-only Run Intake v2 lowering call.
+
+    Every assertion drives ``services.execution.run_intake_cli_validation`` directly with
+    an injected ``process_runner``. No HTTP server is started, no route is exercised and
+    nothing here binds or touches 127.0.0.1:5173. This work package deliberately wires the
+    call into no endpoint, so ``test_the_lowering_call_is_not_wired_into_any_route``
+    fails the moment somebody connects it.
+    """
+
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.tilesim_root = Path(self.temporary_directory.name)
+        self.previous_runs_root = server.RUNS_ROOT
+        server.RUNS_ROOT = self.tilesim_root / "runs"
+        server.RUNS_ROOT.mkdir()
+        server.runs.clear()
+
+    def tearDown(self) -> None:
+        server.RUNS_ROOT = self.previous_runs_root
+        server.runs.clear()
+        self.temporary_directory.cleanup()
+
+    # --- fixtures ---------------------------------------------------------------------
+
+    def intake_document(self) -> dict:
+        return {
+            "schema_identity": "tilesim.bridge.agent_orchestration_run_intake.v2",
+            "schema_revision": "sha256:" + "0" * 64,
+            "intake_id": "wp-2c-02.fixture.intake",
+            "canonical_digest": "sha256:" + "1" * 64,
+            "device_count": 8,
+        }
+
+    def five_field_stdout(self) -> str:
+        """The stdout shape the published Run Intake issue contract *requires*.
+
+        The deployed CLI does not emit this yet - its serializer drops ``message`` and
+        ``safe_next_action`` (see ``deployed_cli_stdout`` below) - so this fixture stands
+        for the future CLI that can actually fill ``backend_issues``.
+        """
+        return json.dumps(
+            {
+                "status": "blocked",
+                "issues": [
+                    {
+                        "code": "profile_missing",
+                        "message": "Profile records are unavailable (0/unavailable): model",
+                        "field_path": "/profile_binding/model",
+                        "blocking": True,
+                        "safe_next_action": "publish an audited Profile record and bind it",
+                    },
+                    {
+                        "code": "kv_lowering_missing",
+                        "message": "Logical KV capacity has no physical page/block lowering",
+                        "field_path": "/kv_cache/capacity_bytes",
+                        "blocking": True,
+                        "safe_next_action": "provide an auditable physical KV profile",
+                    },
+                ],
+            }
+        )
+
+    def deployed_cli_stdout(self) -> str:
+        """The stdout the *current* CLI serializer produces: code / field_path / blocking.
+
+        ``serialize_run_intake_issues`` (``D:\\tileSim\\src\\Core\\RunIntakeLowering.cpp``)
+        hardcodes ``blocking: true`` and has no outlet for ``message`` or
+        ``safe_next_action``, nor for the three lowering flags.
+        """
+        return json.dumps(
+            {
+                "status": "blocked",
+                "issues": [
+                    {
+                        "code": "profile_missing",
+                        "field_path": "/profile_binding/model",
+                        "blocking": True,
+                    }
+                ],
+            }
+        )
+
+    # --- drivers ----------------------------------------------------------------------
+
+    def runner(
+        self,
+        *,
+        returncode: int = 0,
+        stdout: str = "",
+        stderr: str = "",
+        side_effect: object | None = None,
+    ) -> mock.Mock:
+        if side_effect is not None:
+            return mock.Mock(side_effect=side_effect)
+        return mock.Mock(
+            return_value=server.subprocess.CompletedProcess(
+                [], returncode, stdout=stdout, stderr=stderr
+            )
+        )
+
+    def capturing_runner(
+        self,
+        captured: dict,
+        *,
+        returncode: int = 1,
+        stdout: str | None = None,
+        raises: BaseException | None = None,
+    ):
+        """Record argv / kwargs / staged bytes from inside the call, then answer."""
+
+        def run(command, **kwargs):
+            staged = Path(command[3])
+            captured["command"] = list(command)
+            captured["kwargs"] = dict(kwargs)
+            captured["staged_path"] = staged
+            captured["staged_exists_during_call"] = staged.is_file()
+            captured["staged_body"] = staged.read_text(encoding="utf-8")
+            if raises is not None:
+                raise raises
+            return server.subprocess.CompletedProcess(
+                command,
+                returncode,
+                stdout=self.deployed_cli_stdout() if stdout is None else stdout,
+                stderr="",
+            )
+
+        return run
+
+    def validate(
+        self,
+        document: object,
+        *,
+        process_runner,
+        tilesim_cli: Path | None = None,
+        tilesim_root: Path | None = None,
+        slot: object | None = None,
+    ) -> dict:
+        return server.execution.run_intake_cli_validation(
+            document,
+            slot=server.week7_operation_lock if slot is None else slot,
+            tilesim_cli=Path(server.__file__) if tilesim_cli is None else tilesim_cli,
+            tilesim_root=self.tilesim_root if tilesim_root is None else tilesim_root,
+            process_runner=process_runner,
+        )
+
+    # --- judged outcomes --------------------------------------------------------------
+
+    def test_exit_one_with_parseable_stdout_is_a_judged_outcome(self) -> None:
+        stdout = self.five_field_stdout()
+        emitted = json.loads(stdout)
+        result = self.validate(
+            self.intake_document(),
+            process_runner=self.runner(returncode=1, stdout=stdout),
+        )
+        self.assertEqual(set(result), set(server.execution.RUN_INTAKE_CLI_RESULT_FIELDS))
+        self.assertEqual(result["operation"], "validate-run-intake")
+        self.assertEqual(result["exit_code"], 1)
+        self.assertEqual(result["status"], "blocked")
+        # Verbatim: same values, same key order, no added or dropped field.
+        self.assertEqual(result["issues"], emitted["issues"])
+        self.assertEqual(
+            [list(issue) for issue in result["issues"]],
+            [list(issue) for issue in emitted["issues"]],
+        )
+        self.assertTrue(result["representable"])
+        self.assertEqual(result["non_representable_reasons"], [])
+
+    def test_exit_zero_accepted_is_returned_with_the_cli_status_verbatim(self) -> None:
+        result = self.validate(
+            self.intake_document(),
+            process_runner=self.runner(
+                returncode=0, stdout=json.dumps({"status": "accepted", "issues": []})
+            ),
+        )
+        self.assertEqual(result["exit_code"], 0)
+        self.assertEqual(result["status"], "accepted")
+        self.assertEqual(result["issues"], [])
+        self.assertTrue(result["representable"])
+
+    def test_an_empty_issues_array_is_never_presented_as_an_all_clear(self) -> None:
+        result = self.validate(
+            self.intake_document(),
+            process_runner=self.runner(
+                returncode=1, stdout=json.dumps({"status": "blocked", "issues": []})
+            ),
+        )
+        self.assertEqual(result["issues"], [])
+        self.assertEqual(result["status"], "blocked")
+        self.assertEqual(result["exit_code"], 1)
+        # Nothing in the result derives a verdict of its own from an empty array.
+        self.assertEqual(set(result), set(server.execution.RUN_INTAKE_CLI_RESULT_FIELDS))
+        for derived in ("ok", "all_clear", "accepted", "no_issues", "passed", "backend_issues"):
+            self.assertNotIn(derived, result)
+
+    def test_the_deployed_three_field_issues_are_reported_as_unrepresentable(self) -> None:
+        """The serializer gap, pinned as a regression assertion.
+
+        The current CLI emits only ``code`` / ``field_path`` / ``blocking``. The call must
+        report that losslessly instead of filling the two missing fields in.
+        """
+        result = self.validate(
+            self.intake_document(),
+            process_runner=self.runner(returncode=1, stdout=self.deployed_cli_stdout()),
+        )
+        self.assertFalse(result["representable"])
+        self.assertEqual(
+            result["non_representable_reasons"],
+            ["issues[0] is missing message, safe_next_action"],
+        )
+        self.assertEqual(
+            result["issues"],
+            [
+                {
+                    "code": "profile_missing",
+                    "field_path": "/profile_binding/model",
+                    "blocking": True,
+                }
+            ],
+        )
+        for issue in result["issues"]:
+            self.assertEqual(set(issue), {"code", "field_path", "blocking"})
+            self.assertNotIn("message", issue)
+            self.assertNotIn("safe_next_action", issue)
+        self.assertNotIn("backend_issues", result)
+
+    def test_a_non_boolean_blocking_is_not_representable(self) -> None:
+        stdout = json.dumps(
+            {
+                "status": "blocked",
+                "issues": [
+                    {
+                        "code": "profile_missing",
+                        "message": "m",
+                        "field_path": "/profile_binding/model",
+                        "blocking": "true",
+                        "safe_next_action": "a",
+                    }
+                ],
+            }
+        )
+        result = self.validate(
+            self.intake_document(),
+            process_runner=self.runner(returncode=1, stdout=stdout),
+        )
+        self.assertFalse(result["representable"])
+        self.assertEqual(
+            result["non_representable_reasons"],
+            ["issues[0].blocking is not boolean"],
+        )
+
+    # --- a) CLI unavailable -----------------------------------------------------------
+
+    def test_cli_not_available_fails_closed_as_retryable(self) -> None:
+        runner = self.runner(returncode=1, stdout=self.deployed_cli_stdout())
+        with self.assertRaises(server.execution.RunIntakeCliError) as raised:
+            self.validate(
+                self.intake_document(),
+                process_runner=runner,
+                tilesim_cli=self.tilesim_root / "missing-TileSimCLI",
+            )
+        self.assertEqual(raised.exception.code, "run_intake_cli_unavailable")
+        self.assertTrue(raised.exception.retryable)
+        runner.assert_not_called()
+        # Never downgraded to an accepted or an empty result.
+        self.assertIn("not validated", str(raised.exception))
+
+    # --- b) OSError ------------------------------------------------------------------
+
+    def test_os_error_maps_to_a_retryable_execution_error(self) -> None:
+        with self.assertRaises(server.execution.RunIntakeCliError) as raised:
+            self.validate(
+                self.intake_document(),
+                process_runner=self.runner(
+                    side_effect=OSError(13, "Permission denied")
+                ),
+            )
+        self.assertEqual(raised.exception.code, "run_intake_cli_execution_error")
+        self.assertTrue(raised.exception.retryable)
+
+    def test_a_staging_write_failure_is_also_a_retryable_execution_error(self) -> None:
+        blocker = self.tilesim_root / "not-a-directory"
+        blocker.write_text("x", encoding="utf-8")
+        runner = self.runner(returncode=0)
+        with mock.patch.object(
+            server.execution.tempfile, "TemporaryDirectory"
+        ) as factory:
+            factory.return_value.__enter__ = mock.Mock(return_value=str(blocker))
+            factory.return_value.__exit__ = mock.Mock(return_value=False)
+            with self.assertRaises(server.execution.RunIntakeCliError) as raised:
+                self.validate(self.intake_document(), process_runner=runner)
+        self.assertEqual(raised.exception.code, "run_intake_cli_execution_error")
+        self.assertTrue(raised.exception.retryable)
+        runner.assert_not_called()
+
+    # --- c) Timeout ------------------------------------------------------------------
+
+    def test_timeout_maps_to_a_retryable_timeout(self) -> None:
+        with self.assertRaises(server.execution.RunIntakeCliError) as raised:
+            self.validate(
+                self.intake_document(),
+                process_runner=self.runner(
+                    side_effect=server.subprocess.TimeoutExpired("TileSimCLI", 45)
+                ),
+            )
+        self.assertEqual(raised.exception.code, "run_intake_cli_timeout")
+        self.assertTrue(raised.exception.retryable)
+
+    # --- d) unparseable or non-finite stdout ------------------------------------------
+
+    def test_stdout_that_is_not_valid_finite_json_is_not_interpreted(self) -> None:
+        cases = {
+            "empty": "",
+            "truncated": "{truncated",
+            "bare literal": "blocked",
+            "nan token": '{"status": NaN, "issues": []}',
+            "overflowing exponent": '{"status":"blocked","issues":[],"peak":1e999}',
+        }
+        for label, stdout in cases.items():
+            with self.subTest(case=label):
+                with self.assertRaises(server.execution.RunIntakeCliError) as raised:
+                    self.validate(
+                        self.intake_document(),
+                        process_runner=self.runner(returncode=1, stdout=stdout),
+                    )
+                self.assertEqual(raised.exception.code, "run_intake_cli_invalid_json")
+                self.assertFalse(raised.exception.retryable)
+
+    # --- e) exit codes the published contract does not define -------------------------
+
+    def test_exit_codes_outside_the_published_pair_are_not_interpreted(self) -> None:
+        for exit_code in (2, 64, 130, -1):
+            with self.subTest(exit_code=exit_code):
+                with self.assertRaises(server.execution.RunIntakeCliError) as raised:
+                    self.validate(
+                        self.intake_document(),
+                        process_runner=self.runner(
+                            returncode=exit_code, stdout=self.five_field_stdout()
+                        ),
+                    )
+                self.assertEqual(raised.exception.code, "run_intake_cli_unexpected_exit")
+                self.assertFalse(raised.exception.retryable)
+                self.assertIn(str(exit_code), str(raised.exception))
+
+    # --- g) stdout that is not an assessable envelope ---------------------------------
+
+    def test_stdout_that_is_not_an_assessable_envelope_is_not_representable(self) -> None:
+        cases = {
+            "json scalar": json.dumps("blocked"),
+            "json array": json.dumps([{"status": "blocked"}]),
+            "no issues member": json.dumps({"status": "blocked"}),
+            "issues not an array": json.dumps({"status": "blocked", "issues": {"code": "x"}}),
+            "issue not an object": json.dumps({"status": "blocked", "issues": ["profile_missing"]}),
+            "status not a string": json.dumps({"status": 1, "issues": []}),
+        }
+        for label, stdout in cases.items():
+            with self.subTest(case=label):
+                with self.assertRaises(server.execution.RunIntakeCliError) as raised:
+                    self.validate(
+                        self.intake_document(),
+                        process_runner=self.runner(returncode=1, stdout=stdout),
+                    )
+                self.assertEqual(
+                    raised.exception.code, "run_intake_cli_issue_not_representable"
+                )
+                self.assertFalse(raised.exception.retryable)
+                # No issue copy is ever invented, here or anywhere else.
+                self.assertNotIn("Profile records are unavailable", str(raised.exception))
+                self.assertNotIn("safe_next_action", str(raised.exception))
+
+    # --- single shared slot -----------------------------------------------------------
+
+    def test_the_shared_bridge_slot_reports_capacity_reached_and_recovers(self) -> None:
+        self.assertTrue(server.week7_operation_lock.acquire(blocking=False))
+        try:
+            runner = self.runner(returncode=1, stdout=self.deployed_cli_stdout())
+            with self.assertRaises(server.execution.RunIntakeCliError) as raised:
+                self.validate(self.intake_document(), process_runner=runner)
+            self.assertEqual(raised.exception.code, "run_intake_capacity_reached")
+            self.assertTrue(raised.exception.retryable)
+            runner.assert_not_called()
+
+            # The injected object is consulted: an unheld lock succeeds while the shared
+            # Week 7 slot is still held, so no private lock is being used instead.
+            passed = self.validate(
+                self.intake_document(),
+                process_runner=self.runner(
+                    returncode=0, stdout=json.dumps({"status": "accepted", "issues": []})
+                ),
+                slot=threading.Lock(),
+            )
+            self.assertEqual(passed["status"], "accepted")
+        finally:
+            server.week7_operation_lock.release()
+
+        recovered = self.validate(
+            self.intake_document(),
+            process_runner=self.runner(
+                returncode=0, stdout=json.dumps({"status": "accepted", "issues": []})
+            ),
+        )
+        self.assertEqual(recovered["status"], "accepted")
+
+    def test_the_slot_is_released_after_a_failing_call(self) -> None:
+        with self.assertRaises(server.execution.RunIntakeCliError):
+            self.validate(
+                self.intake_document(),
+                process_runner=self.runner(
+                    side_effect=server.subprocess.TimeoutExpired("TileSimCLI", 45)
+                ),
+            )
+        self.assertTrue(server.week7_operation_lock.acquire(blocking=False))
+        server.week7_operation_lock.release()
+
+    def test_the_module_holds_no_private_operation_lock(self) -> None:
+        lock_type = type(threading.Lock())
+        private_locks = [
+            name
+            for name, value in vars(server.execution).items()
+            if isinstance(value, lock_type)
+        ]
+        self.assertEqual(private_locks, [])
+
+    # --- argv allow-list and faithful staging -----------------------------------------
+
+    def test_argv_is_a_fixed_allow_list_and_the_document_supplies_no_arguments(self) -> None:
+        document = dict(self.intake_document())
+        document.update(
+            {
+                "run-intake": "/etc/passwd",
+                "argv": ["--out", "C:/Windows/System32/drivers/etc/hosts"],
+                "path": "../../runs/run-1",
+                "shell": "rm -rf /",
+                "command": ["evidence-map"],
+            }
+        )
+        captured: dict = {}
+        self.validate(
+            document, process_runner=self.capturing_runner(captured, returncode=1)
+        )
+        command = captured["command"]
+        self.assertEqual(len(command), 4)
+        self.assertEqual(Path(command[0]).resolve(), Path(server.__file__).resolve())
+        self.assertEqual(command[1], "validate-run-intake")
+        self.assertEqual(command[2], "--run-intake")
+        staged = captured["staged_path"]
+        self.assertEqual(command[3], str(staged))
+        self.assertEqual(staged.name, "run-intake.json")
+        self.assertTrue(staged.parent.name.startswith("tilesim-run-intake-"))
+
+        joined = " ".join(command)
+        for hostile in (
+            "--out",
+            "evidence-map",
+            "passwd",
+            "hosts",
+            "rm -rf",
+            "../../runs/run-1",
+        ):
+            with self.subTest(hostile=hostile):
+                self.assertNotIn(hostile, joined)
+
+        self.assertEqual(
+            captured["kwargs"],
+            {
+                "cwd": self.tilesim_root,
+                "text": True,
+                "capture_output": True,
+                "timeout": 45,
+                "check": False,
+            },
+        )
+        # Only the intake content travels to the CLI, and it travels unchanged.
+        self.assertEqual(json.loads(captured["staged_body"]), document)
+
+    def test_staging_happens_outside_the_runs_root_repository_and_backend_worktree(self) -> None:
+        captured: dict = {}
+        self.validate(self.intake_document(), process_runner=self.capturing_runner(captured))
+        staged = captured["staged_path"].resolve()
+        self.assertIn(Path(tempfile.gettempdir()).resolve(), staged.parents)
+        for forbidden in (server.RUNS_ROOT, server.WEB_ROOT, self.tilesim_root):
+            with self.subTest(root=str(forbidden)):
+                self.assertNotIn(Path(forbidden).resolve(), staged.parents)
+
+    def test_uint64_intake_values_are_staged_without_float_conversion(self) -> None:
+        document = self.intake_document()
+        document["device_count"] = 9007199254740993
+        document["budget"] = {
+            "run_count": 18446744073709551615,
+            "wall_time_ps": 9223372036854775807,
+        }
+        captured: dict = {}
+        self.validate(document, process_runner=self.capturing_runner(captured))
+        staged = captured["staged_body"]
+        self.assertIn("18446744073709551615", staged)
+        self.assertIn("9223372036854775807", staged)
+        self.assertIn("9007199254740993", staged)
+        self.assertNotIn("e+", staged)
+        restored = json.loads(staged)
+        self.assertEqual(restored, document)
+        self.assertIsInstance(restored["budget"]["run_count"], int)
+        self.assertIsInstance(restored["device_count"], int)
+
+    def test_a_non_finite_or_unserializable_intake_document_is_refused_before_staging(
+        self,
+    ) -> None:
+        cases = {
+            "top level infinity": {"device_count": float("inf")},
+            "nested nan": {"placement": [float("nan")]},
+            "deep negative infinity": {"slos": [{"window": {"ps": -float("inf")}}]},
+            "non string key": {1: "device"},
+            "unserializable member": {"device_count": {1, 2}},
+        }
+        for label, document in cases.items():
+            with self.subTest(case=label):
+                runner = self.runner(
+                    returncode=0, stdout=json.dumps({"status": "accepted", "issues": []})
+                )
+                with self.assertRaises(server.execution.RunIntakeCliError) as raised:
+                    self.validate(document, process_runner=runner)
+                self.assertEqual(
+                    raised.exception.code, "run_intake_cli_input_not_serializable"
+                )
+                self.assertFalse(raised.exception.retryable)
+                runner.assert_not_called()
+
+    # --- staging lifecycle and write boundary -----------------------------------------
+
+    def test_the_staging_directory_is_removed_after_success_and_after_failure(self) -> None:
+        captured: dict = {}
+        self.validate(
+            self.intake_document(), process_runner=self.capturing_runner(captured, returncode=1)
+        )
+        self.assertTrue(captured["staged_exists_during_call"])
+        self.assertFalse(captured["staged_path"].exists())
+        self.assertFalse(captured["staged_path"].parent.exists())
+
+        for label, kwargs in (
+            ("timeout", {"raises": server.subprocess.TimeoutExpired("TileSimCLI", 45)}),
+            ("unexpected exit", {"returncode": 2, "stdout": self.five_field_stdout()}),
+            ("invalid json", {"returncode": 1, "stdout": "{truncated"}),
+        ):
+            with self.subTest(case=label):
+                failed: dict = {}
+                with self.assertRaises(server.execution.RunIntakeCliError):
+                    self.validate(
+                        self.intake_document(),
+                        process_runner=self.capturing_runner(failed, **kwargs),
+                    )
+                self.assertTrue(failed["staged_exists_during_call"])
+                self.assertFalse(failed["staged_path"].exists())
+                self.assertFalse(failed["staged_path"].parent.exists())
+
+    def test_the_call_writes_nothing_to_the_runs_directory_and_creates_no_run(self) -> None:
+        before = sorted(path.name for path in server.RUNS_ROOT.iterdir())
+        captured: dict = {}
+        self.validate(self.intake_document(), process_runner=self.capturing_runner(captured))
+        self.assertEqual(sorted(path.name for path in server.RUNS_ROOT.iterdir()), before)
+        self.assertEqual(before, [])
+        self.assertEqual(server.runs, {})
+
+    # --- scope boundary ---------------------------------------------------------------
+
+    def test_the_lowering_call_is_not_wired_into_any_route(self) -> None:
+        """WP-2C-02 delivers the service layer only; endpoint wiring is a later package."""
+        bridge_root = server.WEB_ROOT / "bridge"
+        for path in sorted(bridge_root.rglob("*.py")):
+            if path.name in {"execution.py", "test_server.py"}:
+                continue
+            with self.subTest(module=path.name):
+                self.assertNotIn(
+                    "run_intake_cli_validation", path.read_text(encoding="utf-8")
+                )
+
+
+PHASE2A_FIXTURE_ROOT = (
+    server.WEB_ROOT
+    / "bridge"
+    / "contracts"
+    / "proposals"
+    / "agent_orchestration_phase2a"
+    / "fixtures"
+)
+
+
+class RunIntakeV2RegistryContractTest(unittest.TestCase):
+    """WP-2C-01a: offline judging for the published Run Intake v2 contract.
+
+    Every assertion drives the registry and the service directly. No HTTP endpoint
+    belongs to this work package, nothing here binds or touches 127.0.0.1:5173, and no
+    fixture is ever written back.
+    """
+
+    def load_fixture(self, *parts: str) -> dict:
+        return json.loads(
+            PHASE2A_FIXTURE_ROOT.joinpath(*parts).read_text(encoding="utf-8")
+        )
+
+    def published_revision(self) -> str:
+        return run_intake_registry.published_schema_revisions()[
+            run_intake_registry.RUN_INTAKE_IDENTITY
+        ]
+
+    def registered_intake(self) -> dict:
+        """The proposal fixture intake, re-revisioned to the published schema digest.
+
+        Phase 2A froze its own revision for this fixture; the copy substitutes the
+        revision the published schema document digests to. The fixture itself is not
+        modified.
+        """
+        payload = self.load_fixture("valid", "run-intake.json")["contract"]
+        payload["schema_revision"] = self.published_revision()
+        return payload
+
+    def matrix_cases(self) -> list[dict]:
+        return self.load_fixture("compatibility-matrix.json")["cases"]
+
+    def profile_records(self) -> dict[str, list[dict]]:
+        return {
+            family: [self.load_fixture("valid", f"{family}-profile.json")["contract"]]
+            for family in run_intake_registry.PROFILE_FAMILIES
+        }
+
+    def resolve_profile_binding(
+        self,
+        *,
+        replaced: str | None = None,
+        records: list[dict] | None = None,
+        claim_requires_calibration: bool = False,
+    ):
+        available = self.profile_records()
+        if replaced is not None:
+            available[replaced] = records or []
+        return run_intake_registry.evaluate_profile_binding(
+            self.registered_intake()["profile_binding"],
+            profile_records=available,
+            claim_requires_calibration=claim_requires_calibration,
+        )
+
+    def judgement_for(self, scenario: str):
+        registry = run_intake_registry
+        if scenario == "old_client_to_new_server":
+            return registry.judge_route(None)
+        if scenario == "new_client_to_old_server":
+            return registry.judge_route(
+                self.registered_intake(), route=registry.ROUTE_LEGACY_NESTED_INTAKE
+            )
+        if scenario == "v1_to_successor":
+            return registry.judge_route({"schema_identity": registry.CREATE_RUN_IDENTITY})
+        if scenario == "successor_to_v1":
+            return registry.judge_route(
+                self.registered_intake(), route=registry.ROUTE_CREATE_RUN_V1
+            )
+        if scenario == "identity_missing":
+            return registry.judge_route({"intake_id": "fixture.intake.without-identity"})
+        if scenario == "unknown_identity":
+            payload = self.registered_intake()
+            payload["schema_identity"] = (
+                "tilesim.bridge.agent_orchestration_run_intake.v3"
+            )
+            return registry.judge_route(payload)
+        if scenario == "unknown_revision":
+            payload = self.registered_intake()
+            payload["schema_revision"] = "sha256:" + "ab" * 32
+            return registry.judge_route(payload)
+        if scenario == "mixed_version_payload":
+            payload = self.registered_intake()
+            payload["profile_binding"]["model"]["identity"] = (
+                "tilesim.bridge.agent_orchestration_model_profile.v1"
+            )
+            return registry.judge_route(payload)
+        if scenario in {"exact_replay", "payload_mismatch", "retained_historical_run"}:
+            revision = (
+                "sha256:" + "ab" * 32
+                if scenario == "retained_historical_run"
+                else self.published_revision()
+            )
+            return registry.evaluate_idempotency(
+                {
+                    "canonical_payload_digest": "payload-digest"
+                    if scenario != "payload_mismatch"
+                    else "other-digest",
+                    "identity": registry.RUN_INTAKE_IDENTITY,
+                    "revision": revision,
+                },
+                {
+                    "canonical_payload_digest": "payload-digest",
+                    "identity": registry.RUN_INTAKE_IDENTITY,
+                    "revision": revision,
+                },
+            )
+        if scenario == "stale_profile_binding":
+            report = self.load_fixture("valid", "validation-report.json")["contract"]
+            current, recorded = self.staleness_binding_inputs(report)
+            current["profile_revision_and_digest"] = (
+                "tilesim.bridge.agent_orchestration_profile_snapshot.v1",
+                "sha256:" + "24" * 32,
+                "sha256:" + "ff" * 32,
+            )
+            return registry.evaluate_validation_report_staleness(
+                report, current_bindings=current, recorded_bindings=recorded
+            )
+        self.fail(f"unhandled compatibility scenario {scenario}")
+
+    def staleness_binding_inputs(self, report: dict) -> tuple[dict, dict]:
+        recorded = run_intake_registry.derive_recorded_bindings(report)
+        supplied = {
+            "workload_template": (
+                "tilesim.workload.fixture.v1",
+                "sha256:" + "31" * 32,
+                "sha256:" + "32" * 32,
+            ),
+            "approval": ("fixture.approval.phase2c", "sha256:" + "33" * 32),
+        }
+        current = {
+            binding: recorded[binding] if recorded[binding] is not None else supplied[binding]
+            for binding in run_intake_registry.STALE_CHECKED_BINDINGS
+        }
+        return current, supplied
+
+    # --- frozen vocabulary ------------------------------------------------------------
+
+    def test_compatibility_vocabulary_matches_the_published_matrix(self) -> None:
+        cases = self.matrix_cases()
+        self.assertEqual(
+            {case["scenario"] for case in cases},
+            set(run_intake_registry.COMPATIBILITY_SCENARIOS),
+        )
+        self.assertEqual(
+            {case["error_code"] for case in cases if case["error_code"]},
+            set(run_intake_registry.COMPATIBILITY_ERROR_CODES),
+        )
+        self.assertEqual(
+            {case["expected"] for case in cases},
+            set(run_intake_registry.COMPATIBILITY_EXPECTATIONS),
+        )
+        self.assertEqual(len(cases), 12)
+
+    def test_published_revision_table_and_profile_identities_are_derived(self) -> None:
+        revisions = run_intake_registry.published_schema_revisions()
+        self.assertEqual(set(revisions), set(run_intake_registry.IDENTITIES))
+        for identity, revision in revisions.items():
+            self.assertTrue(revision.startswith("sha256:"), identity)
+        self.assertEqual(
+            run_intake_registry.PROFILE_IDENTITY_V2[
+                run_intake_registry.PROFILE_FAMILIES[0]
+            ],
+            "tilesim.bridge.agent_orchestration_model_profile.v2",
+        )
+        openapi = json.loads(
+            (server.WEB_ROOT / "bridge/contracts/openapi.json").read_text(encoding="utf-8")
+        )
+        published_v1 = openapi["x-tilesim-contract"]["agent_orchestration_capability"][
+            "profile_schema_identities"
+        ]
+        self.assertEqual(set(published_v1), set(run_intake_registry.PROFILE_IDENTITIES_V1))
+
+    # --- compatibility matrix ---------------------------------------------------------
+
+    def test_compatibility_matrix_scenarios_are_judged_one_to_one(self) -> None:
+        for case in self.matrix_cases():
+            with self.subTest(scenario=case["scenario"]):
+                verdict = self.judgement_for(case["scenario"]).as_dict()
+                self.assertEqual(verdict["scenario"], case["scenario"])
+                self.assertEqual(verdict["expected"], case["expected"])
+                self.assertEqual(verdict["code"], case["error_code"])
+                self.assertEqual(verdict["accepted"], case["error_code"] is None)
+                self.assertEqual(verdict["accepted"], case["expected"].startswith("accept"))
+                self.assertTrue(verdict["detail"])
+                self.assertTrue(verdict["message"])
+
+    def test_identity_and_revision_negatives_fail_closed(self) -> None:
+        registry = run_intake_registry
+        cases = (
+            (
+                "missing identity",
+                lambda: registry.judge_route({"intake_id": "fixture.intake"}),
+                "missing_contract_identity",
+                "nested_intake_identity_missing",
+            ),
+            (
+                "missing identity on a legacy nested dispatcher",
+                lambda: registry.judge_route({}, route=registry.ROUTE_LEGACY_NESTED_INTAKE),
+                "missing_contract_identity",
+                "nested_intake_identity_missing",
+            ),
+            (
+                "nested payload is not an object",
+                lambda: registry.judge_route("tilesim.bridge.agent_orchestration_run_intake.v2"),
+                "missing_contract_identity",
+                "nested_intake_identity_missing",
+            ),
+            (
+                "unknown identity",
+                lambda: registry.judge_route({"schema_identity": "tilesim.bridge.unknown.v1"}),
+                "unknown_contract_identity",
+                "identity_not_registered",
+            ),
+            (
+                "unknown revision",
+                lambda: registry.judge_route(
+                    self.registered_intake() | {"schema_revision": "sha256:" + "cd" * 32}
+                ),
+                "unknown_contract_revision",
+                "revision_not_registered",
+            ),
+            (
+                "missing revision",
+                lambda: registry.judge_route(
+                    {key: value for key, value in self.registered_intake().items() if key != "schema_revision"}
+                ),
+                "unknown_contract_revision",
+                "revision_missing",
+            ),
+            (
+                "expected revision mismatch",
+                lambda: registry.judge_route(
+                    self.registered_intake(), expected_revision="sha256:" + "cd" * 32
+                ),
+                "unknown_contract_revision",
+                "expected_revision_mismatch",
+            ),
+            (
+                "mixed contract version",
+                lambda: registry.judge_route(
+                    self.registered_intake()
+                    | {"schema_version": registry.CREATE_RUN_IDENTITY}
+                ),
+                "mixed_contract_version",
+                "legacy_field_present",
+            ),
+        )
+        for label, build, code, detail in cases:
+            with self.subTest(case=label):
+                verdict = build()
+                self.assertFalse(verdict.accepted, label)
+                self.assertEqual(verdict.code, code, label)
+                self.assertEqual(verdict.detail, detail, label)
+                self.assertIsNotNone(verdict.scenario, label)
+                self.assertTrue(verdict.field_path.startswith("/"), label)
+                self.assertTrue(verdict.expected.startswith("reject"), label)
+
+    def test_proposal_era_revision_is_not_a_published_revision(self) -> None:
+        fixture_revision = self.load_fixture("valid", "run-intake.json")["contract"][
+            "schema_revision"
+        ]
+        self.assertNotEqual(fixture_revision, self.published_revision())
+        proposal_verdict = run_intake_registry.judge_route(
+            self.load_fixture("valid", "run-intake.json")["contract"]
+        )
+        self.assertFalse(proposal_verdict.accepted)
+        self.assertEqual(proposal_verdict.code, "unknown_contract_revision")
+        self.assertEqual(proposal_verdict.detail, "revision_not_registered")
+        published_verdict = run_intake_registry.judge_route(self.registered_intake())
+        self.assertTrue(published_verdict.accepted)
+        self.assertIsNone(published_verdict.code)
+        self.assertIsNone(published_verdict.scenario)
+
+    def test_valid_run_intake_is_accepted_and_schema_validated_by_the_validator(self) -> None:
+        verdict = run_intake_registry.judge_route(self.registered_intake())
+        self.assertTrue(verdict.accepted)
+        self.assertEqual(verdict.detail, "registered_run_intake_v2")
+
+        mutations = {
+            "missing budget": lambda payload: payload.pop("budget"),
+            "uint64 as JSON number": lambda payload: payload["budget"].__setitem__(
+                "run_count", 1
+            ),
+            "binding without a family": lambda payload: payload["profile_binding"].pop(
+                "device"
+            ),
+            "binding digest not a sha256": lambda payload: payload["profile_binding"].__setitem__(
+                "binding_digest", "not-a-digest"
+            ),
+        }
+        for label, mutate in mutations.items():
+            with self.subTest(mutation=label):
+                payload = self.registered_intake()
+                mutate(payload)
+                with self.assertRaises(ContractValidationError):
+                    run_intake_registry.judge_route(payload)
+
+    # --- idempotency and retention ----------------------------------------------------
+
+    def test_idempotency_judgements_distinguish_replay_mismatch_and_history(self) -> None:
+        registry = run_intake_registry
+        revision = self.published_revision()
+        facts = {
+            "canonical_payload_digest": "payload-digest",
+            "identity": registry.RUN_INTAKE_IDENTITY,
+            "revision": revision,
+        }
+        free = registry.evaluate_idempotency(None, facts)
+        self.assertTrue(free.accepted)
+        self.assertIsNone(free.scenario)
+
+        replay = registry.evaluate_idempotency(dict(facts), facts)
+        self.assertTrue(replay.accepted)
+        self.assertEqual((replay.scenario, replay.expected), ("exact_replay", "accept_exact_replay"))
+
+        mismatch = registry.evaluate_idempotency(
+            dict(facts) | {"canonical_payload_digest": "other-digest"}, facts
+        )
+        self.assertFalse(mismatch.accepted)
+        self.assertEqual(mismatch.code, "idempotency_payload_mismatch")
+        self.assertEqual(mismatch.detail, "payload_changed")
+
+        version_changed = registry.evaluate_idempotency(
+            dict(facts)
+            | {
+                "canonical_payload_digest": "other-digest",
+                "identity": registry.CREATE_RUN_IDENTITY,
+            },
+            facts,
+        )
+        self.assertEqual(version_changed.detail, "version_changed")
+
+        profile_changed = registry.evaluate_idempotency(
+            dict(facts)
+            | {"canonical_payload_digest": "other-digest", "revision": "sha256:" + "ab" * 32},
+            facts,
+        )
+        self.assertEqual(profile_changed.detail, "profile_revision_changed")
+
+        impossible = registry.evaluate_idempotency(
+            dict(facts) | {"revision": "sha256:" + "ab" * 32}, facts
+        )
+        self.assertFalse(impossible.accepted)
+        self.assertEqual(impossible.detail, "profile_revision_changed")
+
+        historical = registry.evaluate_idempotency(
+            {
+                "canonical_payload_digest": "payload-digest",
+                "identity": registry.RUN_INTAKE_IDENTITY,
+                "revision": "sha256:" + "ab" * 32,
+            },
+            {
+                "canonical_payload_digest": "payload-digest",
+                "identity": registry.RUN_INTAKE_IDENTITY,
+                "revision": "sha256:" + "ab" * 32,
+            },
+        )
+        self.assertTrue(historical.accepted)
+        self.assertEqual(
+            (historical.scenario, historical.expected),
+            ("retained_historical_run", "accept_exact_replay_original_identity"),
+        )
+
+        locked = registry.evaluate_idempotency({}, facts)
+        self.assertFalse(locked.accepted)
+        self.assertEqual(locked.detail, "retained_record_digest_missing")
+
+    def test_retention_policy_facts_come_from_the_published_schema(self) -> None:
+        schema = json.loads(
+            (
+                server.WEB_ROOT
+                / "bridge/contracts/agent_orchestration_phase2/schemas/idempotency-retention-policy.schema.json"
+            ).read_text(encoding="utf-8")
+        )
+        facts = run_intake_registry.published_retention_policy_facts()
+        self.assertEqual(facts["identity"], schema["x-tilesim-schema-identity"])
+        self.assertEqual(
+            facts["idempotency"],
+            {
+                name: value["const"]
+                for name, value in schema["properties"]["idempotency"]["properties"].items()
+            },
+        )
+        self.assertEqual(
+            facts["retention"],
+            {
+                name: value["const"]
+                for name, value in schema["properties"]["retention"]["properties"].items()
+            },
+        )
+        self.assertEqual(
+            list(facts["forbidden_persistence"]),
+            list(schema["properties"]["forbidden_persistence"]["items"]["enum"]),
+        )
+
+    def test_forbidden_persistence_set_is_enforced_and_never_persisted(self) -> None:
+        published = self.load_fixture("valid", "idempotency-retention-policy.json")["contract"]
+        self.assertEqual(
+            set(run_intake_registry.forbidden_persistence()),
+            {"credential", "hidden_reasoning", "raw_provider_response"},
+        )
+        for key in run_intake_registry.forbidden_persistence():
+            with self.subTest(forbidden=key):
+                with self.assertRaises(ContractValidationError):
+                    run_intake_registry.assert_no_forbidden_persistence(
+                        ["run_id", key], policy=published
+                    )
+        self.assertEqual(
+            run_intake_registry.assert_no_forbidden_persistence(
+                ["run_id", "schema_set_revision"], policy=published
+            ),
+            (),
+        )
+        weakened = json.loads(json.dumps(published))
+        weakened["forbidden_persistence"] = ["hidden_reasoning", "raw_provider_response"]
+        with self.assertRaises(ContractValidationError):
+            run_intake_registry.assert_no_forbidden_persistence(["run_id"], policy=weakened)
+
+    # --- Profile binding --------------------------------------------------------------
+
+    def test_profile_binding_fails_closed_while_published_records_are_empty(self) -> None:
+        records = run_intake_service.published_profile_records()
+        self.assertEqual(set(records), set(run_intake_registry.PROFILE_FAMILIES))
+        self.assertEqual({family: len(value) for family, value in records.items()}, {
+            family: 0 for family in run_intake_registry.PROFILE_FAMILIES
+        })
+
+        result = run_intake_service.preview_run_intake(self.registered_intake())
+        self.assertTrue(result["judgement"]["accepted"])
+        self.assertEqual(result["planning_status"], "blocked")
+        self.assertFalse(result["profile_binding"]["resolved"])
+        self.assertEqual(
+            [issue["code"] for issue in result["profile_binding"]["issues"]],
+            ["profile_missing"] * 5,
+        )
+        for issue in result["profile_binding"]["issues"]:
+            self.assertEqual(
+                set(issue), set(run_intake_service.RUN_INTAKE_ISSUE_FIELDS)
+            )
+            self.assertTrue(issue["blocking"])
+            self.assertTrue(issue["safe_next_action"])
+        self.assertEqual(
+            set(result["profile_binding"]["records_available"]),
+            set(run_intake_registry.PROFILE_FAMILIES),
+        )
+        self.assertNotIn("candidates", result)
+        self.assertNotIn("candidate_plan", result)
+        self.assertNotIn("ranking", result)
+
+    def test_profile_binding_resolution_codes(self) -> None:
+        resolved = self.resolve_profile_binding()
+        self.assertTrue(resolved.resolved)
+        self.assertEqual(resolved.issues, ())
+
+        def mutated(family: str, **updates) -> list[dict]:
+            record = self.load_fixture("valid", f"{family}-profile.json")["contract"]
+            record.update(updates)
+            return [record]
+
+        missing = self.resolve_profile_binding(replaced="model", records=[])
+        self.assertEqual([issue["code"] for issue in missing.issues], ["profile_missing"])
+
+        unknown = self.resolve_profile_binding(
+            replaced="model", records=mutated("model", profile_id="fixture.model.other")
+        )
+        self.assertEqual([issue["code"] for issue in unknown.issues], ["unknown_profile"])
+
+        unavailable = self.resolve_profile_binding(
+            replaced="model",
+            records=mutated(
+                "model",
+                lifecycle={
+                    "introduced_at": "2026-09-11T00:00:00Z",
+                    "updated_at": "2026-09-11T00:00:00Z",
+                    "expires_at": None,
+                    "status": "unavailable",
+                },
+            ),
+        )
+        self.assertEqual(
+            [issue["code"] for issue in unavailable.issues], ["profile_unavailable"]
+        )
+
+        expired = self.resolve_profile_binding(
+            replaced="model",
+            records=mutated(
+                "model",
+                lifecycle={
+                    "introduced_at": "2026-09-11T00:00:00Z",
+                    "updated_at": "2026-09-11T00:00:00Z",
+                    "expires_at": "2026-09-12T00:00:00Z",
+                    "status": "expired",
+                },
+            ),
+        )
+        self.assertEqual([issue["code"] for issue in expired.issues], ["profile_expired"])
+
+        ambiguous = self.resolve_profile_binding(
+            replaced="model",
+            records=[
+                self.load_fixture("valid", "model-profile.json")["contract"],
+                self.load_fixture("valid", "model-profile.json")["contract"],
+            ],
+        )
+        self.assertEqual(
+            [issue["code"] for issue in ambiguous.issues], ["profile_ambiguous"]
+        )
+
+        revision_mismatch = self.resolve_profile_binding(
+            replaced="model", records=mutated("model", profile_revision="sha256:" + "ab" * 32)
+        )
+        self.assertEqual(
+            [issue["code"] for issue in revision_mismatch.issues],
+            ["profile_revision_mismatch"],
+        )
+
+        digest_mismatch = self.resolve_profile_binding(
+            replaced="model", records=mutated("model", canonical_digest="sha256:" + "ab" * 32)
+        )
+        self.assertEqual(
+            [issue["code"] for issue in digest_mismatch.issues], ["profile_digest_mismatch"]
+        )
+
+        calibration = self.resolve_profile_binding(claim_requires_calibration=True)
+        self.assertFalse(calibration.resolved)
+        self.assertIn("calibration_missing", [issue["code"] for issue in calibration.issues])
+
+        missing_family = run_intake_registry.evaluate_profile_binding(
+            {
+                key: value
+                for key, value in self.registered_intake()["profile_binding"].items()
+                if key != "topology"
+            },
+            profile_records=self.profile_records(),
+        )
+        self.assertEqual([issue["code"] for issue in missing_family.issues], ["profile_missing"])
+
+    # --- Validation Report staleness --------------------------------------------------
+
+    def test_validation_report_staleness_judgement(self) -> None:
+        report = self.load_fixture("valid", "validation-report.json")["contract"]
+        current, recorded = self.staleness_binding_inputs(report)
+        self.assertEqual(
+            [binding for binding in current if current[binding] is None], []
+        )
+
+        fresh = run_intake_registry.evaluate_validation_report_staleness(
+            report, current_bindings=current, recorded_bindings=recorded
+        )
+        self.assertTrue(fresh.accepted)
+        self.assertEqual(fresh.detail, "stale_binding_verified")
+
+        changed = dict(current)
+        changed["capability_snapshot"] = (
+            "tilesim.bridge.agent_orchestration_capability_snapshot.v1",
+            "sha256:" + "ff" * 32,
+            "sha256:" + "fe" * 32,
+        )
+        stale = run_intake_registry.evaluate_validation_report_staleness(
+            report, current_bindings=changed, recorded_bindings=recorded
+        )
+        self.assertFalse(stale.accepted)
+        self.assertEqual(stale.code, "validation_report_stale")
+        self.assertEqual(stale.detail, "stale_binding_changed")
+        self.assertEqual(stale.scenario, "stale_profile_binding")
+        self.assertEqual(stale.facts["reasons"], ["capability_snapshot_changed"])
+
+        unverified = dict(current)
+        unverified.pop("approval")
+        unverified.pop("workload_template")
+        partial = run_intake_registry.evaluate_validation_report_staleness(
+            report, current_bindings=unverified
+        )
+        self.assertFalse(partial.accepted)
+        self.assertEqual(partial.detail, "stale_binding_unverified")
+        self.assertEqual(
+            sorted(partial.facts["unverified_bindings"]), ["approval", "workload_template"]
+        )
+
+        self_declared = json.loads(json.dumps(report))
+        self_declared["stale_binding"]["is_stale"] = True
+        self_declared["stale_binding"]["reasons"] = ["compiled_request_changed"]
+        declared = run_intake_registry.evaluate_validation_report_staleness(
+            self_declared, current_bindings=current, recorded_bindings=recorded
+        )
+        self.assertFalse(declared.accepted)
+        self.assertEqual(declared.detail, "self_declared_stale")
+
+        undeclared = json.loads(json.dumps(report))
+        undeclared["stale_binding"]["checked_bindings"] = undeclared["stale_binding"][
+            "checked_bindings"
+        ][:7]
+        with self.assertRaises(ContractValidationError):
+            run_intake_registry.evaluate_validation_report_staleness(
+                undeclared, current_bindings=current, recorded_bindings=recorded
+            )
+
+    # --- service assembly -------------------------------------------------------------
+
+    def test_service_preview_assembles_a_typed_result_without_creating_a_run(self) -> None:
+        runs_root = server.RUNS_ROOT
+        before = sorted(path.name for path in runs_root.iterdir()) if runs_root.is_dir() else None
+        result = run_intake_service.preview_run_intake(
+            self.registered_intake(),
+            backend_issues=[
+                {
+                    "code": "LOWERING.NOT_IMPLEMENTED",
+                    "message": "Phase 2C lowering is not wired.",
+                    "field_path": "/parallelism",
+                    "blocking": True,
+                    "safe_next_action": "Wait for the reviewed Phase 2C lowering.",
+                }
+            ],
+        )
+        after = sorted(path.name for path in runs_root.iterdir()) if runs_root.is_dir() else None
+        self.assertEqual(before, after)
+        self.assertEqual(result["run_creation"], "not_performed")
+        self.assertEqual(result["run_acceptance"], "not_accepted_by_current_api")
+        self.assertEqual(result["service"], run_intake_service.RUN_INTAKE_SERVICE_ID)
+        self.assertEqual(result["planning_status"], "blocked")
+        self.assertEqual(
+            result["intake"]["identity"], run_intake_registry.RUN_INTAKE_IDENTITY
+        )
+        self.assertEqual(result["intake"]["revision"], self.published_revision())
+        self.assertEqual(result["persistence"]["write_capability"], "absent")
+        self.assertEqual(
+            result["persistence"]["idempotency"]["same_key_different_payload"],
+            "reject_409_idempotency_payload_mismatch",
+        )
+        self.assertNotIn("candidates", result)
+        self.assertNotIn("candidate_plan", result)
+        self.assertNotIn("ranking", result)
+
+        rejected = run_intake_service.preview_run_intake({"intake_id": "without-identity"})
+        self.assertFalse(rejected["judgement"]["accepted"])
+        self.assertEqual(rejected["judgement"]["code"], "missing_contract_identity")
+        self.assertIsNone(rejected["intake"])
+        self.assertIsNone(rejected["profile_binding"])
+
+        delegated = run_intake_service.preview_run_intake(None)
+        self.assertTrue(delegated["judgement"]["accepted"])
+        self.assertEqual(
+            delegated["judgement"]["expected"], "accept_v1_unchanged"
+        )
+        self.assertIsNone(delegated["intake"])
+
+    def test_service_passes_backend_issues_through_verbatim(self) -> None:
+        issues = (
+            {
+                "code": "LOWERING.MISSING",
+                "message": "Parallelism lowering is absent.",
+                "field_path": "/parallelism",
+                "blocking": True,
+                "safe_next_action": "Wait for the reviewed lowering.",
+            },
+            {
+                "code": "PROFILE.NO_CALIBRATION",
+                "message": "Fixture records are not calibrated.",
+                "field_path": "/profile_binding/model",
+                "blocking": False,
+                "safe_next_action": "Lower the claim scope.",
+                "extra_backend_field": "kept verbatim",
+            },
+        )
+        result = run_intake_service.preview_run_intake(
+            self.registered_intake(), backend_issues=issues
+        )
+        self.assertEqual(result["backend_issues"], [dict(issue) for issue in issues])
+        self.assertEqual(
+            [issue["field_path"] for issue in result["backend_issues"]],
+            ["/parallelism", "/profile_binding/model"],
+        )
+
+        broken = dict(issues[0])
+        broken.pop("safe_next_action")
+        with self.assertRaises(RequestValidationError) as captured:
+            run_intake_service.preview_run_intake(
+                self.registered_intake(), backend_issues=[broken]
+            )
+        self.assertEqual(captured.exception.field_path, "/issues/0/safe_next_action")
+        self.assertEqual(
+            captured.exception.nested_schema_identity,
+            run_intake_registry.RUN_INTAKE_IDENTITY,
+        )
+
+        not_boolean = dict(issues[0]) | {"blocking": "yes"}
+        with self.assertRaises(RequestValidationError):
+            run_intake_service.preview_run_intake(
+                self.registered_intake(), backend_issues=[not_boolean]
+            )
+
+    def test_service_rejects_schema_invalid_intake_as_request_validation(self) -> None:
+        payload = self.registered_intake()
+        payload["profile_binding"].pop("workload")
+        with self.assertRaises(RequestValidationError) as captured:
+            run_intake_service.preview_run_intake(payload)
+        self.assertTrue(captured.exception.field_path.endswith("/workload"))
+        self.assertEqual(
+            captured.exception.nested_schema_identity,
+            run_intake_registry.RUN_INTAKE_IDENTITY,
+        )
+
+        with self.assertRaises(RequestValidationError) as captured:
+            run_intake_service.preview_run_intake(["not", "an", "object"])
+        self.assertEqual(captured.exception.field_path, "/")
+
+        with self.assertRaises(RequestValidationError) as captured:
+            run_intake_service.preview_run_intake(
+                self.registered_intake(), idempotency={"payload_digest": "digest"}
+            )
+        self.assertEqual(captured.exception.field_path, "/idempotency")
+
+    def test_service_idempotency_facts_are_explicit(self) -> None:
+        payload = self.registered_intake()
+        stored = {
+            "canonical_payload_digest": run_intake_registry.canonical_payload_digest(payload),
+            "identity": run_intake_registry.RUN_INTAKE_IDENTITY,
+            "revision": self.published_revision(),
+        }
+        replay = run_intake_service.preview_run_intake(
+            payload,
+            idempotency={"stored": stored, "payload_digest": stored["canonical_payload_digest"]},
+        )
+        self.assertEqual(
+            (replay["idempotency"]["scenario"], replay["idempotency"]["expected"]),
+            ("exact_replay", "accept_exact_replay"),
+        )
+        conflict = run_intake_service.preview_run_intake(
+            payload, idempotency={"stored": stored, "payload_digest": "sha256:" + "ab" * 32}
+        )
+        self.assertEqual(conflict["idempotency"]["code"], "idempotency_payload_mismatch")
+        free = run_intake_service.preview_run_intake(payload, idempotency={"stored": None})
+        self.assertTrue(free["idempotency"]["accepted"])
+        self.assertEqual(free["idempotency"]["detail"], "new_idempotency_key")
+
+    def test_service_and_registry_modules_cannot_write_or_touch_run_lifecycle(self) -> None:
+        modules = {
+            "registry.py": server.WEB_ROOT
+            / "bridge/contracts/agent_orchestration_phase2/registry.py",
+            "run_intake.py": server.WEB_ROOT / "bridge/services/run_intake.py",
+        }
+        forbidden_calls = {
+            "open",
+            "write_text",
+            "write_bytes",
+            "mkdir",
+            "makedirs",
+            "rename",
+            "replace",
+            "remove",
+            "unlink",
+            "rmdir",
+            "system",
+            "Popen",
+            "run",
+            "trash",
+        }
+        for name, path in modules.items():
+            with self.subTest(module=name):
+                source = path.read_text(encoding="utf-8")
+                tree = ast.parse(source)
+                imported = set()
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Import):
+                        imported.update(alias.name for alias in node.names)
+                    elif isinstance(node, ast.ImportFrom):
+                        imported.add(node.module or "")
+                for imported_name in imported:
+                    self.assertNotIn("repositories", imported_name, name)
+                    self.assertNotIn("subprocess", imported_name, name)
+                    self.assertNotIn("shutil", imported_name, name)
+                for node in ast.walk(tree):
+                    if not isinstance(node, ast.Call):
+                        continue
+                    target = node.func
+                    attribute = (
+                        target.attr
+                        if isinstance(target, ast.Attribute)
+                        else getattr(target, "id", "")
+                    )
+                    self.assertNotIn(attribute, forbidden_calls, f"{name}: {attribute}")
+
+
+class RunIntakePreviewEndpointTest(unittest.TestCase):
+    """WP-2C-01b: the published ``POST /api/agent/run-intake-preview`` route.
+
+    The endpoint must judge and nothing else: it creates no run, writes no ``runs/``
+    entry, takes no operation lock and never moves a published compatibility code into the
+    error envelope.  Requests go to an isolated Bridge server on an ephemeral port;
+    nothing here touches 127.0.0.1:5173.
+    """
+
+    PREVIEW_PATH = "/api/agent/run-intake-preview"
+
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.previous_runs_root = server.RUNS_ROOT
+        server.RUNS_ROOT = Path(self.temporary_directory.name) / "runs"
+        server.RUNS_ROOT.mkdir()
+        server.runs.clear()
+        self.httpd = server.ThreadingHTTPServer(("127.0.0.1", 0), server.BridgeHandler)
+        self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
+        self.thread.start()
+        self.base_url = f"http://127.0.0.1:{self.httpd.server_port}"
+
+    def tearDown(self) -> None:
+        self.httpd.shutdown()
+        self.httpd.server_close()
+        self.thread.join(timeout=2)
+        server.RUNS_ROOT = self.previous_runs_root
+        server.runs.clear()
+        self.temporary_directory.cleanup()
+
+    def get(self, path: str) -> tuple[int, dict, object]:
+        request = urllib.request.Request(self.base_url + path, headers={}, method="GET")
+        with urllib.request.urlopen(request, timeout=5) as response:
+            return response.status, json.loads(response.read()), response.headers
+
+    def post_raw(self, raw: bytes) -> tuple[int, dict]:
+        request = urllib.request.Request(
+            self.base_url + self.PREVIEW_PATH,
+            data=raw,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            response = urllib.request.urlopen(request, timeout=5)
+        except urllib.error.HTTPError as error:
+            return error.code, json.loads(error.read())
+        with response:
+            return response.status, json.loads(response.read())
+
+    def request(self, payload: dict) -> tuple[int, dict, object]:
+        request = urllib.request.Request(
+            self.base_url + self.PREVIEW_PATH,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            response = urllib.request.urlopen(request, timeout=5)
+        except urllib.error.HTTPError as error:
+            return error.code, json.loads(error.read()), error.headers
+        with response:
+            return response.status, json.loads(response.read()), response.headers
+
+    def preview(self, intake: object) -> tuple[int, dict, object]:
+        return self.request({"intake": intake})
+
+    def published_revision(self) -> str:
+        return run_intake_registry.published_schema_revisions()[
+            run_intake_registry.RUN_INTAKE_IDENTITY
+        ]
+
+    def registered_intake(self) -> dict:
+        """The 2A fixture intake re-revisioned to the published schema digest."""
+        payload = json.loads(
+            PHASE2A_FIXTURE_ROOT.joinpath("valid", "run-intake.json").read_text(
+                encoding="utf-8"
+            )
+        )["contract"]
+        payload["schema_revision"] = self.published_revision()
+        return payload
+
+    def contract_document(self, *parts: str) -> dict:
+        return json.loads(
+            server.CONTRACT_ROOT.joinpath(*parts).read_text(encoding="utf-8")
+        )
+
+    # --- registration -----------------------------------------------------------------
+
+    def test_preview_is_registered_by_the_published_manifest_and_openapi(self) -> None:
+        status, manifest, headers = self.get("/api/manifest")
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            manifest["endpoints"]["previewAgentRunIntake"],
+            "POST /api/agent/run-intake-preview",
+        )
+        self.assertEqual(headers["X-TileSim-Schema-Set-Revision"], server.SCHEMA_SET_REVISION)
+
+        openapi = self.contract_document("openapi.json")
+        preview_path = openapi["paths"]["/agent/run-intake-preview"]["post"]
+        self.assertEqual(preview_path["operationId"], "previewAgentRunIntake")
+        self.assertEqual(
+            preview_path["x-client-request-type"],
+            "AgentOrchestrationRunIntakePreviewRequest",
+        )
+        self.assertEqual(
+            preview_path["x-client-response-type"],
+            "AgentOrchestrationRunIntakePreviewResponse",
+        )
+        for status_code in ("400", "503"):
+            self.assertEqual(
+                preview_path["responses"][status_code]["$ref"],
+                "#/components/responses/Error",
+            )
+
+        published = openapi["x-tilesim-contract"]["agent_orchestration_phase2"]
+        self.assertEqual(
+            published["run_intake_preview"]["endpoint"], "POST /api/agent/run-intake-preview"
+        )
+        self.assertEqual(
+            published["run_intake_preview"]["runtime_status"],
+            "read_only_preview_registered",
+        )
+        # The package-level status stays contract_only: this endpoint wires no Profile
+        # record, calculator, validation report generator or backend lowering.
+        self.assertEqual(published["runtime_status"], "contract_only")
+        self.assertEqual(published["create_run_acceptance"], "not_accepted_by_current_api")
+
+    def test_preview_request_and_response_schemas_are_published_as_closed_contracts(self) -> None:
+        bridge_api = self.contract_document("schemas", "bridge-api.schema.json")
+        self.assertEqual(
+            bridge_api["properties"]["agentOrchestrationRunIntakePreviewRequest"]["$ref"],
+            "agent-orchestration-run-intake-preview-request.schema.json",
+        )
+        self.assertEqual(
+            bridge_api["properties"]["agentOrchestrationRunIntakePreviewResponse"]["$ref"],
+            "agent-orchestration-run-intake-preview-response.schema.json",
+        )
+
+        request_schema = self.contract_document(
+            "schemas", "agent-orchestration-run-intake-preview-request.schema.json"
+        )
+        self.assertEqual(
+            set(request_schema["properties"]), set(run_intake_service.PREVIEW_REQUEST_FIELDS)
+        )
+        self.assertEqual(request_schema["required"], ["intake"])
+        self.assertIs(request_schema["additionalProperties"], False)
+        self.assertEqual(
+            request_schema["properties"]["intake"]["oneOf"][1]["$ref"],
+            "../agent_orchestration_phase2/schemas/run-intake.schema.json",
+        )
+
+    def test_preview_response_schema_matches_the_frozen_registry_vocabulary(self) -> None:
+        schema = self.contract_document(
+            "schemas", "agent-orchestration-run-intake-preview-response.schema.json"
+        )
+        definitions = schema["$defs"]
+        self.assertEqual(
+            set(definitions["compatibilityCode"]["enum"]),
+            set(run_intake_registry.COMPATIBILITY_ERROR_CODES),
+        )
+        self.assertEqual(
+            set(definitions["compatibilityScenario"]["enum"]),
+            set(run_intake_registry.COMPATIBILITY_SCENARIOS),
+        )
+        self.assertEqual(
+            set(definitions["compatibilityExpectation"]["enum"]),
+            set(run_intake_registry.COMPATIBILITY_EXPECTATIONS),
+        )
+        self.assertEqual(
+            set(definitions["profileIssueCode"]["enum"]),
+            set(run_intake_registry.PROFILE_FAIL_CLOSED_CODES),
+        )
+        self.assertEqual(
+            set(schema["properties"]["route"]["enum"]), set(run_intake_registry.ROUTES)
+        )
+        self.assertEqual(
+            set(schema["properties"]["planning_status"]["enum"]),
+            set(run_intake_service.PLANNING_STATUS),
+        )
+
+        policy = run_intake_registry.published_retention_policy_facts()
+        persistence = definitions["persistence"]["properties"]
+        self.assertEqual(persistence["write_capability"]["const"], "absent")
+        self.assertEqual(
+            set(persistence["forbidden_persistence"]["items"]["enum"]),
+            set(policy["forbidden_persistence"]),
+        )
+        for name, const in policy["idempotency"].items():
+            self.assertEqual(persistence["idempotency"]["properties"][name]["const"], const)
+        for name, const in policy["retention"].items():
+            self.assertEqual(persistence["retention"]["properties"][name]["const"], const)
+
+    def test_preview_reports_idempotency_as_not_evaluated_never_as_a_free_key(self) -> None:
+        status, body, _ = self.preview(self.registered_intake())
+        self.assertEqual(status, 200)
+        self.assertIsNone(body["idempotency"])
+
+        manifest = self.contract_document(
+            "agent_orchestration_phase2", "manifest.json"
+        )["run_intake_preview"]
+        self.assertEqual(
+            manifest["idempotency_status"], "not_evaluated_no_retained_run_intake_key_store"
+        )
+        self.assertEqual(manifest["runtime_status"], "read_only_preview_registered")
+        self.assertEqual(manifest["runtime_scope"], "validate_and_judge_only")
+        self.assertEqual(manifest["write_capability"], "absent")
+        self.assertEqual(manifest["profile_families_with_records"], 0)
+        self.assertEqual(manifest["backend_lowering"], "not_wired")
+        self.assertEqual(
+            manifest["endpoint"], "POST /api/agent/run-intake-preview"
+        )
+
+    # --- envelope ---------------------------------------------------------------------
+
+    def test_preview_envelope_is_closed_to_server_owned_judging_inputs(self) -> None:
+        status, error, _ = self.request({"intake_id": "fixture.intake.without-envelope"})
+        self.assertEqual(status, 400)
+        self.assertEqual(error["error"]["code"], "invalid_run_intake_preview_request")
+        self.assertEqual(error["error"]["field_path"], "/intake")
+        self.assertFalse(error["error"]["retryable"])
+
+        forged = (
+            "expected_revision",
+            "registered_revisions",
+            "profile_records",
+            "backend_issues",
+            "idempotency",
+            "route",
+            "claim_requires_calibration",
+        )
+        for member in forged:
+            with self.subTest(member=member):
+                status, error, _ = self.request({"intake": None, member: None})
+                self.assertEqual(status, 400)
+                self.assertEqual(
+                    error["error"]["code"], "invalid_run_intake_preview_request"
+                )
+                self.assertEqual(error["error"]["field_path"], f"/{member}")
+
+    def test_preview_refuses_a_body_that_is_not_the_published_envelope(self) -> None:
+        for raw in (b"[]", b'"intake"', b"{truncated", b'{"intake": NaN}', b""):
+            with self.subTest(body=raw):
+                status, error = self.post_raw(raw)
+                self.assertEqual(status, 400)
+                self.assertEqual(
+                    error["error"]["code"], "invalid_run_intake_preview_request"
+                )
+
+    def test_preview_maps_an_unavailable_published_manifest_to_a_formal_unavailable_state(
+        self,
+    ) -> None:
+        with mock.patch.object(
+            server,
+            "run_intake_profile_records",
+            side_effect=ValueError("published Phase 2 manifest is missing"),
+        ):
+            status, error, _ = self.preview(self.registered_intake())
+        self.assertEqual(status, 503)
+        self.assertEqual(error["error"]["code"], "run_intake_preview_unavailable")
+        self.assertFalse(error["error"]["retryable"])
+
+    # --- verdicts ---------------------------------------------------------------------
+
+    def test_preview_accepts_a_create_run_request_without_a_nested_payload(self) -> None:
+        status, body, _ = self.request({"intake": None})
+        self.assertEqual(status, 200)
+        self.assertTrue(body["judgement"]["accepted"])
+        self.assertEqual(body["judgement"]["scenario"], "old_client_to_new_server")
+        self.assertEqual(body["judgement"]["expected"], "accept_v1_unchanged")
+        self.assertEqual(body["judgement"]["detail"], "v1_request_without_nested_intake")
+        self.assertIsNone(body["judgement"]["code"])
+        self.assertIsNone(body["intake"])
+        self.assertIsNone(body["profile_binding"])
+        self.assertEqual(body["run_creation"], "not_performed")
+        self.assertEqual(body["run_acceptance"], "not_accepted_by_current_api")
+        self.assertEqual(body["backend_issues"], [])
+
+    def test_preview_returns_the_service_result_verbatim(self) -> None:
+        intake = self.registered_intake()
+        status, body, _ = self.preview(intake)
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            body,
+            run_intake_service.preview_run_intake(
+                intake, profile_records=run_intake_service.published_profile_records()
+            ),
+        )
+        schema = self.contract_document(
+            "schemas", "agent-orchestration-run-intake-preview-response.schema.json"
+        )
+        self.assertEqual(set(body), set(schema["properties"]))
+        self.assertEqual(set(schema["required"]), set(schema["properties"]))
+        self.assertIs(schema["additionalProperties"], False)
+
+    def test_preview_judges_a_registered_intake_and_blocks_on_empty_profiles(self) -> None:
+        status, body, _ = self.preview(self.registered_intake())
+        self.assertEqual(status, 200)
+        self.assertTrue(body["judgement"]["accepted"])
+        self.assertEqual(body["judgement"]["detail"], "registered_run_intake_v2")
+        self.assertIsNone(body["judgement"]["code"])
+        self.assertEqual(body["intake"]["identity"], run_intake_registry.RUN_INTAKE_IDENTITY)
+        self.assertEqual(body["intake"]["revision"], self.published_revision())
+
+        self.assertFalse(body["profile_binding"]["resolved"])
+        self.assertEqual(body["planning_status"], "blocked")
+        self.assertEqual(
+            [issue["code"] for issue in body["profile_binding"]["issues"]],
+            ["profile_missing"] * len(run_intake_registry.PROFILE_FAMILIES),
+        )
+        for issue in body["profile_binding"]["issues"]:
+            self.assertTrue(issue["blocking"])
+            self.assertTrue(issue["safe_next_action"])
+        self.assertEqual(
+            body["profile_binding"]["records_available"],
+            {family: 0 for family in run_intake_registry.PROFILE_FAMILIES},
+        )
+        self.assertEqual(body["persistence"]["write_capability"], "absent")
+        for absent in ("candidates", "candidate_plan", "ranking", "error"):
+            self.assertNotIn(absent, body)
+
+    def test_preview_returns_rejected_verdicts_as_a_typed_body_not_an_error_envelope(
+        self,
+    ) -> None:
+        status, body, _ = self.preview({"intake_id": "fixture.intake.without-identity"})
+        self.assertEqual(status, 200)
+        self.assertNotIn("error", body)
+        self.assertFalse(body["judgement"]["accepted"])
+        self.assertEqual(body["judgement"]["code"], "missing_contract_identity")
+        self.assertEqual(body["judgement"]["detail"], "nested_intake_identity_missing")
+        self.assertEqual(body["judgement"]["field_path"], "/schema_identity")
+        self.assertIsNone(body["intake"])
+
+        unknown_identity = self.registered_intake()
+        unknown_identity["schema_identity"] = (
+            "tilesim.bridge.agent_orchestration_run_intake.v9"
+        )
+        status, body, _ = self.preview(unknown_identity)
+        self.assertEqual(status, 200)
+        self.assertEqual(body["judgement"]["code"], "unknown_contract_identity")
+        self.assertEqual(body["judgement"]["detail"], "identity_not_registered")
+        self.assertEqual(body["judgement"]["scenario"], "unknown_identity")
+
+        unknown_revision = self.registered_intake()
+        unknown_revision["schema_revision"] = "sha256:" + "ab" * 32
+        status, body, _ = self.preview(unknown_revision)
+        self.assertEqual(status, 200)
+        self.assertNotIn("error", body)
+        self.assertEqual(body["judgement"]["code"], "unknown_contract_revision")
+        self.assertEqual(body["judgement"]["detail"], "revision_not_registered")
+        self.assertEqual(body["judgement"]["scenario"], "unknown_revision")
+        self.assertEqual(body["judgement"]["field_path"], "/schema_revision")
+
+        mixed_version = self.registered_intake()
+        mixed_version["profile_binding"]["model"]["identity"] = (
+            "tilesim.bridge.agent_orchestration_model_profile.v1"
+        )
+        status, body, _ = self.preview(mixed_version)
+        self.assertEqual(status, 200)
+        self.assertEqual(body["judgement"]["code"], "mixed_contract_version")
+        self.assertEqual(body["judgement"]["detail"], "legacy_nested_profile_identity")
+        self.assertEqual(body["judgement"]["scenario"], "mixed_version_payload")
+
+    def test_preview_rejects_a_schema_invalid_intake_with_its_nested_identity(self) -> None:
+        payload = self.registered_intake()
+        del payload["device_count"]
+        status, error, _ = self.preview(payload)
+        self.assertEqual(status, 400)
+        self.assertEqual(error["error"]["code"], "invalid_run_intake_preview_request")
+        self.assertEqual(
+            error["error"]["nested_schema_identity"], run_intake_registry.RUN_INTAKE_IDENTITY
+        )
+        # Pre-existing WP-2C-01b finding (not fixed in this work package): validator.py::
+        # _required concatenates "path" + "/" + field while defaulting path to "/", so a
+        # missing top-level field currently reports "//device_count" instead of
+        # "/device_count". The pointer is only asserted to identify the right field here so
+        # that a later fix is not blocked by this test.
+        self.assertIn("device_count", error["error"]["field_path"])
+
+    # --- write boundary ---------------------------------------------------------------
+
+    def test_preview_never_creates_a_run_or_writes_the_runs_directory(self) -> None:
+        before = sorted(path.name for path in server.RUNS_ROOT.iterdir())
+        status, _, _ = self.preview(self.registered_intake())
+        self.assertEqual(status, 200)
+        status, _, _ = self.request({"intake": None})
+        self.assertEqual(status, 200)
+        status, _, _ = self.preview("not-an-object")
+        self.assertEqual(status, 400)
+        self.assertEqual(sorted(path.name for path in server.RUNS_ROOT.iterdir()), before)
+        self.assertEqual(server.runs, {})
 
 
 if __name__ == "__main__":

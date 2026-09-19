@@ -17,5 +17,17 @@
     "tilesim.bridge.agent_orchestration_workload_distribution_receipt.v1",
     "tilesim.bridge.agent_orchestration_slo_budget_receipt.v1"
   ],
-  "blocked_runtime_enforcement": ["lowering_missing", "calculator_unavailable", "runtime_execution_unavailable", "calibration_missing", "held_out_validation_missing"]
+  "blocked_runtime_enforcement": ["lowering_missing", "calculator_unavailable", "runtime_execution_unavailable", "calibration_missing", "held_out_validation_missing"],
+  "run_intake_preview": {
+    "endpoint": "POST /api/agent/run-intake-preview",
+    "service_module": "bridge/services/run_intake.py",
+    "runtime_status": "read_only_preview_registered",
+    "runtime_scope": "validate_and_judge_only",
+    "write_capability": "absent",
+    "run_creation": "not_performed",
+    "run_acceptance": "not_accepted_by_current_api",
+    "idempotency_status": "not_evaluated_no_retained_run_intake_key_store",
+    "profile_families_with_records": 0,
+    "backend_lowering": "not_wired"
+  }
 }

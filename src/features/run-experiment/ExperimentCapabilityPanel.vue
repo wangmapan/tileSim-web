@@ -6,6 +6,7 @@ const props = defineProps({
   bridge: { type: Object, required: true },
   surface: { type: Object, required: true },
   manifest: { type: Object, default: null },
+  compact: { type: Boolean, default: false },
 });
 const { t } = useI18n();
 const identity = computed(() => props.bridge.identity || {});
@@ -34,7 +35,7 @@ function statusClass(value) {
       <span>{{ t("能力") }}</span>
       <div>
         <h2>{{ t("执行依赖与边界") }}</h2>
-        <p>{{ t("按需查看后端能力、正式契约和部署身份；不可用能力不会静默降级。") }}</p>
+        <p v-if="!props.compact">{{ t("按需查看后端能力、正式契约和部署身份；不可用能力不会静默降级。") }}</p>
       </div>
       <div class="capability-disclosure-state">
         <span :class="surface.contractStatus === 'supported' ? 'available' : 'partial'">{{

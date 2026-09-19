@@ -1,6 +1,6 @@
 # TileSim Web：AI 部署与接手手册
 
-> 事实日期：2026-09-11
+> 事实日期：2026-09-17
 >
 > 当前公开发布状态：`published_clean_clone_verified`
 
@@ -18,9 +18,14 @@
 
 2026-09-11 已在一个全新临时目录从两个 GitHub 远端克隆并执行完整 bootstrap。验证结果为后端 63/63 CTest、
 前端 506 passed/8 skipped、生产构建和 immutable release 全部通过，最终模式为
-`validated_deployment_without_restart`。验证使用 `-NoRestart`，未启动、停止或替换 5173。Web 部署功能基线为
+`validated_deployment_without_restart`。验证使用 `-NoRestart`，未启动、停止或替换 5173。该次验证的 Web 部署功能基线为
 `b2958e796eb8e3b7bb8bd7cc95d8972195571d4d`，后端为
-`a876859a44f660c4627dab495034d52b4ae61f57`。
+`a876859a44f660c4627dab495034d52b4ae61f57`。以上数字是 **2026-09-11 的 dated 验证记录**，不是当前基线。
+
+2026-09-17 当前 revision：Web `HEAD == origin/main ==`
+`4d7f9fa3c330b7d6f287d12da853ec2bf481b0cb`；后端公开 `origin/main` 为
+`7b2b1cff52fdab21575609be170c3856f120120b`，后端本地 `main` 为
+`ba11e6fdb69af046dc7597e5ef5732cce029cfbe`（领先 2 个提交、尚未 push）。本节之后描述的部署步骤与要求不变。
 
 ## 2. 环境要求
 

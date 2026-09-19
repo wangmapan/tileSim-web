@@ -1,0 +1,260 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/agent-orchestration-run-intake-preview-response.schema.json",
+  "x-tilesim-contract-status": "published",
+  "x-tilesim-schema-identity": "tilesim.bridge.agent_orchestration_run_intake_preview_response.v1",
+  "title": "AgentOrchestrationRunIntakePreviewResponse",
+  "description": "Typed read-only Run Intake v2 preview verdict. This body is the service result passed through verbatim: the endpoint adds, removes and rewrites nothing, so judgement.code is the single home of the published compatibility vocabulary and is never duplicated into the error envelope. The endpoint returns this body for every submission the published contract can judge, including rejections; HTTP status only separates transport outcomes (200 judged, 400 unjudgeable request, 503 unavailable published contract). The response identity is published by this document and by the X-TileSim-API-Version and X-TileSim-Schema-Set-Revision response headers, not by a body field. Every value here describes intent only: run_creation is always not_performed, run_acceptance always not_accepted_by_current_api and persistence.write_capability always absent, so no consumer may read this body as evidence that a run exists, was accepted or was persisted.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "service",
+    "route",
+    "run_creation",
+    "run_acceptance",
+    "judgement",
+    "intake",
+    "profile_binding",
+    "idempotency",
+    "backend_issues",
+    "planning_status",
+    "persistence"
+  ],
+  "properties": {
+    "service": { "const": "agent_orchestration_run_intake_preview" },
+    "route": {
+      "description": "Dispatcher generation that produced this judgement. The server always reports its own generation; a request cannot select a different one.",
+      "enum": ["nested_run_intake_v2", "legacy_nested_intake_server", "create_run_v1"]
+    },
+    "run_creation": { "const": "not_performed" },
+    "run_acceptance": { "const": "not_accepted_by_current_api" },
+    "judgement": { "$ref": "#/$defs/judgement" },
+    "intake": {
+      "description": "Echo of the accepted submission's own declared facts; it is copied, never recomputed. Null whenever the submission was rejected or no nested payload was present.",
+      "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/intakeSummary" }]
+    },
+    "profile_binding": {
+      "description": "Fail-closed Profile resolution. Null when the submission was rejected or carried no nested payload. When present with resolved false, no candidate, ranking or fallback value exists anywhere in this response.",
+      "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/profileBinding" }]
+    },
+    "idempotency": {
+      "description": "Replay judgement for a retained Idempotency-Key record. Null means not evaluated, which for this endpoint currently means the Bridge keeps no Run Intake v2 key store; null never means the key is free.",
+      "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/judgement" }]
+    },
+    "backend_issues": {
+      "description": "Backend lowering issues passed through verbatim. Empty means the Bridge has no lowering result to forward, not that lowering passed.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/backendIssue" }
+    },
+    "planning_status": {
+      "description": "blocked whenever any blocking issue or unresolved Profile reference exists; unknown only when nothing is known to block. It is never an execution or acceptance statement.",
+      "enum": ["blocked", "unknown"]
+    },
+    "persistence": { "$ref": "#/$defs/persistence" }
+  },
+  "$defs": {
+    "compatibilityCode": {
+      "description": "The frozen compatibility-matrix error_code vocabulary (bridge/contracts/proposals/agent_orchestration_phase2a/fixtures/compatibility-matrix.json).",
+      "enum": [
+        "unknown_nested_identity",
+        "explicit_migration_required",
+        "unsupported_contract_identity",
+        "missing_contract_identity",
+        "unknown_contract_identity",
+        "unknown_contract_revision",
+        "mixed_contract_version",
+        "idempotency_payload_mismatch",
+        "validation_report_stale"
+      ]
+    },
+    "compatibilityScenario": {
+      "enum": [
+        "old_client_to_new_server",
+        "new_client_to_old_server",
+        "v1_to_successor",
+        "successor_to_v1",
+        "identity_missing",
+        "unknown_identity",
+        "unknown_revision",
+        "mixed_version_payload",
+        "exact_replay",
+        "payload_mismatch",
+        "retained_historical_run",
+        "stale_profile_binding"
+      ]
+    },
+    "compatibilityExpectation": {
+      "enum": [
+        "accept_v1_unchanged",
+        "reject",
+        "reject_no_implicit_upgrade",
+        "reject_no_downgrade",
+        "accept_exact_replay",
+        "accept_exact_replay_original_identity"
+      ]
+    },
+    "judgement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accepted", "code", "scenario", "expected", "detail", "field_path", "message", "facts"],
+      "properties": {
+        "accepted": {
+          "description": "False means the published compatibility matrix demands a rejection; accepted never carries a code.",
+          "type": "boolean"
+        },
+        "code": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/compatibilityCode" }] },
+        "scenario": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/compatibilityScenario" }] },
+        "expected": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/compatibilityExpectation" }] },
+        "detail": {
+          "description": "Stable resolution token; it is the only place where two rows of the same code are told apart.",
+          "type": "string"
+        },
+        "field_path": { "type": "string" },
+        "message": { "type": "string" },
+        "facts": { "type": "object" }
+      }
+    },
+    "profileIssueCode": {
+      "enum": [
+        "profile_missing",
+        "unknown_profile",
+        "profile_unavailable",
+        "profile_ambiguous",
+        "profile_expired",
+        "profile_revision_mismatch",
+        "profile_digest_mismatch",
+        "profile_combination_incompatible",
+        "calibration_missing",
+        "execution_evidence_missing"
+      ]
+    },
+    "profileIssue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "field_path", "blocking", "safe_next_action"],
+      "properties": {
+        "code": { "$ref": "#/$defs/profileIssueCode" },
+        "message": { "type": "string" },
+        "field_path": { "type": "string" },
+        "blocking": { "const": true },
+        "safe_next_action": { "type": "string" }
+      }
+    },
+    "backendIssue": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["code", "message", "field_path", "blocking", "safe_next_action"],
+      "properties": {
+        "code": { "description": "Verbatim backend code; the Bridge never renames it.", "type": "string" },
+        "message": { "type": "string" },
+        "field_path": { "type": "string" },
+        "blocking": { "type": "boolean" },
+        "safe_next_action": { "type": "string" }
+      }
+    },
+    "intakeSummary": {
+      "description": "Verbatim echo of the accepted submission's own declared facts. The runtime validator (bridge/contracts/agent_orchestration_phase2/validator.py) is the published-acceptance authority and enforces identity, schema_revision, intake_id, canonical_digest and the nested binding, but not the requested_fidelity, gpu_participation_mode or trace_source.mode enums, so those three stay unconstrained strings here: this document must describe what the endpoint can actually emit.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity",
+        "revision",
+        "intake_id",
+        "declared_canonical_digest",
+        "requested_fidelity",
+        "gpu_participation_mode",
+        "trace_source_mode"
+      ],
+      "properties": {
+        "identity": { "const": "tilesim.bridge.agent_orchestration_run_intake.v2" },
+        "revision": {
+          "description": "Copied from schema_revision; the runtime validator requires a sha256 here.",
+          "type": "string"
+        },
+        "intake_id": {
+          "description": "Copied from intake_id; the runtime validator requires a stable id here.",
+          "type": "string"
+        },
+        "declared_canonical_digest": {
+          "description": "Exactly what the submission declared; the preview never recomputes or verifies it.",
+          "type": "string"
+        },
+        "requested_fidelity": {
+          "description": "Declared value, copied verbatim; it is not a resolved-fidelity statement and the preview does not map Analytical or DES onto Cycle.",
+          "type": "string"
+        },
+        "gpu_participation_mode": { "type": "string" },
+        "trace_source_mode": {
+          "description": "Copied from trace_source.mode; the preview does not upgrade trace provenance.",
+          "type": "string"
+        }
+      }
+    },
+    "profileBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resolved", "issues", "records_available", "planning_status"],
+      "properties": {
+        "resolved": { "type": "boolean" },
+        "issues": { "type": "array", "items": { "$ref": "#/$defs/profileIssue" } },
+        "records_available": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["model", "engine", "device", "topology", "workload"],
+          "properties": {
+            "model": { "type": "integer", "minimum": 0 },
+            "engine": { "type": "integer", "minimum": 0 },
+            "device": { "type": "integer", "minimum": 0 },
+            "topology": { "type": "integer", "minimum": 0 },
+            "workload": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "planning_status": { "enum": ["blocked", "unknown"] }
+      }
+    },
+    "persistence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["write_capability", "forbidden_persistence", "idempotency", "retention"],
+      "properties": {
+        "write_capability": { "const": "absent" },
+        "forbidden_persistence": {
+          "type": "array",
+          "minItems": 3,
+          "contains": { "const": "credential" },
+          "items": { "enum": ["credential", "hidden_reasoning", "raw_provider_response"] },
+          "uniqueItems": true
+        },
+        "idempotency": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "same_key_same_payload",
+            "same_key_different_payload",
+            "version_change",
+            "profile_revision_change",
+            "crash_retry"
+          ],
+          "properties": {
+            "same_key_same_payload": { "const": "exact_replay_or_terminal_not_retained" },
+            "same_key_different_payload": { "const": "reject_409_idempotency_payload_mismatch" },
+            "version_change": { "const": "different_payload_reject_same_key" },
+            "profile_revision_change": { "const": "different_payload_reject_same_key" },
+            "crash_retry": { "const": "resume_or_terminalize_without_duplicate_side_effect" }
+          }
+        },
+        "retention": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["retained_result", "not_retained_result", "delete", "expiry"],
+          "properties": {
+            "retained_result": { "const": "exact_replay_with_original_contract_identity" },
+            "not_retained_result": { "const": "reject_terminal_not_retained" },
+            "delete": { "const": "tombstone_key_without_payload_or_result" },
+            "expiry": { "const": "tombstone_key_without_payload_or_result" }
+          }
+        }
+      }
+    }
+  }
+}

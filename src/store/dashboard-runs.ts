@@ -4,7 +4,7 @@ import { fetchRunEvidence as queryRunEvidence } from "../features/run-evidence";
 import { fetchRunHistory, renameRun as renameRunMutation } from "../features/run-history";
 import type { ApplyBundleOptions } from "../entities/dashboard/types";
 import { persistDashboardSelection as persist } from "./dashboard-persistence";
-import { errorMessage, queryContext, session, state } from "./dashboard-state";
+import { acquireRunBusy, errorMessage, queryContext, releaseBusy, session, state } from "./dashboard-state";
 
 interface DashboardRunCoordinatorOptions {
   applyBundle: (value: unknown, options?: ApplyBundleOptions) => void;
@@ -32,7 +32,10 @@ export function createDashboardRunCoordinator({ applyBundle, setView }: Dashboar
   }
 
   async function openRun(runId: string) {
-    state.busy = true;
+    // Own the shared busy flag through a claim: a navigation running in parallel only revokes
+    // navigation claims, and a concurrent open only releases its own claim, so the flag stays set
+    // until the last in-flight load settles.
+    const busyClaim = acquireRunBusy();
     try {
       const { payload, inputs, artifactManifest } = await fetchRunEvidence(runId);
       const run = state.history.runs.find((item) => item.run_id === runId);
@@ -42,7 +45,7 @@ export function createDashboardRunCoordinator({ applyBundle, setView }: Dashboar
     } catch (error) {
       session.notify(t("打开运行失败：{message}", { message: errorMessage(error) }), "danger");
     } finally {
-      state.busy = false;
+      releaseBusy(busyClaim);
     }
   }
 

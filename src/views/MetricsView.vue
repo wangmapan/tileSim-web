@@ -16,6 +16,7 @@ import {
   requestMetricSource,
 } from "../features/execution-inspector";
 import { useEvidenceSelectionStore } from "../stores/evidence-selection";
+import { availabilityDescription, availabilityLabel, ReportCoveragePanel } from "../features/report-coverage";
 
 const { state, dashboardView } = useDashboard();
 const { t } = useI18n();
@@ -26,12 +27,33 @@ function selectEvidenceRequest(requestId: string) {
   if (state.runId) evidenceSelection.select(state.runId, requestId);
 }
 
+/**
+ * C0-7: `SourcedValue.availability` keeps its five distinct states; a reported
+ * `0` stays a value, while each missing state renders its own label + reason.
+ */
 function metricValue(metric: SourcedValue<number | LosslessInteger>, unit: string) {
-  return metric.availability === "available" ? `${formatNumber(metric.value)} ${unit}` : t("不适用");
+  return metric.availability === "available"
+    ? `${formatNumber(metric.value)} ${unit}`
+    : availabilityLabel(metric.availability);
 }
 
 function readablePicoseconds(metric: SourcedValue<number | LosslessInteger>) {
-  return metric.availability === "available" ? formatPicoseconds(metric.value) : t("不适用");
+  return metric.availability === "available" ? formatPicoseconds(metric.value) : availabilityLabel(metric.availability);
+}
+
+function completionHint(
+  completed: SourcedValue<number | LosslessInteger>,
+  total: SourcedValue<number | LosslessInteger>,
+) {
+  const label = t("{done}/{total} 请求完成", {
+    done: metricCount(completed),
+    total: metricCount(total),
+  });
+  return total.availability === "available" ? label : `${label} · ${availabilityDescription(total.availability)}`;
+}
+
+function metricCount(metric: SourcedValue<number | LosslessInteger>) {
+  return metric.availability === "available" ? formatNumber(metric.value) : availabilityLabel(metric.availability);
 }
 </script>
 
@@ -48,12 +70,7 @@ function readablePicoseconds(metric: SourcedValue<number | LosslessInteger>) {
       <StatCard
         :label="t('吞吐')"
         :value="metricValue(dashboardView.metrics.throughputRequestsPerSecond, 'req/s')"
-        :hint="
-          t('{done}/{total} 请求完成', {
-            done: dashboardView.metrics.completedRequestCount.value ?? '—',
-            total: dashboardView.metrics.requestCount.value ?? '—',
-          })
-        "
+        :hint="completionHint(dashboardView.metrics.completedRequestCount, dashboardView.metrics.requestCount)"
         accent
       />
       <StatCard
@@ -81,6 +98,8 @@ function readablePicoseconds(metric: SourcedValue<number | LosslessInteger>) {
       <ArtifactEvidenceLink :source-path="dashboardView.metrics.tpotP95Ps.sourcePaths[0]" label="每 Token 延迟证据" />
       <ArtifactEvidenceLink :source-path="dashboardView.metrics.endToEndP95Ps.sourcePaths[0]" label="端到端 P95 证据" />
     </nav>
+
+    <ReportCoveragePanel section="metrics" :bundle="state.bundle" />
 
     <ExecutionVisualizationPanel :visualization="requestLatencyVisualization" />
 

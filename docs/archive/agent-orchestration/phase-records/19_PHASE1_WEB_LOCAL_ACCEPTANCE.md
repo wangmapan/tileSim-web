@@ -1,5 +1,8 @@
 # Phase 1 Web 本地验收
 
+> **已归档（2026-09-17）**：Phase 1 已结束并集成 `main`。本文是当时的 dated 验收证据，其测试数字保留原文、不改写成当前数字。
+> 当前状态见 [`docs/AI_HANDOFF.md`](../../AI_HANDOFF.md) 与 [`01_CURRENT_BASELINE_AND_GAPS.md`](../../F9_AGENT_ORCHESTRATION/01_CURRENT_BASELINE_AND_GAPS.md)。
+
 > 文档 ID：`AO-19`
 >
 > 事实日期：2026-09-10

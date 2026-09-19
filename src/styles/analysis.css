@@ -1089,6 +1089,7 @@
 .week8-execution-grid dt {
   color: var(--muted);
   font-size: var(--text-xs);
+  overflow-wrap: anywhere;
 }
 .week8-execution-grid dd {
   margin: 5px 0 0;

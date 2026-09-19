@@ -312,6 +312,14 @@ App shell、router、全局 CSS/i18n、contract/generated client 和 shared E2E 
 
 ## 22. 分阶段实施
 
+> 实现进度（2026-09-17）：Stage 0 已完成；Stage 2 的自然语言草案部分已完成（八字段 compiler、别名/单位归一、澄清、
+> unsupported fail-closed、capability 投影），但 typed blocks 只覆盖 10 类中的 7 类，缺 `approval_request`、
+> `operation_progress`、`evidence_result`、`citation`。Stage 1、3、4 未开始。逐项事实见
+> [当前基线](01_CURRENT_BASELINE_AND_GAPS.md) 与 [Phase 2C Web 集成计划](23_PHASE2C_WEB_INTEGRATION_PLAN.md)。
+
+Stage 0–4 是**实现顺序**，不是能力授权：进入某一 Stage 前，其依赖的 contract 必须先正式发布，且不得用前端模拟补齐尚未
+发布的契约。
+
 ### Stage 0：只读 Shell
 
 实现侧栏布局、开关、resize、context bar 和静态页面帮助；不创建会话、不调用 Provider。验证主页面不回归。

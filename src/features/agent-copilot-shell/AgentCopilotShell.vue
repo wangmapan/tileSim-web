@@ -218,53 +218,56 @@ onBeforeUnmount(() => {
       @keydown="onResizeKeydown"
     ></button>
 
-    <template v-if="modelValue === 'collapsed'">
-      <div class="agent-copilot-shell__rail">
-        <strong aria-hidden="true">AI</strong>
-        <span class="agent-copilot-shell__rail-status" :data-stale="attachmentStatus.state === 'stale'"></span>
-        <button type="button" aria-label="展开 TileSim 助手" @click="setState('open')">展开</button>
-        <button type="button" aria-label="关闭 TileSim 助手" @click="setState('closed')">关闭</button>
+    <div v-show="modelValue === 'collapsed'" class="agent-copilot-shell__rail">
+      <strong aria-hidden="true">AI</strong>
+      <span class="agent-copilot-shell__rail-status" :data-stale="attachmentStatus.state === 'stale'"></span>
+      <button type="button" aria-label="展开 TileSim 助手" @click="setState('open')">展开</button>
+      <button type="button" aria-label="关闭 TileSim 助手" @click="setState('closed')">关闭</button>
+    </div>
+
+    <header v-show="modelValue !== 'collapsed'" class="agent-copilot-shell__header">
+      <div>
+        <span>TileSim 助手</span>
+        <strong>{{ currentTask }}</strong>
       </div>
-    </template>
-
-    <template v-else>
-      <header class="agent-copilot-shell__header">
-        <div>
-          <span>TileSim 助手</span>
-          <strong>{{ currentTask }}</strong>
-        </div>
-        <div class="agent-copilot-shell__header-actions">
-          <button type="button" @click="setState('collapsed')">收起</button>
-          <button
-            type="button"
-            :aria-pressed="modelValue === 'expanded'"
-            @click="setState(modelValue === 'expanded' ? 'open' : 'expanded')"
-          >
-            {{ modelValue === "expanded" ? "恢复" : "展开" }}
-          </button>
-          <button type="button" @click="setState('closed')">关闭</button>
-        </div>
-      </header>
-
-      <AgentContextBar :context="context" :attachment-status="attachmentStatus" />
-
-      <div class="agent-copilot-shell__timeline" role="log" aria-live="polite" aria-relevant="additions text">
-        <AgentTypedBlockList :blocks="blocks" @answer="emit('answer', $event)" />
+      <div class="agent-copilot-shell__header-actions">
+        <button type="button" @click="setState('collapsed')">收起</button>
+        <button
+          type="button"
+          :aria-pressed="modelValue === 'expanded'"
+          @click="setState(modelValue === 'expanded' ? 'open' : 'expanded')"
+        >
+          {{ modelValue === "expanded" ? "恢复" : "展开" }}
+        </button>
+        <button type="button" @click="setState('closed')">关闭</button>
       </div>
+    </header>
 
-      <AgentComposer
-        ref="composer"
-        :disabled="composerDisabled"
-        :disabled-reason="composerDisabledReason"
-        :allow-draft="canDraft"
-        @submit="submit"
-      />
+    <AgentContextBar v-show="modelValue !== 'collapsed'" :context="context" :attachment-status="attachmentStatus" />
 
-      <footer class="agent-copilot-shell__footer" role="status" aria-live="polite">
-        <span>{{ statusText }}</span>
-        <span>仅生成草案 · 不会开始运行</span>
-      </footer>
-    </template>
+    <div
+      v-show="modelValue !== 'collapsed'"
+      class="agent-copilot-shell__timeline"
+      role="log"
+      aria-live="polite"
+      aria-relevant="additions text"
+    >
+      <AgentTypedBlockList :blocks="blocks" @answer="emit('answer', $event)" />
+    </div>
+
+    <AgentComposer
+      v-show="modelValue !== 'collapsed'"
+      ref="composer"
+      :disabled="composerDisabled"
+      :disabled-reason="composerDisabledReason"
+      :allow-draft="canDraft"
+      @submit="submit"
+    />
+
+    <footer v-show="modelValue !== 'collapsed'" class="agent-copilot-shell__footer" role="status" aria-live="polite">
+      <span>{{ statusText }}</span>
+      <span>{{ canDraft ? "仅生成草案 · 不会开始运行" : "仅解释当前页面 · 不会修改实验或开始运行" }}</span>
+    </footer>
   </aside>
 </template>
 
@@ -350,7 +353,9 @@ onBeforeUnmount(() => {
 
 .agent-copilot-shell__header-actions {
   display: flex;
+  flex: 0 0 auto;
   gap: 3px;
+  white-space: nowrap;
 }
 
 .agent-copilot-shell__header-actions button,
@@ -440,6 +445,18 @@ onBeforeUnmount(() => {
   .agent-copilot-shell__header-actions {
     flex-wrap: wrap;
     justify-content: flex-end;
+  }
+}
+
+@media (min-width: 721px) and (max-width: 1599px) {
+  .agent-copilot-shell {
+    width: min(var(--agent-copilot-panel-width), 48vw);
+  }
+
+  /* The scoped media rule has the same specificity as the base collapsed
+     rule; keep the rail narrow instead of restoring the open panel width. */
+  .agent-copilot-shell.agent-copilot-shell--collapsed {
+    width: 52px;
   }
 }
 

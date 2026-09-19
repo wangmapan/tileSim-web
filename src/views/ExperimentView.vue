@@ -55,6 +55,18 @@ const inspectingTracePackage = ref(false);
 const fieldPath = ref("");
 const submissionContractError = ref("");
 const pendingSubmission = state.experimentSubmission;
+const backendRevision = computed(
+  () =>
+    [
+      state.bridge.identity?.source_revision,
+      state.bridge.identity?.build_revision,
+      state.bridge.identity?.source_state_digest,
+      state.bridge.identity?.build_state_digest,
+      state.bridge.identity?.deployment_ref,
+    ]
+      .filter(Boolean)
+      .join("|") || "backend-unavailable",
+);
 let waitController = null;
 const surface = computed(() =>
   buildExperimentSurface(
@@ -65,7 +77,9 @@ const surface = computed(() =>
     state.experiment.error,
   ),
 );
-const form = reactive(createExperimentForm(surface.value));
+// Experiment panels use `defineModel`; an assignable binding avoids Vue's
+// const-model compiler warning while retaining one reactive canonical form.
+let form = reactive(createExperimentForm(surface.value));
 let agentContextSequence = 0;
 const selectedTracePackage = computed(
   () => tracePackageCatalog.value?.packages.find((item) => item.package_id === selectedTracePackageId.value) || null,
@@ -178,13 +192,30 @@ function publishAgentContext() {
       form,
       surface: surface.value,
       mode: mode.value,
-      contextRevision: `context:experiment:${state.runId || "no-run"}:${state.bridge.manifest?.schema_set_revision || "schema-unavailable"}:${agentContextSequence}`,
+      contextRevision: `context:experiment:${state.runId || "no-run"}:${state.bridge.manifest?.schema_set_revision || "schema-unavailable"}:${backendRevision.value}:${agentContextSequence}`,
       runId: state.runId || null,
+      pageAvailable: Boolean(
+        state.bridge.connected && state.bridge.manifest && state.bridge.available && !state.bridge.checking,
+      ),
     }),
   );
 }
 
-watch([form, surface, mode, () => state.runId], publishAgentContext, { deep: true, immediate: true });
+watch(
+  [
+    form,
+    surface,
+    mode,
+    () => state.runId,
+    () => state.bridge.manifest?.schema_set_revision,
+    backendRevision,
+    () => state.bridge.connected,
+    () => state.bridge.available,
+    () => state.bridge.checking,
+  ],
+  publishAgentContext,
+  { deep: true, immediate: true },
+);
 onActivated(publishAgentContext);
 
 function resetControls() {

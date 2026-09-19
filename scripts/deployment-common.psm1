@@ -30,6 +30,11 @@ function ConvertTo-TileSimWslPath {
     param([Parameter(Mandatory = $true)][string]$WindowsPath)
 
     $full = [System.IO.Path]::GetFullPath($WindowsPath)
+    if ($full.StartsWith('\\?\UNC\', [System.StringComparison]::OrdinalIgnoreCase)) {
+        $full = '\\' + $full.Substring(8)
+    } elseif ($full.StartsWith('\\?\', [System.StringComparison]::OrdinalIgnoreCase)) {
+        $full = $full.Substring(4)
+    }
     if ($full -notmatch '^([A-Za-z]):\\(.*)$') {
         throw "Only absolute Windows drive paths are supported: $full"
     }
@@ -97,10 +102,38 @@ function Assert-TileSimWslDistro {
     if ($null -eq $wsl) {
         throw "Windows Subsystem for Linux is required. Install WSL and an Ubuntu distribution first."
     }
-    & wsl.exe -d $WslDistro --exec true
-    if ($LASTEXITCODE -ne 0) {
+    $wslProcess = Start-Process -FilePath $wsl.Source `
+        -ArgumentList @("-d", $WslDistro, "--exec", "true") `
+        -WindowStyle Hidden -Wait -PassThru
+    if ($wslProcess.ExitCode -ne 0) {
         throw "WSL distribution '$WslDistro' is not available or cannot start."
     }
+}
+
+function Test-TileSimBridgeListening {
+    $connections = Get-NetTCPConnection -LocalPort 5173 -State Listen -ErrorAction SilentlyContinue
+    return $null -ne ($connections | Select-Object -First 1)
+}
+
+function Stop-TileSimBridge {
+    param([Parameter(Mandatory = $true)][string]$WslDistro)
+
+    $wsl = Get-Command "wsl.exe" -ErrorAction SilentlyContinue
+    if ($null -eq $wsl) {
+        throw "Windows Subsystem for Linux is required to stop TileSim Web."
+    }
+
+    for ($attempt = 0; $attempt -lt 3; $attempt++) {
+        $stopProcess = Start-Process -FilePath $wsl.Source `
+            -ArgumentList @("-d", $WslDistro, "--exec", "sh", "-lc", '"fuser -k 5173/tcp >/dev/null 2>&1 || true"') `
+            -WindowStyle Hidden -Wait -PassThru
+        # WSL localhost/NAT warnings may produce a non-zero wsl.exe exit code;
+        # the port state is the authoritative result for this operation.
+        Start-Sleep -Milliseconds 350
+        if (-not (Test-TileSimBridgeListening)) { return }
+    }
+
+    throw "Could not stop the previous TileSim Web bridge on port 5173."
 }
 
 function Assert-TileSimBackendEvidenceRevisions {
@@ -143,5 +176,7 @@ Export-ModuleMember -Function @(
     "Resolve-TileSimWslBuildRoot",
     "Get-TileSimPathIdentity",
     "Assert-TileSimWslDistro",
+    "Test-TileSimBridgeListening",
+    "Stop-TileSimBridge",
     "Assert-TileSimBackendEvidenceRevisions"
 )

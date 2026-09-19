@@ -29,6 +29,7 @@ from repositories import runs as run_repository
 from services import execution
 from services import evidence_agent as evidence_agent_service
 from services import capability_catalog
+from services import run_intake as run_intake_service
 from services import trace_packages
 from services import week7
 from providers import evidence_agent as evidence_agent_provider_contract
@@ -557,6 +558,16 @@ def execute_week7_operation(operation_id: str) -> dict:
     )
 
 
+def run_intake_profile_records() -> dict:
+    """Read the published Phase 2 Profile record set for the Run Intake preview.
+
+    The published package declares five empty families, so every Profile reference fails
+    closed as ``profile_missing``.  Nothing here ever invents a record, and a missing or
+    invalid published manifest is a release-integrity failure, not a bad request.
+    """
+    return run_intake_service.published_profile_records()
+
+
 class BridgeHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_ROOT), **kwargs)
@@ -677,6 +688,8 @@ class BridgeHandler(SimpleHTTPRequestHandler):
     def do_POST(self) -> None:
         path = urlparse(self.path).path
         parts = path.strip("/").split("/")
+        if path == "/api/agent/run-intake-preview":
+            return self.preview_agent_run_intake()
         if path == "/api/week7/calibration-example":
             return self.run_week7_operation("calibration_example")
         if path == "/api/week7/orchestration-example":
@@ -985,6 +998,82 @@ class BridgeHandler(SimpleHTTPRequestHandler):
             HTTPStatus.ACCEPTED,
             creation_response(metadata, idempotent_replay=False),
         )
+
+    def preview_agent_run_intake(self) -> None:
+        """Read-only Run Intake v2 preview.
+
+        No lock, no run reservation and no persistence: the endpoint validates and judges
+        and nothing else.  HTTP status separates transport outcomes only - 200 means the
+        published contract judged the submission (including a rejected verdict, which
+        stays inside the typed body), 400 means the submission could not be validated
+        against the published contract, and 503 means the published contract facts needed
+        for a judgement are unavailable.
+        """
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if length <= 0 or length > MAX_REQUEST_BYTES:
+                raise RequestValidationError(
+                    "Run Intake preview request body must be between 1 byte and 2.1 MB.", "/"
+                )
+            document = json.loads(
+                self.rfile.read(length), parse_constant=reject_nonfinite_json
+            )
+        except (ValueError, json.JSONDecodeError) as error:
+            validation = request_validation_error(error)
+            return write_error(
+                self,
+                HTTPStatus.BAD_REQUEST,
+                "invalid_run_intake_preview_request",
+                str(validation),
+                field_path=validation.field_path,
+                retryable=False,
+                nested_schema_identity=validation.nested_schema_identity,
+            )
+        try:
+            payload = run_intake_service.preview_request_payload(document)
+        except RequestValidationError as error:
+            return write_error(
+                self,
+                HTTPStatus.BAD_REQUEST,
+                "invalid_run_intake_preview_request",
+                str(error),
+                field_path=error.field_path,
+                retryable=False,
+                nested_schema_identity=error.nested_schema_identity,
+            )
+        try:
+            profile_records = run_intake_profile_records()
+        except (OSError, RuntimeError, ValueError) as error:
+            return write_error(
+                self,
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "run_intake_preview_unavailable",
+                f"The published Phase 2 Profile record set is unavailable: {error}",
+                retryable=False,
+            )
+        try:
+            result = run_intake_service.preview_run_intake(
+                payload, profile_records=profile_records
+            )
+        except RequestValidationError as error:
+            return write_error(
+                self,
+                HTTPStatus.BAD_REQUEST,
+                "invalid_run_intake_preview_request",
+                str(error),
+                field_path=error.field_path,
+                retryable=False,
+                nested_schema_identity=error.nested_schema_identity,
+            )
+        except (OSError, RuntimeError, ValueError) as error:
+            return write_error(
+                self,
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "run_intake_preview_unavailable",
+                f"The published Agent orchestration Phase 2 contract facts are unavailable: {error}",
+                retryable=False,
+            )
+        return write_json(self, HTTPStatus.OK, result)
 
     def run_week7_operation(self, operation_id: str) -> None:
         if not (TILESIM_CLI.is_file() and os.access(TILESIM_CLI, os.X_OK)):

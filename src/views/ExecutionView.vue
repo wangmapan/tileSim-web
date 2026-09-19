@@ -37,6 +37,7 @@ import type { LayerId } from "../features/execution-inspector";
 import { useI18n } from "../i18n";
 import ArtifactEvidenceLink from "../components/ArtifactEvidenceLink.vue";
 import { useEvidenceSelectionStore } from "../stores/evidence-selection";
+import { ReportCoveragePanel } from "../features/report-coverage";
 
 type ExecutionResult = ReturnType<typeof buildExecutionResult>;
 type ExecutionLayer = ExecutionResult["layers"][number];
@@ -491,6 +492,8 @@ async function exportStructuredReport() {
         }}
       </p>
     </section>
+
+    <ReportCoveragePanel section="execution_envelope" :bundle="state.bundle" />
 
     <JsonArtifactPanel />
   </div>

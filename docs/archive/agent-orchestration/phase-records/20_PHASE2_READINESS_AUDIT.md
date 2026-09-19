@@ -1,5 +1,9 @@
 # Phase 2 Definition of Ready 审计
 
+> **已归档（2026-09-17）**：本文的 `blocked` 裁决是 2026-09-11 的 dated 审计结论，其契约侧结论已被 Phase 2A/2B 发布与后端
+> Phase 2C lowering 取代；数据侧（五类 Profile 真实记录、calibration、held-out）结论仍然有效。
+> 当前状态见 [`docs/AI_HANDOFF.md`](../../AI_HANDOFF.md) 与 [`01_CURRENT_BASELINE_AND_GAPS.md`](../../F9_AGENT_ORCHESTRATION/01_CURRENT_BASELINE_AND_GAPS.md)。
+
 > 文档 ID：`AO-20`
 >
 > 事实日期：2026-09-11

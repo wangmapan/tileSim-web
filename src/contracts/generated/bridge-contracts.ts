@@ -529,6 +529,8 @@ export interface BridgeApiContracts {
   evidenceAgentResponse?: EvidenceAgentResponse;
   evidenceAgentCitation?: EvidenceAgentCitation;
   agentOrchestrationCapabilitySnapshot?: AgentOrchestrationCapabilitySnapshot;
+  agentOrchestrationRunIntakePreviewRequest?: AgentOrchestrationRunIntakePreviewRequest;
+  agentOrchestrationRunIntakePreviewResponse?: AgentOrchestrationRunIntakePreviewResponse;
   agentOrchestrationProfileBindingV1?: HttpsTilesimLocalContractsAgentOrchestrationPhase2ProfileBindingSchemaJson;
   agentOrchestrationRunIntakeV2?: HttpsTilesimLocalContractsAgentOrchestrationPhase2RunIntakeSchemaJson;
   agentOrchestrationValidationReportV1?: HttpsTilesimLocalContractsAgentOrchestrationPhase2ValidationReportSchemaJson;
@@ -2333,6 +2335,15 @@ export interface NotExposedCapability {
   state: "not_exposed";
   reason_code: "not_exposed_to_agent";
 }
+/**
+ * Request envelope for the read-only Run Intake v2 preview endpoint. It carries only what the browser legitimately owns: the nested Run Intake v2 payload exactly as it would appear inside a create-run v1 body, or an explicit null for a create-run request that has no nested Agent orchestration payload. Every judging input that could forge an accepted verdict is server-owned and therefore not accepted here: expected_revision, registered revisions, profile_records, backend lowering issues, claim_requires_calibration and the dispatcher route are all fixed by the server. additionalProperties is false so a client that tries to supply one of those fields is rejected instead of silently ignored.
+ */
+export interface AgentOrchestrationRunIntakePreviewRequest {
+  /**
+   * The nested Agent orchestration submission. An explicit null is the expected-absence case: the create-run v1 accept set is unchanged because no nested payload is present. Omitting the key is a request-validation failure, not an expected absence.
+   */
+  intake: null | HttpsTilesimLocalContractsAgentOrchestrationPhase2RunIntakeSchemaJson;
+}
 export interface HttpsTilesimLocalContractsAgentOrchestrationPhase2ProfileBindingSchemaJson {
   schema_identity: "tilesim.bridge.agent_orchestration_profile_binding.v1";
   schema_revision: string;
@@ -2377,6 +2388,186 @@ export interface StableReference {
   identity: string;
   revision: string;
   digest: string;
+}
+/**
+ * Typed read-only Run Intake v2 preview verdict. This body is the service result passed through verbatim: the endpoint adds, removes and rewrites nothing, so judgement.code is the single home of the published compatibility vocabulary and is never duplicated into the error envelope. The endpoint returns this body for every submission the published contract can judge, including rejections; HTTP status only separates transport outcomes (200 judged, 400 unjudgeable request, 503 unavailable published contract). The response identity is published by this document and by the X-TileSim-API-Version and X-TileSim-Schema-Set-Revision response headers, not by a body field. Every value here describes intent only: run_creation is always not_performed, run_acceptance always not_accepted_by_current_api and persistence.write_capability always absent, so no consumer may read this body as evidence that a run exists, was accepted or was persisted.
+ */
+export interface AgentOrchestrationRunIntakePreviewResponse {
+  service: "agent_orchestration_run_intake_preview";
+  /**
+   * Dispatcher generation that produced this judgement. The server always reports its own generation; a request cannot select a different one.
+   */
+  route: "nested_run_intake_v2" | "legacy_nested_intake_server" | "create_run_v1";
+  run_creation: "not_performed";
+  run_acceptance: "not_accepted_by_current_api";
+  judgement: Judgement;
+  /**
+   * Echo of the accepted submission's own declared facts; it is copied, never recomputed. Null whenever the submission was rejected or no nested payload was present.
+   */
+  intake: null | IntakeSummary;
+  /**
+   * Fail-closed Profile resolution. Null when the submission was rejected or carried no nested payload. When present with resolved false, no candidate, ranking or fallback value exists anywhere in this response.
+   */
+  profile_binding: null | ProfileBinding;
+  /**
+   * Replay judgement for a retained Idempotency-Key record. Null means not evaluated, which for this endpoint currently means the Bridge keeps no Run Intake v2 key store; null never means the key is free.
+   */
+  idempotency: null | Judgement;
+  /**
+   * Backend lowering issues passed through verbatim. Empty means the Bridge has no lowering result to forward, not that lowering passed.
+   */
+  backend_issues: BackendIssue[];
+  /**
+   * blocked whenever any blocking issue or unresolved Profile reference exists; unknown only when nothing is known to block. It is never an execution or acceptance statement.
+   */
+  planning_status: "blocked" | "unknown";
+  persistence: Persistence;
+}
+export interface Judgement {
+  /**
+   * False means the published compatibility matrix demands a rejection; accepted never carries a code.
+   */
+  accepted: boolean;
+  code:
+    | null
+    | (
+        | "unknown_nested_identity"
+        | "explicit_migration_required"
+        | "unsupported_contract_identity"
+        | "missing_contract_identity"
+        | "unknown_contract_identity"
+        | "unknown_contract_revision"
+        | "mixed_contract_version"
+        | "idempotency_payload_mismatch"
+        | "validation_report_stale"
+      );
+  scenario:
+    | null
+    | (
+        | "old_client_to_new_server"
+        | "new_client_to_old_server"
+        | "v1_to_successor"
+        | "successor_to_v1"
+        | "identity_missing"
+        | "unknown_identity"
+        | "unknown_revision"
+        | "mixed_version_payload"
+        | "exact_replay"
+        | "payload_mismatch"
+        | "retained_historical_run"
+        | "stale_profile_binding"
+      );
+  expected:
+    | null
+    | (
+        | "accept_v1_unchanged"
+        | "reject"
+        | "reject_no_implicit_upgrade"
+        | "reject_no_downgrade"
+        | "accept_exact_replay"
+        | "accept_exact_replay_original_identity"
+      );
+  /**
+   * Stable resolution token; it is the only place where two rows of the same code are told apart.
+   */
+  detail: string;
+  field_path: string;
+  message: string;
+  facts: {
+    [k: string]: unknown;
+  };
+}
+/**
+ * Verbatim echo of the accepted submission's own declared facts. The runtime validator (bridge/contracts/agent_orchestration_phase2/validator.py) is the published-acceptance authority and enforces identity, schema_revision, intake_id, canonical_digest and the nested binding, but not the requested_fidelity, gpu_participation_mode or trace_source.mode enums, so those three stay unconstrained strings here: this document must describe what the endpoint can actually emit.
+ */
+export interface IntakeSummary {
+  identity: "tilesim.bridge.agent_orchestration_run_intake.v2";
+  /**
+   * Copied from schema_revision; the runtime validator requires a sha256 here.
+   */
+  revision: string;
+  /**
+   * Copied from intake_id; the runtime validator requires a stable id here.
+   */
+  intake_id: string;
+  /**
+   * Exactly what the submission declared; the preview never recomputes or verifies it.
+   */
+  declared_canonical_digest: string;
+  /**
+   * Declared value, copied verbatim; it is not a resolved-fidelity statement and the preview does not map Analytical or DES onto Cycle.
+   */
+  requested_fidelity: string;
+  gpu_participation_mode: string;
+  /**
+   * Copied from trace_source.mode; the preview does not upgrade trace provenance.
+   */
+  trace_source_mode: string;
+}
+export interface ProfileBinding {
+  resolved: boolean;
+  issues: ProfileIssue[];
+  records_available: {
+    model: number;
+    engine: number;
+    device: number;
+    topology: number;
+    workload: number;
+  };
+  planning_status: "blocked" | "unknown";
+}
+export interface ProfileIssue {
+  code:
+    | "profile_missing"
+    | "unknown_profile"
+    | "profile_unavailable"
+    | "profile_ambiguous"
+    | "profile_expired"
+    | "profile_revision_mismatch"
+    | "profile_digest_mismatch"
+    | "profile_combination_incompatible"
+    | "calibration_missing"
+    | "execution_evidence_missing";
+  message: string;
+  field_path: string;
+  blocking: true;
+  safe_next_action: string;
+}
+export interface BackendIssue {
+  /**
+   * Verbatim backend code; the Bridge never renames it.
+   */
+  code: string;
+  message: string;
+  field_path: string;
+  blocking: boolean;
+  safe_next_action: string;
+  [k: string]: unknown;
+}
+export interface Persistence {
+  write_capability: "absent";
+  /**
+   * @minItems 3
+   */
+  forbidden_persistence: [
+    "credential" | "hidden_reasoning" | "raw_provider_response",
+    "credential" | "hidden_reasoning" | "raw_provider_response",
+    "credential" | "hidden_reasoning" | "raw_provider_response",
+    ...("credential" | "hidden_reasoning" | "raw_provider_response")[],
+  ];
+  idempotency: {
+    same_key_same_payload: "exact_replay_or_terminal_not_retained";
+    same_key_different_payload: "reject_409_idempotency_payload_mismatch";
+    version_change: "different_payload_reject_same_key";
+    profile_revision_change: "different_payload_reject_same_key";
+    crash_retry: "resume_or_terminalize_without_duplicate_side_effect";
+  };
+  retention: {
+    retained_result: "exact_replay_with_original_contract_identity";
+    not_retained_result: "reject_terminal_not_retained";
+    delete: "tombstone_key_without_payload_or_result";
+    expiry: "tombstone_key_without_payload_or_result";
+  };
 }
 export interface HttpsTilesimLocalContractsAgentOrchestrationPhase2ValidationReportSchemaJson {
   schema_identity: "tilesim.bridge.agent_orchestration_validation_report.v1";

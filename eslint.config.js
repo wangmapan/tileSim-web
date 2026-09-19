@@ -12,6 +12,7 @@ export default [
       "runtime/**",
       "coverage/**",
       "test-results/**",
+      "output/**",
       "src/contracts/generated/report-validators.js",
       "src/contracts/generated/experiment-validators.js",
       "src/contracts/generated/evidence-agent-validators.js",

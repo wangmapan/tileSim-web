@@ -122,15 +122,36 @@ DoR checkpoint（2026-09-11）：14 项审计已完成，完整 Phase 2 为 `blo
 versioned calculator receipt、Phase 2 Validation Report，以及 card/TP/PP/EP/placement/物理 KV/集合通信/网络的
 正式累计 lowering 均未闭合。停止 `WP-PROFILE-02` 至 `WP-LOWER-01` 和 Web receipt UI 实施；先关闭
 `GAP-PROFILE-SUCCESSOR-001`、`GAP-CALCULATOR-001`、`GAP-RUN-INTAKE-001` 及相邻后端执行 Gap，再重新审计 DoR。
-证据见 [Phase 2 Definition of Ready 审计](20_PHASE2_READINESS_AUDIT.md)。
+证据见 [Phase 2 DoR 审计（已归档）](../archive/agent-orchestration/phase-records/20_PHASE2_READINESS_AUDIT.md)。
 
 Phase 2A 契约设计状态（2026-09-11）：已形成隔离的 `proposal_only` publication candidate，采用五类 Profile v2、
 保留顶层 create-run v1 并新增显式 nested run intake v2 的方案，同时冻结 Validation Report、七类 calculator
 receipt、compatibility、stale、幂等和留存语义。`GAP-PROFILE-SUCCESSOR-001`、`GAP-RUN-INTAKE-001`、
 `GAP-VALIDATE-001`、`GAP-CALCULATOR-001` 仅进入 `designing`；尚未注册正式契约、实现 Bridge runtime 或后端
-lowering，也没有真实 Profile、校准或 held-out evidence，因此完整 Phase 2 继续 `blocked`。后续必须先经 Phase 2B
-发布评审，再按 Phase 2C 建立累计执行闭环，不能直接启动 Web receipt UI。详见
-[Phase 2A 契约候选](21_PHASE2A_CONTRACT_PROPOSAL.md)。
+lowering，也没有真实 Profile、校准或 held-out evidence，因此完整 Phase 2 继续 `blocked`。详见
+[Phase 2A 契约候选（已归档）](../archive/agent-orchestration/phase-records/21_PHASE2A_CONTRACT_PROPOSAL.md)。
+
+Phase 2B 契约发布状态（2026-09-17）：2A 候选已正式发布并提交（`4d7f9fa`）。契约包位于
+`bridge/contracts/agent_orchestration_phase2/`，含五类 Profile v2、Profile Binding v1、Run Intake v2、
+Validation Report v1、Calculator Receipt Envelope v1、七类 typed receipt identity 与幂等/留存 policy。
+`package_revision = sha256:59373c71…c8b6`。**2B 发布时接线只到契约层**：`/api/runs` 仍不接受 Run Intake v2，
+没有任何 Bridge service 导入该 validator，包内也没有 registry 与测试源文件。因此 2B 只解除了
+`GAP-PROFILE-SUCCESSOR-001`/`GAP-RUN-INTAKE-001`/`GAP-VALIDATE-001`/`GAP-CALCULATOR-001` 的 contract 侧阻塞，
+`blocked_data` 与 `blocked_backend` 部分仍然有效。
+
+Phase 2C Bridge 只读预览状态（2026-09-17）：`WP-2C-01a` 与 `WP-2C-01b` 已在工作树（未提交）交付
+`bridge/contracts/agent_orchestration_phase2/registry.py`、`bridge/services/run_intake.py` 与
+`POST /api/agent/run-intake-preview`。端点只做契约校验、兼容判定与 Profile fail-closed 解析：不创建 run、不写
+`runs/`、不调用后端 lowering。包 manifest 新增 `run_intake_preview` 块（`runtime_status =
+read_only_preview_registered`），**包级 `runtime_status` 仍为 `contract_only`**。该批次改动契约 JSON，因此 live
+schema-set revision 由 `sha256:518f4da9…e43ece` 变为 `sha256:d498092a…abffab`，生成物已同步；契约变更窗口就此关闭。
+`GAP-RUN-INTAKE-001` 仍为 `implementing`，缺 lowering 路由与累计执行证据。
+
+Phase 2C 后端 lowering 状态（2026-09-17）：后端已提交 `parse_run_intake_v2` / `lower_run_intake_v2`
+（`include/Core/RunIntakeLowering.h`、`src/Core/RunIntakeLowering.cpp`、`tests/test_run_intake_lowering.cpp`），
+CLI 提供只读 `validate-run-intake --run-intake <json>` 与 `run-intake-preview`。后端自评 `partial`，执行侧因
+五类 Profile records 为空而 fail closed。**Web/Bridge 尚未调用该 lowering**，两侧之间缺一层显式路由与 typed
+receipt 呈现。当前可安全推进的工作包见 [Phase 2C Web 集成计划](23_PHASE2C_WEB_INTEGRATION_PLAN.md)。
 
 ## 8. Phase 3：正式多轮与审批（约 2–3 周）
 
@@ -206,6 +227,7 @@ A2A、GraphRAG 和开放多 Agent 不作为面试版前置。
 | ------ | --------------------- | ----------------------------- | --------------------- |
 | P0     | `WP-CAP-01/02/03`     | 后端字段审计                  | 阻止推荐未执行能力    |
 | P0     | `WP-PROFILE-01`       | Profile owner                 | 模型/设备等有统一真源 |
+| P0     | `WP-2C-01/02`         | Phase 2B 契约 + 后端 lowering | 消除契约与运行时断点  |
 | P0     | `WP-DRAFT-01`         | contract design               | 自然语言输出可审计    |
 | P0     | `WP-VALIDATE-01`      | capability catalog            | 不让 LLM 负责合法性   |
 | P1     | `WP-COMPILER-01`      | alias/unit registry           | 可用的自然语言入口    |

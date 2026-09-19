@@ -8,9 +8,11 @@ import type { ReportBundle, RunInputs } from "../../../contracts/report-model";
 import { useI18n } from "../../../i18n";
 import { formatNumber } from "../../../lib/format";
 import { buildRunBoundEvidenceChain } from "../model";
+import type { LosslessInteger } from "../../../contracts/report-model";
 import type { RunBoundAvailability, RunBoundEvidenceNode } from "../types";
 import PercentileSubjects from "./PercentileSubjects.vue";
 import EvidenceNode from "./EvidenceNode.vue";
+import Week8StreamRecords from "./Week8StreamRecords.vue";
 
 const props = defineProps<{
   runId: string | null;
@@ -91,6 +93,10 @@ watch(
   },
   { immediate: true },
 );
+
+function stateSummaryValue(value: LosslessInteger | null) {
+  return value === null ? t("后端未写出该字段") : formatNumber(value);
+}
 
 function statusLabel(node: { availability: RunBoundAvailability }) {
   const labels = {
@@ -247,6 +253,18 @@ function statusLabel(node: { availability: RunBoundAvailability }) {
               <dt>{{ t("来源模式") }}</dt>
               <dd>{{ chain.week8Execution.provenance.sourceMode }}</dd>
             </div>
+            <div v-if="chain.week8Execution.provenance">
+              <dt>provenance.calibration_level</dt>
+              <dd>{{ chain.week8Execution.provenance.calibrationLevel || t("后端未写出该字段") }}</dd>
+            </div>
+            <div v-if="chain.week8Execution.provenance">
+              <dt>provenance.allowed_claim_scope</dt>
+              <dd>{{ chain.week8Execution.provenance.allowedClaimScope || t("后端未写出该字段") }}</dd>
+            </div>
+            <div v-if="chain.week8Execution.provenance">
+              <dt>provenance.trace_kind</dt>
+              <dd>{{ chain.week8Execution.provenance.traceKind || t("后端未写出该字段") }}</dd>
+            </div>
           </dl>
           <section v-if="chain.week8Execution.fallback" class="week8-execution-block">
             <strong>{{ t("Fallback") }}</strong>
@@ -264,6 +282,10 @@ function statusLabel(node: { availability: RunBoundAvailability }) {
               <dd>{{ formatNumber(chain.week8Execution.stateSummary.partitionCount) }}</dd>
             </div>
             <div>
+              <dt>synchronization_window_count</dt>
+              <dd>{{ stateSummaryValue(chain.week8Execution.stateSummary.synchronizationWindowCount) }}</dd>
+            </div>
+            <div>
               <dt>committed_event_count</dt>
               <dd>{{ formatNumber(chain.week8Execution.stateSummary.committedEventCount) }}</dd>
             </div>
@@ -271,7 +293,49 @@ function statusLabel(node: { availability: RunBoundAvailability }) {
               <dt>pending_event_count</dt>
               <dd>{{ formatNumber(chain.week8Execution.stateSummary.pendingEventCount) }}</dd>
             </div>
+            <div>
+              <dt>committed_event_digest</dt>
+              <dd>
+                <code v-if="chain.week8Execution.stateSummary.committedEventDigest">{{
+                  chain.week8Execution.stateSummary.committedEventDigest
+                }}</code>
+                <span v-else>{{ t("后端未写出该字段") }}</span>
+              </dd>
+            </div>
+            <div>
+              <dt>validation_lane</dt>
+              <dd>{{ chain.week8Execution.stateSummary.validationLane || t("后端未写出该字段") }}</dd>
+            </div>
+            <div>
+              <dt>claim_scope</dt>
+              <dd>{{ chain.week8Execution.stateSummary.claimScope || t("后端未写出该字段") }}</dd>
+            </div>
+            <div>
+              <dt>stream_record_count</dt>
+              <dd>{{ stateSummaryValue(chain.week8Execution.stateSummary.streamRecordCount) }}</dd>
+            </div>
+            <div>
+              <dt>total_stream_record_count</dt>
+              <dd>{{ stateSummaryValue(chain.week8Execution.stateSummary.totalStreamRecordCount) }}</dd>
+            </div>
+            <div>
+              <dt>stream_records_truncated</dt>
+              <dd>
+                {{
+                  chain.week8Execution.stateSummary.streamRecordsTruncated === null
+                    ? t("后端未写出该字段")
+                    : chain.week8Execution.stateSummary.streamRecordsTruncated
+                      ? t("是")
+                      : t("否")
+                }}
+              </dd>
+            </div>
           </dl>
+          <Week8StreamRecords
+            :records="chain.week8Execution.streamRecords"
+            :truncated="chain.week8Execution.stateSummary?.streamRecordsTruncated ?? null"
+            source-path="week8-run-evidence:/stream/records"
+          />
           <div class="week8-execution-columns">
             <section v-if="chain.week8Execution.differential" class="week8-execution-block">
               <strong>{{ t("差分校验") }}</strong>

@@ -1,6 +1,7 @@
+import { CLAUSE_DELIMITER_PATTERN, clauseForMatch } from "./clause-selection";
 import { EXPECTED_FIELD_POINTERS, UNSUPPORTED_CAPABILITIES } from "./constants";
 import { validateIntentCompilerInput } from "./guards";
-import { findAliasMatches, normalizeCandidate, validateCandidate, type AliasMatch } from "./normalizers";
+import { findAliasMatches, normalizeCandidate, validateCandidate } from "./normalizers";
 import {
   PHASE1_LOCAL_CONTRACT_REVISION,
   type ClarificationQuestion,
@@ -48,20 +49,6 @@ function invalidInputOutput(reasonCode: string): IntentCompilerOutput {
   };
 }
 
-function clauseForMatch(instruction: string, matches: readonly AliasMatch[], index: number): string {
-  const match = matches[index];
-  const previousEnd = index === 0 ? 0 : matches[index - 1].end;
-  const nextStart = index + 1 < matches.length ? matches[index + 1].start : instruction.length;
-  const prefix = instruction.slice(Math.max(previousEnd, match.start - 24), match.start);
-  const meaningfulPrefix =
-    /(?:不要|不得|禁止|至少|至多|最大|最小|do\s+not|don't|without|at\s+(?:least|most)|min|max)/iu.test(prefix)
-      ? prefix
-      : "";
-  return `${meaningfulPrefix}${instruction.slice(match.start, nextStart)}`
-    .replace(/(?:\band\b|以及|并且)\s*$/iu, "")
-    .trim();
-}
-
 function unsupportedItems(instruction: string) {
   return UNSUPPORTED_CAPABILITIES.flatMap((entry) => {
     const match = instruction.match(entry.pattern);
@@ -74,7 +61,7 @@ function unknownConfigurationClauses(
   fields: IntentCompilerInput["capability"]["fields"],
 ): string[] {
   return instruction
-    .split(/[,，;；。]|\band\b|以及|并且/iu)
+    .split(CLAUSE_DELIMITER_PATTERN)
     .map((clause) => clause.trim())
     .filter(Boolean)
     .filter((clause) => /\d/u.test(clause))
@@ -265,7 +252,7 @@ export function compileIntent(input: IntentCompilerInput): IntentCompilerOutput 
   }
 
   const mixedGenericAmbiguity = input.instruction
-    .split(/[,，;；。]|\band\b|以及|并且/iu)
+    .split(CLAUSE_DELIMITER_PATTERN)
     .map((clause) => clause.trim())
     .filter((clause) => clause && findAliasMatches(clause, input.capability.fields).length === 0)
     .map((clause) => genericAmbiguity(clause, input.capability.fields))

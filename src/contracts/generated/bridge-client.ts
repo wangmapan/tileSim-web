@@ -2,6 +2,8 @@
 
 import type {
   AgentOrchestrationCapabilitySnapshotResponse,
+  AgentOrchestrationRunIntakePreviewRequest,
+  AgentOrchestrationRunIntakePreviewResponse,
   ApiManifestResponse,
   ApiRun,
   ArtifactManifestResponse,
@@ -40,6 +42,7 @@ export const bridgePaths = {
   inspectTracePackage: (packageId: string) => `/trace-packages/${encodeURIComponent(packageId)}/inspect`,
   evidenceAgentCapabilities: () => "/agent/evidence-capabilities",
   agentOrchestrationCapabilities: () => "/agent/orchestration-capabilities",
+  previewAgentRunIntake: () => "/agent/run-intake-preview",
   week7EvidenceMap: () => "/week7/evidence-map",
   runWeek7CalibrationExample: () => "/week7/calibration-example",
   runWeek7OrchestrationExample: () => "/week7/orchestration-example",
@@ -98,6 +101,16 @@ export class GeneratedBridgeClient {
       bridgePaths.agentOrchestrationCapabilities(),
       {},
     );
+  }
+
+  previewAgentRunIntake(
+    body: AgentOrchestrationRunIntakePreviewRequest,
+  ): Promise<AgentOrchestrationRunIntakePreviewResponse> {
+    return this.transport.request<AgentOrchestrationRunIntakePreviewResponse>(bridgePaths.previewAgentRunIntake(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
   }
 
   week7EvidenceMap(): Promise<Week7EvidenceMapResponse> {

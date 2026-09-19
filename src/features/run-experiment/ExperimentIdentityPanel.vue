@@ -1,9 +1,10 @@
 <script setup>
 import { useI18n } from "../../i18n";
 const form = defineModel("form", { type: Object, required: true });
-defineProps({
+const props = defineProps({
   surface: { type: Object, required: true },
   fieldPath: { type: String, default: "" },
+  compact: { type: Boolean, default: false },
 });
 const { t } = useI18n();
 </script>
@@ -14,7 +15,7 @@ const { t } = useI18n();
       <span>01</span>
       <div>
         <h2>{{ t("实验身份") }}</h2>
-        <p>{{ t("给这次运行一个易于在历史记录中识别的名称。") }}</p>
+        <p v-if="!props.compact">{{ t("给这次运行一个易于在历史记录中识别的名称。") }}</p>
       </div>
     </header>
     <div class="form-grid form-grid--identity">
@@ -26,7 +27,7 @@ const { t } = useI18n();
           v-model="form.run_name"
           maxlength="80"
           :aria-invalid="fieldPath === '/run_name'"
-          :placeholder="t('例如：FIFO · batch 1 · 同时到达')"
+          :placeholder="props.compact ? undefined : t('例如：FIFO · batch 1 · 同时到达')"
         />
       </label>
       <label class="field">
@@ -44,7 +45,7 @@ const { t } = useI18n();
             {{ fidelity }}
           </option>
         </select>
-        <small class="field-help">{{ t("实际解析结果以验证报告为准") }}</small>
+        <small v-if="!props.compact" class="field-help">{{ t("实际解析结果以验证报告为准") }}</small>
       </label>
       <label class="field">
         <span>{{ t("GPU 参与方式") }}</span>
@@ -53,7 +54,9 @@ const { t } = useI18n();
             {{ gpuMode }}
           </option>
         </select>
-        <small class="field-help">{{ t("数值输出不会驱动仿真语义；真实网络观测只进入 S8 证据通道") }}</small>
+        <small v-if="!props.compact" class="field-help">{{
+          t("数值输出不会驱动仿真语义；真实网络观测只进入 S8 证据通道")
+        }}</small>
       </label>
     </div>
   </article>

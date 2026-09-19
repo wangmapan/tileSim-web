@@ -1,5 +1,8 @@
 # Phase 2A 契约 publication candidate
 
+> **已归档（2026-09-17）**：本候选已由 Phase 2B 正式发布（提交 `4d7f9fa`，契约包 `bridge/contracts/agent_orchestration_phase2/`）取代。
+> 现存代码事实见 [`01_CURRENT_BASELINE_AND_GAPS.md`](../../F9_AGENT_ORCHESTRATION/01_CURRENT_BASELINE_AND_GAPS.md)。
+
 > 文档 ID：`AO-21`
 >
 > 契约状态：`proposed`；交付状态：`pre_commit_ready`；四个契约 Gap 为 `designing`，完整 Phase 2 仍为 `blocked`

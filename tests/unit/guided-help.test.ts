@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { guideRegistry, type GuideDefinition, routedGuideIds, viewGuides } from "../../src/features/guided-help";
+import {
+  guideRegistry,
+  isGuideInScope,
+  lightweightGuideIds,
+  professionalGuideIds,
+  type GuideDefinition,
+  routedGuideIds,
+  viewGuides,
+} from "../../src/features/guided-help";
 import { hasEnglishTranslation } from "../../src/i18n";
 
 const sourceModules = import.meta.glob("../../src/**/*.{ts,vue}", {
@@ -36,6 +44,15 @@ describe("guided help catalog", () => {
       expect(guide.terms.length).toBeGreaterThan(0);
       expect(guide.advanced.body).toMatch(/Schema|identity|SHA-256|Pointer|契约|原始/);
     }
+  });
+
+  it("partitions lightweight and professional help without shared topics", () => {
+    expect(new Set([...professionalGuideIds].filter((id) => lightweightGuideIds.includes(id as never))).size).toBe(0);
+    expect([...professionalGuideIds].every((id) => isGuideInScope(id, "professional"))).toBe(true);
+    expect([...professionalGuideIds].every((id) => !isGuideInScope(id, "lightweight"))).toBe(true);
+    expect([...lightweightGuideIds].every((id) => isGuideInScope(id, "lightweight"))).toBe(true);
+    expect([...lightweightGuideIds].every((id) => !isGuideInScope(id, "professional"))).toBe(true);
+    expect(guideRegistry).not.toHaveProperty("lightweight_tasks");
   });
 
   it("keeps architecture and evidence boundaries explicit", () => {

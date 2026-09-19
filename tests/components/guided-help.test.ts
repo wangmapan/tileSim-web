@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { mount, flushPromises } from "@vue/test-utils";
-import { defineComponent, nextTick } from "vue";
+import { defineComponent, nextTick, type Component } from "vue";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -12,7 +12,7 @@ import {
   TermHelp,
   openGuidedHelp,
 } from "../../src/features/guided-help";
-import { routedGuideIds } from "../../src/features/guided-help/schema";
+import { lightweightGuideIds, professionalGuideIds, routedGuideIds } from "../../src/features/guided-help/schema";
 import { setLocale } from "../../src/i18n";
 
 const router = createRouter({
@@ -25,9 +25,15 @@ const Harness = defineComponent({
   template:
     '<PagePrimer :guide="guide" /><details><section data-help-anchor="overview-status">status</section></details><GuidedHelpHost default-guide-id="overview" />',
 });
+const LightweightHarness = defineComponent({
+  components: { GuidedHelpHost, PagePrimer },
+  setup: () => ({ guide: guideRegistry.lightweight }),
+  template:
+    '<PagePrimer :guide="guide" /><section data-help-anchor="lightweight-start-primary">start</section><GuidedHelpHost default-guide-id="lightweight" scope="lightweight" />',
+});
 const wrappers: ReturnType<typeof mount>[] = [];
-async function openDocument() {
-  const wrapper = mount(Harness, { attachTo: document.body, global: { plugins: [router] } });
+async function openDocument(harness: Component = Harness) {
+  const wrapper = mount(harness, { attachTo: document.body, global: { plugins: [router] } });
   wrappers.push(wrapper);
   const trigger = wrapper.get(".page-primer-trigger");
   await trigger.trigger("click");
@@ -68,7 +74,11 @@ describe("help documentation", () => {
     expect(trigger.attributes("aria-haspopup")).toBe("dialog");
     expect(trigger.attributes("aria-expanded")).toBe("true");
     expect(panel.open).toBe(true);
-    expect(panel.querySelectorAll("[data-guide-id]")).toHaveLength(13);
+    const topicIds = [...panel.querySelectorAll<HTMLElement>("[data-guide-id]")].map((topic) => topic.dataset.guideId);
+    expect(topicIds.sort()).toEqual([...professionalGuideIds].sort());
+    expect(topicIds).not.toEqual(expect.arrayContaining([...lightweightGuideIds]));
+    expect(panel.textContent).toContain("专业版页面帮助");
+    expect(panel.textContent).not.toContain("轻量版页面帮助");
     for (const section of guideRegistry.overview.steps) expect(panel.textContent).toContain(section.body);
     expect(panel.textContent).toContain("术语与定义");
     expect(panel.textContent).toContain("适用范围与证据边界");
@@ -81,6 +91,19 @@ describe("help documentation", () => {
     expect(document.querySelector("dialog")).toBeNull();
     expect(document.activeElement).toBe(trigger.element);
     expect(document.body.style.overflow).toBe("auto");
+  });
+  it("keeps lightweight and professional help topics in separate catalogs", async () => {
+    const { panel } = await openDocument(LightweightHarness);
+    const topicIds = [...panel.querySelectorAll<HTMLElement>("[data-guide-id]")].map((topic) => topic.dataset.guideId);
+    expect(topicIds.sort()).toEqual([...lightweightGuideIds].sort());
+    expect(topicIds).not.toEqual(expect.arrayContaining([...professionalGuideIds]));
+    expect(panel.textContent).toContain("轻量版页面帮助");
+    expect(panel.textContent).not.toContain("专业版页面帮助");
+    expect(panel.textContent).not.toContain("实验与输入");
+
+    openGuidedHelp("overview");
+    await nextTick();
+    expect(document.querySelector("dialog")).toBeNull();
   });
   it("searches and changes topics without navigating or exposing unavailable anchors", async () => {
     const { panel } = await openDocument();

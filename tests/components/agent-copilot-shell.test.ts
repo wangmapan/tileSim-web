@@ -263,6 +263,21 @@ describe("Agent copilot shell interaction", () => {
     expect(blocks).toHaveLength(7);
   });
 
+  it("keeps an unfinished composer draft mounted while the rail is collapsed", async () => {
+    const wrapper = mount(AgentCopilotShell, {
+      props: { modelValue: "open", context: pageContext(), blocks: [] },
+    });
+    const textarea = wrapper.get("textarea");
+    await textarea.setValue("跨工作台仍需保留的输入");
+
+    await wrapper.setProps({ modelValue: "collapsed" });
+    expect(wrapper.get("textarea").element.value).toBe("跨工作台仍需保留的输入");
+
+    await wrapper.get('button[aria-label="展开 TileSim 助手"]').trigger("click");
+    await wrapper.setProps({ modelValue: "open" });
+    expect(wrapper.get("textarea").element.value).toBe("跨工作台仍需保留的输入");
+  });
+
   it("retains existing results and marks them stale when route context revision changes", async () => {
     const wrapper = mount(AgentCopilotShell, {
       props: { modelValue: "open", context: pageContext(), blocks },
@@ -274,6 +289,19 @@ describe("Agent copilot shell interaction", () => {
     expect(wrapper.findAll(".agent-block")).toHaveLength(before);
     expect(wrapper.text()).toContain("页面或选择已更新；现有内容仍按原上下文保留");
     expect(wrapper.text()).toContain("现有内容使用旧上下文");
+  });
+
+  it("labels run-bound contexts as explain-only instead of implying draft access", () => {
+    const wrapper = mount(AgentCopilotShell, {
+      props: {
+        modelValue: "open",
+        context: { ...pageContext(), allowed_purposes: ["explain"], supported_actions: ["explain"] },
+        blocks: [],
+      },
+    });
+
+    expect(wrapper.text()).toContain("仅解释当前页面 · 不会修改实验或开始运行");
+    expect(wrapper.text()).not.toContain("仅生成草案 · 不会开始运行");
   });
 
   it("offers an accessible keyboard resize control with bounded width", async () => {

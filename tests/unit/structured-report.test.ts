@@ -9,6 +9,8 @@ import {
 import type { ArtifactManifestResponse } from "../../src/contracts/bridge-api";
 import type { EvidenceRef, ReportBundle } from "../../src/contracts/report-model";
 import { fixtureCase } from "../helpers/fixtures";
+import { availabilityDescription, availabilityLabel, availabilityTone } from "../../src/features/report-coverage";
+import { statusLabel, statusTone } from "../../src/lib/format";
 import { setLocale } from "../../src/i18n";
 import { buildStructuredReportWorkerResponse } from "../../src/features/structured-report/worker-contract";
 
@@ -312,6 +314,59 @@ describe("structured performance report", () => {
     });
     expect(report.run_bound_evidence.percentile_subjects[0].selected_request_id).toBe("req-0");
     expect(renderStructuredPerformanceReportHtml(report)).toContain("未选择 request；导出不会自动选择 P99");
+  });
+
+  it("resolves absent record facts to the shared availability label and tone in the HTML export", () => {
+    const report = buildStructuredPerformanceReport(context());
+    // A record whose fact set differs from its neighbours leaves union columns without a fact at all.
+    report.execution_host_s7.stages.push({
+      id: "stage-no-window",
+      title: "manual stage",
+      facts: [{ label: "开始时间", value: 5, unit: "ps" }],
+    });
+    const html = renderStructuredPerformanceReportHtml(report);
+
+    expect(html).not.toContain("不适用");
+    expect(html).toContain(`>${availabilityLabel("missing")}</td>`);
+    expect(html).toContain(`class="availability availability--${availabilityTone("missing")}"`);
+    expect(html).toContain(availabilityDescription("missing"));
+    expect(html).toContain(`class="availability availability--${availabilityTone("available")}"`);
+    expect(html).toContain(">5 ps</td>");
+  });
+
+  it("prints the record status column with the same rule as the on-screen record table", () => {
+    const report = buildStructuredPerformanceReport(context());
+    // `stageRecords()` leaves `status` unset, and the `unknown` placeholder means the backend reported
+    // none either: both must resolve to the shared missing state (LayerRecordTable.vue:67-72).
+    report.execution_host_s7.stages.push(
+      { id: "stage-status-reported", title: "reported status stage", status: "reported", facts: [] },
+      { id: "stage-status-placeholder", title: "placeholder status stage", status: "unknown", facts: [] },
+      { id: "stage-status-absent", title: "absent status stage", facts: [] },
+    );
+    const html = renderStructuredPerformanceReportHtml(report);
+    // The status column is the first cell of the row; the union fact columns that follow legitimately
+    // render their own `missing` badges, so the assertions must not read the whole row.
+    const statusCellOf = (recordId: string) => {
+      const rowStart = html.indexOf(`<code>${recordId}</code>`);
+      expect(rowStart).toBeGreaterThan(-1);
+      const cellStart = html.indexOf("<td", rowStart);
+      return html.slice(cellStart, html.indexOf("</td>", cellStart) + "</td>".length);
+    };
+    const missingCell = `<td class="availability availability--${availabilityTone("missing")}" title="${availabilityDescription(
+      "missing",
+    )}">${availabilityLabel("missing")}</td>`;
+
+    // A reported status keeps its translated label and its own tone instead of the missing badge.
+    expect(statusCellOf("stage-status-reported")).toBe(
+      `<td class="availability availability--${statusTone("reported")}">${statusLabel("reported")}</td>`,
+    );
+
+    // Neither the `unknown` placeholder nor an absent status is printed verbatim, and the status column
+    // never falls back to a bare dash.
+    expect(statusCellOf("stage-status-placeholder")).toBe(missingCell);
+    expect(statusCellOf("stage-status-absent")).toBe(missingCell);
+    expect(statusCellOf("stage-status-placeholder")).not.toContain("unknown");
+    expect(html).not.toContain(">—</td>");
   });
 
   it("escapes document markup and embedded JSON while keeping a safe filename", () => {

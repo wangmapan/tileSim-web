@@ -261,6 +261,24 @@ describe("Phase 1 deterministic intent compiler", () => {
     expect("draft" in output).toBe(false);
   });
 
+  it("fails closed when the page context marks a formal field unavailable", () => {
+    const compilerInput = input("最大 batch 设为 8");
+    compilerInput.context.resources = [
+      {
+        resource_type: "field",
+        resource_id: "s1.runtime.max_batch_size",
+        revision: compilerInput.context.context_revision,
+        display_label: "最大 batch",
+        availability: "unavailable",
+      },
+    ];
+
+    expect(compileIntent(compilerInput)).toMatchObject({
+      kind: "unsupported",
+      result: { reason_code: "page_context_draft_not_allowed" },
+    });
+  });
+
   it("fails unknown fields and generic network direction ambiguity closed", () => {
     const unknown = compileIntent(input("set queue depth to 32", "en-US"));
     const mixedUnknown = compileIntent(input("最大 batch 设为 8，并把 queue depth 设为 32"));

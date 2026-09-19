@@ -331,6 +331,7 @@ export const guidedHelpEnglishCatalog: Readonly<Record<string, string>> = {
   "逐项验证记录提供检查结果与原始字段位置。使用 Schema identity、SHA-256 和 JSON Pointer 复核证据时，应同时记录验证场景与未覆盖范围。":
     "Individual validation records provide outcomes and source-field locations. When checking schema identities, SHA-256, and JSON Pointers, retain the validated scenario and uncovered scope.",
   帮助文档: "Documentation",
+  专业版页面帮助: "Professional page help",
   关闭帮助: "Close help",
   帮助主题: "Help topics",
   搜索帮助主题: "Search help topics",

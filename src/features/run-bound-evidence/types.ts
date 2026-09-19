@@ -55,19 +55,43 @@ export interface PercentileNavigation {
   reference: RunBoundReference | null;
 }
 
+export interface Week8StreamRecord {
+  index: number;
+  windowStartPs: LosslessInteger | null;
+  windowEndPs: LosslessInteger | null;
+  partitionId: string | null;
+  committedEventCount: LosslessInteger | null;
+  committedEventDigest: string | null;
+  sourcePath: string;
+}
+
 export interface Week8ExecutionSummary {
   availability: RunBoundAvailability;
   requestedFidelity: string | null;
   resolvedFidelity: string | null;
   executionMode: string | null;
   fallback: { policy: string; used: boolean; reason: string } | null;
-  provenance: { sourceMode: string; calibrationLevel: string; allowedClaimScope: string } | null;
+  provenance: {
+    sourceMode: string;
+    calibrationLevel: string;
+    allowedClaimScope: string;
+    traceKind: string | null;
+  } | null;
   stateSummary: {
     logicalTimePs: LosslessInteger;
     partitionCount: LosslessInteger;
     committedEventCount: LosslessInteger;
     pendingEventCount: LosslessInteger;
+    synchronizationWindowCount: LosslessInteger | null;
+    committedEventDigest: string | null;
+    validationLane: string | null;
+    claimScope: string | null;
+    streamRecordCount: LosslessInteger | null;
+    totalStreamRecordCount: LosslessInteger | null;
+    streamRecordsTruncated: boolean | null;
   } | null;
+  /** Per-window detail from `stream.records[]`; never silently truncated. */
+  streamRecords: Week8StreamRecord[];
   differential: {
     compared: boolean;
     matched: boolean;

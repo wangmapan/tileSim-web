@@ -40,17 +40,40 @@ export function buildExperimentAgentContextPublication(input: {
   mode: ExperimentInputMode;
   contextRevision: string;
   runId: string | null;
+  /**
+   * Whether the shared Bridge/schema bootstrap has completed for this page.
+   * Callers can keep the richer form context mounted while fail-closing the
+   * Agent until a manifest is present.
+   */
+  pageAvailable?: boolean;
+  pageId?: string;
+  routeName?: string;
+  displayLabel?: string;
 }): ExperimentAgentContextPublication {
-  const available = input.surface.contractStatus !== "contract_error" && input.mode === "controls";
-  const resources = PHASE1_AGENT_EXPOSED_FIELD_IDS.map((fieldId) => ({
-    resource_type: "field" as const,
-    resource_id: fieldId,
-    revision: input.contextRevision,
-    display_label:
-      input.surface.controlGroups.flatMap((group) => group.fields).find((field) => field.fieldId === fieldId)?.label ??
-      fieldId,
-    availability: available ? ("available" as const) : ("unavailable" as const),
-  }));
+  const surfaceFields = input.surface.controlGroups.flatMap((group) => group.fields);
+  const pageReady =
+    input.pageAvailable !== false && input.surface.contractStatus !== "contract_error" && input.mode === "controls";
+  const allAgentFieldsAvailable = PHASE1_AGENT_EXPOSED_FIELD_IDS.every(
+    (fieldId) => surfaceFields.find((candidate) => candidate.fieldId === fieldId)?.available === true,
+  );
+  // The shared Agent may explain a partially described form, but it must not
+  // advertise a draft surface when any of the frozen fields is unavailable.
+  // This keeps a descriptor capability gap fail-closed instead of allowing a
+  // stale capability snapshot to produce a seemingly valid draft.
+  const draftAvailable = pageReady && allAgentFieldsAvailable;
+  const resources = PHASE1_AGENT_EXPOSED_FIELD_IDS.map((fieldId) => {
+    const field = surfaceFields.find((candidate) => candidate.fieldId === fieldId);
+    return {
+      resource_type: "field" as const,
+      resource_id: fieldId,
+      revision: input.contextRevision,
+      display_label: field?.label ?? fieldId,
+      // Keep the page context aligned with the descriptor, not just the
+      // input mode. An unavailable/omitted field must not appear as a usable
+      // Agent target even when the surrounding form is otherwise valid.
+      availability: pageReady && field?.available === true ? ("available" as const) : ("unavailable" as const),
+    };
+  });
   const currentValues = Object.fromEntries(
     PHASE1_AGENT_EXPOSED_FIELD_IDS.map((fieldId) => [
       fieldId,
@@ -60,8 +83,8 @@ export function buildExperimentAgentContextPublication(input: {
   return {
     context: {
       contract_revision: PHASE1_LOCAL_CONTRACT_REVISION,
-      page_id: "run-experiment",
-      route_name: "experiment",
+      page_id: input.pageId || "run-experiment",
+      route_name: input.routeName || "experiment",
       context_revision: input.contextRevision,
       workspace_ref: null,
       run_ref: input.runId ? { run_id: input.runId, revision: input.runId } : null,
@@ -71,12 +94,20 @@ export function buildExperimentAgentContextPublication(input: {
         revision: input.contextRevision,
       },
       resources,
-      supported_actions: available ? ["explain", "configure_current_subset", "check_capability"] : ["explain"],
+      supported_actions: draftAvailable
+        ? ["explain", "configure_current_subset", "check_capability"]
+        : pageReady
+          ? ["explain", "check_capability"]
+          : ["explain"],
       data_classification: "workspace_internal",
-      allowed_purposes: available ? ["explain", "draft"] : ["explain"],
+      allowed_purposes: draftAvailable ? ["explain", "draft"] : ["explain"],
       expires_at: null,
-      display_label: available ? "当前实验参数" : "当前实验输入模式不支持参数草案",
-      availability: available ? "available" : "unavailable",
+      display_label: draftAvailable
+        ? input.displayLabel || "当前实验参数"
+        : input.displayLabel
+          ? `${input.displayLabel} · 当前能力不支持参数草案`
+          : "当前能力不支持参数草案",
+      availability: pageReady ? "available" : "unavailable",
     },
     current_values: currentValues,
   };

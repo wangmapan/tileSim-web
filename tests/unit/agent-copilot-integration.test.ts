@@ -123,6 +123,86 @@ describe("Phase 1 public page adapter and redaction", () => {
     });
   });
 
+  it("publishes lightweight prepare through the shared typed draft context", () => {
+    const surface = buildExperimentSurface(
+      {
+        scenarios: [{ scenario_id: "s1_des_example", label: "S1 → S6" }],
+        fidelity_policies: ["default", "des"],
+        input_modes: ["controls", "json"],
+        design_space_modes: ["built_in_synthetic", "strict_s6_manifest"],
+        gpu_participation_modes: ["gpu_free"],
+      },
+      f8Capabilities,
+      createF8ExperimentDescriptor(),
+      "supported",
+    );
+    const form = createExperimentForm(surface);
+    form.parameterValues["s1.runtime.max_batch_size"] = 4;
+
+    const publication = buildExperimentAgentContextPublication({
+      form,
+      surface,
+      mode: "controls",
+      contextRevision: "context:lightweight_prepare:run-lightweight-agent:1",
+      runId: "run-lightweight-agent",
+      pageId: "lightweight-prepare",
+      routeName: "lightweight_prepare",
+      displayLabel: "轻量实验配置",
+    });
+
+    expect(publication.context).toMatchObject({
+      page_id: "lightweight-prepare",
+      route_name: "lightweight_prepare",
+      display_label: "轻量实验配置",
+      availability: "available",
+      run_ref: { run_id: "run-lightweight-agent", revision: "run-lightweight-agent" },
+      supported_actions: ["explain", "configure_current_subset", "check_capability"],
+      allowed_purposes: ["explain", "draft"],
+    });
+    expect(publication.context.resources).toHaveLength(8);
+    expect(publication.context.resources.every((resource) => resource.resource_type === "field")).toBe(true);
+    expect(publication.current_values["s1.runtime.max_batch_size"]).toEqual({
+      value_type: "integer",
+      serialized_value: "4",
+    });
+    expect(JSON.stringify(publication.context)).not.toContain("parameterValues");
+
+    const unavailableSurface = structuredClone(surface);
+    unavailableSurface.controlGroups[0].fields = unavailableSurface.controlGroups[0].fields.map((field, index) =>
+      index === 0 ? { ...field, available: false, unavailableReason: "fixture capability unavailable" } : field,
+    );
+    const unavailableFieldPublication = buildExperimentAgentContextPublication({
+      form,
+      surface: unavailableSurface,
+      mode: "controls",
+      contextRevision: "context:lightweight_prepare:unavailable-field:3",
+      runId: null,
+      pageId: "lightweight-prepare",
+      routeName: "lightweight_prepare",
+      displayLabel: "轻量实验配置",
+    });
+    expect(unavailableFieldPublication.context.resources[0]).toMatchObject({
+      resource_id: "s0.workload.message_size_multiplier",
+      availability: "unavailable",
+    });
+    expect(unavailableFieldPublication.context.allowed_purposes).toEqual(["explain"]);
+    expect(unavailableFieldPublication.context.supported_actions).toEqual(["explain", "check_capability"]);
+
+    const unavailable = buildExperimentAgentContextPublication({
+      form,
+      surface,
+      mode: "json",
+      contextRevision: "context:lightweight_prepare:json:2",
+      runId: null,
+      pageId: "lightweight-prepare",
+      routeName: "lightweight_prepare",
+      displayLabel: "轻量实验配置",
+    });
+    expect(unavailable.context.availability).toBe("unavailable");
+    expect(unavailable.context.supported_actions).toEqual(["explain"]);
+    expect(unavailable.context.allowed_purposes).toEqual(["explain"]);
+  });
+
   it("redacts common credentials without retaining the submitted instruction", () => {
     const result = redactSingleTurnInstruction("把 batch 改为 8; api_key=abc123; Bearer secret-token");
     expect(result).toContain("把 batch 改为 8");

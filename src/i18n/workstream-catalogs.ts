@@ -7,9 +7,12 @@ import { networkReviewEnglishCatalog } from "./workstreams/network-review";
 import { attributionReviewEnglishCatalog } from "./workstreams/attribution-review";
 import { workbenchReviewEnglishCatalog } from "./workstreams/workbench-review";
 import { shellReviewEnglishCatalog } from "./workstreams/shell-review";
+import { reportCoverageEnglishCatalog } from "./workstreams/report-coverage";
 
 import { themeColorEnglishCatalog } from "./workstreams/theme-color";
 import { semanticGlossaryEnglishCatalog } from "./workstreams/semantic-glossary";
+import { lightweightWorkbenchEnglishCatalog } from "./workstreams/lightweight-workbench";
+import { topologyEditorEnglishCatalog } from "./workstreams/topology-editor";
 
 export const workstreamEnglishCatalogs: Readonly<Record<string, string>> = {
   ...evidenceAgentEnglishCatalog,
@@ -21,6 +24,9 @@ export const workstreamEnglishCatalogs: Readonly<Record<string, string>> = {
   ...attributionReviewEnglishCatalog,
   ...workbenchReviewEnglishCatalog,
   ...shellReviewEnglishCatalog,
+  ...reportCoverageEnglishCatalog,
   ...themeColorEnglishCatalog,
   ...semanticGlossaryEnglishCatalog,
+  ...lightweightWorkbenchEnglishCatalog,
+  ...topologyEditorEnglishCatalog,
 };

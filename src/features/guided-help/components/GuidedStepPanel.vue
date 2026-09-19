@@ -3,15 +3,19 @@ import { ArrowUpRight, Search, X } from "@lucide/vue";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "../../../i18n";
 import { guideRegistry } from "../catalog";
-import type { GuideDefinition, GuideId, HelpAnchor } from "../schema";
+import { lightweightGuideIds, type GuideDefinition, type GuideId, type GuideScope, type HelpAnchor } from "../schema";
 
-const props = defineProps<{
-  guide: GuideDefinition;
-  contextGuideId: GuideId;
-  availableAnchors: readonly HelpAnchor[];
-  pageHref: string | null;
-  relatedHref: string;
-}>();
+const props = withDefaults(
+  defineProps<{
+    guide: GuideDefinition;
+    contextGuideId: GuideId;
+    scope?: GuideScope;
+    availableAnchors: readonly HelpAnchor[];
+    pageHref: string | null;
+    relatedHref: string | null;
+  }>(),
+  { scope: "professional" },
+);
 const emit = defineEmits<{
   close: [];
   select: [guideId: GuideId];
@@ -23,15 +27,18 @@ const dialog = ref<HTMLDialogElement | null>(null);
 const article = ref<HTMLElement | null>(null);
 const heading = ref<HTMLElement | null>(null);
 const search = ref("");
-const groups: { title: string; ids: GuideId[] }[] = [
+type HelpGroup = { readonly title: string; readonly ids: readonly GuideId[] };
+const professionalGroups: readonly HelpGroup[] = [
   { title: "实验与输入", ids: ["overview", "experiment", "history"] },
   { title: "结果分析", ids: ["execution", "metrics", "fabric", "attribution", "design_space"] },
   { title: "证据与校准", ids: ["validation", "evidence_agent", "evidence_lab"] },
   { title: "参考资料", ids: ["raw_evidence", "unsupported_schema"] },
 ];
+const lightweightGroups: readonly HelpGroup[] = [{ title: "轻量工作台", ids: lightweightGuideIds }];
+const groups = computed(() => (props.scope === "lightweight" ? lightweightGroups : professionalGroups));
 const filteredGroups = computed(() => {
   const query = search.value.trim().toLocaleLowerCase();
-  return groups
+  return groups.value
     .map((group) => ({
       title: group.title,
       guides: group.ids
@@ -110,7 +117,7 @@ onBeforeUnmount(() => {
   >
     <header class="help-documentation-header">
       <span
-        >TileSim <strong>{{ t("帮助文档") }}</strong></span
+        >TileSim <strong>{{ t(scope === "lightweight" ? "轻量版页面帮助" : "专业版页面帮助") }}</strong></span
       >
       <button
         class="icon-button help-documentation-close"
@@ -195,7 +202,7 @@ onBeforeUnmount(() => {
           <h2 :id="sectionId('reference')" tabindex="-1">{{ t(guide.advanced.title) }}</h2>
           <p>{{ t(guide.advanced.body) }}</p>
         </section>
-        <footer class="help-documentation-related">
+        <footer v-if="relatedHref" class="help-documentation-related">
           <h2>{{ t("相关页面") }}</h2>
           <a :href="relatedHref" @click.exact.prevent="emit('navigate', true)"
             >{{ t(guide.next.label) }}<ArrowUpRight :size="14" aria-hidden="true"

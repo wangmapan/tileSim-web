@@ -1,6 +1,7 @@
 import type { Availability, LosslessInteger, ReportBundle, ReportKind, SourcedValue } from "../contracts/report-model";
 
-function unavailable(bundle: ReportBundle, reportKind: ReportKind, subsystems: string[]): Availability {
+/** Single source of truth for the five `Availability` states of a missing value. */
+export function unavailable(bundle: ReportBundle, reportKind: ReportKind, subsystems: string[]): Availability {
   const compatibility = bundle.compatibility[reportKind];
   if (compatibility && !compatibility.supported) return "unsupported_schema";
   const entries = bundle.validation?.resolution_entries || bundle.metrics?.resolution_entries || [];
@@ -12,7 +13,7 @@ function unavailable(bundle: ReportBundle, reportKind: ReportKind, subsystems: s
   return "missing";
 }
 
-function sourced<T>(
+export function sourced<T>(
   bundle: ReportBundle,
   value: T | null | undefined,
   sourcePaths: string[],

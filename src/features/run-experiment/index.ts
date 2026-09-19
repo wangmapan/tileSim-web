@@ -5,6 +5,9 @@ export { default as DesignSpaceInputPanel } from "./DesignSpaceInputPanel.vue";
 export { default as ExperimentCapabilityPanel } from "./ExperimentCapabilityPanel.vue";
 export { default as ExperimentIdentityPanel } from "./ExperimentIdentityPanel.vue";
 export { default as ExperimentInputPanel } from "./ExperimentInputPanel.vue";
+export { default as TopologyGraphEditor } from "./TopologyGraphEditor.vue";
+export { parseTopologyDocument, topologyJson } from "./topology-graph";
+export type { TopologyDevice, TopologyDomain, TopologyDocument, TopologyLink } from "./topology-graph";
 export { default as ExperimentSubmitCard } from "./ExperimentSubmitCard.vue";
 export { default as TracePackageInputPanel } from "./TracePackageInputPanel.vue";
 export { fetchTracePackageCatalog, inspectTracePackage, tracePackageBackendIdentity } from "./trace-package-queries";
@@ -36,6 +39,7 @@ export type {
 
 export const runExperiment = {
   getTemplate: (scenarioId: string) => bridgeApi.getTemplate(scenarioId),
+  getStatus: (runId: string) => bridgeApi.getRun(runId),
   create: (payload: CreateRunRequest, idempotencyKey: string) => bridgeApi.createRun(payload, idempotencyKey),
   wait: (
     runId: string,

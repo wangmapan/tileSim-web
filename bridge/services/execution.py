@@ -4,10 +4,16 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
+import os
 import subprocess
+import tempfile
 import threading
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
+
+from services.run_intake import RUN_INTAKE_ISSUE_FIELDS
 
 
 ProcessRunner = Callable[..., subprocess.CompletedProcess[str]]
@@ -327,3 +333,265 @@ def start_run_execution(
         args=(run_id, scenario, fidelity_policy),
         daemon=True,
     ).start()
+
+
+# ---------------------------------------------------------------------------
+# Read-only Run Intake v2 lowering call (WP-2C-02, service layer only)
+# ---------------------------------------------------------------------------
+
+RUN_INTAKE_CLI_OPERATION = "validate-run-intake"
+RUN_INTAKE_CLI_ALIAS_OPERATION = "run-intake-preview"
+RUN_INTAKE_CLI_TIMEOUT_SECONDS = 45
+# The published CLI contract defines exactly two judged exit codes: 0 (accepted) and
+# 1 (blocked, with the issues JSON on stdout).  Anything else is reported verbatim
+# instead of being guessed.
+RUN_INTAKE_CLI_JUDGED_EXIT_CODES = (0, 1)
+RUN_INTAKE_CLI_STAGING_PREFIX = "tilesim-run-intake-"
+RUN_INTAKE_CLI_STAGED_FILE_NAME = "run-intake.json"
+
+RUN_INTAKE_CLI_RESULT_FIELDS = (
+    "operation",
+    "exit_code",
+    "status",
+    "issues",
+    "representable",
+    "non_representable_reasons",
+)
+
+RUN_INTAKE_CLI_INPUT_CODE = "run_intake_cli_input_not_serializable"
+RUN_INTAKE_CLI_UNAVAILABLE_CODE = "run_intake_cli_unavailable"
+RUN_INTAKE_CLI_EXECUTION_ERROR_CODE = "run_intake_cli_execution_error"
+RUN_INTAKE_CLI_TIMEOUT_CODE = "run_intake_cli_timeout"
+RUN_INTAKE_CLI_INVALID_JSON_CODE = "run_intake_cli_invalid_json"
+RUN_INTAKE_CLI_UNEXPECTED_EXIT_CODE = "run_intake_cli_unexpected_exit"
+RUN_INTAKE_CLI_ISSUE_NOT_REPRESENTABLE_CODE = "run_intake_cli_issue_not_representable"
+# Same semantics as the Week 7 endpoint's ``week7_capacity_reached``: one shared Bridge
+# operation slot is already occupied and the caller must not be parked on it.
+RUN_INTAKE_CAPACITY_REACHED_CODE = "run_intake_capacity_reached"
+
+
+@dataclass
+class RunIntakeCliError(RuntimeError):
+    """Three-part failure (``code`` / ``message`` / ``retryable``), mirroring Week 7."""
+
+    code: str
+    message: str
+    retryable: bool = False
+
+    def __str__(self) -> str:
+        return self.message
+
+
+def _reject_nonfinite(value: str) -> None:
+    raise ValueError(f"non-finite JSON number: {value}")
+
+
+def _reject_nonfinite_document(value: object, path: str = "$") -> None:
+    """Refuse non-finite numbers and non-string keys before anything is staged."""
+    if isinstance(value, float) and not math.isfinite(value):
+        raise RunIntakeCliError(
+            RUN_INTAKE_CLI_INPUT_CODE,
+            f"The Run Intake document carries a non-finite number at {path}; the Bridge "
+            "stages a lossless copy and never writes NaN or Infinity.",
+            retryable=False,
+        )
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise RunIntakeCliError(
+                    RUN_INTAKE_CLI_INPUT_CODE,
+                    f"The Run Intake document has a non-string object key at {path}; "
+                    "staging a faithful copy must not rewrite keys.",
+                    retryable=False,
+                )
+            _reject_nonfinite_document(item, f"{path}/{key}")
+    elif isinstance(value, (list, tuple)):
+        for index, item in enumerate(value):
+            _reject_nonfinite_document(item, f"{path}/{index}")
+
+
+def _faithful_json_body(document: object) -> str:
+    """Return the caller's document as lossless JSON, or fail closed.
+
+    The staged copy must be the same JSON the caller submitted: no key is added,
+    renamed or dropped, every object key stays a string, and integers keep their exact
+    decimal value because :mod:`json` writes a Python ``int`` without a float
+    round-trip (``18446744073709551615`` is never emitted as ``1.8446744073709552e+19``).
+    A non-finite number is refused instead of being written as the non-standard ``NaN``
+    / ``Infinity`` tokens, mirroring ``week7._reject_nonfinite``.
+    """
+    _reject_nonfinite_document(document)
+    try:
+        return json.dumps(document, ensure_ascii=False, allow_nan=False)
+    except (TypeError, ValueError) as error:
+        raise RunIntakeCliError(
+            RUN_INTAKE_CLI_INPUT_CODE,
+            f"The Run Intake document cannot be staged as lossless JSON: {error}",
+            retryable=False,
+        ) from error
+
+
+def _read_run_intake_stdout(
+    payload: object, exit_code: int
+) -> tuple[str, list, list[str]]:
+    """Split the CLI payload into verbatim ``status`` / ``issues`` plus unrepresentable reasons.
+
+    The issues array is read verbatim: key names, values and ordering are never
+    rewritten, and no issue field is ever added.  A payload that does not expose a
+    string ``status`` and an array of issue objects cannot be represented at all and
+    fails closed with ``run_intake_cli_issue_not_representable``.  An assessable array
+    whose members are missing Run Intake issue fields is reported through the reasons
+    list instead, so the raw payload still reaches the caller unchanged.
+    """
+    if not isinstance(payload, dict):
+        raise RunIntakeCliError(
+            RUN_INTAKE_CLI_ISSUE_NOT_REPRESENTABLE_CODE,
+            f"TileSimCLI exited {exit_code} with JSON that is not the published "
+            f"{RUN_INTAKE_CLI_OPERATION} envelope object; the Bridge reports that instead "
+            "of guessing an issue shape.",
+            retryable=False,
+        )
+    status = payload.get("status")
+    issues = payload.get("issues")
+    assessable = isinstance(status, str) and isinstance(issues, list)
+    if assessable:
+        assessable = all(isinstance(issue, dict) for issue in issues)
+    if not assessable:
+        raise RunIntakeCliError(
+            RUN_INTAKE_CLI_ISSUE_NOT_REPRESENTABLE_CODE,
+            f"TileSimCLI exited {exit_code} with JSON that does not expose a string status "
+            "and an array of issue objects; the Bridge reports that instead of rewriting "
+            "the payload.",
+            retryable=False,
+        )
+    reasons: list[str] = []
+    for index, issue in enumerate(issues):
+        missing = [name for name in RUN_INTAKE_ISSUE_FIELDS if name not in issue]
+        if missing:
+            reasons.append(f"issues[{index}] is missing {', '.join(missing)}")
+        elif not isinstance(issue["blocking"], bool):
+            reasons.append(f"issues[{index}].blocking is not boolean")
+    return status, issues, reasons
+
+
+def run_intake_cli_validation(
+    document: object,
+    *,
+    slot: threading.Lock,
+    tilesim_cli: Path,
+    tilesim_root: Path,
+    process_runner: ProcessRunner = subprocess.run,
+) -> dict:
+    """Validate one Run Intake v2 document through the read-only TileSimCLI entry point.
+
+    Read-only: this call creates no run, writes no ``runs/`` entry, reserves no run id,
+    imports no run repository and performs no persistence of any kind.  The only file it
+    writes is a short-lived staged copy of the caller's document inside a Bridge-owned
+    :mod:`tempfile` directory, which is removed before the call returns.
+
+    The command line is a fixed allow-list
+    (``[tilesim_cli, validate-run-intake, --run-intake, <staged>]``): no argv, path or
+    argument of any kind travels from the request into the command, and the staged path
+    is always chosen by the Bridge.  The caller injects the Bridge single-operation slot
+    (``server.week7_operation_lock`` once an endpoint is wired in a later work package),
+    the function never creates a lock of its own, and a slot that is already held is
+    reported as ``run_intake_capacity_reached`` rather than waited on.
+
+    The returned mapping is **not** a published contract type, and it must not be
+    mistaken for one: its members are ``operation`` / ``exit_code`` / ``status`` /
+    ``issues`` / ``representable`` / ``non_representable_reasons``.  ``status`` and
+    ``issues`` are the CLI stdout read verbatim.  ``representable`` is True exactly when
+    every issue carries ``code`` / ``message`` / ``field_path`` / ``blocking`` /
+    ``safe_next_action`` and ``blocking`` is boolean, i.e. exactly when the issues could
+    legally fill the published ``backend_issues`` array; whenever it is False those
+    issues must not enter any contract field.  The call never fabricates ``message`` or
+    ``safe_next_action`` and never reverse-looks-up copy from an issue code.
+
+    A blocked judgement is a judged outcome, not a transport failure: ``exit_code`` 1
+    with parseable stdout returns this typed result.  An empty ``issues`` array is never
+    an "all clear" - it is only readable together with ``status`` and ``exit_code``.
+    """
+    body = _faithful_json_body(document)
+
+    if not (tilesim_cli.is_file() and os.access(tilesim_cli, os.X_OK)):
+        raise RunIntakeCliError(
+            RUN_INTAKE_CLI_UNAVAILABLE_CODE,
+            "TileSimCLI is not available to the bridge, so Run Intake v2 was not validated. "
+            "This is not an accepted or an empty result.",
+            retryable=True,
+        )
+
+    if not slot.acquire(blocking=False):
+        raise RunIntakeCliError(
+            RUN_INTAKE_CAPACITY_REACHED_CODE,
+            "The shared Bridge operation slot is already occupied.",
+            retryable=True,
+        )
+    try:
+        with tempfile.TemporaryDirectory(prefix=RUN_INTAKE_CLI_STAGING_PREFIX) as staging:
+            staged = Path(staging) / RUN_INTAKE_CLI_STAGED_FILE_NAME
+            try:
+                staged.write_text(body, encoding="utf-8")
+                completed = process_runner(
+                    [
+                        str(tilesim_cli),
+                        RUN_INTAKE_CLI_OPERATION,
+                        "--run-intake",
+                        str(staged),
+                    ],
+                    cwd=tilesim_root,
+                    text=True,
+                    capture_output=True,
+                    timeout=RUN_INTAKE_CLI_TIMEOUT_SECONDS,
+                    check=False,
+                )
+            except subprocess.TimeoutExpired as error:
+                raise RunIntakeCliError(
+                    RUN_INTAKE_CLI_TIMEOUT_CODE,
+                    "The Run Intake validation exceeded its "
+                    f"{RUN_INTAKE_CLI_TIMEOUT_SECONDS} second limit.",
+                    retryable=True,
+                ) from error
+            except OSError as error:
+                raise RunIntakeCliError(
+                    RUN_INTAKE_CLI_EXECUTION_ERROR_CODE,
+                    f"The Run Intake validation could not be executed: {error}",
+                    retryable=True,
+                ) from error
+    finally:
+        slot.release()
+
+    exit_code = completed.returncode
+    if exit_code not in RUN_INTAKE_CLI_JUDGED_EXIT_CODES:
+        raise RunIntakeCliError(
+            RUN_INTAKE_CLI_UNEXPECTED_EXIT_CODE,
+            f"TileSimCLI returned exit code {exit_code} for {RUN_INTAKE_CLI_OPERATION}; the "
+            "published CLI contract defines only 0 (accepted) and 1 (blocked), so the code "
+            "is reported as-is instead of being interpreted.",
+            retryable=False,
+        )
+    try:
+        payload = json.loads(completed.stdout, parse_constant=_reject_nonfinite)
+    except (json.JSONDecodeError, ValueError) as error:
+        raise RunIntakeCliError(
+            RUN_INTAKE_CLI_INVALID_JSON_CODE,
+            "TileSimCLI returned stdout that is not valid finite JSON, so no Run Intake "
+            "judgement can be read from it.",
+            retryable=False,
+        ) from error
+    try:
+        _reject_nonfinite_document(payload)
+    except RunIntakeCliError as error:
+        raise RunIntakeCliError(
+            RUN_INTAKE_CLI_INVALID_JSON_CODE, error.message, retryable=False
+        ) from error
+
+    status, issues, reasons = _read_run_intake_stdout(payload, exit_code)
+    return {
+        "operation": RUN_INTAKE_CLI_OPERATION,
+        "exit_code": exit_code,
+        "status": status,
+        "issues": issues,
+        "representable": not reasons,
+        "non_representable_reasons": reasons,
+    }

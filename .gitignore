@@ -9,6 +9,9 @@ runtime/
 coverage/
 test-results/
 playwright-report/
+.playwright-cli/
+output/
+.workbuddy/
 __pycache__/
 *.pyc
 /启动TileSim工作台.exe

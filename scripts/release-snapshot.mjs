@@ -142,7 +142,17 @@ export async function createReleaseSnapshot({ sourceRoot, releasesRoot, identity
     };
     manifest.release_digest = releaseDigestFor(manifest);
     await writeFile(path.join(stagingRoot, "release.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
-    await rename(stagingRoot, releaseRoot);
+    try {
+      await rename(stagingRoot, releaseRoot);
+    } catch (error) {
+      // Windows can transiently deny renaming a directory containing freshly
+      // written bridge/dist files (typically while Defender/indexing scans it).
+      // Keep the immutable destination unique and fall back to a verified copy;
+      // the manifest is only switched after verifyReleaseSnapshot succeeds.
+      if (!error || !["EPERM", "EBUSY", "EACCES"].includes(error.code)) throw error;
+      await cp(stagingRoot, releaseRoot, { recursive: true, force: false, errorOnExist: true });
+      await rm(stagingRoot, { recursive: true, force: true });
+    }
     return verifyReleaseSnapshot(releaseRoot);
   } catch (error) {
     await rm(stagingRoot, { recursive: true, force: true });

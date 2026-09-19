@@ -1032,7 +1032,11 @@
   font-family: var(--font-mono);
   white-space: nowrap;
 }
-.record-value--missing {
+/* Availability tone of a cell, resolved through the shared five-state vocabulary. Only the
+   non-positive states are tinted; `available` cells keep the default cell colour. */
+.record-value--neutral,
+.record-value--warning,
+.record-value--danger {
   color: var(--muted) !important;
   background: var(--surface-inset);
 }

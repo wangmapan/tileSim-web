@@ -162,7 +162,14 @@
         "tilesim.bridge.agent_orchestration_validation_report.v1",
         "tilesim.bridge.agent_orchestration_calculator_receipt_envelope.v1",
         "tilesim.bridge.agent_orchestration_idempotency_retention_policy.v1"
-      ]
+      ],
+      "run_intake_preview": {
+        "endpoint": "POST /api/agent/run-intake-preview",
+        "operation_id": "previewAgentRunIntake",
+        "request_schema_identity": "tilesim.bridge.agent_orchestration_run_intake_preview_request.v1",
+        "response_schema_identity": "tilesim.bridge.agent_orchestration_run_intake_preview_response.v1",
+        "runtime_status": "read_only_preview_registered"
+      }
     }
   },
   "paths": {
@@ -244,6 +251,27 @@
         "x-client-response-type": "AgentOrchestrationCapabilitySnapshotResponse",
         "responses": {
           "200": { "$ref": "#/components/responses/AgentOrchestrationCapabilitySnapshot" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/run-intake-preview": {
+      "post": {
+        "operationId": "previewAgentRunIntake",
+        "x-client-request-type": "AgentOrchestrationRunIntakePreviewRequest",
+        "x-client-response-type": "AgentOrchestrationRunIntakePreviewResponse",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AgentOrchestrationRunIntakePreviewRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/AgentOrchestrationRunIntakePreview" },
+          "400": { "$ref": "#/components/responses/Error" },
+          "503": { "$ref": "#/components/responses/Error" },
           "default": { "$ref": "#/components/responses/Error" }
         }
       }
@@ -568,6 +596,12 @@
       "AgentOrchestrationCapabilitySnapshotResponse": {
         "$ref": "./agent_orchestration_capability/schemas/capability-snapshot.schema.json"
       },
+      "AgentOrchestrationRunIntakePreviewRequest": {
+        "$ref": "./schemas/agent-orchestration-run-intake-preview-request.schema.json"
+      },
+      "AgentOrchestrationRunIntakePreviewResponse": {
+        "$ref": "./schemas/agent-orchestration-run-intake-preview-response.schema.json"
+      },
       "TemplateResponse": {
         "type": "object",
         "required": ["scenario_id", "runtime_trace", "topology"],
@@ -680,6 +714,14 @@
         "content": {
           "application/json": {
             "schema": { "$ref": "#/components/schemas/AgentOrchestrationCapabilitySnapshotResponse" }
+          }
+        }
+      },
+      "AgentOrchestrationRunIntakePreview": {
+        "description": "Read-only Run Intake v2 preview verdict. Returned for every submission the published contract can judge, including rejections; judgement.accepted and judgement.code carry the verdict. The error envelope is used only when no judgement could be produced.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/AgentOrchestrationRunIntakePreviewResponse" }
           }
         }
       },

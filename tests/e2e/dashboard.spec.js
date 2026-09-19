@@ -2092,7 +2092,11 @@ test("Week 7 evidence chain exposes calibration, lineage, and deterministic orch
   await expect(page.locator(".week7-timeline li")).toHaveCount(5);
   await expect(page.getByText("offline_fixture_consistency")).toBeVisible();
   await expect(page.getByText("workflow_consistency_only")).toBeVisible();
-  await expect(page.locator(".global-busy")).toHaveCount(0);
+  // Evidence Lab owns its own query loading state. The shared dashboard
+  // restore can still finish in parallel when two fixture workers start at
+  // once, so allow that unrelated overlay to settle before inspecting the
+  // expanded evidence sections.
+  await expect(page.locator(".global-busy")).toHaveCount(0, { timeout: 15_000 });
   await page.locator(".week7-section").nth(2).locator(":scope > summary").click();
   await expect(page.getByText("partial", { exact: true })).toBeVisible();
   await expect(page.getByText("H100")).toBeVisible();
@@ -2744,7 +2748,9 @@ test("boundary metrics remain unavailable rather than becoming zero", async ({ p
   const boundary = fixtureCase("boundary-expected-absence");
   const boundaryFailures = await openFixture(page, boundary, "metrics");
   const unavailableMetrics = page.locator('[data-help-anchor="metrics-summary"] .stat-card strong');
-  await expect(unavailableMetrics).toHaveText(["不适用", "不适用", "不适用", "不适用"]);
+  // C0-7: `expected_absence` is its own state (预期缺省), distinct from missing /
+  // not_covered / unsupported_schema — never downgraded to a fabricated 0.
+  await expect(unavailableMetrics).toHaveText(["预期缺省", "预期缺省", "预期缺省", "预期缺省"]);
   for (const metric of await unavailableMetrics.all()) await expect(metric).toBeVisible();
   await expect(page.getByText("0/0 请求完成")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(

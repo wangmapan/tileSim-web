@@ -4,21 +4,28 @@
 >
 > 类型：事实基线
 >
+> 事实日期：2026-09-17
+>
 > 前置阅读：[约束与术语](00_GUARDRAILS_AND_GLOSSARY.md)
 
 ## 1. 审计范围
 
 本基线来自：
 
-- 后端 execution evidence commit `7e5a8c6a5cf738bd24608b440a61b62dee8d1881`（审计父基线
+- 后端本地 `main` `ba11e6fdb69af046dc7597e5ef5732cce029cfbe`（含 Phase 2C Run Intake Lowering 与 dense timing）；
+  公开 `origin/main` 为 `7b2b1cff52fdab21575609be170c3856f120120b`；
+- 不可变 execution evidence commit `7e5a8c6a5cf738bd24608b440a61b62dee8d1881`（审计父基线
   `09c22c0efff890253a1eacf403c2979f56fd9ba6`）；
-- Web runtime commit `64a741f3dfc76ef4b80352f1ca1197428de1ab25` 与 reproducibility follow-up
-  `df1f24452384d328ce402ffa37affbd8c734da13`；
+- Web `HEAD == origin/main == 4d7f9fa3c330b7d6f287d12da853ec2bf481b0cb`，工作树 clean；
 - `AgentOrchestration`、工作负载描述语言、引擎 profile、候选探索、WindTunnel；
 - Bridge create-run/experiment descriptor/custom input/design-space schemas；
+- `bridge/contracts/agent_orchestration_phase2/` Phase 2B 契约包；
 - 当前 Evidence Agent v2 descriptor 与 v1 request/response/citation/snapshot。
 
 工作树未提交内容不构成发布基线，也不得被本任务清理或覆盖。
+
+本节只记录**当前**事实。Phase 0/1/2 的 dated 阶段证据已移入
+`docs/archive/agent-orchestration/phase-records/`，需要追溯时读取，不得用其数字覆盖当前状态。
 
 ### 1.1 Phase 0D 发布事实（2026-09-09）
 
@@ -175,9 +182,16 @@ strict candidate 可执行字段：
 
 ## 9. 当前测试证据解释
 
-`D:\tileSim-web\AGENTS.md` 当前记录 61/61 后端 CTest、265/265 frontend、78/78 Bridge、29/29 fixture Playwright，F9 live model repetitions 为 0。这些是历史或当前交接事实，后续实现必须重新运行相关门禁。
+2026-09-17 实测：Web Vitest 为 515 passed、8 skipped；Bridge `unittest` 为 91 passed。后端 CTest 与 fixture Playwright
+本轮未复跑（本机没有 C++ 工具链），必须标记为 `not-run` 而不是继承旧数字。F9 live model repetitions 仍为 0。
+
+`AGENTS.md` 与本节此前记录过的 61/61、265/265、78/78、29/29、505/105 等数字都属于**带日期的历史事实**，不得当作当前
+基线引用。
 
 测试通过只能证明功能/契约行为，不等于真实系统 fidelity。真实校准和 held-out validation 必须使用相应证据资产。
+
+以下 `9.1`–`9.6` 小节是 Phase 0/1/2 的 dated 阶段记录，保留用于追溯；它们描述的阶段文档已归档到
+`docs/archive/agent-orchestration/phase-records/`。当前结论见 `9.7` 与 `9.8`。
 
 ### 9.1 Phase 0 capability/Profile 批次（2026-09-08）
 
@@ -243,7 +257,7 @@ strict candidate 可执行字段：
   Evidence Provider；模型、设备、卡数、TP/PP/EP、placement、物理 KV、集合通信算法和 SLO 均 fail closed；
 - 双语或中英混合 fixture corpus 为 128/128，八字段 canonical request equivalence 为 8/8；结果只证明
   synthetic consistency 与 UI/contract 行为，不构成真实校准或独立 held-out validation；
-- 最新集成门禁为 Web 505 passed、8 skipped，桌面 fixture E2E 50 passed、6 个 deployed/live tests skipped，
+- 当时（2026-09-09）的集成门禁为 Web 505 passed、8 skipped，桌面 fixture E2E 50 passed、6 个 deployed/live tests skipped，
   Bridge 为 105/105；Phase 0D 可复现性 oracle 以不可变后端 evidence revision 复跑并保持通过；
 - `GAP-COPILOT-UI-001` 已达到 `validated`；`GAP-DRAFT-001`、`GAP-VALIDATE-001`、
   `GAP-CLARIFY-001` 及 Conversation/Approval/Workflow Gap 仍为 open。
@@ -258,27 +272,103 @@ strict candidate 可执行字段：
   正式 calculator receipt、Phase 2 Validation Report 和从新字段到执行片段、KV、集合通信、网络反馈、请求指标的累计链均未闭合；
 - 新增 `GAP-PROFILE-SUCCESSOR-001`、`GAP-CALCULATOR-001`、`GAP-RUN-INTAKE-001`，并细化
   `GAP-VALIDATE-001` 的退出条件。完整证据和后端工作包见
-  [Phase 2 Definition of Ready 审计](20_PHASE2_READINESS_AUDIT.md)。
+  [Phase 2 DoR 审计（已归档）](../archive/agent-orchestration/phase-records/20_PHASE2_READINESS_AUDIT.md)。
+
+### 9.7 Phase 2A/2B 契约发布（2026-09-11 → 2026-09-17）
+
+- Phase 2A 的隔离候选（Profile successor、run intake、Validation Report、calculator receipt 与 stale/幂等/留存语义）
+  已由 Phase 2B 正式发布并提交：Web 提交 `4d7f9fa3c330b7d6f287d12da853ec2bf481b0cb`，契约包位于
+  `bridge/contracts/agent_orchestration_phase2/`；
+- 包 manifest 的当前自报值为 `publication_status = published`、`package_revision = sha256:59373c71…c8b6`、
+  `runtime_status = contract_only`、`create_run_acceptance = not_accepted_by_current_api`、
+  `calculator_status = receipt_contract_only`、`validation_report_status = schema_and_validator_only`，
+  五类 `profile_records` 数组全部为空，`blocked_runtime_enforcement` 列出 `lowering_missing`、
+  `calculator_unavailable`、`runtime_execution_unavailable`、`calibration_missing`、
+  `held_out_validation_missing`；
+- 已发布对象：五类 Profile v2 Schema、Profile Binding v1、`tilesim.bridge.agent_orchestration_run_intake.v2`、
+  Validation Report v1、Calculator Receipt Envelope v1、七类 typed receipt identity，以及幂等/留存 policy contract；
+- 接线范围仅到契约层：`bridge/contracts/agent_orchestration_phase2/` 只被 `bridge/contracts/openapi.json`、
+  `bridge/contracts/schemas/bridge-api.schema.json` 与生成物料（`src/contracts/generated/agent-orchestration-phase2-validators.js`、
+  `src/contracts/generated/bridge-contracts.ts`）引用；**没有任何 Bridge service 导入该 validator**，
+  `/api/runs` 仍只接受 create-run v1；（该结论描述 2B 发布当时的形态；WP-2C-01a/01b 已在工作树新增只读预览路径，
+  见 §9.9）
+- Phase 2B 包内**没有** `registry.py` 与测试源文件（仅存在过期的 `__pycache__` 残留），因此它当前是
+  Schema + validator 的发布物，不是可路由的运行时能力。（WP-2C-01a 已在工作树补入 `registry.py` 与测试，见 §9.9）
+
+### 9.8 后端 Phase 2C Run Intake Lowering（2026-09-17）
+
+后端已提交 `parse_run_intake_v2` 与 `lower_run_intake_v2`（提交 `8839b969`，含于本地 `main` `ba11e6fd`）：
+
+- 头文件 `include/Core/RunIntakeLowering.h` 定义 identity 常量 `tilesim.bridge.agent_orchestration_run_intake.v2`、
+  `RunIntakeV2`、`RunIntakeIssue`、`RunIntakeLoweringResult`；
+- Parser 执行严格字段闭包、identity/revision、Profile family/identity、uint64 decimal、TP/PP/EP、rank/device/endpoint
+  唯一性、placement 数量、trace claim scope、fidelity/GPU mode、typed SLO 与 budget 校验；
+- Lowering 保留 Profile Binding、KV policy、collective policy、topology/network binding 与 `WorkloadDescription`
+  的明确边界；`RunIntakeLoweringResult` 用 `workload_lowered`、`execution_lowered`、`runtime_available` 三个标志
+  显式区分"已解析"与"可执行"；
+- CLI 提供只读入口 `validate-run-intake --run-intake <json>` 与 `run-intake-preview`，输出 typed issues，不创建 run；
+- 后端自评 `partial`：执行侧因五类正式 Profile records 为 `0/unavailable` 而 fail closed，物理 KV page/block lowering、
+  workload template registry、真实 Profile、calculator、calibration 与 held-out validation 均未实现；
+- **Web/Bridge 尚未调用该 lowering**。Bridge 的 execution service 仍只构造 create-run v1 的固定参数列表，
+  Run Intake v2 与后端 lowering 之间还缺一层显式路由。（Bridge 侧的 Run Intake v2 **只读预览**端点已完成，
+  但它只做契约校验与兼容判定，不调用 lowering，见 §9.9）
+
+### 9.9 Bridge 侧 Run Intake v2 只读预览（WP-2C-01a + WP-2C-01b，2026-09-17）
+
+工作树（未提交）已把契约校验与兼容判定接到 HTTP 面，形成 Phase 2C 的第一条 Bridge 路由：
+
+- `bridge/contracts/agent_orchestration_phase2/registry.py`（新增）：复用 `validator.py` 的 `IDENTITIES` /
+  `validate_contract`，做 identity/revision 解析、`expected_revision` 校验与兼容矩阵判定；判定码与
+  `bridge/contracts/proposals/agent_orchestration_phase2a/fixtures/compatibility-matrix.json` 的 12 个 scenario、
+  6 个 expectation、9 个错误码逐一对应，无自造码；
+- `bridge/services/run_intake.py`（新增）：单一 Run Intake 服务，暴露 `preview_run_intake()`；
+  WP-2C-01b 追加 `preview_request_payload()`（信封闭包校验，只允许客户端提供 `intake`，
+  `expected_revision` / `profile_records` / `backend_issues` / `idempotency` / `route` / `registered_revisions` /
+  `claim_requires_calibration` 等服务端输入一律**拒绝**而非忽略）与 `preview_run_intake_request()`；
+- 新契约：`agent-orchestration-run-intake-preview-request.schema.json`（`…run_intake_preview_request.v1`）与
+  `agent-orchestration-run-intake-preview-response.schema.json`（`…run_intake_preview_response.v1`，逐字镜像
+  `preview_run_intake()` 的输出），已登记进 `bridge-api.schema.json` 与 `openapi.json`；
+- 端点：`POST /api/agent/run-intake-preview`（`operationId: previewAgentRunIntake`）。`bridge/server.py` 只做协调，
+  三条路径分开：**HTTP 200 + typed body**（含被拒判定，`judgement.accepted = false`）、**400**（信封非法或
+  不可判定）、**503**（发布契约或 Profile 记录不可读）。被拒判定不是错误，因此不进错误信封；
+- 状态与写入边界：包 manifest 新增 `run_intake_preview` 块，`runtime_status = read_only_preview_registered`、
+  `runtime_scope = validate_and_judge_only`、`write_capability = absent`、`run_creation = not_performed`、
+  `run_acceptance = not_accepted_by_current_api`、`idempotency_status = not_evaluated_no_retained_run_intake_key_store`、
+  `profile_families_with_records = 0`、`backend_lowering = not_wired`；**包级 `runtime_status` 仍为 `contract_only`**，
+  `create_run_acceptance` 仍为 `not_accepted_by_current_api`，`/api/runs` 仍只接受 create-run v1；
+- 五类 Profile 记录仍全为 `0/unavailable`，端点因此对合法 nested intake 稳定返回 5 条 `profile_missing` 且
+  `planning_status = blocked`；`judgement` 中不产生任何候选、ranking 或 fallback 值；
+- 端点级测试 13 条（进程内 handler + 临时端口，不触碰 5173），Bridge `unittest` 由 108 升至 121；
+- 契约级联：live `SCHEMA_SET_REVISION` 由 `sha256:518f4da9…e43ece` 变为 `sha256:d498092a…abffab`
+  （`bridge/contracts` 下 `.json` 由 86 增至 88）；`src/contracts/generated/**` 已重新生成；
+  `tests/fixtures/phase1-agent-orchestration/*.json` 与 `frozen-current-subset.json` **未被改写**；
+- 这是**只读预览**，不是执行路径：本次不创建 run、不写 `runs/`、不调用后端 lowering、不改动
+  `bridge/repositories/runs.py`。`GAP-RUN-INTAKE-001` 因此仍为 `implementing`。
+- 已知遗留（未修）：`validator.py::_required` 在默认 `path="/"` 下会拼出 `//device_count` 形态的 `field_path`，
+  端点原样透出该既有形态。
+
+结论：契约侧（2A/2B）与后端 lowering（2C）都已就绪，缺的是 Bridge 侧接线与前端呈现。这是当前可安全推进的下一步，
+见 [AO-23 Phase 2C Web 集成计划](23_PHASE2C_WEB_INTEGRATION_PLAN.md)。
 
 ## 10. 优先缺口
 
-| 优先级 | Gap                                                | 原因                                      |
-| ------ | -------------------------------------------------- | ----------------------------------------- |
-| P0     | `GAP-CAP-001` 参数能力目录                         | validated；8/8 与 snapshot closure 完成   |
-| P0     | `GAP-PROFILE-001` Profile family                   | validated；v1 正确表达 0/unavailable      |
-| P0     | `GAP-PROFILE-SUCCESSOR-001` 正式 Profile successor | 缺 typed facts、来源、生命周期与真实记录  |
-| P0     | `GAP-CALCULATOR-001` deterministic calculators     | 七类 versioned receipt 尚未发布           |
-| P0     | `GAP-RUN-INTAKE-001` Phase 2 正式运行输入          | create-run v1 无 Phase 2 typed intake     |
-| P0     | `GAP-CONTRACT-DRIFT-001` 正式契约漂移              | validated；双版本与 revision closure 完成 |
-| P0     | `GAP-DRAFT-001` typed experiment draft             | LLM 输出无法安全进入正式运行面            |
-| P0     | `GAP-VALIDATE-001` deterministic validation report | 缺少跨 profile/参数的统一可行性结果       |
-| P1     | `GAP-CONV-001` conversation/turn                   | 不能正式多轮澄清                          |
-| P1     | `GAP-APPROVAL-001` approval envelope               | 不能安全授权写操作                        |
-| P1     | `GAP-WORKFLOW-001` operation/event/checkpoint      | 不能 durable 执行与取消                   |
-| P1     | `GAP-RAG-001` evidence index/retrieval             | 当前证据选择面有限，无法评测召回          |
-| P2     | `GAP-COMPARE-001` comparability contract           | 不能正式跨 run 分析                       |
-| P2     | `GAP-TOOLS-001` tool registry/permission           | 不能安全扩展工具生态                      |
-| P3     | `GAP-A2A-001` external agent gateway               | 只有外部集成需求出现后才需要              |
+| 优先级 | Gap                                                | 原因                                                                                   |
+| ------ | -------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| P0     | `GAP-CAP-001` 参数能力目录                         | validated；8/8 与 snapshot closure 完成                                                |
+| P0     | `GAP-PROFILE-001` Profile family                   | validated；v1 正确表达 0/unavailable                                                   |
+| P0     | `GAP-PROFILE-SUCCESSOR-001` 正式 Profile successor | v2 契约已发布；仍缺 typed facts 之外的**真实授权记录**                                 |
+| P0     | `GAP-CALCULATOR-001` deterministic calculators     | 七类 receipt 契约已发布；正式算法、service 与证据未实现                                |
+| P0     | `GAP-RUN-INTAKE-001` Phase 2 正式运行输入          | intake v2 契约、后端 lowering 与 Bridge 只读预览均已就绪；仍缺 lowering 路由与累计证据 |
+| P0     | `GAP-CONTRACT-DRIFT-001` 正式契约漂移              | validated；双版本与 revision closure 完成                                              |
+| P0     | `GAP-DRAFT-001` typed experiment draft             | LLM 输出仍无法安全进入正式运行面                                                       |
+| P0     | `GAP-VALIDATE-001` deterministic validation report | Validation Report v1 契约已发布；未接入 runtime                                        |
+| P1     | `GAP-CONV-001` conversation/turn                   | 不能正式多轮澄清                                                                       |
+| P1     | `GAP-APPROVAL-001` approval envelope               | 不能安全授权写操作                                                                     |
+| P1     | `GAP-WORKFLOW-001` operation/event/checkpoint      | 不能 durable 执行与取消                                                                |
+| P1     | `GAP-RAG-001` evidence index/retrieval             | 当前证据选择面有限，无法评测召回                                                       |
+| P2     | `GAP-COMPARE-001` comparability contract           | 不能正式跨 run 分析                                                                    |
+| P2     | `GAP-TOOLS-001` tool registry/permission           | 不能安全扩展工具生态                                                                   |
+| P3     | `GAP-A2A-001` external agent gateway               | 只有外部集成需求出现后才需要                                                           |
 
 完整状态见 [契约缺口登记表](14_CONTRACT_GAP_REGISTER.md)。
 
@@ -287,6 +377,9 @@ strict candidate 可执行字段：
 以下事件发生时必须更新本文件：
 
 - Bridge 发布新的 create-run 或 experiment descriptor；
+- `bridge/contracts/agent_orchestration_phase2/manifest.json` 的 `runtime_status`、`create_run_acceptance`、
+  `profile_records` 或 `blocked_runtime_enforcement` 发生变化；
+- Bridge 开始路由 Run Intake v2，或后端 lowering 结果从 fail closed 变为可执行；
 - 工作负载描述语言正式接入 Web 托管运行；
 - 新 profile 或引擎 feature 进入累计链；
 - 设计空间不再是网络与硬件资源限定范围；

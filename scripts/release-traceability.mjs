@@ -11,6 +11,7 @@ const defaultExcludedNames = new Set([
   "dist",
   "node_modules",
   "playwright-report",
+  ".playwright-cli",
   "runtime",
   "runs",
   "test-results",

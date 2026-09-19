@@ -1,6 +1,8 @@
 # Phase 2B Bridge 契约发布
 
-状态：`pre_commit_ready`（仅契约发布，未进入 Phase 2C）。
+> **已归档（2026-09-17）**：本阶段已结束并提交（`4d7f9fa`）。原文的 `pre_commit_ready` 是提交前状态，现已完成。
+
+原状态：`pre_commit_ready`（仅契约发布，未进入 Phase 2C）。
 
 本阶段发布五类 Profile v2 Schema、Profile Binding v1、Run Intake v2、Validation Report v1、Calculator Receipt Envelope v1、七类 typed receipt identity，以及幂等/留存 policy contract。Schema 使用严格字段闭包、十进制字符串 uint64、decimal canonical 约束和字段级 provenance。
 

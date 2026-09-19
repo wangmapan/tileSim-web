@@ -34,6 +34,8 @@
     "agentOrchestrationCapabilitySnapshot": {
       "$ref": "../agent_orchestration_capability/schemas/capability-snapshot.schema.json"
     },
+    "agentOrchestrationRunIntakePreviewRequest": { "$ref": "agent-orchestration-run-intake-preview-request.schema.json" },
+    "agentOrchestrationRunIntakePreviewResponse": { "$ref": "agent-orchestration-run-intake-preview-response.schema.json" },
     "agentOrchestrationProfileBindingV1": { "$ref": "../agent_orchestration_phase2/schemas/profile-binding.schema.json" },
     "agentOrchestrationRunIntakeV2": { "$ref": "../agent_orchestration_phase2/schemas/run-intake.schema.json" },
     "agentOrchestrationValidationReportV1": { "$ref": "../agent_orchestration_phase2/schemas/validation-report.schema.json" },

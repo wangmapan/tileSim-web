@@ -5,6 +5,7 @@ import { useDashboard } from "../store/dashboard";
 import { useI18n } from "../i18n";
 import ThemeSwitcher from "./ThemeSwitcher.vue";
 import AppearanceToggle from "./AppearanceToggle.vue";
+import { WorkbenchModeSwitcher } from "../features/lightweight-workbench";
 
 const { state, currentTitle, importFiles, notify } = useDashboard();
 const { isEnglish, t, toggleLocale } = useI18n();
@@ -21,6 +22,7 @@ const headerKickers = {
   evidence_agent: "辅助解释",
   evidence_lab: "证据工具",
   experiment: "实验配置",
+  lightweight: "轻量工作台",
 };
 const headerKicker = computed(() => headerKickers[state.view] || "TILESIM");
 
@@ -45,11 +47,20 @@ async function onImport(event) {
     <div class="page-heading">
       <p>{{ t(headerKicker) }}</p>
       <div>
-        <h1>{{ state.view === "experiment" ? t("新建实验") : t(currentTitle) }}</h1>
+        <h1>
+          {{
+            state.view === "experiment"
+              ? t("新建实验")
+              : state.view === "lightweight"
+                ? t("轻量工作台")
+                : t(currentTitle)
+          }}
+        </h1>
       </div>
     </div>
     <div class="header-actions">
       <slot />
+      <WorkbenchModeSwitcher />
       <AppearanceToggle />
       <ThemeSwitcher />
       <button

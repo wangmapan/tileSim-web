@@ -2,15 +2,17 @@
 import { Braces, Cpu, Database, Network, PackageSearch, RotateCcw, SlidersHorizontal } from "@lucide/vue";
 import { ref } from "vue";
 import { useI18n } from "../../i18n";
+import TopologyGraphEditor from "./TopologyGraphEditor.vue";
 
 const form = defineModel("form", { type: Object, required: true });
 const mode = defineModel("mode", { type: String, required: true });
 const runtimeJson = defineModel("runtimeJson", { type: String, required: true });
 const topologyJson = defineModel("topologyJson", { type: String, required: true });
-defineProps({
+const props = defineProps({
   surface: { type: Object, required: true },
   controlGroups: { type: Array, required: true },
   fieldPath: { type: String, default: "" },
+  compact: { type: Boolean, default: false },
 });
 defineEmits(["reset-controls", "load-template", "load-bundle", "load-json-file"]);
 const { t } = useI18n();
@@ -23,7 +25,7 @@ const showFieldContracts = ref(false);
       <span>02</span>
       <div>
         <h2>{{ t("输入方式") }}</h2>
-        <p>{{ t("快捷控制适合对比实验；JSON 适合精确复现。") }}</p>
+        <p v-if="!props.compact">{{ t("快捷控制适合对比实验；JSON 适合精确复现。") }}</p>
       </div>
     </header>
     <div class="experiment-input-toolbar">
@@ -68,7 +70,7 @@ const showFieldContracts = ref(false);
           <Network v-else :size="17" />
           <div>
             <strong>{{ group.title }}</strong
-            ><small>{{ group.subsystem }} · {{ t(group.detail) }}</small>
+            ><small v-if="!props.compact">{{ group.subsystem }} · {{ t(group.detail) }}</small>
           </div>
           <button v-if="group.subsystem === 'S1'" class="text-button" @click="$emit('reset-controls')">
             <RotateCcw :size="14" />{{ t("清除可选参数") }}
@@ -151,22 +153,13 @@ const showFieldContracts = ref(false);
             :placeholder="t('加载模板或粘贴 S1 runtime trace')"
           ></textarea>
         </label>
-        <label
-          ><span
-            >Fabric topology JSON
-            <label class="inline-file"
-              >{{ t("导入")
-              }}<input
-                type="file"
-                accept="application/json,.json"
-                @change="$emit('load-json-file', $event, 'topology')" /></label></span
-          ><textarea
-            v-model="topologyJson"
-            spellcheck="false"
-            :aria-invalid="fieldPath === '/custom_inputs/topology'"
-            :placeholder="t('加载模板或粘贴 Fabric topology')"
-          ></textarea>
-        </label>
+        <div class="topology-input-column">
+          <TopologyGraphEditor v-model="topologyJson" :field-path="fieldPath" />
+          <label class="inline-file topology-import"
+            >{{ t("导入拓扑 JSON")
+            }}<input type="file" accept="application/json,.json" @change="$emit('load-json-file', $event, 'topology')"
+          /></label>
+        </div>
       </div>
     </div>
     <div v-else class="trace-package-state">

@@ -248,6 +248,13 @@ export function validateIntentCompilerInput(input: IntentCompilerInput): string 
   if (input.context.availability === "stale") return "page_context_stale";
   if (input.context.availability !== "available") return "page_context_unavailable";
   if (
+    input.context.resources.some(
+      (resource) => resource.resource_type === "field" && resource.availability !== "available",
+    )
+  ) {
+    return "page_context_draft_not_allowed";
+  }
+  if (
     !input.context.supported_actions.includes("configure_current_subset") ||
     !input.context.allowed_purposes.includes("draft")
   ) {

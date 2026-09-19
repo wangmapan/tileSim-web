@@ -5,6 +5,12 @@ import { formatNumber, formatPercent } from "../../../lib/format";
 import type { ExecutionRecord } from "../model/types";
 import { useI18n } from "../../../i18n";
 import ArtifactEvidenceLink from "../../../components/ArtifactEvidenceLink.vue";
+import {
+  AvailabilityBadge,
+  availabilityDescription,
+  availabilityOfValue,
+  availabilityTone,
+} from "../../report-coverage";
 
 const props = defineProps<{ records: ExecutionRecord[] }>();
 const { t } = useI18n();
@@ -20,6 +26,17 @@ watch(
 function factFor(record: ExecutionRecord, label: string) {
   return record.facts.find((fact) => fact.label === label);
 }
+
+/** Columns are the union of every record's facts: a record that lacks one reports it as absent. */
+function cellAvailability(record: ExecutionRecord, label: string) {
+  return availabilityOfValue(factFor(record, label)?.value);
+}
+
+/**
+ * A record whose status the backend did not report is absent evidence, so it resolves to the
+ * shared `missing` state instead of a bare dash placeholder.
+ */
+const unreportedStatusAvailability = availabilityOfValue(null);
 
 function display(value: unknown, unit = "") {
   if (value === null || value === undefined || value === "") return t("缺失");
@@ -48,16 +65,22 @@ function display(value: unknown, unit = "") {
             <ArtifactEvidenceLink v-if="record.sourcePath" :source-path="record.sourcePath" />
           </th>
           <td>
-            <StatusPill v-if="record.status && record.status !== 'unknown'" :value="record.status" /><span v-else
-              >—</span
-            >
+            <StatusPill v-if="record.status && record.status !== 'unknown'" :value="record.status" />
+            <span v-else :title="availabilityDescription(unreportedStatusAvailability)"
+              ><AvailabilityBadge :availability="unreportedStatusAvailability" compact
+            /></span>
           </td>
-          <td v-for="column in columns" :key="column" :class="{ 'record-value--missing': !factFor(record, column) }">
-            {{
-              factFor(record, column)
-                ? display(factFor(record, column)?.value, factFor(record, column)?.unit)
-                : t("不适用")
-            }}
+          <td
+            v-for="column in columns"
+            :key="column"
+            :class="`record-value--${availabilityTone(cellAvailability(record, column))}`"
+          >
+            <template v-if="cellAvailability(record, column) === 'available'">
+              {{ display(factFor(record, column)?.value, factFor(record, column)?.unit) }}
+            </template>
+            <span v-else :title="availabilityDescription(cellAvailability(record, column))">
+              <AvailabilityBadge :availability="cellAvailability(record, column)" compact />
+            </span>
           </td>
         </tr>
       </tbody>

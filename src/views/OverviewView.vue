@@ -3,17 +3,48 @@ import { ArrowRight, Braces, ChevronDown, FileJson, Play, Workflow } from "@luci
 import StatCard from "../components/StatCard.vue";
 import StatusPill from "../components/StatusPill.vue";
 import UtilizationMeasure from "../components/ui/UtilizationMeasure.vue";
+import ArtifactEvidenceLink from "../components/ArtifactEvidenceLink.vue";
 import "../styles/workbench.css";
 import { computed } from "vue";
 import { formatNumber, formatPercent } from "../lib/format";
 import { rawArtifactUrl } from "../features/inspect-artifact";
 import { useDashboard } from "../store/dashboard";
 import { useI18n } from "../i18n";
+import type { LosslessInteger, SourcedValue } from "../contracts/report-model";
+import {
+  availabilityDescription,
+  availabilityLabel,
+  AvailabilityBadge,
+  buildRunVerdict,
+  ReportCoveragePanel,
+} from "../features/report-coverage";
 
 const { state, dashboardView, setView } = useDashboard();
 const { t } = useI18n();
 const networkSummary = computed(() => state.bundle.metrics?.system_summary);
 const previewDomains = computed(() => networkSummary.value?.fabric_domain_utilization?.slice(0, 6) || []);
+const runVerdict = computed(() => buildRunVerdict(state.bundle));
+
+/**
+ * C0-7: the availability of a value is one of five distinct states, never
+ * collapsed into a shared "—" or "not applicable" placeholder.
+ */
+function stateText(metric: SourcedValue<number | LosslessInteger>, format: (value: unknown) => string): string {
+  return metric.availability === "available" ? format(metric.value) : availabilityLabel(metric.availability);
+}
+
+function stateHint(metric: SourcedValue<number | LosslessInteger>, fallback: string): string {
+  return metric.availability === "available" ? fallback : availabilityDescription(metric.availability);
+}
+
+function countText(value: unknown) {
+  return formatNumber(value, 0);
+}
+
+function durationText(value: unknown) {
+  return formatNumber(value);
+}
+
 const artifactCopy: Record<string, [string, string]> = {
   "input-runtime-trace": ["Runtime trace", "输入"],
   "input-topology": ["Fabric topology", "输入"],
@@ -69,10 +100,10 @@ const primarySubsystemName = computed(() => {
         <div class="hero-measure">
           <span>{{ t("本次模拟总时长") }}</span>
           <div>
-            <strong>{{ formatNumber(dashboardView.overview.endToEndLatencyUs.value) }}</strong
-            ><small>µs</small>
+            <strong>{{ stateText(dashboardView.overview.endToEndLatencyUs, durationText) }}</strong
+            ><small v-if="dashboardView.overview.endToEndLatencyUs.availability === 'available'">µs</small>
           </div>
-          <span>{{ t("仿真时间，非程序运行耗时") }}</span>
+          <span>{{ stateHint(dashboardView.overview.endToEndLatencyUs, t("仿真时间，非程序运行耗时")) }}</span>
         </div>
         <nav
           class="analysis-stage__actions overview-analysis-index"
@@ -114,21 +145,34 @@ const primarySubsystemName = computed(() => {
     <section class="stat-grid" data-help-anchor="overview-metrics">
       <StatCard
         :label="t('吞吐')"
-        :value="`${formatNumber(dashboardView.overview.throughputRequestsPerSecond.value)} req/s`"
+        :value="
+          stateText(dashboardView.overview.throughputRequestsPerSecond, (value) => `${formatNumber(value)} req/s`)
+        "
         :hint="
-          t('{done}/{total} 请求完成', {
-            done: dashboardView.overview.completedRequestCount.value ?? '—',
-            total: dashboardView.overview.requestCount.value ?? '—',
-          })
+          stateHint(
+            dashboardView.overview.requestCount,
+            t('{done}/{total} 请求完成', {
+              done: dashboardView.overview.completedRequestCount.value ?? '—',
+              total: dashboardView.overview.requestCount.value ?? '—',
+            }),
+          )
         "
         accent
       />
-      <StatCard :label="t('调度事件')" :value="formatNumber(dashboardView.overview.runtimeEventCount.value, 0)" />
-      <StatCard :label="t('网络通信记录')" :value="formatNumber(dashboardView.overview.fabricRecordCount.value, 0)" />
+      <StatCard
+        :label="t('调度事件')"
+        :value="stateText(dashboardView.overview.runtimeEventCount, countText)"
+        :hint="stateHint(dashboardView.overview.runtimeEventCount, t('记录调度、批处理和请求推进'))"
+      />
+      <StatCard
+        :label="t('网络通信记录')"
+        :value="stateText(dashboardView.overview.fabricRecordCount, countText)"
+        :hint="stateHint(dashboardView.overview.fabricRecordCount, t('记录网络传输与等待'))"
+      />
       <StatCard
         :label="t('验证完整度')"
-        :value="formatPercent(dashboardView.overview.validationCompleteness.value)"
-        :hint="t('字段覆盖，非准确率')"
+        :value="stateText(dashboardView.overview.validationCompleteness, (value) => formatPercent(value))"
+        :hint="stateHint(dashboardView.overview.validationCompleteness, t('字段覆盖，非准确率'))"
       />
     </section>
 
@@ -206,5 +250,87 @@ const primarySubsystemName = computed(() => {
         </a>
       </div>
     </details>
+
+    <!--
+      C0-1 #7b: `cause` and `next_action` are the run report's own verdict and sit at the
+      same level of the payload. They are rendered together, verbatim, at the end of the
+      page so the first-viewport contract (`.overview-domain-list` stays above the fold)
+      is preserved. `next_action` is never demoted to a hint or rewritten.
+    -->
+    <section v-if="runVerdict" class="panel run-verdict" data-help-anchor="overview-verdict">
+      <header>
+        <p class="section-kicker">{{ t("后端结论") }}</p>
+        <h2>{{ t("cause 与 next_action") }}</h2>
+        <p>{{ t("这两个字段由后端原样给出，前端不改写、不摘编、不降级为提示文案。") }}</p>
+      </header>
+      <dl>
+        <div>
+          <dt><code>cause</code></dt>
+          <dd>
+            <span v-if="runVerdict.cause.text !== null" class="run-verdict__text">{{ runVerdict.cause.text }}</span>
+            <AvailabilityBadge v-else :availability="runVerdict.cause.availability" />
+            <ArtifactEvidenceLink :source-path="runVerdict.cause.sourcePaths[0]" />
+          </dd>
+        </div>
+        <div>
+          <dt><code>next_action</code></dt>
+          <dd>
+            <span v-if="runVerdict.nextAction.text !== null" class="run-verdict__text">{{
+              runVerdict.nextAction.text
+            }}</span>
+            <AvailabilityBadge v-else :availability="runVerdict.nextAction.availability" />
+            <ArtifactEvidenceLink :source-path="runVerdict.nextAction.sourcePaths[0]" />
+          </dd>
+        </div>
+      </dl>
+    </section>
+
+    <ReportCoveragePanel section="run" :bundle="state.bundle" />
   </div>
 </template>
+
+<style scoped>
+.run-verdict {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  min-width: 0;
+}
+.run-verdict header h2 {
+  margin: 4px 0 0;
+}
+.run-verdict header p {
+  margin: 4px 0 0;
+  max-width: 72ch;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.run-verdict dl {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+}
+.run-verdict dl > div {
+  display: grid;
+  grid-template-columns: minmax(120px, 180px) minmax(0, 1fr);
+  gap: 4px 12px;
+  min-width: 0;
+}
+.run-verdict dt code {
+  font: 600 var(--text-xs) var(--font-mono);
+}
+.run-verdict dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+}
+.run-verdict__text {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+</style>

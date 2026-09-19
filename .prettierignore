@@ -3,3 +3,5 @@ node_modules/
 runs/
 .idea/
 pnpm-lock.yaml
+.playwright-cli/
+output/

@@ -1,7 +1,21 @@
-import type { ReportBundle } from "../../contracts/report-model";
+import type { LosslessInteger, ReportBundle } from "../../contracts/report-model";
 import type { ArtifactManifestResponse } from "../../lib/api";
+import { isLosslessInteger } from "../../contracts/lossless-json";
 import { artifactAvailability, identityAware, reference } from "./evidence-references";
-import type { RunBoundAvailability, Week8ExecutionSummary } from "./types";
+import type { RunBoundAvailability, Week8ExecutionSummary, Week8StreamRecord } from "./types";
+
+/** Returns null (rather than a fabricated `0`) when the backend omitted the field. */
+function optionalLossless(value: unknown): LosslessInteger | null {
+  return isLosslessInteger(value) ? value : null;
+}
+
+function optionalString(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function optionalBoolean(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
 
 export function buildWeek8ExecutionSummary(
   runId: string | null,
@@ -16,6 +30,7 @@ export function buildWeek8ExecutionSummary(
     fallback: null,
     provenance: null,
     stateSummary: null,
+    streamRecords: [],
     differential: null,
     stream: null,
     checkpoint: null,
@@ -36,6 +51,19 @@ export function buildWeek8ExecutionSummary(
     return empty("invalid_reference", "S7 execution artifact 的 run_id 与当前运行不一致。");
   let availability: RunBoundAvailability = identityAware(manifest, ["week8-run-evidence"], "available");
   if (report.fallback.used || !report.differential.matched || report.stream.truncated) availability = "partial";
+  const stateSummary = report.state_summary as Record<string, unknown>;
+  const streamRecords: Week8StreamRecord[] = report.stream.records.map((item, index) => {
+    const entry = item as Record<string, unknown>;
+    return {
+      index,
+      windowStartPs: optionalLossless(entry.window_start_ps),
+      windowEndPs: optionalLossless(entry.window_end_ps),
+      partitionId: optionalString(entry.partition_id),
+      committedEventCount: optionalLossless(entry.committed_event_count),
+      committedEventDigest: optionalString(entry.committed_event_digest),
+      sourcePath: `week8-run-evidence:/stream/records/${index}`,
+    };
+  });
   return {
     availability,
     requestedFidelity: report.requested_fidelity,
@@ -46,13 +74,22 @@ export function buildWeek8ExecutionSummary(
       sourceMode: report.provenance.source_mode,
       calibrationLevel: report.provenance.calibration_level,
       allowedClaimScope: report.provenance.allowed_claim_scope,
+      traceKind: optionalString((report.provenance as Record<string, unknown>).trace_kind),
     },
     stateSummary: {
       logicalTimePs: report.state_summary.logical_time_ps,
       partitionCount: report.state_summary.partition_count,
       committedEventCount: report.state_summary.committed_event_count,
       pendingEventCount: report.state_summary.pending_event_count,
+      synchronizationWindowCount: optionalLossless(stateSummary.synchronization_window_count),
+      committedEventDigest: optionalString(stateSummary.committed_event_digest),
+      validationLane: optionalString(stateSummary.validation_lane),
+      claimScope: optionalString(stateSummary.claim_scope),
+      streamRecordCount: optionalLossless(stateSummary.stream_record_count),
+      totalStreamRecordCount: optionalLossless(stateSummary.total_stream_record_count),
+      streamRecordsTruncated: optionalBoolean(stateSummary.stream_records_truncated),
     },
+    streamRecords,
     differential: {
       compared: report.differential.compared,
       matched: report.differential.matched,
