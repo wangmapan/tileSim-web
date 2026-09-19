@@ -22,10 +22,14 @@
 `b2958e796eb8e3b7bb8bd7cc95d8972195571d4d`，后端为
 `a876859a44f660c4627dab495034d52b4ae61f57`。以上数字是 **2026-09-11 的 dated 验证记录**，不是当前基线。
 
-2026-09-17 当前 revision：Web `HEAD == origin/main ==`
+2026-09-17 revision 实测（**历史记录**）：Web `HEAD == origin/main ==`
 `4d7f9fa3c330b7d6f287d12da853ec2bf481b0cb`；后端公开 `origin/main` 为
 `7b2b1cff52fdab21575609be170c3856f120120b`，后端本地 `main` 为
 `ba11e6fdb69af046dc7597e5ef5732cce029cfbe`（领先 2 个提交、尚未 push）。本节之后描述的部署步骤与要求不变。
+
+**2026-09-19 更正**：本机 Web `HEAD` 已为 `11cef6b`，与 `origin/main`（`4d7f9fa`，仍可解析）**没有共同祖先**；
+2026-09-18 对象库清空后，三个未推送的本地提交 `446f21d` / `290d1c8` / `9b2d39b` 已不可解析且不可恢复。
+部署步骤与要求不变，完整更正见 `docs/AI_HANDOFF.md` 的「2026-09-19 仓库与基线更正」。
 
 ## 2. 环境要求
 

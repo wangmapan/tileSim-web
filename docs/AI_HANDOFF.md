@@ -1,12 +1,63 @@
 # TileSim Web AI Handoff
 
-**事实日期**：2026-09-17
+**事实日期**：2026-09-17（下文历史记录）／2026-09-19（本机实测基线，见「2026-09-19 仓库与基线更正」）
 
 **产品范围**：电脑网页端、local Bridge、版本化契约和 Windows/WSL 本地部署
 
 **当前状态**：Phase 1 全局 Agent 侧栏与八字段本地草案已发布；Phase 2A/2B 契约已正式发布并提交（`4d7f9fa`）；后端 Phase 2C
 Run Intake Lowering 已落地，Bridge 侧 Run Intake v2 **只读预览**端点（WP-2C-01a/01b，工作树未提交）已注册但仍未与 lowering
 接线；五类 Profile 真实记录仍为 `0/unavailable`，因此 Phase 2 的执行与数据侧仍被阻塞；未部署 5173
+
+## 2026-09-19 仓库与基线更正（**优先于下文所有 revision 与测试数字**）
+
+本节由 2026-09-19 的只读盘点得出，未改动任何代码、契约或运行态。**下文所有 `HEAD`/revision 表述与门禁数字均为历史记录，读取时以本节为准。**
+
+### git 真实状态（2026-09-18「本地历史不可恢复」的表述需收窄）
+
+- 实际 `HEAD` = `11cef6b`（`chore(recovery): restore phase 2 docs, registry test and launcher-safe deployment scripts`），
+  其父为 `c303ac2`（`feat(workbench): restore lightweight workbench shell, topology editor and 2026-09-17 work`）。
+  本地仅有这两个提交，`c303ac2` 是根提交。
+- **已发布的远端历史在本机对象库里是完好的**：`refs/remotes/origin/main` = `4d7f9fa` 可解析（`git log origin/main` 正常，
+  其树含 636 个受跟踪文件）。即 2026-09-18 那次对象库清空**没有**毁掉已发布历史。
+- 真正丢失且**不可恢复**的是当时尚未推送的 3 个本地提交：`446f21d`、`290d1c8`、`9b2d39b`。
+  已实测救援目录 `C:\Users\mapanwang\_tilesim_rescue`：`tilesim-web-backup.git` 只含 `refs/heads/main = 11cef6b`
+  （恢复之后才建立的镜像），`dotgit_backup/.git` 不含任何 ref —— **两处备份都没有这三个提交**。
+- 本地 `main` 与 `origin/main` **没有共同祖先**（`git merge-base` 为空）。文件层面本地是严格超集：
+  `git diff --diff-filter=D origin/main main` 命中 **0** 个文件，本地相对远端新增 100 个文件、182 个文件改动；
+  `git ls-tree -r` 计数为本地 736 / 远端 636。**后续任何 push 决策都必须先处理这两条无关联历史。**
+- `git worktree list` 现只剩 `D:/tileSim-web`；工作树 clean；其余 `origin/codex/*` 分支引用仍在。
+
+### 文档卫生
+
+- 本文件此前残留两个合并冲突标记（`>>>>>>> Stashed changes` 与 `<<<<<<< Updated upstream`），已随本节同一批次清除；
+  它们也是本文件唯一的 prettier 不合规来源。紧随本节的「双工作台方案状态」与「Phase 2D handoff」两节来自当时的
+  stash 侧内容，属**历史阶段记录**。
+- 以下文件仍引用本机已不可解析的提交号 `446f21d` / `4d7f9fa` / `290d1c8` / `9b2d39b`，应作为历史证据阅读，
+  **不要**用它们做 `git` 定位：本文件、`AGENTS.md`、`docs/getting-started/AI_DEPLOYMENT_AND_HANDOFF.md`、
+  `docs/architecture/BACKEND_SIMULATION_FLOW_UI_COVERAGE.md`、`docs/F9_AGENT_ORCHESTRATION/` 下的 `01`、`12`、
+  `14`、`24` 与 `README.md`，以及 `docs/archive/agent-orchestration/phase-records/` 下的 `21`、`22`。
+
+### 2026-09-19 实测门禁（本机，`HEAD` = `11cef6b`，工作树 clean）
+
+| 门禁                                              | 实测                                                       | 本文下文历史值    |
+| ------------------------------------------------- | ---------------------------------------------------------- | ----------------- |
+| Web Vitest（`vitest run`）                        | **721 passed / 8 skipped，79 files**                       | 596 / 8，70 files |
+| Bridge `python -m unittest test_server.py`        | **Ran 143 tests / OK，exit 0**                             | 143（一致）       |
+| `generate-contract-types.mjs --check`             | exit 0                                                     | —                 |
+| `generate-bridge-client.mjs --check`              | exit 0（既有 `unknown format "date-time"` 为提示，非错误） | —                 |
+| `check-doc-links.mjs`（`docs:check`）             | exit 0，**62 篇活跃 Markdown**                             | 43 篇             |
+| `check-frontend-dependencies.mjs`（`deps:check`） | exit 0，**290 源文件**                                     | 255               |
+| `vue-tsc --noEmit`                                | exit 0                                                     | —                 |
+| Playwright 全量 e2e                               | **not-run**（本轮未执行；上批 49/57 中 1 条失败仍未定性）  | —                 |
+
+- Vitest 必须用**原始 PATH** 运行：前插 `/usr/bin:/bin` 会让 GNU tar 遮蔽 bsdtar，使
+  `tests/oracles/phase0d-evidence-reproducibility*` 出现唯一红灯（本轮原始 PATH 下为 5/5 绿）。
+- 本机无 C++ 工具链且 `wsl.exe` 被安全策略阻断，后端 CTest 与后端构建门禁一律 `not-run`。
+
+### 运行态
+
+- `127.0.0.1:5173` **未监听**（2026-09-19 实测 `listening=False`）。当前没有工作台服务在运行；
+  部署与启停仍只能由人工执行，未获授权不得操作。
 
 ## 双工作台方案状态
 
@@ -26,7 +77,6 @@ L6R 后续 UI remediation 已完成 P0/P1/P2/P3：`/lightweight` 负责开始/�
 - 所有记录均 `runtime_status=unavailable`、`agent_exposed=false`、calculator/ranking 不可用；校准和 held-out 缺失，Phase 2C lowering 继续 fail closed。
 - registry 校验 source/license/regime、字段 provenance、生命周期、visibility/sensitivity、canonical digest、revision drift 和 stale snapshot；不得把 synthetic/compatibility 记录升级为真实校准证据。
 - Phase 2D/2E handoff 本身不新增 calculator、Agent orchestration receipt UI、RAG、多轮、审批、Workflow、SSE/cancellation；不操作 5173、不读取 credential、不调用 Provider、不创建正式 run。当前拓扑图编辑器属于 S6 JSON 输入工作台，不改变该 Phase 2 边界。Phase 2E 不启动。
->>>>>>> Stashed changes
 
 ## 1. 必读
 
@@ -43,7 +93,6 @@ Phase 2B 发布）已归档到 `docs/archive/agent-orchestration/phase-records/`
 
 - Vue 前端、Python Bridge、OpenAPI/JSON Schema、generated contracts、fixture/E2E 和 immutable release 工具均在本仓库。
 - 完整仿真运行仍依赖独立 TileSim 后端仓库；bootstrap 可自动克隆。Evidence Agent 外部模型为可选配置。
-<<<<<<< Updated upstream
 - Web 集成交付、部署可移植性修复和对应回归已进入公开 `origin/main`；本仓库 `HEAD == origin/main ==`
   `4d7f9fa3c330b7d6f287d12da853ec2bf481b0cb`。
 - 后端本地 `main` 为 `ba11e6fdb69af046dc7597e5ef5732cce029cfbe`（含 Phase 2C 与 dense timing）；后端公开
