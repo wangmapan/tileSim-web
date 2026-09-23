@@ -312,8 +312,8 @@ export const experimentDescriptorSchema = {
     },
     parameter_descriptors: {
       type: "array",
-      minItems: 8,
-      maxItems: 8,
+      minItems: 13,
+      maxItems: 13,
       items: {
         $ref: "#/$defs/parameterDescriptor",
       },

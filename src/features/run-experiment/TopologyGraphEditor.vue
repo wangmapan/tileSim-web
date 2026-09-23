@@ -1,7 +1,26 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { Link2, MousePointer2, Trash2, Unlink, X } from "@lucide/vue";
+import { Link2, MousePointer2, Plus, Trash2, Unlink, X } from "@lucide/vue";
 import { useI18n } from "../../i18n";
+import {
+  moduleBindingFields,
+  moduleBindingOverrideFields,
+  topologyModuleBindingMaxItems,
+  type SchemaFieldMeta,
+} from "./input-schema-meta";
+import {
+  addModuleBinding,
+  moduleBindingNamesOf,
+  nextModuleBindingName,
+  patchJsonDocument,
+  removeModuleBinding,
+  renameModuleBinding,
+  setModuleBindingKind,
+  setModuleBindingText,
+  StructuredInputError,
+  type DomainType,
+  type JsonObject,
+} from "./structured-input";
 import {
   parseTopologyDocument,
   topologyJson,
@@ -10,7 +29,22 @@ import {
   type TopologyDomain,
 } from "./topology-graph";
 
-const props = withDefaults(defineProps<{ modelValue: string; fieldPath?: string }>(), { fieldPath: "" });
+/**
+ * Two switches keep one canvas in both work modes.
+ *
+ * `readOnly` turns the canvas into a preview: the graph still follows whatever
+ * the JSON says, but every editing gesture is refused, and the chrome that only
+ * makes sense while editing (connect mode, link properties, domain chips,
+ * module bindings) is not rendered at all.
+ *
+ * `showJson` hides the raw JSON textarea, which is how the quick-control tab
+ * stays mouse-only. Both default to the long-standing editor behaviour so a
+ * caller that passes neither keeps exactly what it had.
+ */
+const props = withDefaults(
+  defineProps<{ modelValue: string; fieldPath?: string; readOnly?: boolean; showJson?: boolean }>(),
+  { fieldPath: "", readOnly: false, showJson: true },
+);
 const emit = defineEmits<{ (event: "update:modelValue", value: string): void }>();
 const { t } = useI18n();
 const instanceId =
@@ -161,6 +195,7 @@ function point(event: PointerEvent) {
   };
 }
 function startNode(event: PointerEvent, device: TopologyDevice) {
+  if (props.readOnly) return;
   if (connecting.value) {
     // Connection mode is a two-step gesture: retain the first node until a
     // different node receives pointerup. This supports both click-to-connect
@@ -186,7 +221,7 @@ function moveNode(event: PointerEvent) {
 }
 function endNode(event: PointerEvent, target?: TopologyDevice) {
   if (drag.value) drag.value = null;
-  if (!connecting.value || !pendingConnection.value || !target) return;
+  if (props.readOnly || !connecting.value || !pendingConnection.value || !target) return;
   const source = pendingConnection.value;
   if (source === target.device_id) {
     // Keep the source armed after a click. The next device click can then
@@ -252,6 +287,7 @@ function updateLinkField(field: "domain_id" | "bandwidth_gbps" | "latency_us", v
   });
 }
 function keydown(event: KeyboardEvent) {
+  if (props.readOnly) return;
   const target = event.target as HTMLElement | null;
   const isEditable =
     target instanceof HTMLInputElement ||
@@ -294,6 +330,7 @@ function linkLabel(link: { src_device: string; dst_device: string; domain_id: st
   });
 }
 function nodeKeydown(event: KeyboardEvent, device: TopologyDevice) {
+  if (props.readOnly) return;
   if (event.key !== "Enter" && event.key !== " ") return;
   event.preventDefault();
   if (!connecting.value) return;
@@ -301,6 +338,7 @@ function nodeKeydown(event: KeyboardEvent, device: TopologyDevice) {
   else endNode(event as unknown as PointerEvent, device);
 }
 function linkKeydown(event: KeyboardEvent, index: number) {
+  if (props.readOnly) return;
   if (event.key === "Enter" || event.key === " ") {
     event.preventDefault();
     event.stopPropagation();
@@ -312,40 +350,275 @@ function linkKeydown(event: KeyboardEvent, index: number) {
     deleteSelected();
   }
 }
+function selectLink(index: number) {
+  if (props.readOnly) return;
+  selectedLink.value = index;
+}
 function toggleConnecting() {
+  if (props.readOnly) return;
   connecting.value = !connecting.value;
   if (!connecting.value) pendingConnection.value = null;
 }
 function eventValue(event: Event) {
   return (event.target as HTMLInputElement | HTMLSelectElement | null)?.value || "";
 }
+
+/* ------------------------------------------------- module_bindings overrides */
+
+const moduleBindings = computed<Record<string, unknown>[]>(
+  () => (graph.value?.module_bindings || []) as Record<string, unknown>[],
+);
+const bindingIndexes = computed(() => moduleBindings.value.map((_, index) => index));
+
+const OVERRIDE_LABEL_SOURCE: Record<string, string> = {
+  bandwidth_gbps: "带宽（Gbps）",
+  latency_us: "延迟（us）",
+  queue_factor: "队列系数",
+  oversubscription_factor: "超额订阅系数",
+};
+
+const LINK_LABEL_SOURCE: Record<string, string> = {
+  domain_id: "所属域",
+  bandwidth_gbps: "带宽（Gbps）",
+  latency_us: "延迟（us）",
+};
+
+/** Link property labels stay Chinese; the contract key survives as a tooltip. */
+function linkFieldLabel(field: "domain_id" | "bandwidth_gbps" | "latency_us"): string {
+  const source = LINK_LABEL_SOURCE[field];
+  return source ? t(source) : field;
+}
+
+function overrideLabel(field: SchemaFieldMeta): string {
+  const source = OVERRIDE_LABEL_SOURCE[field.key];
+  return source ? t(source) : field.key;
+}
+
+function bindingName(index: number): string {
+  const binding = moduleBindings.value[index];
+  const name = binding?.module_name;
+  return typeof name === "string" && name.length ? name : `#${index + 1}`;
+}
+
+function overrideValue(index: number, key: string): string {
+  const params = moduleBindings.value[index]?.override_params;
+  if (!params || typeof params !== "object" || Array.isArray(params)) return "";
+  const value = (params as Record<string, unknown>)[key];
+  return value === undefined || value === null ? "" : String(value);
+}
+
+function overrideHint(field: SchemaFieldMeta): string {
+  const below = field.exclusiveMinimum !== null ? `> ${field.exclusiveMinimum}` : `${field.minimum ?? "-∞"}`;
+  return `${below} ~ ${field.maximum ?? "+∞"}`;
+}
+
+/**
+ * Writes `module_bindings[].override_params`. Values outside the contract range
+ * are refused instead of being written, because the editor's own strict parser
+ * would reject the document and blank the graph.
+ */
+function updateModuleOverride(index: number, field: SchemaFieldMeta, event: Event) {
+  const raw = (event.target as HTMLInputElement).value;
+  updateDocument((document_) => {
+    const binding = (document_.module_bindings || [])[index];
+    if (!binding) return;
+    const existing = binding.override_params;
+    const params =
+      existing && typeof existing === "object" && !Array.isArray(existing) ? (existing as Record<string, unknown>) : {};
+    if (raw.trim() === "") {
+      delete params[field.key];
+    } else {
+      const numeric = Number(raw);
+      const belowMinimum =
+        field.exclusiveMinimum !== null
+          ? numeric <= field.exclusiveMinimum
+          : field.minimum !== null
+            ? numeric < field.minimum
+            : false;
+      const aboveMaximum = field.maximum !== null ? numeric > field.maximum : false;
+      if (!Number.isFinite(numeric) || belowMinimum || aboveMaximum) return;
+      params[field.key] = numeric;
+    }
+    binding.override_params = params;
+  });
+}
+
+/* ------------------------------------------- module_bindings as an editable list */
+
+type ModuleMessage = { tone: "info" | "warning" | "error"; text: string };
+
+const moduleMessage = ref<ModuleMessage | null>(null);
+
+const MODULE_LABEL_SOURCE: Record<string, string> = {
+  module_name: "模型名",
+  module_kind: "类型",
+  module_version: "版本",
+  config_profile: "配置档",
+};
+
+const MODULE_KIND_LABEL_SOURCE: Record<string, string> = {
+  scale_up: "机内高速互联（scale_up）",
+  scale_out: "跨机网络（scale_out）",
+};
+
+/** Optional string keys this panel writes; an empty value removes the key. */
+const MODULE_TEXT_KEYS = ["module_version", "config_profile"] as const;
+
+const moduleKindValues = computed<readonly string[]>(
+  () => moduleBindingFields.find((field) => field.key === "module_kind")?.enumValues || [],
+);
+
+function moduleLabel(key: string): string {
+  const source = MODULE_LABEL_SOURCE[key];
+  return source ? t(source) : key;
+}
+
+function moduleKindLabel(value: string): string {
+  const source = MODULE_KIND_LABEL_SOURCE[value];
+  return source ? t(source) : value;
+}
+
+function bindingPath(index: number, key: string): string {
+  return `/custom_inputs/topology/topology/module_bindings/${index}/${key}`;
+}
+
+function bindingText(index: number, key: string): string {
+  const value = moduleBindings.value[index]?.[key];
+  return typeof value === "string" ? value : "";
+}
+
+/**
+ * Module edits go through the raw JSON text rather than the parsed graph, so the
+ * envelope and every key this panel does not render survive the round trip. The
+ * helpers refuse impossible edits (duplicate name, module a domain still binds)
+ * instead of writing a document the strict parser would reject.
+ */
+function updateModuleList(mutate: (document: JsonObject) => ModuleMessage | null) {
+  let message: ModuleMessage | null = null;
+  try {
+    const next = patchJsonDocument(props.modelValue, "Fabric topology", (draft) => {
+      message = mutate(draft);
+    });
+    emit("update:modelValue", next);
+    moduleMessage.value = message;
+  } catch (error) {
+    moduleMessage.value = {
+      tone: "error",
+      text: error instanceof StructuredInputError ? error.message : String(error),
+    };
+  }
+}
+
+function addOneModule() {
+  updateModuleList((document) => {
+    const name = nextModuleBindingName(moduleBindingNamesOf(document).map((entry) => entry.name));
+    addModuleBinding(document, { module_name: name, module_kind: "scale_up" });
+    return {
+      tone: "warning",
+      text: t("已新增模型 {name}（机内高速互联）。名字只是占位符，请改成你实际要用的模块名。", { name }),
+    };
+  });
+}
+
+/** Renaming a module rewrites every `domains[].module_binding` that named it. */
+function updateModuleName(index: number, event: Event) {
+  const current = bindingText(index, "module_name");
+  const next = eventValue(event).trim();
+  if (!current || next === current) return;
+  const bound = domains.value.filter((domain) => domain.module_binding === current).length;
+  updateModuleList((document) => {
+    renameModuleBinding(document, current, next);
+    return {
+      tone: "info",
+      text: bound
+        ? t("已把模型 {from} 改名为 {to}，并同步更新了 {count} 个域的绑定。", {
+            from: current,
+            to: next,
+            count: bound,
+          })
+        : t("已把模型 {from} 改名为 {to}。", { from: current, to: next }),
+    };
+  });
+}
+
+function updateModuleKind(index: number, event: Event) {
+  const name = bindingText(index, "module_name");
+  const next = eventValue(event) as DomainType;
+  if (!name || next === bindingText(index, "module_kind")) return;
+  const mismatched = domains.value
+    .filter((domain) => domain.module_binding === name && domain.domain_type !== next)
+    .map((domain) => domain.domain_id);
+  updateModuleList((document) => {
+    setModuleBindingKind(document, name, next);
+    return mismatched.length
+      ? {
+          tone: "warning",
+          text: t("模型 {name} 的类型已改为 {kind}，但域 {domains} 的类型对不上，请核对。", {
+            name,
+            kind: moduleKindLabel(next),
+            domains: mismatched.join("、"),
+          }),
+        }
+      : { tone: "info", text: t("模型 {name} 的类型已改为 {kind}。", { name, kind: moduleKindLabel(next) }) };
+  });
+}
+
+/** Optional text keys stay silent: the input itself is the feedback. */
+function updateModuleText(index: number, key: (typeof MODULE_TEXT_KEYS)[number], event: Event) {
+  const name = bindingText(index, "module_name");
+  if (!name) return;
+  const raw = eventValue(event);
+  if (raw.trim() === bindingText(index, key)) return;
+  updateModuleList((document) => {
+    setModuleBindingText(document, name, key, raw);
+    return null;
+  });
+}
+
+function dropModule(index: number) {
+  const name = bindingText(index, "module_name");
+  if (!name) return;
+  updateModuleList((document) => {
+    removeModuleBinding(document, name);
+    return { tone: "info", text: t("已删除模型 {name}。", { name }) };
+  });
+}
 </script>
 
 <template>
-  <section class="topology-editor" :aria-label="t('网络拓扑可视化编辑器')" tabindex="-1" @keydown="keydown">
+  <section
+    class="topology-editor"
+    :class="{ 'topology-editor--readonly': readOnly }"
+    :aria-label="t('网络拓扑可视化编辑器')"
+    tabindex="-1"
+    @keydown="keydown"
+  >
     <div class="topology-editor__toolbar">
       <div>
         <strong>{{ t("网络拓扑") }}</strong
-        ><small>{{ t("拖动节点调整布局；开启连接后，从一个设备拖到另一个设备即可写入 links。") }}</small>
+        ><small v-if="readOnly">{{ t("只读预览：改下面的 JSON 文本，图会立刻跟着变。") }}</small
+        ><small v-else>{{ t("拖动节点调整布局；开启连接后，从一个设备拖到另一个设备即可写入 links。") }}</small>
       </div>
-      <button
-        type="button"
-        class="button button--secondary"
-        :class="{ active: connecting }"
-        :aria-pressed="connecting"
-        @click="toggleConnecting"
-      >
-        <Link2 :size="15" />{{ connecting ? t("退出连接") : t("连接设备") }}
-      </button>
-      <label v-if="connecting" class="topology-domain-picker"
-        >{{ t("连接 domain")
-        }}<select v-model="selectedDomainId" :aria-label="t('选择连接 domain')">
-          <option value="">{{ t("请选择") }}</option>
-          <option v-for="domain in domains" :key="domain.domain_id" :value="domain.domain_id">
-            {{ domain.domain_id }}
-          </option>
-        </select></label
-      >
+      <template v-if="!readOnly">
+        <button
+          type="button"
+          class="button button--secondary"
+          :class="{ active: connecting }"
+          :aria-pressed="connecting"
+          @click="toggleConnecting"
+        >
+          <Link2 :size="15" />{{ connecting ? t("退出连接") : t("连接设备") }}
+        </button>
+        <label v-if="connecting" class="topology-domain-picker"
+          >{{ t("连接 domain")
+          }}<select v-model="selectedDomainId" :aria-label="t('选择连接 domain')">
+            <option value="">{{ t("请选择") }}</option>
+            <option v-for="domain in domains" :key="domain.domain_id" :value="domain.domain_id">
+              {{ domain.domain_id }}
+            </option>
+          </select></label
+        >
+      </template>
     </div>
     <p v-if="parsed.error" class="topology-editor__error" role="alert">{{ parsed.error }}</p>
     <div v-if="!hasGraph" class="topology-editor__empty">
@@ -396,10 +669,10 @@ function eventValue(event: Event) {
             :key="`${link.src_device}-${link.dst_device}-${index}`"
             class="topology-link"
             :class="{ selected: selectedLink === index }"
-            tabindex="0"
-            role="button"
+            :tabindex="readOnly ? -1 : 0"
+            :role="readOnly ? 'img' : 'button'"
             :aria-label="linkLabel(link)"
-            @click.stop="selectedLink = index"
+            @click.stop="selectLink(index)"
             @keydown="linkKeydown($event, index)"
           >
             <line
@@ -429,8 +702,8 @@ function eventValue(event: Event) {
           class="topology-device"
           :class="{ pending: pendingConnection === device.device_id }"
           :transform="`translate(${positions[device.device_id]?.x || 0},${positions[device.device_id]?.y || 0})`"
-          tabindex="0"
-          role="button"
+          :tabindex="readOnly ? -1 : 0"
+          :role="readOnly ? 'img' : 'button'"
           :aria-label="t('设备 {label}', { label: deviceLabel(device) })"
           @keydown="nodeKeydown($event, device)"
           @pointerdown.stop="startNode($event, device)"
@@ -458,14 +731,14 @@ function eventValue(event: Event) {
           })
         }}</span>
       </div>
-      <p v-if="!links.length" class="topology-editor__empty-note">
+      <p v-if="!links.length && !readOnly" class="topology-editor__empty-note">
         {{
           t(
             "当前没有显式 links；图中的虚线只表达设备属于哪个 domain，不会写入 links。开启“连接设备”后，可拖拽两个设备创建连接。",
           )
         }}
       </p>
-      <aside v-if="selected" class="topology-link-panel" :aria-label="t('连接属性')">
+      <aside v-if="selected && !readOnly" class="topology-link-panel" :aria-label="t('连接属性')">
         <header>
           <strong>{{ t("连接属性") }}</strong
           ><button type="button" class="icon-button" :aria-label="t('关闭连接属性')" @click="selectedLink = null">
@@ -473,23 +746,26 @@ function eventValue(event: Event) {
           </button>
         </header>
         <small>{{ selected.src_device }} ↔ {{ selected.dst_device }}</small>
-        <label
-          >domain_id<select :value="selected.domain_id" @change="updateLinkField('domain_id', eventValue($event))">
+        <label title="domain_id"
+          >{{ linkFieldLabel("domain_id")
+          }}<select :value="selected.domain_id" @change="updateLinkField('domain_id', eventValue($event))">
             <option v-for="domain in domains" :key="domain.domain_id" :value="domain.domain_id">
               {{ domain.domain_id }}
             </option>
           </select></label
         >
-        <label
-          >bandwidth_gbps<input
+        <label title="bandwidth_gbps"
+          >{{ linkFieldLabel("bandwidth_gbps")
+          }}<input
             :value="selected.bandwidth_gbps ?? ''"
             type="number"
             min="0"
             step="any"
             @input="updateLinkField('bandwidth_gbps', eventValue($event))"
         /></label>
-        <label
-          >latency_us<input
+        <label title="latency_us"
+          >{{ linkFieldLabel("latency_us")
+          }}<input
             :value="selected.latency_us ?? ''"
             type="number"
             min="0"
@@ -501,7 +777,7 @@ function eventValue(event: Event) {
         </button>
       </aside>
     </div>
-    <div v-if="graph && domains.length" class="topology-domains" :aria-label="t('拓扑域')">
+    <div v-if="graph && domains.length && !readOnly" class="topology-domains" :aria-label="t('拓扑域')">
       <span>{{ t("拓扑域") }}</span
       ><button
         v-for="domain in domains"
@@ -519,7 +795,104 @@ function eventValue(event: Event) {
         }}
       </button>
     </div>
-    <div class="topology-editor__json">
+    <div v-if="graph && !readOnly" class="topology-module-bindings" :aria-label="t('模块绑定参数')">
+      <header>
+        <div>
+          <strong>{{ t("模块绑定参数") }}</strong>
+          <small>{{
+            t("每行一个网络模型（module_bindings）；域必须绑定其中一个，所以这里空着就没法新增域。最多 {max} 个。", {
+              max: topologyModuleBindingMaxItems,
+            })
+          }}</small>
+        </div>
+        <button type="button" class="button button--secondary" @click="addOneModule">
+          <Plus :size="15" />{{ t("新增模型") }}
+        </button>
+      </header>
+      <p v-if="!moduleBindings.length" class="structured-note">
+        {{ t("还没有网络模型。点「新增模型」加一条，再把它绑给需要的域。") }}
+      </p>
+      <div v-for="index in bindingIndexes" :key="`binding-${index}`" class="topology-module-binding">
+        <div class="topology-module-binding__meta">
+          <label :data-input-path="bindingPath(index, 'module_name')" title="module_name">
+            <span>{{ moduleLabel("module_name") }}</span>
+            <input
+              type="text"
+              spellcheck="false"
+              :value="bindingText(index, 'module_name')"
+              :aria-label="`${moduleLabel('module_name')} ${index + 1}`"
+              :aria-invalid="fieldPath === bindingPath(index, 'module_name')"
+              @change="updateModuleName(index, $event)"
+            />
+          </label>
+          <label :data-input-path="bindingPath(index, 'module_kind')" title="module_kind">
+            <span>{{ moduleLabel("module_kind") }}</span>
+            <select
+              :value="bindingText(index, 'module_kind')"
+              :aria-label="`${moduleLabel('module_kind')} ${index + 1}`"
+              :aria-invalid="fieldPath === bindingPath(index, 'module_kind')"
+              @change="updateModuleKind(index, $event)"
+            >
+              <option v-for="value in moduleKindValues" :key="`kind-${value}`" :value="value">
+                {{ moduleKindLabel(value) }}
+              </option>
+            </select>
+          </label>
+          <label v-for="key in MODULE_TEXT_KEYS" :key="`${index}-${key}`" :title="key">
+            <span>{{ moduleLabel(key) }}</span>
+            <input
+              type="text"
+              spellcheck="false"
+              :value="bindingText(index, key)"
+              :aria-label="`${bindingName(index)} ${moduleLabel(key)}`"
+              @change="updateModuleText(index, key, $event)"
+            />
+          </label>
+          <button
+            type="button"
+            class="icon-button"
+            :aria-label="t('删除模型 {name}', { name: bindingName(index) })"
+            @click="dropModule(index)"
+          >
+            <Trash2 :size="14" />
+          </button>
+        </div>
+        <div class="topology-module-binding__params">
+          <small class="topology-module-binding__hint">{{
+            t("以下几项写进 module_bindings[].override_params；留空表示省略该键。")
+          }}</small>
+          <label
+            v-for="field in moduleBindingOverrideFields"
+            :key="`${index}-${field.key}`"
+            class="topology-module-binding__field"
+          >
+            <span
+              >{{ overrideLabel(field) }} <small>{{ overrideHint(field) }}</small></span
+            >
+            <input
+              type="number"
+              step="any"
+              :value="overrideValue(index, field.key)"
+              :aria-label="`${bindingName(index)} ${overrideLabel(field)}`"
+              @change="updateModuleOverride(index, field, $event)"
+            />
+            <code>{{ field.key }}</code>
+          </label>
+        </div>
+      </div>
+      <p
+        v-if="moduleMessage"
+        class="structured-note"
+        :class="{
+          'structured-note--warning': moduleMessage.tone === 'warning',
+          'structured-note--error': moduleMessage.tone === 'error',
+        }"
+        role="status"
+      >
+        {{ moduleMessage.text }}
+      </p>
+    </div>
+    <div v-if="showJson" class="topology-editor__json">
       <label :for="jsonEditorId">{{ t("Fabric topology JSON") }}</label
       ><textarea
         :id="jsonEditorId"
@@ -533,7 +906,10 @@ function eventValue(event: Event) {
         {{ t("后端指出拓扑字段：{path}", { path: props.fieldPath }) }}
       </small>
     </div>
-    <small class="topology-editor__hint"
+    <p v-else-if="topologyFieldError" class="topology-editor__error" role="alert">
+      {{ t("后端指出拓扑字段：{path}", { path: props.fieldPath }) }}
+    </p>
+    <small v-if="!readOnly" class="topology-editor__hint"
       ><Unlink :size="13" />{{
         t("布局坐标仅存在于本次编辑，不会写入提交 JSON。边属性保持缺失与 0 的原始语义。")
       }}</small

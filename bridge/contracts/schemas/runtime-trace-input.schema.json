@@ -40,7 +40,7 @@
         "initial_kv_tokens": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
         "max_active_requests": { "type": "integer", "minimum": 0, "maximum": 1024 },
         "max_batch_size": { "type": "integer", "minimum": 0, "maximum": 1024 },
-        "batch_scheduler": { "enum": ["fifo", "decode_priority", "fabric_backpressure_aware"] },
+        "batch_scheduler": { "enum": ["fifo", "decode_priority", "fabric_backpressure_aware", "starvation_aware"] },
         "prefill_starvation_threshold_ps": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
         "pd_handoff_delay_ps": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
         "pd_handoff_queue_service_ps": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },

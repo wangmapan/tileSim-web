@@ -57,7 +57,14 @@ const { t } = useI18n();
     </dl>
     <details class="experiment-request-preview">
       <summary>{{ t("查看等价 JSON request") }}</summary>
-      <pre v-if="requestPreview.text">{{ requestPreview.text }}</pre>
+      <!--
+        The preview scrolls once the request carries a whole trace and topology
+        (`custom_inputs`), and a scrollable region has to be reachable without a
+        pointer — hence the explicit tab stop and accessible name.
+      -->
+      <pre v-if="requestPreview.text" tabindex="0" role="region" :aria-label="t('等价 JSON request')">{{
+        requestPreview.text
+      }}</pre>
       <p v-else class="request-preview-error">
         <code>{{ requestPreview.error?.fieldPath || "contract_gap" }}</code>
         {{ requestPreview.error?.message || t("请求不可提交。") }}

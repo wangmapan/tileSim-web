@@ -200,7 +200,18 @@ export function buildExperimentRequest(options: BuildExperimentRequestOptions): 
     gpu_participation_mode: form.gpu_participation_mode,
   };
   if (form.run_name.trim()) request.run_name = form.run_name.trim();
-  if (mode === "controls") {
+  if (mode === "controls" && options.structuredInput) {
+    // The structured editors sit behind the quick-control tab because that is
+    // where the knobs are, but request rows and device lists only travel on
+    // `custom_inputs`: `overrides` is scalar-only and the backend's overrides
+    // channel never reads them. The two channels are mutually exclusive in the
+    // contract (`create-run-request.schema.json:24-30`), so the presence of the
+    // structured editors — not the selected tab — decides which one is used.
+    request.custom_inputs = {
+      runtime_trace: parseJsonObject(options.runtimeJson, "/custom_inputs/runtime_trace", "Runtime trace"),
+      topology: parseJsonObject(options.topologyJson, "/custom_inputs/topology", "Fabric topology"),
+    };
+  } else if (mode === "controls") {
     for (const field of surface.controlGroups.flatMap((group) => group.fields)) {
       if (!field.applicableInputModes.includes(mode) || !field.applicableScenarios.includes(form.scenario_id)) continue;
       const value = controlValue(form, field);

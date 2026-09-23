@@ -47,9 +47,14 @@ const schema32 = {
       type: "object",
       additionalProperties: false,
       properties: {
-        batch_scheduler: { enum: ["fifo", "decode_priority", "fabric_backpressure_aware"] },
+        batch_scheduler: { enum: ["fifo", "decode_priority", "fabric_backpressure_aware", "starvation_aware"] },
         max_batch_size: { type: "integer", minimum: 1, maximum: 64 },
         kv_capacity_tokens: { type: "integer", minimum: 256, maximum: 1000000 },
+        max_active_requests: { type: "integer", minimum: 1, maximum: 1024 },
+        initial_kv_tokens: { type: "integer", minimum: 0, maximum: 1000000 },
+        kv_admission_watermark: { type: "number", minimum: 0.05, maximum: 1 },
+        long_context_threshold_tokens: { type: "integer", minimum: 1, maximum: 1000000 },
+        decode_penalty_per_threshold: { type: "number", minimum: 0, maximum: 1 },
       },
     },
     workload: {
@@ -238,7 +243,7 @@ const schema34 = {
         initial_kv_tokens: { type: "integer", minimum: 0, maximum: 9007199254740991 },
         max_active_requests: { type: "integer", minimum: 0, maximum: 1024 },
         max_batch_size: { type: "integer", minimum: 0, maximum: 1024 },
-        batch_scheduler: { enum: ["fifo", "decode_priority", "fabric_backpressure_aware"] },
+        batch_scheduler: { enum: ["fifo", "decode_priority", "fabric_backpressure_aware", "starvation_aware"] },
         prefill_starvation_threshold_ps: { type: "integer", minimum: 0, maximum: 9007199254740991 },
         pd_handoff_delay_ps: { type: "integer", minimum: 0, maximum: 9007199254740991 },
         pd_handoff_queue_service_ps: { type: "integer", minimum: 0, maximum: 9007199254740991 },
@@ -3817,7 +3822,12 @@ function validate21(
             }
             if (data13.batch_scheduler !== undefined) {
               let data18 = data13.batch_scheduler;
-              if (!(data18 === "fifo" || data18 === "decode_priority" || data18 === "fabric_backpressure_aware")) {
+              if (!(
+                data18 === "fifo" ||
+                data18 === "decode_priority" ||
+                data18 === "fabric_backpressure_aware" ||
+                data18 === "starvation_aware"
+              )) {
                 const err44 = {
                   instancePath: instancePath + "/runtime_trace/policy/batch_scheduler",
                   schemaPath: "runtime-trace-input.schema.json/properties/policy/properties/batch_scheduler/enum",
@@ -5521,7 +5531,16 @@ function validate20(
           let data5 = data4.runtime;
           if (data5 && typeof data5 == "object" && !Array.isArray(data5)) {
             for (const key2 in data5) {
-              if (!(key2 === "batch_scheduler" || key2 === "max_batch_size" || key2 === "kv_capacity_tokens")) {
+              if (!(
+                key2 === "batch_scheduler" ||
+                key2 === "max_batch_size" ||
+                key2 === "kv_capacity_tokens" ||
+                key2 === "max_active_requests" ||
+                key2 === "initial_kv_tokens" ||
+                key2 === "kv_admission_watermark" ||
+                key2 === "long_context_threshold_tokens" ||
+                key2 === "decode_penalty_per_threshold"
+              )) {
                 const err16 = {
                   instancePath: instancePath + "/overrides/runtime",
                   schemaPath: "run-overrides.schema.json/properties/runtime/additionalProperties",
@@ -5539,7 +5558,12 @@ function validate20(
             }
             if (data5.batch_scheduler !== undefined) {
               let data6 = data5.batch_scheduler;
-              if (!(data6 === "fifo" || data6 === "decode_priority" || data6 === "fabric_backpressure_aware")) {
+              if (!(
+                data6 === "fifo" ||
+                data6 === "decode_priority" ||
+                data6 === "fabric_backpressure_aware" ||
+                data6 === "starvation_aware"
+              )) {
                 const err17 = {
                   instancePath: instancePath + "/overrides/runtime/batch_scheduler",
                   schemaPath: "run-overrides.schema.json/properties/runtime/properties/batch_scheduler/enum",
@@ -5655,53 +5679,46 @@ function validate20(
                 }
               }
             }
-          } else {
-            const err24 = {
-              instancePath: instancePath + "/overrides/runtime",
-              schemaPath: "run-overrides.schema.json/properties/runtime/type",
-              keyword: "type",
-              params: { type: "object" },
-              message: "must be object",
-            };
-            if (vErrors === null) {
-              vErrors = [err24];
-            } else {
-              vErrors.push(err24);
-            }
-            errors++;
-          }
-        }
-        if (data4.workload !== undefined) {
-          let data9 = data4.workload;
-          if (data9 && typeof data9 == "object" && !Array.isArray(data9)) {
-            for (const key3 in data9) {
-              if (!(key3 === "message_size_multiplier")) {
-                const err25 = {
-                  instancePath: instancePath + "/overrides/workload",
-                  schemaPath: "run-overrides.schema.json/properties/workload/additionalProperties",
-                  keyword: "additionalProperties",
-                  params: { additionalProperty: key3 },
-                  message: "must NOT have additional properties",
+            if (data5.max_active_requests !== undefined) {
+              let data9 = data5.max_active_requests;
+              if (!(typeof data9 == "number" && !(data9 % 1) && !isNaN(data9))) {
+                const err24 = {
+                  instancePath: instancePath + "/overrides/runtime/max_active_requests",
+                  schemaPath: "run-overrides.schema.json/properties/runtime/properties/max_active_requests/type",
+                  keyword: "type",
+                  params: { type: "integer" },
+                  message: "must be integer",
                 };
                 if (vErrors === null) {
-                  vErrors = [err25];
+                  vErrors = [err24];
                 } else {
-                  vErrors.push(err25);
+                  vErrors.push(err24);
                 }
                 errors++;
               }
-            }
-            if (data9.message_size_multiplier !== undefined) {
-              let data10 = data9.message_size_multiplier;
-              if (typeof data10 == "number") {
-                if (data10 > 8 || isNaN(data10)) {
-                  const err26 = {
-                    instancePath: instancePath + "/overrides/workload/message_size_multiplier",
-                    schemaPath:
-                      "run-overrides.schema.json/properties/workload/properties/message_size_multiplier/maximum",
+              if (typeof data9 == "number") {
+                if (data9 > 1024 || isNaN(data9)) {
+                  const err25 = {
+                    instancePath: instancePath + "/overrides/runtime/max_active_requests",
+                    schemaPath: "run-overrides.schema.json/properties/runtime/properties/max_active_requests/maximum",
                     keyword: "maximum",
-                    params: { comparison: "<=", limit: 8 },
-                    message: "must be <= 8",
+                    params: { comparison: "<=", limit: 1024 },
+                    message: "must be <= 1024",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err25];
+                  } else {
+                    vErrors.push(err25);
+                  }
+                  errors++;
+                }
+                if (data9 < 1 || isNaN(data9)) {
+                  const err26 = {
+                    instancePath: instancePath + "/overrides/runtime/max_active_requests",
+                    schemaPath: "run-overrides.schema.json/properties/runtime/properties/max_active_requests/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 1 },
+                    message: "must be >= 1",
                   };
                   if (vErrors === null) {
                     vErrors = [err26];
@@ -5710,90 +5727,85 @@ function validate20(
                   }
                   errors++;
                 }
-                if (data10 < 0.25 || isNaN(data10)) {
-                  const err27 = {
-                    instancePath: instancePath + "/overrides/workload/message_size_multiplier",
-                    schemaPath:
-                      "run-overrides.schema.json/properties/workload/properties/message_size_multiplier/minimum",
-                    keyword: "minimum",
-                    params: { comparison: ">=", limit: 0.25 },
-                    message: "must be >= 0.25",
+              }
+            }
+            if (data5.initial_kv_tokens !== undefined) {
+              let data10 = data5.initial_kv_tokens;
+              if (!(typeof data10 == "number" && !(data10 % 1) && !isNaN(data10))) {
+                const err27 = {
+                  instancePath: instancePath + "/overrides/runtime/initial_kv_tokens",
+                  schemaPath: "run-overrides.schema.json/properties/runtime/properties/initial_kv_tokens/type",
+                  keyword: "type",
+                  params: { type: "integer" },
+                  message: "must be integer",
+                };
+                if (vErrors === null) {
+                  vErrors = [err27];
+                } else {
+                  vErrors.push(err27);
+                }
+                errors++;
+              }
+              if (typeof data10 == "number") {
+                if (data10 > 1000000 || isNaN(data10)) {
+                  const err28 = {
+                    instancePath: instancePath + "/overrides/runtime/initial_kv_tokens",
+                    schemaPath: "run-overrides.schema.json/properties/runtime/properties/initial_kv_tokens/maximum",
+                    keyword: "maximum",
+                    params: { comparison: "<=", limit: 1000000 },
+                    message: "must be <= 1000000",
                   };
                   if (vErrors === null) {
-                    vErrors = [err27];
+                    vErrors = [err28];
                   } else {
-                    vErrors.push(err27);
+                    vErrors.push(err28);
                   }
                   errors++;
                 }
-              } else {
-                const err28 = {
-                  instancePath: instancePath + "/overrides/workload/message_size_multiplier",
-                  schemaPath: "run-overrides.schema.json/properties/workload/properties/message_size_multiplier/type",
-                  keyword: "type",
-                  params: { type: "number" },
-                  message: "must be number",
-                };
-                if (vErrors === null) {
-                  vErrors = [err28];
-                } else {
-                  vErrors.push(err28);
+                if (data10 < 0 || isNaN(data10)) {
+                  const err29 = {
+                    instancePath: instancePath + "/overrides/runtime/initial_kv_tokens",
+                    schemaPath: "run-overrides.schema.json/properties/runtime/properties/initial_kv_tokens/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 0 },
+                    message: "must be >= 0",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err29];
+                  } else {
+                    vErrors.push(err29);
+                  }
+                  errors++;
                 }
-                errors++;
               }
             }
-          } else {
-            const err29 = {
-              instancePath: instancePath + "/overrides/workload",
-              schemaPath: "run-overrides.schema.json/properties/workload/type",
-              keyword: "type",
-              params: { type: "object" },
-              message: "must be object",
-            };
-            if (vErrors === null) {
-              vErrors = [err29];
-            } else {
-              vErrors.push(err29);
-            }
-            errors++;
-          }
-        }
-        if (data4.fabric !== undefined) {
-          let data11 = data4.fabric;
-          if (data11 && typeof data11 == "object" && !Array.isArray(data11)) {
-            for (const key4 in data11) {
-              if (!(
-                key4 === "scale_up_bandwidth_gbps" ||
-                key4 === "scale_up_latency_us" ||
-                key4 === "scale_out_bandwidth_gbps" ||
-                key4 === "scale_out_latency_us"
-              )) {
-                const err30 = {
-                  instancePath: instancePath + "/overrides/fabric",
-                  schemaPath: "run-overrides.schema.json/properties/fabric/additionalProperties",
-                  keyword: "additionalProperties",
-                  params: { additionalProperty: key4 },
-                  message: "must NOT have additional properties",
-                };
-                if (vErrors === null) {
-                  vErrors = [err30];
-                } else {
-                  vErrors.push(err30);
-                }
-                errors++;
-              }
-            }
-            if (data11.scale_up_bandwidth_gbps !== undefined) {
-              let data12 = data11.scale_up_bandwidth_gbps;
-              if (typeof data12 == "number") {
-                if (data12 > 2000 || isNaN(data12)) {
-                  const err31 = {
-                    instancePath: instancePath + "/overrides/fabric/scale_up_bandwidth_gbps",
+            if (data5.kv_admission_watermark !== undefined) {
+              let data11 = data5.kv_admission_watermark;
+              if (typeof data11 == "number") {
+                if (data11 > 1 || isNaN(data11)) {
+                  const err30 = {
+                    instancePath: instancePath + "/overrides/runtime/kv_admission_watermark",
                     schemaPath:
-                      "run-overrides.schema.json/properties/fabric/properties/scale_up_bandwidth_gbps/maximum",
+                      "run-overrides.schema.json/properties/runtime/properties/kv_admission_watermark/maximum",
                     keyword: "maximum",
-                    params: { comparison: "<=", limit: 2000 },
-                    message: "must be <= 2000",
+                    params: { comparison: "<=", limit: 1 },
+                    message: "must be <= 1",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err30];
+                  } else {
+                    vErrors.push(err30);
+                  }
+                  errors++;
+                }
+                if (data11 < 0.05 || isNaN(data11)) {
+                  const err31 = {
+                    instancePath: instancePath + "/overrides/runtime/kv_admission_watermark",
+                    schemaPath:
+                      "run-overrides.schema.json/properties/runtime/properties/kv_admission_watermark/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 0.05 },
+                    message: "must be >= 0.05",
                   };
                   if (vErrors === null) {
                     vErrors = [err31];
@@ -5802,29 +5814,32 @@ function validate20(
                   }
                   errors++;
                 }
-                if (data12 < 25 || isNaN(data12)) {
-                  const err32 = {
-                    instancePath: instancePath + "/overrides/fabric/scale_up_bandwidth_gbps",
-                    schemaPath:
-                      "run-overrides.schema.json/properties/fabric/properties/scale_up_bandwidth_gbps/minimum",
-                    keyword: "minimum",
-                    params: { comparison: ">=", limit: 25 },
-                    message: "must be >= 25",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err32];
-                  } else {
-                    vErrors.push(err32);
-                  }
-                  errors++;
-                }
               } else {
-                const err33 = {
-                  instancePath: instancePath + "/overrides/fabric/scale_up_bandwidth_gbps",
-                  schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_up_bandwidth_gbps/type",
+                const err32 = {
+                  instancePath: instancePath + "/overrides/runtime/kv_admission_watermark",
+                  schemaPath: "run-overrides.schema.json/properties/runtime/properties/kv_admission_watermark/type",
                   keyword: "type",
                   params: { type: "number" },
                   message: "must be number",
+                };
+                if (vErrors === null) {
+                  vErrors = [err32];
+                } else {
+                  vErrors.push(err32);
+                }
+                errors++;
+              }
+            }
+            if (data5.long_context_threshold_tokens !== undefined) {
+              let data12 = data5.long_context_threshold_tokens;
+              if (!(typeof data12 == "number" && !(data12 % 1) && !isNaN(data12))) {
+                const err33 = {
+                  instancePath: instancePath + "/overrides/runtime/long_context_threshold_tokens",
+                  schemaPath:
+                    "run-overrides.schema.json/properties/runtime/properties/long_context_threshold_tokens/type",
+                  keyword: "type",
+                  params: { type: "integer" },
+                  message: "must be integer",
                 };
                 if (vErrors === null) {
                   vErrors = [err33];
@@ -5833,17 +5848,15 @@ function validate20(
                 }
                 errors++;
               }
-            }
-            if (data11.scale_up_latency_us !== undefined) {
-              let data13 = data11.scale_up_latency_us;
-              if (typeof data13 == "number") {
-                if (data13 > 100 || isNaN(data13)) {
+              if (typeof data12 == "number") {
+                if (data12 > 1000000 || isNaN(data12)) {
                   const err34 = {
-                    instancePath: instancePath + "/overrides/fabric/scale_up_latency_us",
-                    schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_up_latency_us/maximum",
+                    instancePath: instancePath + "/overrides/runtime/long_context_threshold_tokens",
+                    schemaPath:
+                      "run-overrides.schema.json/properties/runtime/properties/long_context_threshold_tokens/maximum",
                     keyword: "maximum",
-                    params: { comparison: "<=", limit: 100 },
-                    message: "must be <= 100",
+                    params: { comparison: "<=", limit: 1000000 },
+                    message: "must be <= 1000000",
                   };
                   if (vErrors === null) {
                     vErrors = [err34];
@@ -5852,13 +5865,14 @@ function validate20(
                   }
                   errors++;
                 }
-                if (data13 < 0.05 || isNaN(data13)) {
+                if (data12 < 1 || isNaN(data12)) {
                   const err35 = {
-                    instancePath: instancePath + "/overrides/fabric/scale_up_latency_us",
-                    schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_up_latency_us/minimum",
+                    instancePath: instancePath + "/overrides/runtime/long_context_threshold_tokens",
+                    schemaPath:
+                      "run-overrides.schema.json/properties/runtime/properties/long_context_threshold_tokens/minimum",
                     keyword: "minimum",
-                    params: { comparison: ">=", limit: 0.05 },
-                    message: "must be >= 0.05",
+                    params: { comparison: ">=", limit: 1 },
+                    message: "must be >= 1",
                   };
                   if (vErrors === null) {
                     vErrors = [err35];
@@ -5867,33 +5881,35 @@ function validate20(
                   }
                   errors++;
                 }
-              } else {
-                const err36 = {
-                  instancePath: instancePath + "/overrides/fabric/scale_up_latency_us",
-                  schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_up_latency_us/type",
-                  keyword: "type",
-                  params: { type: "number" },
-                  message: "must be number",
-                };
-                if (vErrors === null) {
-                  vErrors = [err36];
-                } else {
-                  vErrors.push(err36);
-                }
-                errors++;
               }
             }
-            if (data11.scale_out_bandwidth_gbps !== undefined) {
-              let data14 = data11.scale_out_bandwidth_gbps;
-              if (typeof data14 == "number") {
-                if (data14 > 2000 || isNaN(data14)) {
-                  const err37 = {
-                    instancePath: instancePath + "/overrides/fabric/scale_out_bandwidth_gbps",
+            if (data5.decode_penalty_per_threshold !== undefined) {
+              let data13 = data5.decode_penalty_per_threshold;
+              if (typeof data13 == "number") {
+                if (data13 > 1 || isNaN(data13)) {
+                  const err36 = {
+                    instancePath: instancePath + "/overrides/runtime/decode_penalty_per_threshold",
                     schemaPath:
-                      "run-overrides.schema.json/properties/fabric/properties/scale_out_bandwidth_gbps/maximum",
+                      "run-overrides.schema.json/properties/runtime/properties/decode_penalty_per_threshold/maximum",
                     keyword: "maximum",
-                    params: { comparison: "<=", limit: 2000 },
-                    message: "must be <= 2000",
+                    params: { comparison: "<=", limit: 1 },
+                    message: "must be <= 1",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err36];
+                  } else {
+                    vErrors.push(err36);
+                  }
+                  errors++;
+                }
+                if (data13 < 0 || isNaN(data13)) {
+                  const err37 = {
+                    instancePath: instancePath + "/overrides/runtime/decode_penalty_per_threshold",
+                    schemaPath:
+                      "run-overrides.schema.json/properties/runtime/properties/decode_penalty_per_threshold/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 0 },
+                    message: "must be >= 0",
                   };
                   if (vErrors === null) {
                     vErrors = [err37];
@@ -5902,63 +5918,70 @@ function validate20(
                   }
                   errors++;
                 }
-                if (data14 < 10 || isNaN(data14)) {
-                  const err38 = {
-                    instancePath: instancePath + "/overrides/fabric/scale_out_bandwidth_gbps",
-                    schemaPath:
-                      "run-overrides.schema.json/properties/fabric/properties/scale_out_bandwidth_gbps/minimum",
-                    keyword: "minimum",
-                    params: { comparison: ">=", limit: 10 },
-                    message: "must be >= 10",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err38];
-                  } else {
-                    vErrors.push(err38);
-                  }
-                  errors++;
-                }
               } else {
-                const err39 = {
-                  instancePath: instancePath + "/overrides/fabric/scale_out_bandwidth_gbps",
-                  schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_out_bandwidth_gbps/type",
+                const err38 = {
+                  instancePath: instancePath + "/overrides/runtime/decode_penalty_per_threshold",
+                  schemaPath:
+                    "run-overrides.schema.json/properties/runtime/properties/decode_penalty_per_threshold/type",
                   keyword: "type",
                   params: { type: "number" },
                   message: "must be number",
                 };
                 if (vErrors === null) {
-                  vErrors = [err39];
+                  vErrors = [err38];
                 } else {
-                  vErrors.push(err39);
+                  vErrors.push(err38);
                 }
                 errors++;
               }
             }
-            if (data11.scale_out_latency_us !== undefined) {
-              let data15 = data11.scale_out_latency_us;
-              if (typeof data15 == "number") {
-                if (data15 > 500 || isNaN(data15)) {
-                  const err40 = {
-                    instancePath: instancePath + "/overrides/fabric/scale_out_latency_us",
-                    schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_out_latency_us/maximum",
-                    keyword: "maximum",
-                    params: { comparison: "<=", limit: 500 },
-                    message: "must be <= 500",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err40];
-                  } else {
-                    vErrors.push(err40);
-                  }
-                  errors++;
+          } else {
+            const err39 = {
+              instancePath: instancePath + "/overrides/runtime",
+              schemaPath: "run-overrides.schema.json/properties/runtime/type",
+              keyword: "type",
+              params: { type: "object" },
+              message: "must be object",
+            };
+            if (vErrors === null) {
+              vErrors = [err39];
+            } else {
+              vErrors.push(err39);
+            }
+            errors++;
+          }
+        }
+        if (data4.workload !== undefined) {
+          let data14 = data4.workload;
+          if (data14 && typeof data14 == "object" && !Array.isArray(data14)) {
+            for (const key3 in data14) {
+              if (!(key3 === "message_size_multiplier")) {
+                const err40 = {
+                  instancePath: instancePath + "/overrides/workload",
+                  schemaPath: "run-overrides.schema.json/properties/workload/additionalProperties",
+                  keyword: "additionalProperties",
+                  params: { additionalProperty: key3 },
+                  message: "must NOT have additional properties",
+                };
+                if (vErrors === null) {
+                  vErrors = [err40];
+                } else {
+                  vErrors.push(err40);
                 }
-                if (data15 < 0.1 || isNaN(data15)) {
+                errors++;
+              }
+            }
+            if (data14.message_size_multiplier !== undefined) {
+              let data15 = data14.message_size_multiplier;
+              if (typeof data15 == "number") {
+                if (data15 > 8 || isNaN(data15)) {
                   const err41 = {
-                    instancePath: instancePath + "/overrides/fabric/scale_out_latency_us",
-                    schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_out_latency_us/minimum",
-                    keyword: "minimum",
-                    params: { comparison: ">=", limit: 0.1 },
-                    message: "must be >= 0.1",
+                    instancePath: instancePath + "/overrides/workload/message_size_multiplier",
+                    schemaPath:
+                      "run-overrides.schema.json/properties/workload/properties/message_size_multiplier/maximum",
+                    keyword: "maximum",
+                    params: { comparison: "<=", limit: 8 },
+                    message: "must be <= 8",
                   };
                   if (vErrors === null) {
                     vErrors = [err41];
@@ -5967,8 +5990,265 @@ function validate20(
                   }
                   errors++;
                 }
+                if (data15 < 0.25 || isNaN(data15)) {
+                  const err42 = {
+                    instancePath: instancePath + "/overrides/workload/message_size_multiplier",
+                    schemaPath:
+                      "run-overrides.schema.json/properties/workload/properties/message_size_multiplier/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 0.25 },
+                    message: "must be >= 0.25",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err42];
+                  } else {
+                    vErrors.push(err42);
+                  }
+                  errors++;
+                }
               } else {
-                const err42 = {
+                const err43 = {
+                  instancePath: instancePath + "/overrides/workload/message_size_multiplier",
+                  schemaPath: "run-overrides.schema.json/properties/workload/properties/message_size_multiplier/type",
+                  keyword: "type",
+                  params: { type: "number" },
+                  message: "must be number",
+                };
+                if (vErrors === null) {
+                  vErrors = [err43];
+                } else {
+                  vErrors.push(err43);
+                }
+                errors++;
+              }
+            }
+          } else {
+            const err44 = {
+              instancePath: instancePath + "/overrides/workload",
+              schemaPath: "run-overrides.schema.json/properties/workload/type",
+              keyword: "type",
+              params: { type: "object" },
+              message: "must be object",
+            };
+            if (vErrors === null) {
+              vErrors = [err44];
+            } else {
+              vErrors.push(err44);
+            }
+            errors++;
+          }
+        }
+        if (data4.fabric !== undefined) {
+          let data16 = data4.fabric;
+          if (data16 && typeof data16 == "object" && !Array.isArray(data16)) {
+            for (const key4 in data16) {
+              if (!(
+                key4 === "scale_up_bandwidth_gbps" ||
+                key4 === "scale_up_latency_us" ||
+                key4 === "scale_out_bandwidth_gbps" ||
+                key4 === "scale_out_latency_us"
+              )) {
+                const err45 = {
+                  instancePath: instancePath + "/overrides/fabric",
+                  schemaPath: "run-overrides.schema.json/properties/fabric/additionalProperties",
+                  keyword: "additionalProperties",
+                  params: { additionalProperty: key4 },
+                  message: "must NOT have additional properties",
+                };
+                if (vErrors === null) {
+                  vErrors = [err45];
+                } else {
+                  vErrors.push(err45);
+                }
+                errors++;
+              }
+            }
+            if (data16.scale_up_bandwidth_gbps !== undefined) {
+              let data17 = data16.scale_up_bandwidth_gbps;
+              if (typeof data17 == "number") {
+                if (data17 > 2000 || isNaN(data17)) {
+                  const err46 = {
+                    instancePath: instancePath + "/overrides/fabric/scale_up_bandwidth_gbps",
+                    schemaPath:
+                      "run-overrides.schema.json/properties/fabric/properties/scale_up_bandwidth_gbps/maximum",
+                    keyword: "maximum",
+                    params: { comparison: "<=", limit: 2000 },
+                    message: "must be <= 2000",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err46];
+                  } else {
+                    vErrors.push(err46);
+                  }
+                  errors++;
+                }
+                if (data17 < 25 || isNaN(data17)) {
+                  const err47 = {
+                    instancePath: instancePath + "/overrides/fabric/scale_up_bandwidth_gbps",
+                    schemaPath:
+                      "run-overrides.schema.json/properties/fabric/properties/scale_up_bandwidth_gbps/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 25 },
+                    message: "must be >= 25",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err47];
+                  } else {
+                    vErrors.push(err47);
+                  }
+                  errors++;
+                }
+              } else {
+                const err48 = {
+                  instancePath: instancePath + "/overrides/fabric/scale_up_bandwidth_gbps",
+                  schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_up_bandwidth_gbps/type",
+                  keyword: "type",
+                  params: { type: "number" },
+                  message: "must be number",
+                };
+                if (vErrors === null) {
+                  vErrors = [err48];
+                } else {
+                  vErrors.push(err48);
+                }
+                errors++;
+              }
+            }
+            if (data16.scale_up_latency_us !== undefined) {
+              let data18 = data16.scale_up_latency_us;
+              if (typeof data18 == "number") {
+                if (data18 > 100 || isNaN(data18)) {
+                  const err49 = {
+                    instancePath: instancePath + "/overrides/fabric/scale_up_latency_us",
+                    schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_up_latency_us/maximum",
+                    keyword: "maximum",
+                    params: { comparison: "<=", limit: 100 },
+                    message: "must be <= 100",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err49];
+                  } else {
+                    vErrors.push(err49);
+                  }
+                  errors++;
+                }
+                if (data18 < 0.05 || isNaN(data18)) {
+                  const err50 = {
+                    instancePath: instancePath + "/overrides/fabric/scale_up_latency_us",
+                    schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_up_latency_us/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 0.05 },
+                    message: "must be >= 0.05",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err50];
+                  } else {
+                    vErrors.push(err50);
+                  }
+                  errors++;
+                }
+              } else {
+                const err51 = {
+                  instancePath: instancePath + "/overrides/fabric/scale_up_latency_us",
+                  schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_up_latency_us/type",
+                  keyword: "type",
+                  params: { type: "number" },
+                  message: "must be number",
+                };
+                if (vErrors === null) {
+                  vErrors = [err51];
+                } else {
+                  vErrors.push(err51);
+                }
+                errors++;
+              }
+            }
+            if (data16.scale_out_bandwidth_gbps !== undefined) {
+              let data19 = data16.scale_out_bandwidth_gbps;
+              if (typeof data19 == "number") {
+                if (data19 > 2000 || isNaN(data19)) {
+                  const err52 = {
+                    instancePath: instancePath + "/overrides/fabric/scale_out_bandwidth_gbps",
+                    schemaPath:
+                      "run-overrides.schema.json/properties/fabric/properties/scale_out_bandwidth_gbps/maximum",
+                    keyword: "maximum",
+                    params: { comparison: "<=", limit: 2000 },
+                    message: "must be <= 2000",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err52];
+                  } else {
+                    vErrors.push(err52);
+                  }
+                  errors++;
+                }
+                if (data19 < 10 || isNaN(data19)) {
+                  const err53 = {
+                    instancePath: instancePath + "/overrides/fabric/scale_out_bandwidth_gbps",
+                    schemaPath:
+                      "run-overrides.schema.json/properties/fabric/properties/scale_out_bandwidth_gbps/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 10 },
+                    message: "must be >= 10",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err53];
+                  } else {
+                    vErrors.push(err53);
+                  }
+                  errors++;
+                }
+              } else {
+                const err54 = {
+                  instancePath: instancePath + "/overrides/fabric/scale_out_bandwidth_gbps",
+                  schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_out_bandwidth_gbps/type",
+                  keyword: "type",
+                  params: { type: "number" },
+                  message: "must be number",
+                };
+                if (vErrors === null) {
+                  vErrors = [err54];
+                } else {
+                  vErrors.push(err54);
+                }
+                errors++;
+              }
+            }
+            if (data16.scale_out_latency_us !== undefined) {
+              let data20 = data16.scale_out_latency_us;
+              if (typeof data20 == "number") {
+                if (data20 > 500 || isNaN(data20)) {
+                  const err55 = {
+                    instancePath: instancePath + "/overrides/fabric/scale_out_latency_us",
+                    schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_out_latency_us/maximum",
+                    keyword: "maximum",
+                    params: { comparison: "<=", limit: 500 },
+                    message: "must be <= 500",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err55];
+                  } else {
+                    vErrors.push(err55);
+                  }
+                  errors++;
+                }
+                if (data20 < 0.1 || isNaN(data20)) {
+                  const err56 = {
+                    instancePath: instancePath + "/overrides/fabric/scale_out_latency_us",
+                    schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_out_latency_us/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 0.1 },
+                    message: "must be >= 0.1",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err56];
+                  } else {
+                    vErrors.push(err56);
+                  }
+                  errors++;
+                }
+              } else {
+                const err57 = {
                   instancePath: instancePath + "/overrides/fabric/scale_out_latency_us",
                   schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_out_latency_us/type",
                   keyword: "type",
@@ -5976,15 +6256,15 @@ function validate20(
                   message: "must be number",
                 };
                 if (vErrors === null) {
-                  vErrors = [err42];
+                  vErrors = [err57];
                 } else {
-                  vErrors.push(err42);
+                  vErrors.push(err57);
                 }
                 errors++;
               }
             }
           } else {
-            const err43 = {
+            const err58 = {
               instancePath: instancePath + "/overrides/fabric",
               schemaPath: "run-overrides.schema.json/properties/fabric/type",
               keyword: "type",
@@ -5992,15 +6272,15 @@ function validate20(
               message: "must be object",
             };
             if (vErrors === null) {
-              vErrors = [err43];
+              vErrors = [err58];
             } else {
-              vErrors.push(err43);
+              vErrors.push(err58);
             }
             errors++;
           }
         }
       } else {
-        const err44 = {
+        const err59 = {
           instancePath: instancePath + "/overrides",
           schemaPath: "run-overrides.schema.json/type",
           keyword: "type",
@@ -6008,9 +6288,9 @@ function validate20(
           message: "must be object",
         };
         if (vErrors === null) {
-          vErrors = [err44];
+          vErrors = [err59];
         } else {
-          vErrors.push(err44);
+          vErrors.push(err59);
         }
         errors++;
       }
@@ -6030,14 +6310,14 @@ function validate20(
       }
     }
     if (data.design_space_candidates !== undefined) {
-      let data17 = data.design_space_candidates;
-      const _errs49 = errors;
+      let data22 = data.design_space_candidates;
+      const _errs59 = errors;
       let valid11 = false;
       let passing0 = null;
-      const _errs50 = errors;
-      if (data17 && typeof data17 == "object" && !Array.isArray(data17)) {
-        if (data17.manifest_id === undefined) {
-          const err45 = {
+      const _errs60 = errors;
+      if (data22 && typeof data22 == "object" && !Array.isArray(data22)) {
+        if (data22.manifest_id === undefined) {
+          const err60 = {
             instancePath: instancePath + "/design_space_candidates",
             schemaPath: "design-space-candidates.schema.json/required",
             keyword: "required",
@@ -6045,14 +6325,14 @@ function validate20(
             message: "must have required property '" + "manifest_id" + "'",
           };
           if (vErrors === null) {
-            vErrors = [err45];
+            vErrors = [err60];
           } else {
-            vErrors.push(err45);
+            vErrors.push(err60);
           }
           errors++;
         }
-        if (data17.source_mode === undefined) {
-          const err46 = {
+        if (data22.source_mode === undefined) {
+          const err61 = {
             instancePath: instancePath + "/design_space_candidates",
             schemaPath: "design-space-candidates.schema.json/required",
             keyword: "required",
@@ -6060,14 +6340,14 @@ function validate20(
             message: "must have required property '" + "source_mode" + "'",
           };
           if (vErrors === null) {
-            vErrors = [err46];
+            vErrors = [err61];
           } else {
-            vErrors.push(err46);
+            vErrors.push(err61);
           }
           errors++;
         }
-        if (data17.calibration_level === undefined) {
-          const err47 = {
+        if (data22.calibration_level === undefined) {
+          const err62 = {
             instancePath: instancePath + "/design_space_candidates",
             schemaPath: "design-space-candidates.schema.json/required",
             keyword: "required",
@@ -6075,14 +6355,14 @@ function validate20(
             message: "must have required property '" + "calibration_level" + "'",
           };
           if (vErrors === null) {
-            vErrors = [err47];
+            vErrors = [err62];
           } else {
-            vErrors.push(err47);
+            vErrors.push(err62);
           }
           errors++;
         }
-        if (data17.allowed_claim_scope === undefined) {
-          const err48 = {
+        if (data22.allowed_claim_scope === undefined) {
+          const err63 = {
             instancePath: instancePath + "/design_space_candidates",
             schemaPath: "design-space-candidates.schema.json/required",
             keyword: "required",
@@ -6090,14 +6370,14 @@ function validate20(
             message: "must have required property '" + "allowed_claim_scope" + "'",
           };
           if (vErrors === null) {
-            vErrors = [err48];
+            vErrors = [err63];
           } else {
-            vErrors.push(err48);
+            vErrors.push(err63);
           }
           errors++;
         }
-        if (data17.candidates === undefined) {
-          const err49 = {
+        if (data22.candidates === undefined) {
+          const err64 = {
             instancePath: instancePath + "/design_space_candidates",
             schemaPath: "design-space-candidates.schema.json/required",
             keyword: "required",
@@ -6105,13 +6385,13 @@ function validate20(
             message: "must have required property '" + "candidates" + "'",
           };
           if (vErrors === null) {
-            vErrors = [err49];
+            vErrors = [err64];
           } else {
-            vErrors.push(err49);
+            vErrors.push(err64);
           }
           errors++;
         }
-        for (const key5 in data17) {
+        for (const key5 in data22) {
           if (!(
             key5 === "schema_version" ||
             key5 === "manifest_id" ||
@@ -6120,7 +6400,7 @@ function validate20(
             key5 === "allowed_claim_scope" ||
             key5 === "candidates"
           )) {
-            const err50 = {
+            const err65 = {
               instancePath: instancePath + "/design_space_candidates",
               schemaPath: "design-space-candidates.schema.json/additionalProperties",
               keyword: "additionalProperties",
@@ -6128,16 +6408,16 @@ function validate20(
               message: "must NOT have additional properties",
             };
             if (vErrors === null) {
-              vErrors = [err50];
+              vErrors = [err65];
             } else {
-              vErrors.push(err50);
+              vErrors.push(err65);
             }
             errors++;
           }
         }
-        if (data17.schema_version !== undefined) {
-          if ("tilesim.design_space.s6_candidates.v1" !== data17.schema_version) {
-            const err51 = {
+        if (data22.schema_version !== undefined) {
+          if ("tilesim.design_space.s6_candidates.v1" !== data22.schema_version) {
+            const err66 = {
               instancePath: instancePath + "/design_space_candidates/schema_version",
               schemaPath: "design-space-candidates.schema.json/properties/schema_version/const",
               keyword: "const",
@@ -6145,18 +6425,18 @@ function validate20(
               message: "must be equal to constant",
             };
             if (vErrors === null) {
-              vErrors = [err51];
+              vErrors = [err66];
             } else {
-              vErrors.push(err51);
+              vErrors.push(err66);
             }
             errors++;
           }
         }
-        if (data17.manifest_id !== undefined) {
-          let data19 = data17.manifest_id;
-          if (typeof data19 === "string") {
-            if (func1(data19) > 160) {
-              const err52 = {
+        if (data22.manifest_id !== undefined) {
+          let data24 = data22.manifest_id;
+          if (typeof data24 === "string") {
+            if (func1(data24) > 160) {
+              const err67 = {
                 instancePath: instancePath + "/design_space_candidates/manifest_id",
                 schemaPath: "design-space-candidates.schema.json/properties/manifest_id/maxLength",
                 keyword: "maxLength",
@@ -6164,14 +6444,14 @@ function validate20(
                 message: "must NOT have more than 160 characters",
               };
               if (vErrors === null) {
-                vErrors = [err52];
+                vErrors = [err67];
               } else {
-                vErrors.push(err52);
+                vErrors.push(err67);
               }
               errors++;
             }
-            if (func1(data19) < 1) {
-              const err53 = {
+            if (func1(data24) < 1) {
+              const err68 = {
                 instancePath: instancePath + "/design_space_candidates/manifest_id",
                 schemaPath: "design-space-candidates.schema.json/properties/manifest_id/minLength",
                 keyword: "minLength",
@@ -6179,14 +6459,14 @@ function validate20(
                 message: "must NOT have fewer than 1 characters",
               };
               if (vErrors === null) {
-                vErrors = [err53];
+                vErrors = [err68];
               } else {
-                vErrors.push(err53);
+                vErrors.push(err68);
               }
               errors++;
             }
           } else {
-            const err54 = {
+            const err69 = {
               instancePath: instancePath + "/design_space_candidates/manifest_id",
               schemaPath: "design-space-candidates.schema.json/properties/manifest_id/type",
               keyword: "type",
@@ -6194,16 +6474,16 @@ function validate20(
               message: "must be string",
             };
             if (vErrors === null) {
-              vErrors = [err54];
+              vErrors = [err69];
             } else {
-              vErrors.push(err54);
+              vErrors.push(err69);
             }
             errors++;
           }
         }
-        if (data17.source_mode !== undefined) {
-          if ("synthetic_trace" !== data17.source_mode) {
-            const err55 = {
+        if (data22.source_mode !== undefined) {
+          if ("synthetic_trace" !== data22.source_mode) {
+            const err70 = {
               instancePath: instancePath + "/design_space_candidates/source_mode",
               schemaPath: "design-space-candidates.schema.json/properties/source_mode/const",
               keyword: "const",
@@ -6211,17 +6491,17 @@ function validate20(
               message: "must be equal to constant",
             };
             if (vErrors === null) {
-              vErrors = [err55];
+              vErrors = [err70];
             } else {
-              vErrors.push(err55);
+              vErrors.push(err70);
             }
             errors++;
           }
         }
-        if (data17.calibration_level !== undefined) {
-          let data21 = data17.calibration_level;
-          if (!(data21 === "uncalibrated" || data21 === "partially_calibrated")) {
-            const err56 = {
+        if (data22.calibration_level !== undefined) {
+          let data26 = data22.calibration_level;
+          if (!(data26 === "uncalibrated" || data26 === "partially_calibrated")) {
+            const err71 = {
               instancePath: instancePath + "/design_space_candidates/calibration_level",
               schemaPath: "design-space-candidates.schema.json/properties/calibration_level/enum",
               keyword: "enum",
@@ -6229,23 +6509,23 @@ function validate20(
               message: "must be equal to one of the allowed values",
             };
             if (vErrors === null) {
-              vErrors = [err56];
+              vErrors = [err71];
             } else {
-              vErrors.push(err56);
+              vErrors.push(err71);
             }
             errors++;
           }
         }
-        if (data17.allowed_claim_scope !== undefined) {
-          let data22 = data17.allowed_claim_scope;
+        if (data22.allowed_claim_scope !== undefined) {
+          let data27 = data22.allowed_claim_scope;
           if (!(
-            data22 === "exploratory" ||
-            data22 === "exploratory_s6_only" ||
-            data22 === "synthetic_consistency" ||
-            data22 === "synthetic_consistency_only" ||
-            data22 === "workflow_consistency_only"
+            data27 === "exploratory" ||
+            data27 === "exploratory_s6_only" ||
+            data27 === "synthetic_consistency" ||
+            data27 === "synthetic_consistency_only" ||
+            data27 === "workflow_consistency_only"
           )) {
-            const err57 = {
+            const err72 = {
               instancePath: instancePath + "/design_space_candidates/allowed_claim_scope",
               schemaPath: "design-space-candidates.schema.json/properties/allowed_claim_scope/enum",
               keyword: "enum",
@@ -6253,18 +6533,18 @@ function validate20(
               message: "must be equal to one of the allowed values",
             };
             if (vErrors === null) {
-              vErrors = [err57];
+              vErrors = [err72];
             } else {
-              vErrors.push(err57);
+              vErrors.push(err72);
             }
             errors++;
           }
         }
-        if (data17.candidates !== undefined) {
-          let data23 = data17.candidates;
-          if (Array.isArray(data23)) {
-            if (data23.length > 256) {
-              const err58 = {
+        if (data22.candidates !== undefined) {
+          let data28 = data22.candidates;
+          if (Array.isArray(data28)) {
+            if (data28.length > 256) {
+              const err73 = {
                 instancePath: instancePath + "/design_space_candidates/candidates",
                 schemaPath: "design-space-candidates.schema.json/properties/candidates/maxItems",
                 keyword: "maxItems",
@@ -6272,14 +6552,14 @@ function validate20(
                 message: "must NOT have more than 256 items",
               };
               if (vErrors === null) {
-                vErrors = [err58];
+                vErrors = [err73];
               } else {
-                vErrors.push(err58);
+                vErrors.push(err73);
               }
               errors++;
             }
-            if (data23.length < 1) {
-              const err59 = {
+            if (data28.length < 1) {
+              const err74 = {
                 instancePath: instancePath + "/design_space_candidates/candidates",
                 schemaPath: "design-space-candidates.schema.json/properties/candidates/minItems",
                 keyword: "minItems",
@@ -6287,18 +6567,18 @@ function validate20(
                 message: "must NOT have fewer than 1 items",
               };
               if (vErrors === null) {
-                vErrors = [err59];
+                vErrors = [err74];
               } else {
-                vErrors.push(err59);
+                vErrors.push(err74);
               }
               errors++;
             }
-            const len0 = data23.length;
+            const len0 = data28.length;
             for (let i0 = 0; i0 < len0; i0++) {
-              let data24 = data23[i0];
-              if (data24 && typeof data24 == "object" && !Array.isArray(data24)) {
-                if (data24.candidate_id === undefined) {
-                  const err60 = {
+              let data29 = data28[i0];
+              if (data29 && typeof data29 == "object" && !Array.isArray(data29)) {
+                if (data29.candidate_id === undefined) {
+                  const err75 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i0,
                     schemaPath: "design-space-candidates.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -6306,14 +6586,14 @@ function validate20(
                     message: "must have required property '" + "candidate_id" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err60];
+                    vErrors = [err75];
                   } else {
-                    vErrors.push(err60);
+                    vErrors.push(err75);
                   }
                   errors++;
                 }
-                if (data24.name === undefined) {
-                  const err61 = {
+                if (data29.name === undefined) {
+                  const err76 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i0,
                     schemaPath: "design-space-candidates.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -6321,14 +6601,14 @@ function validate20(
                     message: "must have required property '" + "name" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err61];
+                    vErrors = [err76];
                   } else {
-                    vErrors.push(err61);
+                    vErrors.push(err76);
                   }
                   errors++;
                 }
-                if (data24.bandwidth_gbps === undefined) {
-                  const err62 = {
+                if (data29.bandwidth_gbps === undefined) {
+                  const err77 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i0,
                     schemaPath: "design-space-candidates.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -6336,14 +6616,14 @@ function validate20(
                     message: "must have required property '" + "bandwidth_gbps" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err62];
+                    vErrors = [err77];
                   } else {
-                    vErrors.push(err62);
+                    vErrors.push(err77);
                   }
                   errors++;
                 }
-                if (data24.latency_us === undefined) {
-                  const err63 = {
+                if (data29.latency_us === undefined) {
+                  const err78 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i0,
                     schemaPath: "design-space-candidates.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -6351,14 +6631,14 @@ function validate20(
                     message: "must have required property '" + "latency_us" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err63];
+                    vErrors = [err78];
                   } else {
-                    vErrors.push(err63);
+                    vErrors.push(err78);
                   }
                   errors++;
                 }
-                if (data24.oversubscription_factor === undefined) {
-                  const err64 = {
+                if (data29.oversubscription_factor === undefined) {
+                  const err79 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i0,
                     schemaPath: "design-space-candidates.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -6366,14 +6646,14 @@ function validate20(
                     message: "must have required property '" + "oversubscription_factor" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err64];
+                    vErrors = [err79];
                   } else {
-                    vErrors.push(err64);
+                    vErrors.push(err79);
                   }
                   errors++;
                 }
-                if (data24.request_count === undefined) {
-                  const err65 = {
+                if (data29.request_count === undefined) {
+                  const err80 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i0,
                     schemaPath: "design-space-candidates.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -6381,14 +6661,14 @@ function validate20(
                     message: "must have required property '" + "request_count" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err65];
+                    vErrors = [err80];
                   } else {
-                    vErrors.push(err65);
+                    vErrors.push(err80);
                   }
                   errors++;
                 }
-                if (data24.message_bytes === undefined) {
-                  const err66 = {
+                if (data29.message_bytes === undefined) {
+                  const err81 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i0,
                     schemaPath: "design-space-candidates.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -6396,14 +6676,14 @@ function validate20(
                     message: "must have required property '" + "message_bytes" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err66];
+                    vErrors = [err81];
                   } else {
-                    vErrors.push(err66);
+                    vErrors.push(err81);
                   }
                   errors++;
                 }
-                if (data24.release_interval_ps === undefined) {
-                  const err67 = {
+                if (data29.release_interval_ps === undefined) {
+                  const err82 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i0,
                     schemaPath: "design-space-candidates.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -6411,14 +6691,14 @@ function validate20(
                     message: "must have required property '" + "release_interval_ps" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err67];
+                    vErrors = [err82];
                   } else {
-                    vErrors.push(err67);
+                    vErrors.push(err82);
                   }
                   errors++;
                 }
-                if (data24.uncertainty_score === undefined) {
-                  const err68 = {
+                if (data29.uncertainty_score === undefined) {
+                  const err83 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i0,
                     schemaPath: "design-space-candidates.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -6426,14 +6706,14 @@ function validate20(
                     message: "must have required property '" + "uncertainty_score" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err68];
+                    vErrors = [err83];
                   } else {
-                    vErrors.push(err68);
+                    vErrors.push(err83);
                   }
                   errors++;
                 }
-                if (data24.tail_risk === undefined) {
-                  const err69 = {
+                if (data29.tail_risk === undefined) {
+                  const err84 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i0,
                     schemaPath: "design-space-candidates.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -6441,14 +6721,14 @@ function validate20(
                     message: "must have required property '" + "tail_risk" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err69];
+                    vErrors = [err84];
                   } else {
-                    vErrors.push(err69);
+                    vErrors.push(err84);
                   }
                   errors++;
                 }
-                if (data24.source_id === undefined) {
-                  const err70 = {
+                if (data29.source_id === undefined) {
+                  const err85 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i0,
                     schemaPath: "design-space-candidates.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -6456,284 +6736,21 @@ function validate20(
                     message: "must have required property '" + "source_id" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err70];
+                    vErrors = [err85];
                   } else {
-                    vErrors.push(err70);
+                    vErrors.push(err85);
                   }
                   errors++;
                 }
-                for (const key6 in data24) {
+                for (const key6 in data29) {
                   if (!func4.call(schema39.properties.candidates.items.properties, key6)) {
-                    const err71 = {
+                    const err86 = {
                       instancePath: instancePath + "/design_space_candidates/candidates/" + i0,
                       schemaPath:
                         "design-space-candidates.schema.json/properties/candidates/items/additionalProperties",
                       keyword: "additionalProperties",
                       params: { additionalProperty: key6 },
                       message: "must NOT have additional properties",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err71];
-                    } else {
-                      vErrors.push(err71);
-                    }
-                    errors++;
-                  }
-                }
-                if (data24.candidate_id !== undefined) {
-                  let data25 = data24.candidate_id;
-                  if (typeof data25 === "string") {
-                    if (func1(data25) > 512) {
-                      const err72 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/candidate_id",
-                        schemaPath:
-                          "design-space-candidates.schema.json/properties/candidates/items/properties/candidate_id/maxLength",
-                        keyword: "maxLength",
-                        params: { limit: 512 },
-                        message: "must NOT have more than 512 characters",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err72];
-                      } else {
-                        vErrors.push(err72);
-                      }
-                      errors++;
-                    }
-                    if (func1(data25) < 1) {
-                      const err73 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/candidate_id",
-                        schemaPath:
-                          "design-space-candidates.schema.json/properties/candidates/items/properties/candidate_id/minLength",
-                        keyword: "minLength",
-                        params: { limit: 1 },
-                        message: "must NOT have fewer than 1 characters",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err73];
-                      } else {
-                        vErrors.push(err73);
-                      }
-                      errors++;
-                    }
-                  } else {
-                    const err74 = {
-                      instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/candidate_id",
-                      schemaPath:
-                        "design-space-candidates.schema.json/properties/candidates/items/properties/candidate_id/type",
-                      keyword: "type",
-                      params: { type: "string" },
-                      message: "must be string",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err74];
-                    } else {
-                      vErrors.push(err74);
-                    }
-                    errors++;
-                  }
-                }
-                if (data24.name !== undefined) {
-                  let data26 = data24.name;
-                  if (typeof data26 === "string") {
-                    if (func1(data26) > 512) {
-                      const err75 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/name",
-                        schemaPath:
-                          "design-space-candidates.schema.json/properties/candidates/items/properties/name/maxLength",
-                        keyword: "maxLength",
-                        params: { limit: 512 },
-                        message: "must NOT have more than 512 characters",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err75];
-                      } else {
-                        vErrors.push(err75);
-                      }
-                      errors++;
-                    }
-                    if (func1(data26) < 1) {
-                      const err76 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/name",
-                        schemaPath:
-                          "design-space-candidates.schema.json/properties/candidates/items/properties/name/minLength",
-                        keyword: "minLength",
-                        params: { limit: 1 },
-                        message: "must NOT have fewer than 1 characters",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err76];
-                      } else {
-                        vErrors.push(err76);
-                      }
-                      errors++;
-                    }
-                  } else {
-                    const err77 = {
-                      instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/name",
-                      schemaPath:
-                        "design-space-candidates.schema.json/properties/candidates/items/properties/name/type",
-                      keyword: "type",
-                      params: { type: "string" },
-                      message: "must be string",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err77];
-                    } else {
-                      vErrors.push(err77);
-                    }
-                    errors++;
-                  }
-                }
-                if (data24.bandwidth_gbps !== undefined) {
-                  let data27 = data24.bandwidth_gbps;
-                  if (typeof data27 == "number") {
-                    if (data27 > 100000 || isNaN(data27)) {
-                      const err78 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/bandwidth_gbps",
-                        schemaPath:
-                          "design-space-candidates.schema.json/properties/candidates/items/properties/bandwidth_gbps/maximum",
-                        keyword: "maximum",
-                        params: { comparison: "<=", limit: 100000 },
-                        message: "must be <= 100000",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err78];
-                      } else {
-                        vErrors.push(err78);
-                      }
-                      errors++;
-                    }
-                    if (data27 < 0.000001 || isNaN(data27)) {
-                      const err79 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/bandwidth_gbps",
-                        schemaPath:
-                          "design-space-candidates.schema.json/properties/candidates/items/properties/bandwidth_gbps/minimum",
-                        keyword: "minimum",
-                        params: { comparison: ">=", limit: 0.000001 },
-                        message: "must be >= 0.000001",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err79];
-                      } else {
-                        vErrors.push(err79);
-                      }
-                      errors++;
-                    }
-                  } else {
-                    const err80 = {
-                      instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/bandwidth_gbps",
-                      schemaPath:
-                        "design-space-candidates.schema.json/properties/candidates/items/properties/bandwidth_gbps/type",
-                      keyword: "type",
-                      params: { type: "number" },
-                      message: "must be number",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err80];
-                    } else {
-                      vErrors.push(err80);
-                    }
-                    errors++;
-                  }
-                }
-                if (data24.latency_us !== undefined) {
-                  let data28 = data24.latency_us;
-                  if (typeof data28 == "number") {
-                    if (data28 > 1000000 || isNaN(data28)) {
-                      const err81 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/latency_us",
-                        schemaPath:
-                          "design-space-candidates.schema.json/properties/candidates/items/properties/latency_us/maximum",
-                        keyword: "maximum",
-                        params: { comparison: "<=", limit: 1000000 },
-                        message: "must be <= 1000000",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err81];
-                      } else {
-                        vErrors.push(err81);
-                      }
-                      errors++;
-                    }
-                    if (data28 < 0 || isNaN(data28)) {
-                      const err82 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/latency_us",
-                        schemaPath:
-                          "design-space-candidates.schema.json/properties/candidates/items/properties/latency_us/minimum",
-                        keyword: "minimum",
-                        params: { comparison: ">=", limit: 0 },
-                        message: "must be >= 0",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err82];
-                      } else {
-                        vErrors.push(err82);
-                      }
-                      errors++;
-                    }
-                  } else {
-                    const err83 = {
-                      instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/latency_us",
-                      schemaPath:
-                        "design-space-candidates.schema.json/properties/candidates/items/properties/latency_us/type",
-                      keyword: "type",
-                      params: { type: "number" },
-                      message: "must be number",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err83];
-                    } else {
-                      vErrors.push(err83);
-                    }
-                    errors++;
-                  }
-                }
-                if (data24.oversubscription_factor !== undefined) {
-                  let data29 = data24.oversubscription_factor;
-                  if (typeof data29 == "number") {
-                    if (data29 > 1000000 || isNaN(data29)) {
-                      const err84 = {
-                        instancePath:
-                          instancePath + "/design_space_candidates/candidates/" + i0 + "/oversubscription_factor",
-                        schemaPath:
-                          "design-space-candidates.schema.json/properties/candidates/items/properties/oversubscription_factor/maximum",
-                        keyword: "maximum",
-                        params: { comparison: "<=", limit: 1000000 },
-                        message: "must be <= 1000000",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err84];
-                      } else {
-                        vErrors.push(err84);
-                      }
-                      errors++;
-                    }
-                    if (data29 < 0.000001 || isNaN(data29)) {
-                      const err85 = {
-                        instancePath:
-                          instancePath + "/design_space_candidates/candidates/" + i0 + "/oversubscription_factor",
-                        schemaPath:
-                          "design-space-candidates.schema.json/properties/candidates/items/properties/oversubscription_factor/minimum",
-                        keyword: "minimum",
-                        params: { comparison: ">=", limit: 0.000001 },
-                        message: "must be >= 0.000001",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err85];
-                      } else {
-                        vErrors.push(err85);
-                      }
-                      errors++;
-                    }
-                  } else {
-                    const err86 = {
-                      instancePath:
-                        instancePath + "/design_space_candidates/candidates/" + i0 + "/oversubscription_factor",
-                      schemaPath:
-                        "design-space-candidates.schema.json/properties/candidates/items/properties/oversubscription_factor/type",
-                      keyword: "type",
-                      params: { type: "number" },
-                      message: "must be number",
                     };
                     if (vErrors === null) {
                       vErrors = [err86];
@@ -6743,33 +6760,33 @@ function validate20(
                     errors++;
                   }
                 }
-                if (data24.request_count !== undefined) {
-                  let data30 = data24.request_count;
-                  if (!(typeof data30 == "number" && !(data30 % 1) && !isNaN(data30))) {
-                    const err87 = {
-                      instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/request_count",
-                      schemaPath:
-                        "design-space-candidates.schema.json/properties/candidates/items/properties/request_count/type",
-                      keyword: "type",
-                      params: { type: "integer" },
-                      message: "must be integer",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err87];
-                    } else {
-                      vErrors.push(err87);
-                    }
-                    errors++;
-                  }
-                  if (typeof data30 == "number") {
-                    if (data30 > 100000 || isNaN(data30)) {
-                      const err88 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/request_count",
+                if (data29.candidate_id !== undefined) {
+                  let data30 = data29.candidate_id;
+                  if (typeof data30 === "string") {
+                    if (func1(data30) > 512) {
+                      const err87 = {
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/candidate_id",
                         schemaPath:
-                          "design-space-candidates.schema.json/properties/candidates/items/properties/request_count/maximum",
-                        keyword: "maximum",
-                        params: { comparison: "<=", limit: 100000 },
-                        message: "must be <= 100000",
+                          "design-space-candidates.schema.json/properties/candidates/items/properties/candidate_id/maxLength",
+                        keyword: "maxLength",
+                        params: { limit: 512 },
+                        message: "must NOT have more than 512 characters",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err87];
+                      } else {
+                        vErrors.push(err87);
+                      }
+                      errors++;
+                    }
+                    if (func1(data30) < 1) {
+                      const err88 = {
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/candidate_id",
+                        schemaPath:
+                          "design-space-candidates.schema.json/properties/candidates/items/properties/candidate_id/minLength",
+                        keyword: "minLength",
+                        params: { limit: 1 },
+                        message: "must NOT have fewer than 1 characters",
                       };
                       if (vErrors === null) {
                         vErrors = [err88];
@@ -6778,51 +6795,50 @@ function validate20(
                       }
                       errors++;
                     }
-                    if (data30 < 1 || isNaN(data30)) {
-                      const err89 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/request_count",
-                        schemaPath:
-                          "design-space-candidates.schema.json/properties/candidates/items/properties/request_count/minimum",
-                        keyword: "minimum",
-                        params: { comparison: ">=", limit: 1 },
-                        message: "must be >= 1",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err89];
-                      } else {
-                        vErrors.push(err89);
-                      }
-                      errors++;
-                    }
-                  }
-                }
-                if (data24.message_bytes !== undefined) {
-                  let data31 = data24.message_bytes;
-                  if (!(typeof data31 == "number" && !(data31 % 1) && !isNaN(data31))) {
-                    const err90 = {
-                      instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/message_bytes",
+                  } else {
+                    const err89 = {
+                      instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/candidate_id",
                       schemaPath:
-                        "design-space-candidates.schema.json/properties/candidates/items/properties/message_bytes/type",
+                        "design-space-candidates.schema.json/properties/candidates/items/properties/candidate_id/type",
                       keyword: "type",
-                      params: { type: "integer" },
-                      message: "must be integer",
+                      params: { type: "string" },
+                      message: "must be string",
                     };
                     if (vErrors === null) {
-                      vErrors = [err90];
+                      vErrors = [err89];
                     } else {
-                      vErrors.push(err90);
+                      vErrors.push(err89);
                     }
                     errors++;
                   }
-                  if (typeof data31 == "number") {
-                    if (data31 > 9007199254740991 || isNaN(data31)) {
-                      const err91 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/message_bytes",
+                }
+                if (data29.name !== undefined) {
+                  let data31 = data29.name;
+                  if (typeof data31 === "string") {
+                    if (func1(data31) > 512) {
+                      const err90 = {
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/name",
                         schemaPath:
-                          "design-space-candidates.schema.json/properties/candidates/items/properties/message_bytes/maximum",
-                        keyword: "maximum",
-                        params: { comparison: "<=", limit: 9007199254740991 },
-                        message: "must be <= 9007199254740991",
+                          "design-space-candidates.schema.json/properties/candidates/items/properties/name/maxLength",
+                        keyword: "maxLength",
+                        params: { limit: 512 },
+                        message: "must NOT have more than 512 characters",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err90];
+                      } else {
+                        vErrors.push(err90);
+                      }
+                      errors++;
+                    }
+                    if (func1(data31) < 1) {
+                      const err91 = {
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/name",
+                        schemaPath:
+                          "design-space-candidates.schema.json/properties/candidates/items/properties/name/minLength",
+                        keyword: "minLength",
+                        params: { limit: 1 },
+                        message: "must NOT have fewer than 1 characters",
                       };
                       if (vErrors === null) {
                         vErrors = [err91];
@@ -6831,52 +6847,50 @@ function validate20(
                       }
                       errors++;
                     }
-                    if (data31 < 1 || isNaN(data31)) {
-                      const err92 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/message_bytes",
-                        schemaPath:
-                          "design-space-candidates.schema.json/properties/candidates/items/properties/message_bytes/minimum",
-                        keyword: "minimum",
-                        params: { comparison: ">=", limit: 1 },
-                        message: "must be >= 1",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err92];
-                      } else {
-                        vErrors.push(err92);
-                      }
-                      errors++;
-                    }
-                  }
-                }
-                if (data24.release_interval_ps !== undefined) {
-                  let data32 = data24.release_interval_ps;
-                  if (!(typeof data32 == "number" && !(data32 % 1) && !isNaN(data32))) {
-                    const err93 = {
-                      instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/release_interval_ps",
+                  } else {
+                    const err92 = {
+                      instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/name",
                       schemaPath:
-                        "design-space-candidates.schema.json/properties/candidates/items/properties/release_interval_ps/type",
+                        "design-space-candidates.schema.json/properties/candidates/items/properties/name/type",
                       keyword: "type",
-                      params: { type: "integer" },
-                      message: "must be integer",
+                      params: { type: "string" },
+                      message: "must be string",
                     };
                     if (vErrors === null) {
-                      vErrors = [err93];
+                      vErrors = [err92];
                     } else {
-                      vErrors.push(err93);
+                      vErrors.push(err92);
                     }
                     errors++;
                   }
+                }
+                if (data29.bandwidth_gbps !== undefined) {
+                  let data32 = data29.bandwidth_gbps;
                   if (typeof data32 == "number") {
-                    if (data32 > 9007199254740991 || isNaN(data32)) {
-                      const err94 = {
-                        instancePath:
-                          instancePath + "/design_space_candidates/candidates/" + i0 + "/release_interval_ps",
+                    if (data32 > 100000 || isNaN(data32)) {
+                      const err93 = {
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/bandwidth_gbps",
                         schemaPath:
-                          "design-space-candidates.schema.json/properties/candidates/items/properties/release_interval_ps/maximum",
+                          "design-space-candidates.schema.json/properties/candidates/items/properties/bandwidth_gbps/maximum",
                         keyword: "maximum",
-                        params: { comparison: "<=", limit: 9007199254740991 },
-                        message: "must be <= 9007199254740991",
+                        params: { comparison: "<=", limit: 100000 },
+                        message: "must be <= 100000",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err93];
+                      } else {
+                        vErrors.push(err93);
+                      }
+                      errors++;
+                    }
+                    if (data32 < 0.000001 || isNaN(data32)) {
+                      const err94 = {
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/bandwidth_gbps",
+                        schemaPath:
+                          "design-space-candidates.schema.json/properties/candidates/items/properties/bandwidth_gbps/minimum",
+                        keyword: "minimum",
+                        params: { comparison: ">=", limit: 0.000001 },
+                        message: "must be >= 0.000001",
                       };
                       if (vErrors === null) {
                         vErrors = [err94];
@@ -6885,36 +6899,34 @@ function validate20(
                       }
                       errors++;
                     }
-                    if (data32 < 0 || isNaN(data32)) {
-                      const err95 = {
-                        instancePath:
-                          instancePath + "/design_space_candidates/candidates/" + i0 + "/release_interval_ps",
-                        schemaPath:
-                          "design-space-candidates.schema.json/properties/candidates/items/properties/release_interval_ps/minimum",
-                        keyword: "minimum",
-                        params: { comparison: ">=", limit: 0 },
-                        message: "must be >= 0",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err95];
-                      } else {
-                        vErrors.push(err95);
-                      }
-                      errors++;
+                  } else {
+                    const err95 = {
+                      instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/bandwidth_gbps",
+                      schemaPath:
+                        "design-space-candidates.schema.json/properties/candidates/items/properties/bandwidth_gbps/type",
+                      keyword: "type",
+                      params: { type: "number" },
+                      message: "must be number",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err95];
+                    } else {
+                      vErrors.push(err95);
                     }
+                    errors++;
                   }
                 }
-                if (data24.uncertainty_score !== undefined) {
-                  let data33 = data24.uncertainty_score;
+                if (data29.latency_us !== undefined) {
+                  let data33 = data29.latency_us;
                   if (typeof data33 == "number") {
-                    if (data33 > 1 || isNaN(data33)) {
+                    if (data33 > 1000000 || isNaN(data33)) {
                       const err96 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/uncertainty_score",
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/latency_us",
                         schemaPath:
-                          "design-space-candidates.schema.json/properties/candidates/items/properties/uncertainty_score/maximum",
+                          "design-space-candidates.schema.json/properties/candidates/items/properties/latency_us/maximum",
                         keyword: "maximum",
-                        params: { comparison: "<=", limit: 1 },
-                        message: "must be <= 1",
+                        params: { comparison: "<=", limit: 1000000 },
+                        message: "must be <= 1000000",
                       };
                       if (vErrors === null) {
                         vErrors = [err96];
@@ -6925,9 +6937,9 @@ function validate20(
                     }
                     if (data33 < 0 || isNaN(data33)) {
                       const err97 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/uncertainty_score",
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/latency_us",
                         schemaPath:
-                          "design-space-candidates.schema.json/properties/candidates/items/properties/uncertainty_score/minimum",
+                          "design-space-candidates.schema.json/properties/candidates/items/properties/latency_us/minimum",
                         keyword: "minimum",
                         params: { comparison: ">=", limit: 0 },
                         message: "must be >= 0",
@@ -6941,9 +6953,9 @@ function validate20(
                     }
                   } else {
                     const err98 = {
-                      instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/uncertainty_score",
+                      instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/latency_us",
                       schemaPath:
-                        "design-space-candidates.schema.json/properties/candidates/items/properties/uncertainty_score/type",
+                        "design-space-candidates.schema.json/properties/candidates/items/properties/latency_us/type",
                       keyword: "type",
                       params: { type: "number" },
                       message: "must be number",
@@ -6956,35 +6968,35 @@ function validate20(
                     errors++;
                   }
                 }
-                if (data24.tail_risk !== undefined) {
-                  if (typeof data24.tail_risk !== "boolean") {
-                    const err99 = {
-                      instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/tail_risk",
-                      schemaPath:
-                        "design-space-candidates.schema.json/properties/candidates/items/properties/tail_risk/type",
-                      keyword: "type",
-                      params: { type: "boolean" },
-                      message: "must be boolean",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err99];
-                    } else {
-                      vErrors.push(err99);
-                    }
-                    errors++;
-                  }
-                }
-                if (data24.promotion_hint !== undefined) {
-                  let data35 = data24.promotion_hint;
-                  if (typeof data35 === "string") {
-                    if (func1(data35) > 160) {
-                      const err100 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/promotion_hint",
+                if (data29.oversubscription_factor !== undefined) {
+                  let data34 = data29.oversubscription_factor;
+                  if (typeof data34 == "number") {
+                    if (data34 > 1000000 || isNaN(data34)) {
+                      const err99 = {
+                        instancePath:
+                          instancePath + "/design_space_candidates/candidates/" + i0 + "/oversubscription_factor",
                         schemaPath:
-                          "design-space-candidates.schema.json/properties/candidates/items/properties/promotion_hint/maxLength",
-                        keyword: "maxLength",
-                        params: { limit: 160 },
-                        message: "must NOT have more than 160 characters",
+                          "design-space-candidates.schema.json/properties/candidates/items/properties/oversubscription_factor/maximum",
+                        keyword: "maximum",
+                        params: { comparison: "<=", limit: 1000000 },
+                        message: "must be <= 1000000",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err99];
+                      } else {
+                        vErrors.push(err99);
+                      }
+                      errors++;
+                    }
+                    if (data34 < 0.000001 || isNaN(data34)) {
+                      const err100 = {
+                        instancePath:
+                          instancePath + "/design_space_candidates/candidates/" + i0 + "/oversubscription_factor",
+                        schemaPath:
+                          "design-space-candidates.schema.json/properties/candidates/items/properties/oversubscription_factor/minimum",
+                        keyword: "minimum",
+                        params: { comparison: ">=", limit: 0.000001 },
+                        message: "must be >= 0.000001",
                       };
                       if (vErrors === null) {
                         vErrors = [err100];
@@ -6995,12 +7007,13 @@ function validate20(
                     }
                   } else {
                     const err101 = {
-                      instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/promotion_hint",
+                      instancePath:
+                        instancePath + "/design_space_candidates/candidates/" + i0 + "/oversubscription_factor",
                       schemaPath:
-                        "design-space-candidates.schema.json/properties/candidates/items/properties/promotion_hint/type",
+                        "design-space-candidates.schema.json/properties/candidates/items/properties/oversubscription_factor/type",
                       keyword: "type",
-                      params: { type: "string" },
-                      message: "must be string",
+                      params: { type: "number" },
+                      message: "must be number",
                     };
                     if (vErrors === null) {
                       vErrors = [err101];
@@ -7010,33 +7023,33 @@ function validate20(
                     errors++;
                   }
                 }
-                if (data24.source_id !== undefined) {
-                  let data36 = data24.source_id;
-                  if (typeof data36 === "string") {
-                    if (func1(data36) > 512) {
-                      const err102 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/source_id",
-                        schemaPath:
-                          "design-space-candidates.schema.json/properties/candidates/items/properties/source_id/maxLength",
-                        keyword: "maxLength",
-                        params: { limit: 512 },
-                        message: "must NOT have more than 512 characters",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err102];
-                      } else {
-                        vErrors.push(err102);
-                      }
-                      errors++;
+                if (data29.request_count !== undefined) {
+                  let data35 = data29.request_count;
+                  if (!(typeof data35 == "number" && !(data35 % 1) && !isNaN(data35))) {
+                    const err102 = {
+                      instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/request_count",
+                      schemaPath:
+                        "design-space-candidates.schema.json/properties/candidates/items/properties/request_count/type",
+                      keyword: "type",
+                      params: { type: "integer" },
+                      message: "must be integer",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err102];
+                    } else {
+                      vErrors.push(err102);
                     }
-                    if (func1(data36) < 1) {
+                    errors++;
+                  }
+                  if (typeof data35 == "number") {
+                    if (data35 > 100000 || isNaN(data35)) {
                       const err103 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/source_id",
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/request_count",
                         schemaPath:
-                          "design-space-candidates.schema.json/properties/candidates/items/properties/source_id/minLength",
-                        keyword: "minLength",
-                        params: { limit: 1 },
-                        message: "must NOT have fewer than 1 characters",
+                          "design-space-candidates.schema.json/properties/candidates/items/properties/request_count/maximum",
+                        keyword: "maximum",
+                        params: { comparison: "<=", limit: 100000 },
+                        message: "must be <= 100000",
                       };
                       if (vErrors === null) {
                         vErrors = [err103];
@@ -7045,8 +7058,275 @@ function validate20(
                       }
                       errors++;
                     }
+                    if (data35 < 1 || isNaN(data35)) {
+                      const err104 = {
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/request_count",
+                        schemaPath:
+                          "design-space-candidates.schema.json/properties/candidates/items/properties/request_count/minimum",
+                        keyword: "minimum",
+                        params: { comparison: ">=", limit: 1 },
+                        message: "must be >= 1",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err104];
+                      } else {
+                        vErrors.push(err104);
+                      }
+                      errors++;
+                    }
+                  }
+                }
+                if (data29.message_bytes !== undefined) {
+                  let data36 = data29.message_bytes;
+                  if (!(typeof data36 == "number" && !(data36 % 1) && !isNaN(data36))) {
+                    const err105 = {
+                      instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/message_bytes",
+                      schemaPath:
+                        "design-space-candidates.schema.json/properties/candidates/items/properties/message_bytes/type",
+                      keyword: "type",
+                      params: { type: "integer" },
+                      message: "must be integer",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err105];
+                    } else {
+                      vErrors.push(err105);
+                    }
+                    errors++;
+                  }
+                  if (typeof data36 == "number") {
+                    if (data36 > 9007199254740991 || isNaN(data36)) {
+                      const err106 = {
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/message_bytes",
+                        schemaPath:
+                          "design-space-candidates.schema.json/properties/candidates/items/properties/message_bytes/maximum",
+                        keyword: "maximum",
+                        params: { comparison: "<=", limit: 9007199254740991 },
+                        message: "must be <= 9007199254740991",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err106];
+                      } else {
+                        vErrors.push(err106);
+                      }
+                      errors++;
+                    }
+                    if (data36 < 1 || isNaN(data36)) {
+                      const err107 = {
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/message_bytes",
+                        schemaPath:
+                          "design-space-candidates.schema.json/properties/candidates/items/properties/message_bytes/minimum",
+                        keyword: "minimum",
+                        params: { comparison: ">=", limit: 1 },
+                        message: "must be >= 1",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err107];
+                      } else {
+                        vErrors.push(err107);
+                      }
+                      errors++;
+                    }
+                  }
+                }
+                if (data29.release_interval_ps !== undefined) {
+                  let data37 = data29.release_interval_ps;
+                  if (!(typeof data37 == "number" && !(data37 % 1) && !isNaN(data37))) {
+                    const err108 = {
+                      instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/release_interval_ps",
+                      schemaPath:
+                        "design-space-candidates.schema.json/properties/candidates/items/properties/release_interval_ps/type",
+                      keyword: "type",
+                      params: { type: "integer" },
+                      message: "must be integer",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err108];
+                    } else {
+                      vErrors.push(err108);
+                    }
+                    errors++;
+                  }
+                  if (typeof data37 == "number") {
+                    if (data37 > 9007199254740991 || isNaN(data37)) {
+                      const err109 = {
+                        instancePath:
+                          instancePath + "/design_space_candidates/candidates/" + i0 + "/release_interval_ps",
+                        schemaPath:
+                          "design-space-candidates.schema.json/properties/candidates/items/properties/release_interval_ps/maximum",
+                        keyword: "maximum",
+                        params: { comparison: "<=", limit: 9007199254740991 },
+                        message: "must be <= 9007199254740991",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err109];
+                      } else {
+                        vErrors.push(err109);
+                      }
+                      errors++;
+                    }
+                    if (data37 < 0 || isNaN(data37)) {
+                      const err110 = {
+                        instancePath:
+                          instancePath + "/design_space_candidates/candidates/" + i0 + "/release_interval_ps",
+                        schemaPath:
+                          "design-space-candidates.schema.json/properties/candidates/items/properties/release_interval_ps/minimum",
+                        keyword: "minimum",
+                        params: { comparison: ">=", limit: 0 },
+                        message: "must be >= 0",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err110];
+                      } else {
+                        vErrors.push(err110);
+                      }
+                      errors++;
+                    }
+                  }
+                }
+                if (data29.uncertainty_score !== undefined) {
+                  let data38 = data29.uncertainty_score;
+                  if (typeof data38 == "number") {
+                    if (data38 > 1 || isNaN(data38)) {
+                      const err111 = {
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/uncertainty_score",
+                        schemaPath:
+                          "design-space-candidates.schema.json/properties/candidates/items/properties/uncertainty_score/maximum",
+                        keyword: "maximum",
+                        params: { comparison: "<=", limit: 1 },
+                        message: "must be <= 1",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err111];
+                      } else {
+                        vErrors.push(err111);
+                      }
+                      errors++;
+                    }
+                    if (data38 < 0 || isNaN(data38)) {
+                      const err112 = {
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/uncertainty_score",
+                        schemaPath:
+                          "design-space-candidates.schema.json/properties/candidates/items/properties/uncertainty_score/minimum",
+                        keyword: "minimum",
+                        params: { comparison: ">=", limit: 0 },
+                        message: "must be >= 0",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err112];
+                      } else {
+                        vErrors.push(err112);
+                      }
+                      errors++;
+                    }
                   } else {
-                    const err104 = {
+                    const err113 = {
+                      instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/uncertainty_score",
+                      schemaPath:
+                        "design-space-candidates.schema.json/properties/candidates/items/properties/uncertainty_score/type",
+                      keyword: "type",
+                      params: { type: "number" },
+                      message: "must be number",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err113];
+                    } else {
+                      vErrors.push(err113);
+                    }
+                    errors++;
+                  }
+                }
+                if (data29.tail_risk !== undefined) {
+                  if (typeof data29.tail_risk !== "boolean") {
+                    const err114 = {
+                      instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/tail_risk",
+                      schemaPath:
+                        "design-space-candidates.schema.json/properties/candidates/items/properties/tail_risk/type",
+                      keyword: "type",
+                      params: { type: "boolean" },
+                      message: "must be boolean",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err114];
+                    } else {
+                      vErrors.push(err114);
+                    }
+                    errors++;
+                  }
+                }
+                if (data29.promotion_hint !== undefined) {
+                  let data40 = data29.promotion_hint;
+                  if (typeof data40 === "string") {
+                    if (func1(data40) > 160) {
+                      const err115 = {
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/promotion_hint",
+                        schemaPath:
+                          "design-space-candidates.schema.json/properties/candidates/items/properties/promotion_hint/maxLength",
+                        keyword: "maxLength",
+                        params: { limit: 160 },
+                        message: "must NOT have more than 160 characters",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err115];
+                      } else {
+                        vErrors.push(err115);
+                      }
+                      errors++;
+                    }
+                  } else {
+                    const err116 = {
+                      instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/promotion_hint",
+                      schemaPath:
+                        "design-space-candidates.schema.json/properties/candidates/items/properties/promotion_hint/type",
+                      keyword: "type",
+                      params: { type: "string" },
+                      message: "must be string",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err116];
+                    } else {
+                      vErrors.push(err116);
+                    }
+                    errors++;
+                  }
+                }
+                if (data29.source_id !== undefined) {
+                  let data41 = data29.source_id;
+                  if (typeof data41 === "string") {
+                    if (func1(data41) > 512) {
+                      const err117 = {
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/source_id",
+                        schemaPath:
+                          "design-space-candidates.schema.json/properties/candidates/items/properties/source_id/maxLength",
+                        keyword: "maxLength",
+                        params: { limit: 512 },
+                        message: "must NOT have more than 512 characters",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err117];
+                      } else {
+                        vErrors.push(err117);
+                      }
+                      errors++;
+                    }
+                    if (func1(data41) < 1) {
+                      const err118 = {
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/source_id",
+                        schemaPath:
+                          "design-space-candidates.schema.json/properties/candidates/items/properties/source_id/minLength",
+                        keyword: "minLength",
+                        params: { limit: 1 },
+                        message: "must NOT have fewer than 1 characters",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err118];
+                      } else {
+                        vErrors.push(err118);
+                      }
+                      errors++;
+                    }
+                  } else {
+                    const err119 = {
                       instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/source_id",
                       schemaPath:
                         "design-space-candidates.schema.json/properties/candidates/items/properties/source_id/type",
@@ -7055,15 +7335,15 @@ function validate20(
                       message: "must be string",
                     };
                     if (vErrors === null) {
-                      vErrors = [err104];
+                      vErrors = [err119];
                     } else {
-                      vErrors.push(err104);
+                      vErrors.push(err119);
                     }
                     errors++;
                   }
                 }
               } else {
-                const err105 = {
+                const err120 = {
                   instancePath: instancePath + "/design_space_candidates/candidates/" + i0,
                   schemaPath: "design-space-candidates.schema.json/properties/candidates/items/type",
                   keyword: "type",
@@ -7071,274 +7351,20 @@ function validate20(
                   message: "must be object",
                 };
                 if (vErrors === null) {
-                  vErrors = [err105];
+                  vErrors = [err120];
                 } else {
-                  vErrors.push(err105);
+                  vErrors.push(err120);
                 }
                 errors++;
               }
             }
           } else {
-            const err106 = {
+            const err121 = {
               instancePath: instancePath + "/design_space_candidates/candidates",
               schemaPath: "design-space-candidates.schema.json/properties/candidates/type",
               keyword: "type",
               params: { type: "array" },
               message: "must be array",
-            };
-            if (vErrors === null) {
-              vErrors = [err106];
-            } else {
-              vErrors.push(err106);
-            }
-            errors++;
-          }
-        }
-      } else {
-        const err107 = {
-          instancePath: instancePath + "/design_space_candidates",
-          schemaPath: "design-space-candidates.schema.json/type",
-          keyword: "type",
-          params: { type: "object" },
-          message: "must be object",
-        };
-        if (vErrors === null) {
-          vErrors = [err107];
-        } else {
-          vErrors.push(err107);
-        }
-        errors++;
-      }
-      var _valid0 = _errs50 === errors;
-      if (_valid0) {
-        valid11 = true;
-        passing0 = 0;
-        var props0 = true;
-      }
-      const _errs89 = errors;
-      if (data17 && typeof data17 == "object" && !Array.isArray(data17)) {
-        if (data17.schema_version === undefined) {
-          const err108 = {
-            instancePath: instancePath + "/design_space_candidates",
-            schemaPath: "design-space-candidates-v2.schema.json/required",
-            keyword: "required",
-            params: { missingProperty: "schema_version" },
-            message: "must have required property '" + "schema_version" + "'",
-          };
-          if (vErrors === null) {
-            vErrors = [err108];
-          } else {
-            vErrors.push(err108);
-          }
-          errors++;
-        }
-        if (data17.manifest_id === undefined) {
-          const err109 = {
-            instancePath: instancePath + "/design_space_candidates",
-            schemaPath: "design-space-candidates-v2.schema.json/required",
-            keyword: "required",
-            params: { missingProperty: "manifest_id" },
-            message: "must have required property '" + "manifest_id" + "'",
-          };
-          if (vErrors === null) {
-            vErrors = [err109];
-          } else {
-            vErrors.push(err109);
-          }
-          errors++;
-        }
-        if (data17.source_mode === undefined) {
-          const err110 = {
-            instancePath: instancePath + "/design_space_candidates",
-            schemaPath: "design-space-candidates-v2.schema.json/required",
-            keyword: "required",
-            params: { missingProperty: "source_mode" },
-            message: "must have required property '" + "source_mode" + "'",
-          };
-          if (vErrors === null) {
-            vErrors = [err110];
-          } else {
-            vErrors.push(err110);
-          }
-          errors++;
-        }
-        if (data17.calibration_level === undefined) {
-          const err111 = {
-            instancePath: instancePath + "/design_space_candidates",
-            schemaPath: "design-space-candidates-v2.schema.json/required",
-            keyword: "required",
-            params: { missingProperty: "calibration_level" },
-            message: "must have required property '" + "calibration_level" + "'",
-          };
-          if (vErrors === null) {
-            vErrors = [err111];
-          } else {
-            vErrors.push(err111);
-          }
-          errors++;
-        }
-        if (data17.allowed_claim_scope === undefined) {
-          const err112 = {
-            instancePath: instancePath + "/design_space_candidates",
-            schemaPath: "design-space-candidates-v2.schema.json/required",
-            keyword: "required",
-            params: { missingProperty: "allowed_claim_scope" },
-            message: "must have required property '" + "allowed_claim_scope" + "'",
-          };
-          if (vErrors === null) {
-            vErrors = [err112];
-          } else {
-            vErrors.push(err112);
-          }
-          errors++;
-        }
-        if (data17.candidates === undefined) {
-          const err113 = {
-            instancePath: instancePath + "/design_space_candidates",
-            schemaPath: "design-space-candidates-v2.schema.json/required",
-            keyword: "required",
-            params: { missingProperty: "candidates" },
-            message: "must have required property '" + "candidates" + "'",
-          };
-          if (vErrors === null) {
-            vErrors = [err113];
-          } else {
-            vErrors.push(err113);
-          }
-          errors++;
-        }
-        for (const key7 in data17) {
-          if (!(
-            key7 === "schema_version" ||
-            key7 === "manifest_id" ||
-            key7 === "source_mode" ||
-            key7 === "calibration_level" ||
-            key7 === "allowed_claim_scope" ||
-            key7 === "candidates"
-          )) {
-            const err114 = {
-              instancePath: instancePath + "/design_space_candidates",
-              schemaPath: "design-space-candidates-v2.schema.json/additionalProperties",
-              keyword: "additionalProperties",
-              params: { additionalProperty: key7 },
-              message: "must NOT have additional properties",
-            };
-            if (vErrors === null) {
-              vErrors = [err114];
-            } else {
-              vErrors.push(err114);
-            }
-            errors++;
-          }
-        }
-        if (data17.schema_version !== undefined) {
-          if ("tilesim.design_space.s6_candidates.v2" !== data17.schema_version) {
-            const err115 = {
-              instancePath: instancePath + "/design_space_candidates/schema_version",
-              schemaPath: "design-space-candidates-v2.schema.json/properties/schema_version/const",
-              keyword: "const",
-              params: { allowedValue: "tilesim.design_space.s6_candidates.v2" },
-              message: "must be equal to constant",
-            };
-            if (vErrors === null) {
-              vErrors = [err115];
-            } else {
-              vErrors.push(err115);
-            }
-            errors++;
-          }
-        }
-        if (data17.manifest_id !== undefined) {
-          let data38 = data17.manifest_id;
-          if (typeof data38 === "string") {
-            if (func1(data38) > 160) {
-              const err116 = {
-                instancePath: instancePath + "/design_space_candidates/manifest_id",
-                schemaPath: "design-space-candidates-v2.schema.json/properties/manifest_id/maxLength",
-                keyword: "maxLength",
-                params: { limit: 160 },
-                message: "must NOT have more than 160 characters",
-              };
-              if (vErrors === null) {
-                vErrors = [err116];
-              } else {
-                vErrors.push(err116);
-              }
-              errors++;
-            }
-            if (func1(data38) < 1) {
-              const err117 = {
-                instancePath: instancePath + "/design_space_candidates/manifest_id",
-                schemaPath: "design-space-candidates-v2.schema.json/properties/manifest_id/minLength",
-                keyword: "minLength",
-                params: { limit: 1 },
-                message: "must NOT have fewer than 1 characters",
-              };
-              if (vErrors === null) {
-                vErrors = [err117];
-              } else {
-                vErrors.push(err117);
-              }
-              errors++;
-            }
-          } else {
-            const err118 = {
-              instancePath: instancePath + "/design_space_candidates/manifest_id",
-              schemaPath: "design-space-candidates-v2.schema.json/properties/manifest_id/type",
-              keyword: "type",
-              params: { type: "string" },
-              message: "must be string",
-            };
-            if (vErrors === null) {
-              vErrors = [err118];
-            } else {
-              vErrors.push(err118);
-            }
-            errors++;
-          }
-        }
-        if (data17.source_mode !== undefined) {
-          if ("synthetic_trace" !== data17.source_mode) {
-            const err119 = {
-              instancePath: instancePath + "/design_space_candidates/source_mode",
-              schemaPath: "design-space-candidates-v2.schema.json/properties/source_mode/const",
-              keyword: "const",
-              params: { allowedValue: "synthetic_trace" },
-              message: "must be equal to constant",
-            };
-            if (vErrors === null) {
-              vErrors = [err119];
-            } else {
-              vErrors.push(err119);
-            }
-            errors++;
-          }
-        }
-        if (data17.calibration_level !== undefined) {
-          if ("uncalibrated" !== data17.calibration_level) {
-            const err120 = {
-              instancePath: instancePath + "/design_space_candidates/calibration_level",
-              schemaPath: "design-space-candidates-v2.schema.json/properties/calibration_level/const",
-              keyword: "const",
-              params: { allowedValue: "uncalibrated" },
-              message: "must be equal to constant",
-            };
-            if (vErrors === null) {
-              vErrors = [err120];
-            } else {
-              vErrors.push(err120);
-            }
-            errors++;
-          }
-        }
-        if (data17.allowed_claim_scope !== undefined) {
-          if ("exploratory" !== data17.allowed_claim_scope) {
-            const err121 = {
-              instancePath: instancePath + "/design_space_candidates/allowed_claim_scope",
-              schemaPath: "design-space-candidates-v2.schema.json/properties/allowed_claim_scope/const",
-              keyword: "const",
-              params: { allowedValue: "exploratory" },
-              message: "must be equal to constant",
             };
             if (vErrors === null) {
               vErrors = [err121];
@@ -7348,11 +7374,265 @@ function validate20(
             errors++;
           }
         }
-        if (data17.candidates !== undefined) {
-          let data42 = data17.candidates;
-          if (Array.isArray(data42)) {
-            if (data42.length > 256) {
-              const err122 = {
+      } else {
+        const err122 = {
+          instancePath: instancePath + "/design_space_candidates",
+          schemaPath: "design-space-candidates.schema.json/type",
+          keyword: "type",
+          params: { type: "object" },
+          message: "must be object",
+        };
+        if (vErrors === null) {
+          vErrors = [err122];
+        } else {
+          vErrors.push(err122);
+        }
+        errors++;
+      }
+      var _valid0 = _errs60 === errors;
+      if (_valid0) {
+        valid11 = true;
+        passing0 = 0;
+        var props0 = true;
+      }
+      const _errs99 = errors;
+      if (data22 && typeof data22 == "object" && !Array.isArray(data22)) {
+        if (data22.schema_version === undefined) {
+          const err123 = {
+            instancePath: instancePath + "/design_space_candidates",
+            schemaPath: "design-space-candidates-v2.schema.json/required",
+            keyword: "required",
+            params: { missingProperty: "schema_version" },
+            message: "must have required property '" + "schema_version" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err123];
+          } else {
+            vErrors.push(err123);
+          }
+          errors++;
+        }
+        if (data22.manifest_id === undefined) {
+          const err124 = {
+            instancePath: instancePath + "/design_space_candidates",
+            schemaPath: "design-space-candidates-v2.schema.json/required",
+            keyword: "required",
+            params: { missingProperty: "manifest_id" },
+            message: "must have required property '" + "manifest_id" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err124];
+          } else {
+            vErrors.push(err124);
+          }
+          errors++;
+        }
+        if (data22.source_mode === undefined) {
+          const err125 = {
+            instancePath: instancePath + "/design_space_candidates",
+            schemaPath: "design-space-candidates-v2.schema.json/required",
+            keyword: "required",
+            params: { missingProperty: "source_mode" },
+            message: "must have required property '" + "source_mode" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err125];
+          } else {
+            vErrors.push(err125);
+          }
+          errors++;
+        }
+        if (data22.calibration_level === undefined) {
+          const err126 = {
+            instancePath: instancePath + "/design_space_candidates",
+            schemaPath: "design-space-candidates-v2.schema.json/required",
+            keyword: "required",
+            params: { missingProperty: "calibration_level" },
+            message: "must have required property '" + "calibration_level" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err126];
+          } else {
+            vErrors.push(err126);
+          }
+          errors++;
+        }
+        if (data22.allowed_claim_scope === undefined) {
+          const err127 = {
+            instancePath: instancePath + "/design_space_candidates",
+            schemaPath: "design-space-candidates-v2.schema.json/required",
+            keyword: "required",
+            params: { missingProperty: "allowed_claim_scope" },
+            message: "must have required property '" + "allowed_claim_scope" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err127];
+          } else {
+            vErrors.push(err127);
+          }
+          errors++;
+        }
+        if (data22.candidates === undefined) {
+          const err128 = {
+            instancePath: instancePath + "/design_space_candidates",
+            schemaPath: "design-space-candidates-v2.schema.json/required",
+            keyword: "required",
+            params: { missingProperty: "candidates" },
+            message: "must have required property '" + "candidates" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err128];
+          } else {
+            vErrors.push(err128);
+          }
+          errors++;
+        }
+        for (const key7 in data22) {
+          if (!(
+            key7 === "schema_version" ||
+            key7 === "manifest_id" ||
+            key7 === "source_mode" ||
+            key7 === "calibration_level" ||
+            key7 === "allowed_claim_scope" ||
+            key7 === "candidates"
+          )) {
+            const err129 = {
+              instancePath: instancePath + "/design_space_candidates",
+              schemaPath: "design-space-candidates-v2.schema.json/additionalProperties",
+              keyword: "additionalProperties",
+              params: { additionalProperty: key7 },
+              message: "must NOT have additional properties",
+            };
+            if (vErrors === null) {
+              vErrors = [err129];
+            } else {
+              vErrors.push(err129);
+            }
+            errors++;
+          }
+        }
+        if (data22.schema_version !== undefined) {
+          if ("tilesim.design_space.s6_candidates.v2" !== data22.schema_version) {
+            const err130 = {
+              instancePath: instancePath + "/design_space_candidates/schema_version",
+              schemaPath: "design-space-candidates-v2.schema.json/properties/schema_version/const",
+              keyword: "const",
+              params: { allowedValue: "tilesim.design_space.s6_candidates.v2" },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err130];
+            } else {
+              vErrors.push(err130);
+            }
+            errors++;
+          }
+        }
+        if (data22.manifest_id !== undefined) {
+          let data43 = data22.manifest_id;
+          if (typeof data43 === "string") {
+            if (func1(data43) > 160) {
+              const err131 = {
+                instancePath: instancePath + "/design_space_candidates/manifest_id",
+                schemaPath: "design-space-candidates-v2.schema.json/properties/manifest_id/maxLength",
+                keyword: "maxLength",
+                params: { limit: 160 },
+                message: "must NOT have more than 160 characters",
+              };
+              if (vErrors === null) {
+                vErrors = [err131];
+              } else {
+                vErrors.push(err131);
+              }
+              errors++;
+            }
+            if (func1(data43) < 1) {
+              const err132 = {
+                instancePath: instancePath + "/design_space_candidates/manifest_id",
+                schemaPath: "design-space-candidates-v2.schema.json/properties/manifest_id/minLength",
+                keyword: "minLength",
+                params: { limit: 1 },
+                message: "must NOT have fewer than 1 characters",
+              };
+              if (vErrors === null) {
+                vErrors = [err132];
+              } else {
+                vErrors.push(err132);
+              }
+              errors++;
+            }
+          } else {
+            const err133 = {
+              instancePath: instancePath + "/design_space_candidates/manifest_id",
+              schemaPath: "design-space-candidates-v2.schema.json/properties/manifest_id/type",
+              keyword: "type",
+              params: { type: "string" },
+              message: "must be string",
+            };
+            if (vErrors === null) {
+              vErrors = [err133];
+            } else {
+              vErrors.push(err133);
+            }
+            errors++;
+          }
+        }
+        if (data22.source_mode !== undefined) {
+          if ("synthetic_trace" !== data22.source_mode) {
+            const err134 = {
+              instancePath: instancePath + "/design_space_candidates/source_mode",
+              schemaPath: "design-space-candidates-v2.schema.json/properties/source_mode/const",
+              keyword: "const",
+              params: { allowedValue: "synthetic_trace" },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err134];
+            } else {
+              vErrors.push(err134);
+            }
+            errors++;
+          }
+        }
+        if (data22.calibration_level !== undefined) {
+          if ("uncalibrated" !== data22.calibration_level) {
+            const err135 = {
+              instancePath: instancePath + "/design_space_candidates/calibration_level",
+              schemaPath: "design-space-candidates-v2.schema.json/properties/calibration_level/const",
+              keyword: "const",
+              params: { allowedValue: "uncalibrated" },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err135];
+            } else {
+              vErrors.push(err135);
+            }
+            errors++;
+          }
+        }
+        if (data22.allowed_claim_scope !== undefined) {
+          if ("exploratory" !== data22.allowed_claim_scope) {
+            const err136 = {
+              instancePath: instancePath + "/design_space_candidates/allowed_claim_scope",
+              schemaPath: "design-space-candidates-v2.schema.json/properties/allowed_claim_scope/const",
+              keyword: "const",
+              params: { allowedValue: "exploratory" },
+              message: "must be equal to constant",
+            };
+            if (vErrors === null) {
+              vErrors = [err136];
+            } else {
+              vErrors.push(err136);
+            }
+            errors++;
+          }
+        }
+        if (data22.candidates !== undefined) {
+          let data47 = data22.candidates;
+          if (Array.isArray(data47)) {
+            if (data47.length > 256) {
+              const err137 = {
                 instancePath: instancePath + "/design_space_candidates/candidates",
                 schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/maxItems",
                 keyword: "maxItems",
@@ -7360,14 +7640,14 @@ function validate20(
                 message: "must NOT have more than 256 items",
               };
               if (vErrors === null) {
-                vErrors = [err122];
+                vErrors = [err137];
               } else {
-                vErrors.push(err122);
+                vErrors.push(err137);
               }
               errors++;
             }
-            if (data42.length < 1) {
-              const err123 = {
+            if (data47.length < 1) {
+              const err138 = {
                 instancePath: instancePath + "/design_space_candidates/candidates",
                 schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/minItems",
                 keyword: "minItems",
@@ -7375,18 +7655,18 @@ function validate20(
                 message: "must NOT have fewer than 1 items",
               };
               if (vErrors === null) {
-                vErrors = [err123];
+                vErrors = [err138];
               } else {
-                vErrors.push(err123);
+                vErrors.push(err138);
               }
               errors++;
             }
-            const len1 = data42.length;
+            const len1 = data47.length;
             for (let i1 = 0; i1 < len1; i1++) {
-              let data43 = data42[i1];
-              if (data43 && typeof data43 == "object" && !Array.isArray(data43)) {
-                if (data43.candidate_id === undefined) {
-                  const err124 = {
+              let data48 = data47[i1];
+              if (data48 && typeof data48 == "object" && !Array.isArray(data48)) {
+                if (data48.candidate_id === undefined) {
+                  const err139 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i1,
                     schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -7394,14 +7674,14 @@ function validate20(
                     message: "must have required property '" + "candidate_id" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err124];
+                    vErrors = [err139];
                   } else {
-                    vErrors.push(err124);
+                    vErrors.push(err139);
                   }
                   errors++;
                 }
-                if (data43.name === undefined) {
-                  const err125 = {
+                if (data48.name === undefined) {
+                  const err140 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i1,
                     schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -7409,14 +7689,14 @@ function validate20(
                     message: "must have required property '" + "name" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err125];
+                    vErrors = [err140];
                   } else {
-                    vErrors.push(err125);
+                    vErrors.push(err140);
                   }
                   errors++;
                 }
-                if (data43.bandwidth_gbps === undefined) {
-                  const err126 = {
+                if (data48.bandwidth_gbps === undefined) {
+                  const err141 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i1,
                     schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -7424,14 +7704,14 @@ function validate20(
                     message: "must have required property '" + "bandwidth_gbps" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err126];
+                    vErrors = [err141];
                   } else {
-                    vErrors.push(err126);
+                    vErrors.push(err141);
                   }
                   errors++;
                 }
-                if (data43.latency_us === undefined) {
-                  const err127 = {
+                if (data48.latency_us === undefined) {
+                  const err142 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i1,
                     schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -7439,14 +7719,14 @@ function validate20(
                     message: "must have required property '" + "latency_us" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err127];
+                    vErrors = [err142];
                   } else {
-                    vErrors.push(err127);
+                    vErrors.push(err142);
                   }
                   errors++;
                 }
-                if (data43.oversubscription_factor === undefined) {
-                  const err128 = {
+                if (data48.oversubscription_factor === undefined) {
+                  const err143 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i1,
                     schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -7454,14 +7734,14 @@ function validate20(
                     message: "must have required property '" + "oversubscription_factor" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err128];
+                    vErrors = [err143];
                   } else {
-                    vErrors.push(err128);
+                    vErrors.push(err143);
                   }
                   errors++;
                 }
-                if (data43.request_count === undefined) {
-                  const err129 = {
+                if (data48.request_count === undefined) {
+                  const err144 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i1,
                     schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -7469,14 +7749,14 @@ function validate20(
                     message: "must have required property '" + "request_count" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err129];
+                    vErrors = [err144];
                   } else {
-                    vErrors.push(err129);
+                    vErrors.push(err144);
                   }
                   errors++;
                 }
-                if (data43.message_bytes === undefined) {
-                  const err130 = {
+                if (data48.message_bytes === undefined) {
+                  const err145 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i1,
                     schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -7484,14 +7764,14 @@ function validate20(
                     message: "must have required property '" + "message_bytes" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err130];
+                    vErrors = [err145];
                   } else {
-                    vErrors.push(err130);
+                    vErrors.push(err145);
                   }
                   errors++;
                 }
-                if (data43.release_interval_ps === undefined) {
-                  const err131 = {
+                if (data48.release_interval_ps === undefined) {
+                  const err146 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i1,
                     schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -7499,14 +7779,14 @@ function validate20(
                     message: "must have required property '" + "release_interval_ps" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err131];
+                    vErrors = [err146];
                   } else {
-                    vErrors.push(err131);
+                    vErrors.push(err146);
                   }
                   errors++;
                 }
-                if (data43.uncertainty_score === undefined) {
-                  const err132 = {
+                if (data48.uncertainty_score === undefined) {
+                  const err147 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i1,
                     schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -7514,14 +7794,14 @@ function validate20(
                     message: "must have required property '" + "uncertainty_score" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err132];
+                    vErrors = [err147];
                   } else {
-                    vErrors.push(err132);
+                    vErrors.push(err147);
                   }
                   errors++;
                 }
-                if (data43.tail_risk === undefined) {
-                  const err133 = {
+                if (data48.tail_risk === undefined) {
+                  const err148 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i1,
                     schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -7529,14 +7809,14 @@ function validate20(
                     message: "must have required property '" + "tail_risk" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err133];
+                    vErrors = [err148];
                   } else {
-                    vErrors.push(err133);
+                    vErrors.push(err148);
                   }
                   errors++;
                 }
-                if (data43.source_id === undefined) {
-                  const err134 = {
+                if (data48.source_id === undefined) {
+                  const err149 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i1,
                     schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -7544,284 +7824,21 @@ function validate20(
                     message: "must have required property '" + "source_id" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err134];
+                    vErrors = [err149];
                   } else {
-                    vErrors.push(err134);
+                    vErrors.push(err149);
                   }
                   errors++;
                 }
-                for (const key8 in data43) {
+                for (const key8 in data48) {
                   if (!func4.call(schema40.properties.candidates.items.properties, key8)) {
-                    const err135 = {
+                    const err150 = {
                       instancePath: instancePath + "/design_space_candidates/candidates/" + i1,
                       schemaPath:
                         "design-space-candidates-v2.schema.json/properties/candidates/items/additionalProperties",
                       keyword: "additionalProperties",
                       params: { additionalProperty: key8 },
                       message: "must NOT have additional properties",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err135];
-                    } else {
-                      vErrors.push(err135);
-                    }
-                    errors++;
-                  }
-                }
-                if (data43.candidate_id !== undefined) {
-                  let data44 = data43.candidate_id;
-                  if (typeof data44 === "string") {
-                    if (func1(data44) > 512) {
-                      const err136 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/candidate_id",
-                        schemaPath:
-                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/candidate_id/maxLength",
-                        keyword: "maxLength",
-                        params: { limit: 512 },
-                        message: "must NOT have more than 512 characters",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err136];
-                      } else {
-                        vErrors.push(err136);
-                      }
-                      errors++;
-                    }
-                    if (func1(data44) < 1) {
-                      const err137 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/candidate_id",
-                        schemaPath:
-                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/candidate_id/minLength",
-                        keyword: "minLength",
-                        params: { limit: 1 },
-                        message: "must NOT have fewer than 1 characters",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err137];
-                      } else {
-                        vErrors.push(err137);
-                      }
-                      errors++;
-                    }
-                  } else {
-                    const err138 = {
-                      instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/candidate_id",
-                      schemaPath:
-                        "design-space-candidates-v2.schema.json/properties/candidates/items/properties/candidate_id/type",
-                      keyword: "type",
-                      params: { type: "string" },
-                      message: "must be string",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err138];
-                    } else {
-                      vErrors.push(err138);
-                    }
-                    errors++;
-                  }
-                }
-                if (data43.name !== undefined) {
-                  let data45 = data43.name;
-                  if (typeof data45 === "string") {
-                    if (func1(data45) > 512) {
-                      const err139 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/name",
-                        schemaPath:
-                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/name/maxLength",
-                        keyword: "maxLength",
-                        params: { limit: 512 },
-                        message: "must NOT have more than 512 characters",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err139];
-                      } else {
-                        vErrors.push(err139);
-                      }
-                      errors++;
-                    }
-                    if (func1(data45) < 1) {
-                      const err140 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/name",
-                        schemaPath:
-                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/name/minLength",
-                        keyword: "minLength",
-                        params: { limit: 1 },
-                        message: "must NOT have fewer than 1 characters",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err140];
-                      } else {
-                        vErrors.push(err140);
-                      }
-                      errors++;
-                    }
-                  } else {
-                    const err141 = {
-                      instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/name",
-                      schemaPath:
-                        "design-space-candidates-v2.schema.json/properties/candidates/items/properties/name/type",
-                      keyword: "type",
-                      params: { type: "string" },
-                      message: "must be string",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err141];
-                    } else {
-                      vErrors.push(err141);
-                    }
-                    errors++;
-                  }
-                }
-                if (data43.bandwidth_gbps !== undefined) {
-                  let data46 = data43.bandwidth_gbps;
-                  if (typeof data46 == "number") {
-                    if (data46 > 100000 || isNaN(data46)) {
-                      const err142 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/bandwidth_gbps",
-                        schemaPath:
-                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/bandwidth_gbps/maximum",
-                        keyword: "maximum",
-                        params: { comparison: "<=", limit: 100000 },
-                        message: "must be <= 100000",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err142];
-                      } else {
-                        vErrors.push(err142);
-                      }
-                      errors++;
-                    }
-                    if (data46 < 0.000001 || isNaN(data46)) {
-                      const err143 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/bandwidth_gbps",
-                        schemaPath:
-                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/bandwidth_gbps/minimum",
-                        keyword: "minimum",
-                        params: { comparison: ">=", limit: 0.000001 },
-                        message: "must be >= 0.000001",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err143];
-                      } else {
-                        vErrors.push(err143);
-                      }
-                      errors++;
-                    }
-                  } else {
-                    const err144 = {
-                      instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/bandwidth_gbps",
-                      schemaPath:
-                        "design-space-candidates-v2.schema.json/properties/candidates/items/properties/bandwidth_gbps/type",
-                      keyword: "type",
-                      params: { type: "number" },
-                      message: "must be number",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err144];
-                    } else {
-                      vErrors.push(err144);
-                    }
-                    errors++;
-                  }
-                }
-                if (data43.latency_us !== undefined) {
-                  let data47 = data43.latency_us;
-                  if (typeof data47 == "number") {
-                    if (data47 > 1000000 || isNaN(data47)) {
-                      const err145 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/latency_us",
-                        schemaPath:
-                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/latency_us/maximum",
-                        keyword: "maximum",
-                        params: { comparison: "<=", limit: 1000000 },
-                        message: "must be <= 1000000",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err145];
-                      } else {
-                        vErrors.push(err145);
-                      }
-                      errors++;
-                    }
-                    if (data47 < 0 || isNaN(data47)) {
-                      const err146 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/latency_us",
-                        schemaPath:
-                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/latency_us/minimum",
-                        keyword: "minimum",
-                        params: { comparison: ">=", limit: 0 },
-                        message: "must be >= 0",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err146];
-                      } else {
-                        vErrors.push(err146);
-                      }
-                      errors++;
-                    }
-                  } else {
-                    const err147 = {
-                      instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/latency_us",
-                      schemaPath:
-                        "design-space-candidates-v2.schema.json/properties/candidates/items/properties/latency_us/type",
-                      keyword: "type",
-                      params: { type: "number" },
-                      message: "must be number",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err147];
-                    } else {
-                      vErrors.push(err147);
-                    }
-                    errors++;
-                  }
-                }
-                if (data43.oversubscription_factor !== undefined) {
-                  let data48 = data43.oversubscription_factor;
-                  if (typeof data48 == "number") {
-                    if (data48 > 1000000 || isNaN(data48)) {
-                      const err148 = {
-                        instancePath:
-                          instancePath + "/design_space_candidates/candidates/" + i1 + "/oversubscription_factor",
-                        schemaPath:
-                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/oversubscription_factor/maximum",
-                        keyword: "maximum",
-                        params: { comparison: "<=", limit: 1000000 },
-                        message: "must be <= 1000000",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err148];
-                      } else {
-                        vErrors.push(err148);
-                      }
-                      errors++;
-                    }
-                    if (data48 < 1 || isNaN(data48)) {
-                      const err149 = {
-                        instancePath:
-                          instancePath + "/design_space_candidates/candidates/" + i1 + "/oversubscription_factor",
-                        schemaPath:
-                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/oversubscription_factor/minimum",
-                        keyword: "minimum",
-                        params: { comparison: ">=", limit: 1 },
-                        message: "must be >= 1",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err149];
-                      } else {
-                        vErrors.push(err149);
-                      }
-                      errors++;
-                    }
-                  } else {
-                    const err150 = {
-                      instancePath:
-                        instancePath + "/design_space_candidates/candidates/" + i1 + "/oversubscription_factor",
-                      schemaPath:
-                        "design-space-candidates-v2.schema.json/properties/candidates/items/properties/oversubscription_factor/type",
-                      keyword: "type",
-                      params: { type: "number" },
-                      message: "must be number",
                     };
                     if (vErrors === null) {
                       vErrors = [err150];
@@ -7831,33 +7848,33 @@ function validate20(
                     errors++;
                   }
                 }
-                if (data43.request_count !== undefined) {
-                  let data49 = data43.request_count;
-                  if (!(typeof data49 == "number" && !(data49 % 1) && !isNaN(data49))) {
-                    const err151 = {
-                      instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/request_count",
-                      schemaPath:
-                        "design-space-candidates-v2.schema.json/properties/candidates/items/properties/request_count/type",
-                      keyword: "type",
-                      params: { type: "integer" },
-                      message: "must be integer",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err151];
-                    } else {
-                      vErrors.push(err151);
-                    }
-                    errors++;
-                  }
-                  if (typeof data49 == "number") {
-                    if (data49 > 100000 || isNaN(data49)) {
-                      const err152 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/request_count",
+                if (data48.candidate_id !== undefined) {
+                  let data49 = data48.candidate_id;
+                  if (typeof data49 === "string") {
+                    if (func1(data49) > 512) {
+                      const err151 = {
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/candidate_id",
                         schemaPath:
-                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/request_count/maximum",
-                        keyword: "maximum",
-                        params: { comparison: "<=", limit: 100000 },
-                        message: "must be <= 100000",
+                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/candidate_id/maxLength",
+                        keyword: "maxLength",
+                        params: { limit: 512 },
+                        message: "must NOT have more than 512 characters",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err151];
+                      } else {
+                        vErrors.push(err151);
+                      }
+                      errors++;
+                    }
+                    if (func1(data49) < 1) {
+                      const err152 = {
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/candidate_id",
+                        schemaPath:
+                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/candidate_id/minLength",
+                        keyword: "minLength",
+                        params: { limit: 1 },
+                        message: "must NOT have fewer than 1 characters",
                       };
                       if (vErrors === null) {
                         vErrors = [err152];
@@ -7866,51 +7883,50 @@ function validate20(
                       }
                       errors++;
                     }
-                    if (data49 < 1 || isNaN(data49)) {
-                      const err153 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/request_count",
-                        schemaPath:
-                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/request_count/minimum",
-                        keyword: "minimum",
-                        params: { comparison: ">=", limit: 1 },
-                        message: "must be >= 1",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err153];
-                      } else {
-                        vErrors.push(err153);
-                      }
-                      errors++;
-                    }
-                  }
-                }
-                if (data43.message_bytes !== undefined) {
-                  let data50 = data43.message_bytes;
-                  if (!(typeof data50 == "number" && !(data50 % 1) && !isNaN(data50))) {
-                    const err154 = {
-                      instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/message_bytes",
+                  } else {
+                    const err153 = {
+                      instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/candidate_id",
                       schemaPath:
-                        "design-space-candidates-v2.schema.json/properties/candidates/items/properties/message_bytes/type",
+                        "design-space-candidates-v2.schema.json/properties/candidates/items/properties/candidate_id/type",
                       keyword: "type",
-                      params: { type: "integer" },
-                      message: "must be integer",
+                      params: { type: "string" },
+                      message: "must be string",
                     };
                     if (vErrors === null) {
-                      vErrors = [err154];
+                      vErrors = [err153];
                     } else {
-                      vErrors.push(err154);
+                      vErrors.push(err153);
                     }
                     errors++;
                   }
-                  if (typeof data50 == "number") {
-                    if (data50 > 9007199254740991 || isNaN(data50)) {
-                      const err155 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/message_bytes",
+                }
+                if (data48.name !== undefined) {
+                  let data50 = data48.name;
+                  if (typeof data50 === "string") {
+                    if (func1(data50) > 512) {
+                      const err154 = {
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/name",
                         schemaPath:
-                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/message_bytes/maximum",
-                        keyword: "maximum",
-                        params: { comparison: "<=", limit: 9007199254740991 },
-                        message: "must be <= 9007199254740991",
+                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/name/maxLength",
+                        keyword: "maxLength",
+                        params: { limit: 512 },
+                        message: "must NOT have more than 512 characters",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err154];
+                      } else {
+                        vErrors.push(err154);
+                      }
+                      errors++;
+                    }
+                    if (func1(data50) < 1) {
+                      const err155 = {
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/name",
+                        schemaPath:
+                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/name/minLength",
+                        keyword: "minLength",
+                        params: { limit: 1 },
+                        message: "must NOT have fewer than 1 characters",
                       };
                       if (vErrors === null) {
                         vErrors = [err155];
@@ -7919,52 +7935,50 @@ function validate20(
                       }
                       errors++;
                     }
-                    if (data50 < 1 || isNaN(data50)) {
-                      const err156 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/message_bytes",
-                        schemaPath:
-                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/message_bytes/minimum",
-                        keyword: "minimum",
-                        params: { comparison: ">=", limit: 1 },
-                        message: "must be >= 1",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err156];
-                      } else {
-                        vErrors.push(err156);
-                      }
-                      errors++;
-                    }
-                  }
-                }
-                if (data43.release_interval_ps !== undefined) {
-                  let data51 = data43.release_interval_ps;
-                  if (!(typeof data51 == "number" && !(data51 % 1) && !isNaN(data51))) {
-                    const err157 = {
-                      instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/release_interval_ps",
+                  } else {
+                    const err156 = {
+                      instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/name",
                       schemaPath:
-                        "design-space-candidates-v2.schema.json/properties/candidates/items/properties/release_interval_ps/type",
+                        "design-space-candidates-v2.schema.json/properties/candidates/items/properties/name/type",
                       keyword: "type",
-                      params: { type: "integer" },
-                      message: "must be integer",
+                      params: { type: "string" },
+                      message: "must be string",
                     };
                     if (vErrors === null) {
-                      vErrors = [err157];
+                      vErrors = [err156];
                     } else {
-                      vErrors.push(err157);
+                      vErrors.push(err156);
                     }
                     errors++;
                   }
+                }
+                if (data48.bandwidth_gbps !== undefined) {
+                  let data51 = data48.bandwidth_gbps;
                   if (typeof data51 == "number") {
-                    if (data51 > 9007199254740991 || isNaN(data51)) {
-                      const err158 = {
-                        instancePath:
-                          instancePath + "/design_space_candidates/candidates/" + i1 + "/release_interval_ps",
+                    if (data51 > 100000 || isNaN(data51)) {
+                      const err157 = {
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/bandwidth_gbps",
                         schemaPath:
-                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/release_interval_ps/maximum",
+                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/bandwidth_gbps/maximum",
                         keyword: "maximum",
-                        params: { comparison: "<=", limit: 9007199254740991 },
-                        message: "must be <= 9007199254740991",
+                        params: { comparison: "<=", limit: 100000 },
+                        message: "must be <= 100000",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err157];
+                      } else {
+                        vErrors.push(err157);
+                      }
+                      errors++;
+                    }
+                    if (data51 < 0.000001 || isNaN(data51)) {
+                      const err158 = {
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/bandwidth_gbps",
+                        schemaPath:
+                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/bandwidth_gbps/minimum",
+                        keyword: "minimum",
+                        params: { comparison: ">=", limit: 0.000001 },
+                        message: "must be >= 0.000001",
                       };
                       if (vErrors === null) {
                         vErrors = [err158];
@@ -7973,36 +7987,34 @@ function validate20(
                       }
                       errors++;
                     }
-                    if (data51 < 0 || isNaN(data51)) {
-                      const err159 = {
-                        instancePath:
-                          instancePath + "/design_space_candidates/candidates/" + i1 + "/release_interval_ps",
-                        schemaPath:
-                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/release_interval_ps/minimum",
-                        keyword: "minimum",
-                        params: { comparison: ">=", limit: 0 },
-                        message: "must be >= 0",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err159];
-                      } else {
-                        vErrors.push(err159);
-                      }
-                      errors++;
+                  } else {
+                    const err159 = {
+                      instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/bandwidth_gbps",
+                      schemaPath:
+                        "design-space-candidates-v2.schema.json/properties/candidates/items/properties/bandwidth_gbps/type",
+                      keyword: "type",
+                      params: { type: "number" },
+                      message: "must be number",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err159];
+                    } else {
+                      vErrors.push(err159);
                     }
+                    errors++;
                   }
                 }
-                if (data43.uncertainty_score !== undefined) {
-                  let data52 = data43.uncertainty_score;
+                if (data48.latency_us !== undefined) {
+                  let data52 = data48.latency_us;
                   if (typeof data52 == "number") {
-                    if (data52 > 1 || isNaN(data52)) {
+                    if (data52 > 1000000 || isNaN(data52)) {
                       const err160 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/uncertainty_score",
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/latency_us",
                         schemaPath:
-                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/uncertainty_score/maximum",
+                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/latency_us/maximum",
                         keyword: "maximum",
-                        params: { comparison: "<=", limit: 1 },
-                        message: "must be <= 1",
+                        params: { comparison: "<=", limit: 1000000 },
+                        message: "must be <= 1000000",
                       };
                       if (vErrors === null) {
                         vErrors = [err160];
@@ -8013,9 +8025,9 @@ function validate20(
                     }
                     if (data52 < 0 || isNaN(data52)) {
                       const err161 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/uncertainty_score",
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/latency_us",
                         schemaPath:
-                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/uncertainty_score/minimum",
+                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/latency_us/minimum",
                         keyword: "minimum",
                         params: { comparison: ">=", limit: 0 },
                         message: "must be >= 0",
@@ -8029,9 +8041,9 @@ function validate20(
                     }
                   } else {
                     const err162 = {
-                      instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/uncertainty_score",
+                      instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/latency_us",
                       schemaPath:
-                        "design-space-candidates-v2.schema.json/properties/candidates/items/properties/uncertainty_score/type",
+                        "design-space-candidates-v2.schema.json/properties/candidates/items/properties/latency_us/type",
                       keyword: "type",
                       params: { type: "number" },
                       message: "must be number",
@@ -8044,35 +8056,35 @@ function validate20(
                     errors++;
                   }
                 }
-                if (data43.tail_risk !== undefined) {
-                  if (typeof data43.tail_risk !== "boolean") {
-                    const err163 = {
-                      instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/tail_risk",
-                      schemaPath:
-                        "design-space-candidates-v2.schema.json/properties/candidates/items/properties/tail_risk/type",
-                      keyword: "type",
-                      params: { type: "boolean" },
-                      message: "must be boolean",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err163];
-                    } else {
-                      vErrors.push(err163);
-                    }
-                    errors++;
-                  }
-                }
-                if (data43.promotion_hint !== undefined) {
-                  let data54 = data43.promotion_hint;
-                  if (typeof data54 === "string") {
-                    if (func1(data54) > 160) {
-                      const err164 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/promotion_hint",
+                if (data48.oversubscription_factor !== undefined) {
+                  let data53 = data48.oversubscription_factor;
+                  if (typeof data53 == "number") {
+                    if (data53 > 1000000 || isNaN(data53)) {
+                      const err163 = {
+                        instancePath:
+                          instancePath + "/design_space_candidates/candidates/" + i1 + "/oversubscription_factor",
                         schemaPath:
-                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/promotion_hint/maxLength",
-                        keyword: "maxLength",
-                        params: { limit: 160 },
-                        message: "must NOT have more than 160 characters",
+                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/oversubscription_factor/maximum",
+                        keyword: "maximum",
+                        params: { comparison: "<=", limit: 1000000 },
+                        message: "must be <= 1000000",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err163];
+                      } else {
+                        vErrors.push(err163);
+                      }
+                      errors++;
+                    }
+                    if (data53 < 1 || isNaN(data53)) {
+                      const err164 = {
+                        instancePath:
+                          instancePath + "/design_space_candidates/candidates/" + i1 + "/oversubscription_factor",
+                        schemaPath:
+                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/oversubscription_factor/minimum",
+                        keyword: "minimum",
+                        params: { comparison: ">=", limit: 1 },
+                        message: "must be >= 1",
                       };
                       if (vErrors === null) {
                         vErrors = [err164];
@@ -8083,12 +8095,13 @@ function validate20(
                     }
                   } else {
                     const err165 = {
-                      instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/promotion_hint",
+                      instancePath:
+                        instancePath + "/design_space_candidates/candidates/" + i1 + "/oversubscription_factor",
                       schemaPath:
-                        "design-space-candidates-v2.schema.json/properties/candidates/items/properties/promotion_hint/type",
+                        "design-space-candidates-v2.schema.json/properties/candidates/items/properties/oversubscription_factor/type",
                       keyword: "type",
-                      params: { type: "string" },
-                      message: "must be string",
+                      params: { type: "number" },
+                      message: "must be number",
                     };
                     if (vErrors === null) {
                       vErrors = [err165];
@@ -8098,33 +8111,33 @@ function validate20(
                     errors++;
                   }
                 }
-                if (data43.source_id !== undefined) {
-                  let data55 = data43.source_id;
-                  if (typeof data55 === "string") {
-                    if (func1(data55) > 512) {
-                      const err166 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/source_id",
-                        schemaPath:
-                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/source_id/maxLength",
-                        keyword: "maxLength",
-                        params: { limit: 512 },
-                        message: "must NOT have more than 512 characters",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err166];
-                      } else {
-                        vErrors.push(err166);
-                      }
-                      errors++;
+                if (data48.request_count !== undefined) {
+                  let data54 = data48.request_count;
+                  if (!(typeof data54 == "number" && !(data54 % 1) && !isNaN(data54))) {
+                    const err166 = {
+                      instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/request_count",
+                      schemaPath:
+                        "design-space-candidates-v2.schema.json/properties/candidates/items/properties/request_count/type",
+                      keyword: "type",
+                      params: { type: "integer" },
+                      message: "must be integer",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err166];
+                    } else {
+                      vErrors.push(err166);
                     }
-                    if (func1(data55) < 1) {
+                    errors++;
+                  }
+                  if (typeof data54 == "number") {
+                    if (data54 > 100000 || isNaN(data54)) {
                       const err167 = {
-                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/source_id",
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/request_count",
                         schemaPath:
-                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/source_id/minLength",
-                        keyword: "minLength",
-                        params: { limit: 1 },
-                        message: "must NOT have fewer than 1 characters",
+                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/request_count/maximum",
+                        keyword: "maximum",
+                        params: { comparison: "<=", limit: 100000 },
+                        message: "must be <= 100000",
                       };
                       if (vErrors === null) {
                         vErrors = [err167];
@@ -8133,8 +8146,275 @@ function validate20(
                       }
                       errors++;
                     }
+                    if (data54 < 1 || isNaN(data54)) {
+                      const err168 = {
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/request_count",
+                        schemaPath:
+                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/request_count/minimum",
+                        keyword: "minimum",
+                        params: { comparison: ">=", limit: 1 },
+                        message: "must be >= 1",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err168];
+                      } else {
+                        vErrors.push(err168);
+                      }
+                      errors++;
+                    }
+                  }
+                }
+                if (data48.message_bytes !== undefined) {
+                  let data55 = data48.message_bytes;
+                  if (!(typeof data55 == "number" && !(data55 % 1) && !isNaN(data55))) {
+                    const err169 = {
+                      instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/message_bytes",
+                      schemaPath:
+                        "design-space-candidates-v2.schema.json/properties/candidates/items/properties/message_bytes/type",
+                      keyword: "type",
+                      params: { type: "integer" },
+                      message: "must be integer",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err169];
+                    } else {
+                      vErrors.push(err169);
+                    }
+                    errors++;
+                  }
+                  if (typeof data55 == "number") {
+                    if (data55 > 9007199254740991 || isNaN(data55)) {
+                      const err170 = {
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/message_bytes",
+                        schemaPath:
+                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/message_bytes/maximum",
+                        keyword: "maximum",
+                        params: { comparison: "<=", limit: 9007199254740991 },
+                        message: "must be <= 9007199254740991",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err170];
+                      } else {
+                        vErrors.push(err170);
+                      }
+                      errors++;
+                    }
+                    if (data55 < 1 || isNaN(data55)) {
+                      const err171 = {
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/message_bytes",
+                        schemaPath:
+                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/message_bytes/minimum",
+                        keyword: "minimum",
+                        params: { comparison: ">=", limit: 1 },
+                        message: "must be >= 1",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err171];
+                      } else {
+                        vErrors.push(err171);
+                      }
+                      errors++;
+                    }
+                  }
+                }
+                if (data48.release_interval_ps !== undefined) {
+                  let data56 = data48.release_interval_ps;
+                  if (!(typeof data56 == "number" && !(data56 % 1) && !isNaN(data56))) {
+                    const err172 = {
+                      instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/release_interval_ps",
+                      schemaPath:
+                        "design-space-candidates-v2.schema.json/properties/candidates/items/properties/release_interval_ps/type",
+                      keyword: "type",
+                      params: { type: "integer" },
+                      message: "must be integer",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err172];
+                    } else {
+                      vErrors.push(err172);
+                    }
+                    errors++;
+                  }
+                  if (typeof data56 == "number") {
+                    if (data56 > 9007199254740991 || isNaN(data56)) {
+                      const err173 = {
+                        instancePath:
+                          instancePath + "/design_space_candidates/candidates/" + i1 + "/release_interval_ps",
+                        schemaPath:
+                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/release_interval_ps/maximum",
+                        keyword: "maximum",
+                        params: { comparison: "<=", limit: 9007199254740991 },
+                        message: "must be <= 9007199254740991",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err173];
+                      } else {
+                        vErrors.push(err173);
+                      }
+                      errors++;
+                    }
+                    if (data56 < 0 || isNaN(data56)) {
+                      const err174 = {
+                        instancePath:
+                          instancePath + "/design_space_candidates/candidates/" + i1 + "/release_interval_ps",
+                        schemaPath:
+                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/release_interval_ps/minimum",
+                        keyword: "minimum",
+                        params: { comparison: ">=", limit: 0 },
+                        message: "must be >= 0",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err174];
+                      } else {
+                        vErrors.push(err174);
+                      }
+                      errors++;
+                    }
+                  }
+                }
+                if (data48.uncertainty_score !== undefined) {
+                  let data57 = data48.uncertainty_score;
+                  if (typeof data57 == "number") {
+                    if (data57 > 1 || isNaN(data57)) {
+                      const err175 = {
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/uncertainty_score",
+                        schemaPath:
+                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/uncertainty_score/maximum",
+                        keyword: "maximum",
+                        params: { comparison: "<=", limit: 1 },
+                        message: "must be <= 1",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err175];
+                      } else {
+                        vErrors.push(err175);
+                      }
+                      errors++;
+                    }
+                    if (data57 < 0 || isNaN(data57)) {
+                      const err176 = {
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/uncertainty_score",
+                        schemaPath:
+                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/uncertainty_score/minimum",
+                        keyword: "minimum",
+                        params: { comparison: ">=", limit: 0 },
+                        message: "must be >= 0",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err176];
+                      } else {
+                        vErrors.push(err176);
+                      }
+                      errors++;
+                    }
                   } else {
-                    const err168 = {
+                    const err177 = {
+                      instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/uncertainty_score",
+                      schemaPath:
+                        "design-space-candidates-v2.schema.json/properties/candidates/items/properties/uncertainty_score/type",
+                      keyword: "type",
+                      params: { type: "number" },
+                      message: "must be number",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err177];
+                    } else {
+                      vErrors.push(err177);
+                    }
+                    errors++;
+                  }
+                }
+                if (data48.tail_risk !== undefined) {
+                  if (typeof data48.tail_risk !== "boolean") {
+                    const err178 = {
+                      instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/tail_risk",
+                      schemaPath:
+                        "design-space-candidates-v2.schema.json/properties/candidates/items/properties/tail_risk/type",
+                      keyword: "type",
+                      params: { type: "boolean" },
+                      message: "must be boolean",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err178];
+                    } else {
+                      vErrors.push(err178);
+                    }
+                    errors++;
+                  }
+                }
+                if (data48.promotion_hint !== undefined) {
+                  let data59 = data48.promotion_hint;
+                  if (typeof data59 === "string") {
+                    if (func1(data59) > 160) {
+                      const err179 = {
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/promotion_hint",
+                        schemaPath:
+                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/promotion_hint/maxLength",
+                        keyword: "maxLength",
+                        params: { limit: 160 },
+                        message: "must NOT have more than 160 characters",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err179];
+                      } else {
+                        vErrors.push(err179);
+                      }
+                      errors++;
+                    }
+                  } else {
+                    const err180 = {
+                      instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/promotion_hint",
+                      schemaPath:
+                        "design-space-candidates-v2.schema.json/properties/candidates/items/properties/promotion_hint/type",
+                      keyword: "type",
+                      params: { type: "string" },
+                      message: "must be string",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err180];
+                    } else {
+                      vErrors.push(err180);
+                    }
+                    errors++;
+                  }
+                }
+                if (data48.source_id !== undefined) {
+                  let data60 = data48.source_id;
+                  if (typeof data60 === "string") {
+                    if (func1(data60) > 512) {
+                      const err181 = {
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/source_id",
+                        schemaPath:
+                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/source_id/maxLength",
+                        keyword: "maxLength",
+                        params: { limit: 512 },
+                        message: "must NOT have more than 512 characters",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err181];
+                      } else {
+                        vErrors.push(err181);
+                      }
+                      errors++;
+                    }
+                    if (func1(data60) < 1) {
+                      const err182 = {
+                        instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/source_id",
+                        schemaPath:
+                          "design-space-candidates-v2.schema.json/properties/candidates/items/properties/source_id/minLength",
+                        keyword: "minLength",
+                        params: { limit: 1 },
+                        message: "must NOT have fewer than 1 characters",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err182];
+                      } else {
+                        vErrors.push(err182);
+                      }
+                      errors++;
+                    }
+                  } else {
+                    const err183 = {
                       instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/source_id",
                       schemaPath:
                         "design-space-candidates-v2.schema.json/properties/candidates/items/properties/source_id/type",
@@ -8143,15 +8423,15 @@ function validate20(
                       message: "must be string",
                     };
                     if (vErrors === null) {
-                      vErrors = [err168];
+                      vErrors = [err183];
                     } else {
-                      vErrors.push(err168);
+                      vErrors.push(err183);
                     }
                     errors++;
                   }
                 }
               } else {
-                const err169 = {
+                const err184 = {
                   instancePath: instancePath + "/design_space_candidates/candidates/" + i1,
                   schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/items/type",
                   keyword: "type",
@@ -8159,15 +8439,15 @@ function validate20(
                   message: "must be object",
                 };
                 if (vErrors === null) {
-                  vErrors = [err169];
+                  vErrors = [err184];
                 } else {
-                  vErrors.push(err169);
+                  vErrors.push(err184);
                 }
                 errors++;
               }
             }
           } else {
-            const err170 = {
+            const err185 = {
               instancePath: instancePath + "/design_space_candidates/candidates",
               schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/type",
               keyword: "type",
@@ -8175,15 +8455,15 @@ function validate20(
               message: "must be array",
             };
             if (vErrors === null) {
-              vErrors = [err170];
+              vErrors = [err185];
             } else {
-              vErrors.push(err170);
+              vErrors.push(err185);
             }
             errors++;
           }
         }
       } else {
-        const err171 = {
+        const err186 = {
           instancePath: instancePath + "/design_space_candidates",
           schemaPath: "design-space-candidates-v2.schema.json/type",
           keyword: "type",
@@ -8191,13 +8471,13 @@ function validate20(
           message: "must be object",
         };
         if (vErrors === null) {
-          vErrors = [err171];
+          vErrors = [err186];
         } else {
-          vErrors.push(err171);
+          vErrors.push(err186);
         }
         errors++;
       }
-      var _valid0 = _errs89 === errors;
+      var _valid0 = _errs99 === errors;
       if (_valid0 && valid11) {
         valid11 = false;
         passing0 = [passing0, 1];
@@ -8211,7 +8491,7 @@ function validate20(
         }
       }
       if (!valid11) {
-        const err172 = {
+        const err187 = {
           instancePath: instancePath + "/design_space_candidates",
           schemaPath: "#/properties/design_space_candidates/oneOf",
           keyword: "oneOf",
@@ -8219,16 +8499,16 @@ function validate20(
           message: "must match exactly one schema in oneOf",
         };
         if (vErrors === null) {
-          vErrors = [err172];
+          vErrors = [err187];
         } else {
-          vErrors.push(err172);
+          vErrors.push(err187);
         }
         errors++;
       } else {
-        errors = _errs49;
+        errors = _errs59;
         if (vErrors !== null) {
-          if (_errs49) {
-            vErrors.length = _errs49;
+          if (_errs59) {
+            vErrors.length = _errs59;
           } else {
             vErrors = null;
           }
@@ -8236,10 +8516,10 @@ function validate20(
       }
     }
     if (data.trace_package_id !== undefined) {
-      let data56 = data.trace_package_id;
-      if (typeof data56 === "string") {
-        if (!pattern4.test(data56)) {
-          const err173 = {
+      let data61 = data.trace_package_id;
+      if (typeof data61 === "string") {
+        if (!pattern4.test(data61)) {
+          const err188 = {
             instancePath: instancePath + "/trace_package_id",
             schemaPath: "#/properties/trace_package_id/pattern",
             keyword: "pattern",
@@ -8247,14 +8527,14 @@ function validate20(
             message: 'must match pattern "' + "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$" + '"',
           };
           if (vErrors === null) {
-            vErrors = [err173];
+            vErrors = [err188];
           } else {
-            vErrors.push(err173);
+            vErrors.push(err188);
           }
           errors++;
         }
       } else {
-        const err174 = {
+        const err189 = {
           instancePath: instancePath + "/trace_package_id",
           schemaPath: "#/properties/trace_package_id/type",
           keyword: "type",
@@ -8262,15 +8542,15 @@ function validate20(
           message: "must be string",
         };
         if (vErrors === null) {
-          vErrors = [err174];
+          vErrors = [err189];
         } else {
-          vErrors.push(err174);
+          vErrors.push(err189);
         }
         errors++;
       }
     }
   } else {
-    const err175 = {
+    const err190 = {
       instancePath,
       schemaPath: "#/type",
       keyword: "type",
@@ -8278,9 +8558,9 @@ function validate20(
       message: "must be object",
     };
     if (vErrors === null) {
-      vErrors = [err175];
+      vErrors = [err190];
     } else {
-      vErrors.push(err175);
+      vErrors.push(err190);
     }
     errors++;
   }
@@ -8421,7 +8701,12 @@ const schema41 = {
         },
       },
     },
-    parameter_descriptors: { type: "array", minItems: 8, maxItems: 8, items: { $ref: "#/$defs/parameterDescriptor" } },
+    parameter_descriptors: {
+      type: "array",
+      minItems: 13,
+      maxItems: 13,
+      items: { $ref: "#/$defs/parameterDescriptor" },
+    },
     resolved_fidelity_source: { const: "run_execution_envelope_and_validation_reports" },
   },
   $defs: {
@@ -12834,13 +13119,13 @@ function validate25(
     if (data.parameter_descriptors !== undefined) {
       let data71 = data.parameter_descriptors;
       if (Array.isArray(data71)) {
-        if (data71.length > 8) {
+        if (data71.length > 13) {
           const err169 = {
             instancePath: instancePath + "/parameter_descriptors",
             schemaPath: "#/properties/parameter_descriptors/maxItems",
             keyword: "maxItems",
-            params: { limit: 8 },
-            message: "must NOT have more than 8 items",
+            params: { limit: 13 },
+            message: "must NOT have more than 13 items",
           };
           if (vErrors === null) {
             vErrors = [err169];
@@ -12849,13 +13134,13 @@ function validate25(
           }
           errors++;
         }
-        if (data71.length < 8) {
+        if (data71.length < 13) {
           const err170 = {
             instancePath: instancePath + "/parameter_descriptors",
             schemaPath: "#/properties/parameter_descriptors/minItems",
             keyword: "minItems",
-            params: { limit: 8 },
-            message: "must NOT have fewer than 8 items",
+            params: { limit: 13 },
+            message: "must NOT have fewer than 13 items",
           };
           if (vErrors === null) {
             vErrors = [err170];

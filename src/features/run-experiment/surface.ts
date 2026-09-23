@@ -20,6 +20,11 @@ const fieldLabels: Record<string, string> = {
   "s6.fabric.scale_up_latency_us": "Scale-up 延迟",
   "s6.fabric.scale_out_bandwidth_gbps": "Scale-out 带宽",
   "s6.fabric.scale_out_latency_us": "Scale-out 延迟",
+  "s1.runtime.max_active_requests": "并发请求上限",
+  "s1.runtime.initial_kv_tokens": "开局 KV 占用",
+  "s1.runtime.kv_admission_watermark": "KV 准入水位",
+  "s1.runtime.long_context_threshold_tokens": "长上下文阈值",
+  "s1.runtime.decode_penalty_per_threshold": "每档减速系数",
 };
 
 const groupPresentation = {
@@ -74,7 +79,7 @@ export const compatibilityControlFields: ExperimentControlDescriptor[] = [
     defaultValue: 1,
   }),
   compatibilityField("s1.runtime.batch_scheduler", "/overrides/runtime/batch_scheduler", {
-    options: ["fifo", "decode_priority", "fabric_backpressure_aware"],
+    options: ["fifo", "decode_priority", "fabric_backpressure_aware", "starvation_aware"],
     defaultValue: "decode_priority",
   }),
   compatibilityField("s1.runtime.max_batch_size", "/overrides/runtime/max_batch_size", {
@@ -91,6 +96,44 @@ export const compatibilityControlFields: ExperimentControlDescriptor[] = [
     integer: true,
     unit: "tokens",
     defaultValue: 4096,
+  }),
+  compatibilityField("s1.runtime.max_active_requests", "/overrides/runtime/max_active_requests", {
+    minimum: 1,
+    maximum: 1024,
+    step: 1,
+    integer: true,
+    unit: "requests",
+    defaultValue: 4,
+  }),
+  compatibilityField("s1.runtime.initial_kv_tokens", "/overrides/runtime/initial_kv_tokens", {
+    minimum: 0,
+    maximum: 1_000_000,
+    step: 256,
+    integer: true,
+    unit: "tokens",
+    defaultValue: 0,
+  }),
+  compatibilityField("s1.runtime.kv_admission_watermark", "/overrides/runtime/kv_admission_watermark", {
+    minimum: 0.05,
+    maximum: 1,
+    step: 0.05,
+    unit: "ratio",
+    defaultValue: 1,
+  }),
+  compatibilityField("s1.runtime.long_context_threshold_tokens", "/overrides/runtime/long_context_threshold_tokens", {
+    minimum: 1,
+    maximum: 1_000_000,
+    step: 256,
+    integer: true,
+    unit: "tokens",
+    defaultValue: 2048,
+  }),
+  compatibilityField("s1.runtime.decode_penalty_per_threshold", "/overrides/runtime/decode_penalty_per_threshold", {
+    minimum: 0,
+    maximum: 1,
+    step: 0.01,
+    unit: "ratio",
+    defaultValue: 0.1,
   }),
   compatibilityField("s6.fabric.scale_up_bandwidth_gbps", "/overrides/fabric/scale_up_bandwidth_gbps", {
     minimum: 25,

@@ -25,9 +25,12 @@ subsystem 并运行打包后自检。
 功能包括：
 
 - 查看当前 deployment/release/schema identity；
-- 配置可选 Evidence Agent 模型服务；
+- 配置可选 Evidence Agent 模型服务（模型名可从服务返回的列表中选择，无需手输）；
 - 启动已验证的 immutable release；
 - 拉取后端 `origin/main` 并在独立 worktree 构建、验证、部署；
 - 请求管理员权限修复 WSL 服务。
+
+「获取模型列表」由 `scripts/configure-evidence-agent.ps1 -Action ListModels` 提供：它用已保存
+（或本次输入）的 API Key 读取 `{origin}/v1/models`，只回一份只读 JSON，不写配置。
 
 API Key 使用 Windows 当前用户 DPAPI，保存在被忽略的 `runtime/evidence-agent.local.json`，不会进入命令参数、日志、浏览器或 Git。状态检查和构建在后台线程运行，写操作单槽；操作未结束时禁止关闭窗口。

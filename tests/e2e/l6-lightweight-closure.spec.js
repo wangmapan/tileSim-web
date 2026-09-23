@@ -320,10 +320,11 @@ test.describe("L6 lightweight formal-run closure", () => {
     await expect(panel).toHaveCount(1);
     await expect(panel).toBeVisible();
     await expect(panel).toContainText("轻量实验配置");
-    await expect(panel.getByRole("radio", { name: "提出草案修改" })).toBeVisible();
+    // One input box, no mode to choose: the panel decides whether the sentence is
+    // a scenario, an explicit assignment or a question.
+    await expect(panel.getByRole("radio")).toHaveCount(0);
     await expect(page.locator(".lightweight-conversation")).toHaveCount(0);
 
-    await panel.getByRole("radio", { name: "提出草案修改" }).check();
     await panel.getByRole("textbox", { name: "描述你想理解或调整的内容" }).fill("把最大 batch 调整为 8");
     await panel.getByRole("button", { name: "提交", exact: true }).click();
 
@@ -347,6 +348,47 @@ test.describe("L6 lightweight formal-run closure", () => {
     expect(prohibitedRequests).toEqual([]);
   });
 
+  test("a described scenario becomes a one-click plan for the prepare panel", async ({ page }) => {
+    const prohibitedRequests = [];
+    page.on("request", (request) => {
+      const url = new URL(request.url());
+      if (
+        (url.pathname === "/api/runs" && request.method() === "POST") ||
+        url.pathname.includes("/agent/evidence-analyses")
+      ) {
+        prohibitedRequests.push(`${request.method()} ${url.pathname}`);
+      }
+    });
+    const api = await installApi(page);
+    await page.goto("/lightweight/prepare", { waitUntil: "networkidle" });
+    const batchInput = page.locator('.field[data-field-id="s1.runtime.max_batch_size"] input');
+    await expect(batchInput).toBeVisible();
+    await batchInput.fill("4");
+
+    await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
+    const panel = page.locator("#tilesim-agent-copilot");
+    await panel.getByRole("textbox", { name: "描述你想理解或调整的内容" }).fill("跑一个高吞吐离线批处理场景");
+    await panel.getByRole("button", { name: "提交", exact: true }).click();
+
+    // The sentence was read as a scenario, so the panel shows a plan and writes
+    // nothing yet. Reading a scenario is local: it must not need the capability
+    // snapshot the frozen eight-field draft path fetches.
+    await expect(panel).toContainText("推荐方案：高吞吐 / 离线批量");
+    await expect(panel).toContainText("把每批塞满");
+    await expect(batchInput).toHaveValue("4");
+    expect(api.getAgentCapabilityRequests()).toBe(0);
+
+    await panel.getByRole("button", { name: "应用到面板", exact: true }).click();
+
+    await expect(panel).toContainText("已写入 4 项参数，没有创建运行。");
+    await expect(batchInput).toHaveValue("64");
+    // Every preset value is a quick-control knob, so the submission channel must
+    // not have moved to custom inputs behind the user's back.
+    await expect(panel).not.toContainText("自定义输入");
+    expect(api.getPostCount()).toBe(0);
+    expect(prohibitedRequests).toEqual([]);
+  });
+
   test("unavailable formal capability stays visible and keeps the shared Agent explain-only", async ({ page }) => {
     await installApi(page, "complete", { unavailableFieldId: "s1.runtime.max_batch_size" });
     await page.goto("/lightweight/prepare", { waitUntil: "networkidle" });
@@ -360,8 +402,8 @@ test.describe("L6 lightweight formal-run closure", () => {
     await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
     const panel = page.locator("#tilesim-agent-copilot");
     await expect(panel).toBeVisible();
-    await expect(panel.getByRole("radio", { name: "仅询问" })).toBeVisible();
-    await expect(panel.getByRole("radio", { name: "提出草案修改" })).toHaveCount(0);
+    await expect(panel.getByRole("textbox", { name: "描述你想理解或调整的内容" })).toBeVisible();
+    await expect(panel.getByRole("radio")).toHaveCount(0);
   });
 
   test("shared Agent is available on lightweight run-bound pages with a read-only run context", async ({ page }) => {
@@ -373,8 +415,8 @@ test.describe("L6 lightweight formal-run closure", () => {
     await expect(panel).toBeVisible();
     await expect(panel).toContainText(`轻量运行状态 · ${runId}`);
     await expect(panel).toContainText("上下文可用");
-    await expect(panel.getByRole("radio", { name: "仅询问" })).toBeVisible();
-    await expect(panel.getByRole("radio", { name: "提出草案修改" })).toHaveCount(0);
+    await expect(panel.getByRole("textbox", { name: "描述你想理解或调整的内容" })).toBeVisible();
+    await expect(panel.getByRole("radio")).toHaveCount(0);
 
     await page.goto(`/lightweight/results?run=${runId}`, { waitUntil: "networkidle" });
     // A hard navigation intentionally resets the transient Agent shell state;
@@ -383,7 +425,7 @@ test.describe("L6 lightweight formal-run closure", () => {
     await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
     const resultsPanel = page.locator("#tilesim-agent-copilot");
     await expect(resultsPanel).toContainText(`轻量结果摘要 · ${runId}`);
-    await expect(resultsPanel.getByRole("radio", { name: "提出草案修改" })).toHaveCount(0);
+    await expect(resultsPanel.getByRole("radio")).toHaveCount(0);
   });
 
   test("new experiment → submit → status → real fixture results → professional round trip", async ({ page }) => {
@@ -421,7 +463,7 @@ test.describe("L6 lightweight formal-run closure", () => {
     await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
     const professionalPanel = page.locator("#tilesim-agent-copilot");
     await expect(professionalPanel).toContainText(runId);
-    await expect(professionalPanel.getByRole("radio", { name: "提出草案修改" })).toHaveCount(0);
+    await expect(professionalPanel.getByRole("radio")).toHaveCount(0);
     await page.goBack();
     await expect(page).toHaveURL(/\/lightweight\/results/);
     expect(api.getPostCount()).toBe(1);

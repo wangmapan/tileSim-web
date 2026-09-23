@@ -16,6 +16,23 @@
       "schema_identity": "tilesim.bridge.experiment_descriptor.v1",
       "create_run_schema_identity": "tilesim.bridge.create_run_request.v1"
     },
+    "assistant_model": {
+      "descriptor_endpoint": "GET /api/agent/assistant-model",
+      "plan_endpoint": "POST /api/agent/scenario-plan",
+      "chat_endpoint": "POST /api/agent/scenario-chat",
+      "catalogue_endpoint": "GET /api/agent/assistant-model-catalogue",
+      "selection_endpoint": "POST /api/agent/assistant-model-selection",
+      "descriptor_schema_identity": "tilesim.bridge.assistant_model_descriptor.v1",
+      "plan_schema_identity": "tilesim.bridge.assistant_model_plan.v1",
+      "chat_schema_identity": "tilesim.bridge.assistant_model_chat.v1",
+      "catalogue_schema_identity": "tilesim.bridge.assistant_model_catalogue.v1",
+      "selection_schema_identity": "tilesim.bridge.assistant_model_selection.v1",
+      "chat_events": ["prose", "plan", "error", "done"],
+      "provider_id": "tilesim_assistant_openai_v1",
+      "credential_storage": "process_environment_only",
+      "conversation_storage": "client_session_only",
+      "model_selection_storage": "bridge_process_only"
+    },
     "trace_packages": {
       "catalog_endpoint": "GET /api/trace-packages",
       "inspect_endpoint": "POST /api/trace-packages/{package_id}/inspect",
@@ -231,6 +248,85 @@
         "x-client-response-type": "TracePackageInspectResponse",
         "responses": {
           "200": { "$ref": "#/components/responses/TracePackageInspect" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/assistant-model": {
+      "get": {
+        "operationId": "assistantModelDescriptor",
+        "x-client-response-type": "AssistantModelDescriptorResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/AssistantModelDescriptor" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/assistant-model-catalogue": {
+      "get": {
+        "operationId": "assistantModelCatalogue",
+        "x-client-response-type": "AssistantModelCatalogueResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/AssistantModelCatalogue" },
+          "503": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/assistant-model-selection": {
+      "post": {
+        "operationId": "selectAssistantModel",
+        "x-client-request-type": "AssistantModelSelectionRequest",
+        "x-client-response-type": "AssistantModelSelectionResponse",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/AssistantModelSelectionRequest" } }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/AssistantModelSelection" },
+          "400": { "$ref": "#/components/responses/Error" },
+          "503": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/scenario-plan": {
+      "post": {
+        "operationId": "planAgentScenario",
+        "x-client-request-type": "AssistantModelPlanRequest",
+        "x-client-response-type": "AssistantModelPlanResponse",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/AssistantModelPlanRequest" } }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/AssistantModelPlan" },
+          "400": { "$ref": "#/components/responses/Error" },
+          "503": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/scenario-chat": {
+      "post": {
+        "operationId": "streamAgentScenarioChat",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/AssistantModelChatRequest" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "One streamed conversation turn: prose events while the answer is written, then one plan event",
+            "content": { "text/event-stream": { "schema": { "type": "string" } } }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "503": { "$ref": "#/components/responses/Error" },
           "default": { "$ref": "#/components/responses/Error" }
         }
       }
@@ -590,6 +686,220 @@
       "ExperimentDescriptorResponse": { "$ref": "./schemas/experiment-descriptor.schema.json" },
       "TracePackageCatalogResponse": { "$ref": "./schemas/trace-package-catalog.schema.json" },
       "TracePackageInspectResponse": { "$ref": "./schemas/trace-package-inspect.schema.json" },
+      "AssistantModelDescriptorResponse": {
+        "type": "object",
+        "required": [
+          "schema_version",
+          "schema_set_revision",
+          "protocol",
+          "availability",
+          "configured",
+          "degradation_state",
+          "detail",
+          "provider",
+          "limits"
+        ],
+        "properties": {
+          "schema_version": { "type": "string" },
+          "schema_set_revision": { "type": "string" },
+          "protocol": { "type": "string" },
+          "availability": { "type": "string", "enum": ["available", "unavailable"] },
+          "configured": { "type": "boolean" },
+          "degradation_state": { "type": "string", "enum": ["available", "not_configured", "misconfigured"] },
+          "detail": { "type": "string" },
+          "provider": {
+            "type": "object",
+            "required": ["configured", "provider_id", "model_id", "model_revision"],
+            "properties": {
+              "configured": { "type": "boolean" },
+              "provider_id": { "type": "string" },
+              "model_id": { "type": "string" },
+              "model_revision": { "type": "string" }
+            },
+            "additionalProperties": false
+          },
+          "limits": {
+            "type": "object",
+            "required": ["maximum_instruction_characters", "maximum_settings"],
+            "properties": {
+              "maximum_instruction_characters": { "type": "integer" },
+              "maximum_settings": { "type": "integer" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "AssistantModelChatRequest": {
+        "type": "object",
+        "required": ["messages"],
+        "properties": {
+          "messages": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 12,
+            "description": "The transcript the client already shows, oldest first, ending with the user's turn. Only the user and assistant roles are accepted.",
+            "items": {
+              "type": "object",
+              "required": ["role", "content"],
+              "properties": {
+                "role": { "type": "string", "enum": ["user", "assistant"] },
+                "content": { "type": "string", "minLength": 1, "maxLength": 2000 }
+              },
+              "additionalProperties": false
+            }
+          },
+          "panel_values": {
+            "type": "object",
+            "maxProperties": 40,
+            "description": "The current panel values, keyed by bare parameter name. Read-only context for the model; never executed or written.",
+            "additionalProperties": { "type": "string", "maxLength": 120 }
+          }
+        },
+        "additionalProperties": false
+      },
+      "AssistantModelPlanRequest": {
+        "type": "object",
+        "required": ["instruction"],
+        "properties": { "instruction": { "type": "string", "minLength": 1, "maxLength": 2000 } },
+        "additionalProperties": false
+      },
+      "AssistantModelPlanResponse": {
+        "type": "object",
+        "required": [
+          "schema_version",
+          "schema_set_revision",
+          "protocol",
+          "provider_id",
+          "model_id",
+          "served_model",
+          "instruction",
+          "answer_state",
+          "title",
+          "rationale",
+          "settings",
+          "dropped",
+          "applied",
+          "executed"
+        ],
+        "properties": {
+          "schema_version": { "type": "string" },
+          "schema_set_revision": { "type": "string" },
+          "protocol": { "type": "string" },
+          "provider_id": { "type": "string" },
+          "model_id": { "type": "string" },
+          "served_model": { "type": "string" },
+          "instruction": { "type": "string" },
+          "answer_state": {
+            "type": "string",
+            "enum": ["settings", "prose_only", "settings_unparsed"],
+            "description": "settings: a settings block was read. prose_only: the model answered in prose and proposed nothing. settings_unparsed: a settings block was present but could not be read, so no value is proposed."
+          },
+          "title": { "type": "string" },
+          "rationale": { "type": "string" },
+          "settings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["key", "value", "why"],
+              "properties": {
+                "key": { "type": "string" },
+                "value": { "type": "string" },
+                "why": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "dropped": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["key", "reason"],
+              "properties": { "key": { "type": "string" }, "reason": { "type": "string" } },
+              "additionalProperties": false
+            }
+          },
+          "applied": { "type": "boolean" },
+          "executed": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      },
+      "AssistantModelCatalogueResponse": {
+        "type": "object",
+        "required": [
+          "schema_version",
+          "schema_set_revision",
+          "protocol",
+          "provider_id",
+          "models",
+          "count",
+          "selected_model",
+          "session_override"
+        ],
+        "properties": {
+          "schema_version": { "type": "string" },
+          "schema_set_revision": { "type": "string" },
+          "protocol": { "type": "string" },
+          "provider_id": { "type": "string" },
+          "models": {
+            "type": "array",
+            "minItems": 1,
+            "description": "The model identities the configured service publishes, in the order it published them and without duplicates. Read with the credential the channel already holds; the credential is never part of this response.",
+            "items": { "type": "string", "minLength": 1, "maxLength": 200 }
+          },
+          "count": { "type": "integer", "minimum": 1 },
+          "selected_model": {
+            "type": "string",
+            "description": "The identity the next request will use: a panel selection when one is in force for this process, otherwise the configured identity."
+          },
+          "session_override": {
+            "type": "boolean",
+            "description": "True when selected_model came from a panel selection for this process rather than from the saved configuration."
+          }
+        },
+        "additionalProperties": false
+      },
+      "AssistantModelSelectionRequest": {
+        "type": "object",
+        "required": ["model"],
+        "properties": { "model": { "type": "string", "minLength": 1, "maxLength": 200 } },
+        "additionalProperties": false
+      },
+      "AssistantModelSelectionResponse": {
+        "type": "object",
+        "required": [
+          "schema_version",
+          "schema_set_revision",
+          "protocol",
+          "provider_id",
+          "selected_model",
+          "previous_model",
+          "in_force",
+          "persisted",
+          "session_only"
+        ],
+        "properties": {
+          "schema_version": { "type": "string" },
+          "schema_set_revision": { "type": "string" },
+          "protocol": { "type": "string" },
+          "provider_id": { "type": "string" },
+          "selected_model": { "type": "string" },
+          "previous_model": { "type": "string" },
+          "in_force": {
+            "type": "boolean",
+            "description": "True, always: the identity is the one this Bridge process uses from the next request on."
+          },
+          "persisted": {
+            "type": "boolean",
+            "description": "False, always: this endpoint never writes the saved configuration, which stays owned by the launcher."
+          },
+          "session_only": {
+            "type": "boolean",
+            "description": "True, always: the selection lasts until this Bridge process is restarted."
+          }
+        },
+        "additionalProperties": false
+      },
       "EvidenceAgentDescriptorResponse": { "$ref": "./schemas/evidence-agent-descriptor.schema.json" },
       "EvidenceAgentRequest": { "$ref": "./schemas/evidence-agent-request.schema.json" },
       "EvidenceAgentResponse": { "$ref": "./schemas/evidence-agent-response.schema.json" },
@@ -695,6 +1005,30 @@
         "description": "Fresh TileSimCLI Trace-package inspection",
         "content": {
           "application/json": { "schema": { "$ref": "#/components/schemas/TracePackageInspectResponse" } }
+        }
+      },
+      "AssistantModelDescriptor": {
+        "description": "Optional assistant model channel state; the credential is never included",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/AssistantModelDescriptorResponse" } }
+        }
+      },
+      "AssistantModelPlan": {
+        "description": "One validated scenario plan proposal; applying it stays a client-side action",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/AssistantModelPlanResponse" } }
+        }
+      },
+      "AssistantModelCatalogue": {
+        "description": "The model identities the configured service publishes; read with the channel credential, which never leaves the Bridge",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/AssistantModelCatalogueResponse" } }
+        }
+      },
+      "AssistantModelSelection": {
+        "description": "The identity now in force for this Bridge process; nothing was persisted and no run was created",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/AssistantModelSelectionResponse" } }
         }
       },
       "EvidenceAgentDescriptor": {

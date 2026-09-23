@@ -99,7 +99,9 @@ test("Phase 1 Agent copilot drafts only the eight-field subset without writing a
   await expect(panel).toHaveAttribute("data-state", "open");
   await page.setViewportSize({ width: 1440, height: 900 });
 
-  await panel.getByRole("radio", { name: "提出草案修改" }).check();
+  // The input asks for the sentence alone: there is no mode to pick first, so a
+  // request the frozen eight-field compiler understands simply goes to it.
+  await expect(panel.getByRole("radio")).toHaveCount(0);
   await panel
     .getByRole("textbox", { name: "描述你想理解或调整的内容" })
     .fill("把最大 batch 调整为 8，把横向扩展网络带宽改为 100 Gbps per-link");
@@ -129,12 +131,10 @@ test("Phase 1 Agent copilot drafts only the eight-field subset without writing a
   await expect(batchInput).toHaveValue("6");
   expect(new URL(page.url()).searchParams.get("run")).toBe(originalUrl.searchParams.get("run"));
 
-  await panel.getByRole("radio", { name: "提出草案修改" }).check();
   await panel.getByRole("textbox", { name: "描述你想理解或调整的内容" }).fill("把带宽改为 100");
   await panel.getByRole("button", { name: "提交", exact: true }).click();
   await expect(panel).toContainText("需要补充的信息");
 
-  await panel.getByRole("radio", { name: "提出草案修改" }).check();
   await panel.getByRole("textbox", { name: "描述你想理解或调整的内容" }).fill("把 TP 改成 8");
   await panel.getByRole("button", { name: "提交", exact: true }).click();
   await expect(panel).toContainText("当前能力不支持");
@@ -200,7 +200,6 @@ test("Phase 1 Agent copilot fails closed when the formal field binding drifts", 
   });
   await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
   const panel = page.locator("#tilesim-agent-copilot");
-  await panel.getByRole("radio", { name: "提出草案修改" }).check();
   await panel.getByRole("textbox", { name: "描述你想理解或调整的内容" }).fill("把消息大小倍率改为 2");
   await panel.getByRole("button", { name: "提交", exact: true }).click();
   await expect(panel.getByRole("alert")).toContainText("当前结果无法继续处理");
@@ -458,9 +457,24 @@ test("overview keeps a usable first-viewport comparison and keyboard route round
   const fixture = fixtureCase("synthetic-s1-s6-complete");
   addWeek8Contracts(fixture, "req-0");
   const failures = await openFixture(page, fixture, "overview");
+  const firstDomainRow = page.locator(".overview-domain-list tr").first();
+  // Readiness: `openFixture` only waits for `domcontentloaded`, and the overview keeps mounting
+  // sections for a few frames after that, so a single `boundingBox()` sample can land while the
+  // list is detached mid re-render. Sample the geometry through a retrying read instead. The
+  // measured thresholds below are unchanged.
+  await expect(firstDomainRow).toBeVisible();
   for (const width of [1440, 1100, 1920]) {
     await page.setViewportSize({ width, height: 900 });
-    const bounds = await page.locator(".overview-domain-list tr").first().boundingBox();
+    let bounds = null;
+    await expect
+      .poll(
+        async () => {
+          bounds = await firstDomainRow.boundingBox();
+          return bounds;
+        },
+        { message: `first domain row geometry at ${width}px viewport` },
+      )
+      .not.toBeNull();
     expect(bounds.y + bounds.height).toBeLessThanOrEqual(900);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   }
@@ -1321,6 +1335,46 @@ function addFormalF7Contracts(fixture) {
   );
 }
 
+/**
+ * Stands in for `GET /api/templates/<scenario_id>`, which returns the shipped
+ * example trace and topology (`bridge/server.py:638-653`). The structured input
+ * editors start from this document, so it has to be contract-valid on its own.
+ */
+const fixtureTemplate = {
+  runtime_trace: {
+    trace_name: "fixture-template-trace",
+    policy: { batch_scheduler: "fifo", max_batch_size: 4 },
+    requests: [
+      {
+        request_id: "req_decode_0",
+        arrival_time_ps: 0,
+        phase: "prefill",
+        tp_degree: 2,
+        participants: ["gpu0", "gpu1"],
+      },
+    ],
+  },
+  topology: {
+    topology: {
+      devices: [
+        { device_id: "gpu0", device_type: "GPU" },
+        { device_id: "gpu1", device_type: "GPU" },
+      ],
+      module_bindings: [
+        { module_name: "su-module", module_kind: "scale_up", override_params: { bandwidth_gbps: 900 } },
+      ],
+      domains: [
+        {
+          domain_id: "su0",
+          domain_type: "scale_up",
+          member_devices: ["gpu0", "gpu1"],
+          module_binding: "su-module",
+        },
+      ],
+    },
+  },
+};
+
 async function installFixtureApi(
   page,
   fixture,
@@ -1447,6 +1501,8 @@ async function installFixtureApi(
       payload = f8Capabilities;
     } else if (path === "/api/experiment-schema") {
       payload = createF8ExperimentDescriptor();
+    } else if (path.startsWith("/api/templates/")) {
+      payload = { ...fixtureTemplate, scenario_id: path.slice("/api/templates/".length) };
     } else if (path === "/api/trace-packages") {
       payload = tracePackageCatalog;
     } else if (path === "/api/trace-packages/synthetic-package/inspect" && route.request().method() === "POST") {
@@ -2468,7 +2524,7 @@ test("F8 experiment builder binds schema options, request preview, and exact err
   await expect(page.locator(".experiment-schema-panel")).toContainText("实验编排契约");
   await expect(page.locator(".experiment-schema-panel")).toContainText("supported");
   await expect(page.locator(".experiment-schema-panel")).toContainText("S3=not_exposed");
-  await expect(page.locator("[data-field-path]")).toHaveCount(8);
+  await expect(page.locator("[data-field-path]")).toHaveCount(13);
   await expect(page.locator(".schema-control-group .field-help code")).toHaveCount(0);
 
   const latency = page.locator('[data-field-path="/overrides/fabric/scale_out_latency_us"] input');
@@ -2490,6 +2546,157 @@ test("F8 experiment builder binds schema options, request preview, and exact err
   await page.getByRole("button", { name: "JSON 输入" }).click();
   await expect(page.locator(".request-preview-error code")).toHaveText("/custom_inputs/runtime_trace");
   await expect(page.locator("button.run-submit")).toBeDisabled();
+
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations.filter((item) => ["serious", "critical"].includes(item.impact))).toEqual([]);
+  await expectNoUnexpectedTextOverflow(page);
+  expect(browserFailures).toEqual([]);
+});
+
+test("quick-control tab hosts the structured editors and swaps the submission channel", async ({ page }) => {
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  const browserFailures = await openFixture(page, fixture, "experiment");
+
+  // Quick control is the tab that owns the structured editors; the JSON tab
+  // keeps the shape it has always had (two textareas, runtime first).
+  await expect(page.locator("[data-field-path]")).toHaveCount(13);
+  await expect(page.locator(".structured-entry-button")).toHaveCount(1);
+  await expect(page.locator(".structured-stack")).toHaveCount(0);
+
+  await page.locator(".experiment-request-preview summary").click();
+  const previewRequest = async () =>
+    JSON.parse((await page.locator(".experiment-request-preview pre").textContent()) || "{}");
+  const overridesRequest = await previewRequest();
+  expect(overridesRequest.scenario_id).toBe("s1_des_example");
+  expect(overridesRequest.custom_inputs).toBeUndefined();
+
+  await page.getByRole("button", { name: "JSON 输入" }).click();
+  await expect(page.locator(".json-grid textarea")).toHaveCount(2);
+  await expect(page.locator(".structured-stack")).toHaveCount(0);
+  await expect(page.locator(".structured-entry-button")).toHaveCount(0);
+
+  // Knobs alone keep the overrides channel; the editors are what move it.
+  await page.getByRole("button", { name: "快捷控制" }).click();
+  await page.locator(".structured-entry-button").click();
+  await expect(page.locator(".structured-stack")).toHaveCount(1);
+  await expect(page.locator(".json-grid")).toHaveCount(0);
+  await expect(page.locator(".device-inventory")).toBeVisible();
+  await expect(page.locator(".structured-area .structured-note--info")).toContainText("custom_inputs");
+
+  // The run-policy block carries only the keys the knobs cannot reach, so the
+  // same parameters are never painted twice on one screen.
+  await expect(page.locator(".structured-block--policy")).toContainText("进阶运行策略");
+  await expect(page.locator("[data-input-path='/custom_inputs/runtime_trace/policy/max_batch_size']")).toHaveCount(0);
+
+  const structuredRequest = await previewRequest();
+  expect(structuredRequest.overrides).toBeUndefined();
+  expect(structuredRequest.custom_inputs.runtime_trace.policy).toBeDefined();
+  expect(structuredRequest.custom_inputs.runtime_trace.requests).toHaveLength(1);
+  expect(structuredRequest.custom_inputs.topology.topology.devices).toHaveLength(2);
+
+  // The domain list is the panel's only route to domains[]. A new domain lands in
+  // the submitted document with an empty member list, ticking a card writes it
+  // straight into member_devices, and deleting the domain takes its links away.
+  await expect(page.locator(".domain-inventory-row")).toHaveCount(1);
+  await page.locator(".domain-inventory .structured-block__header .button").click();
+  await expect(page.locator(".domain-inventory-row")).toHaveCount(2);
+  await expect(page.locator(".experiment-request-preview pre")).toContainText("su1");
+  const withDomain = await previewRequest();
+  expect(withDomain.custom_inputs.topology.topology.domains).toHaveLength(2);
+  expect(withDomain.custom_inputs.topology.topology.domains[1]).toMatchObject({
+    domain_id: "su1",
+    domain_type: "scale_up",
+    member_devices: [],
+    module_binding: "su-module",
+  });
+
+  await page.locator(".domain-inventory-row").nth(1).locator(".domain-member-option input").first().check();
+  await expect(page.locator(".experiment-request-preview pre")).toContainText('"gpu0"');
+  const withMember = await previewRequest();
+  expect(withMember.custom_inputs.topology.topology.domains[1].member_devices).toEqual(["gpu0"]);
+
+  await page.locator(".domain-inventory-row").nth(1).locator(".icon-button").click();
+  await expect(page.locator(".domain-inventory-row")).toHaveCount(1);
+  const afterDomainDelete = await previewRequest();
+  expect(afterDomainDelete.custom_inputs.topology.topology.domains).toHaveLength(1);
+
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations.filter((item) => ["serious", "critical"].includes(item.impact))).toEqual([]);
+  await expectNoUnexpectedTextOverflow(page);
+
+  // Turning the editors off puts the quick-control tab back on overrides.
+  await page.getByRole("button", { name: "停用，回到只用旋钮" }).click();
+  await expect(page.locator(".structured-stack")).toHaveCount(0);
+  const restoredRequest = await previewRequest();
+  expect(restoredRequest.custom_inputs).toBeUndefined();
+
+  expect(browserFailures).toEqual([]);
+});
+
+test("quick-control tab connects, edits and deletes topology links without a JSON box", async ({ page }) => {
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  const browserFailures = await openFixture(page, fixture, "experiment");
+
+  // The editors start from the shipped template: two cards, one scale-up domain.
+  await page.locator(".structured-entry-button").click();
+  const editor = page.locator(".structured-stack .topology-editor");
+  await expect(editor).toBeVisible();
+  await expect(editor.locator(".topology-device")).toHaveCount(2);
+  await expect(editor.locator(".topology-domain-node")).toHaveCount(1);
+  // Mouse-only tab: no raw JSON box exists anywhere in it.
+  await expect(page.locator(".structured-stack textarea")).toHaveCount(0);
+  await expect(editor.locator(".topology-editor__json")).toHaveCount(0);
+
+  await page.locator(".experiment-request-preview summary").click();
+  const previewRequest = async () =>
+    JSON.parse((await page.locator(".experiment-request-preview pre").textContent()) || "{}");
+
+  const nodeBy = (id) => editor.locator(".topology-device").filter({ hasText: id });
+  /** Geometry reads are retried: a re-render can detach a node mid-read. */
+  const centerOf = async (locator) => {
+    await locator.scrollIntoViewIfNeeded();
+    let box = null;
+    await expect.poll(async () => (box = await locator.boundingBox())).not.toBeNull();
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  };
+
+  // Layout stays local: moving a node must not change the submitted document.
+  const beforeDrag = JSON.stringify(await previewRequest());
+  const dragged = nodeBy("gpu0");
+  const start = await centerOf(dragged);
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(start.x + 80, start.y + 30, { steps: 5 });
+  await page.mouse.up();
+  expect(JSON.stringify(await previewRequest())).toBe(beforeDrag);
+
+  // Drag-connect gpu0 -> gpu1 inside the domain the template ships.
+  await editor.getByRole("button", { name: "连接设备", exact: true }).click();
+  await editor.getByRole("combobox", { name: "选择连接 domain" }).selectOption("su0");
+  const source = await centerOf(nodeBy("gpu0"));
+  const target = await centerOf(nodeBy("gpu1"));
+  await page.mouse.move(source.x, source.y);
+  await page.mouse.down();
+  await page.mouse.move(target.x, target.y, { steps: 8 });
+  await page.mouse.up();
+  await expect(editor.locator(".topology-link")).toHaveCount(1);
+  let request = await previewRequest();
+  expect(request.custom_inputs.topology.topology.links).toEqual([
+    { src_device: "gpu0", dst_device: "gpu1", domain_id: "su0" },
+  ]);
+
+  // The link properties write the override keys into the same document.
+  const bandwidth = editor.locator('.topology-link-panel input[type="number"]').first();
+  await bandwidth.fill("400");
+  await expect(page.locator(".experiment-request-preview pre")).toContainText("bandwidth_gbps");
+  request = await previewRequest();
+  expect(request.custom_inputs.topology.topology.links[0]).toMatchObject({ bandwidth_gbps: 400 });
+
+  // Deleting the link takes it out of the submission again.
+  await editor.getByRole("button", { name: "删除连接", exact: true }).click();
+  await expect(editor.locator(".topology-link")).toHaveCount(0);
+  request = await previewRequest();
+  expect(request.custom_inputs.topology.topology.links).toEqual([]);
 
   const results = await new AxeBuilder({ page }).analyze();
   expect(results.violations.filter((item) => ["serious", "critical"].includes(item.impact))).toEqual([]);

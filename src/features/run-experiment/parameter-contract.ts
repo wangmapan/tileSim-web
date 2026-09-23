@@ -7,4 +7,9 @@ export const expectedParameterPointers = new Set([
   "/overrides/fabric/scale_up_latency_us",
   "/overrides/fabric/scale_out_bandwidth_gbps",
   "/overrides/fabric/scale_out_latency_us",
+  "/overrides/runtime/max_active_requests",
+  "/overrides/runtime/initial_kv_tokens",
+  "/overrides/runtime/kv_admission_watermark",
+  "/overrides/runtime/long_context_threshold_tokens",
+  "/overrides/runtime/decode_penalty_per_threshold",
 ]);

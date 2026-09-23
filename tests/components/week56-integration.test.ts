@@ -233,7 +233,7 @@ describe("Week 5 and Week 6 frontend integration", () => {
     expect(wrapper.text()).toContain("S1 · 调度、批处理与 KV 准入");
     expect(wrapper.text()).toContain("S0 · 通信负载输入");
     expect(wrapper.text()).toContain("S6 · Scale-up 与 Scale-out");
-    expect(wrapper.findAll("[data-field-path]")).toHaveLength(8);
+    expect(wrapper.findAll("[data-field-path]")).toHaveLength(13);
     expect(
       wrapper.find('[data-field-path="/overrides/fabric/scale_out_latency_us"] input').attributes("aria-invalid"),
     ).toBe("true");

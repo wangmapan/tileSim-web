@@ -93,27 +93,33 @@ $arguments = @(
     "TILESIM_TRACE_PACKAGE_ROOT=$tracePackageRootWsl",
     "python3", $bridgeScriptWsl
 )
-$evidenceAgentEnvironmentNames = @(
+$modelChannelEnvironmentNames = @(
     "TILESIM_EVIDENCE_AGENT_PROVIDER",
     "TILESIM_EVIDENCE_AGENT_ENDPOINT",
     "TILESIM_EVIDENCE_AGENT_API_KEY",
     "TILESIM_EVIDENCE_AGENT_MODEL",
     "TILESIM_EVIDENCE_AGENT_MODEL_REVISION",
     "TILESIM_EVIDENCE_AGENT_TIMEOUT_MS",
-    "TILESIM_EVIDENCE_AGENT_PROBE_CACHE_SECONDS"
+    "TILESIM_EVIDENCE_AGENT_PROBE_CACHE_SECONDS",
+    # The right-side panel assistant channel. These are forwarded the same way - through WSLENV, never on
+    # the command line - so the credential never appears in a process argument list.
+    "TILESIM_ASSISTANT_BASE_URL",
+    "TILESIM_ASSISTANT_API_KEY",
+    "TILESIM_ASSISTANT_MODEL",
+    "TILESIM_ASSISTANT_TIMEOUT_MS"
 )
-$forwardedEvidenceAgentEnvironmentNames = @(
-    $evidenceAgentEnvironmentNames | Where-Object {
+$forwardedModelChannelEnvironmentNames = @(
+    $modelChannelEnvironmentNames | Where-Object {
         -not [string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable($_, "Process"))
     }
 )
 $previousWslEnvironment = [Environment]::GetEnvironmentVariable("WSLENV", "Process")
 try {
-    if ($forwardedEvidenceAgentEnvironmentNames.Count -gt 0) {
+    if ($forwardedModelChannelEnvironmentNames.Count -gt 0) {
         $existingWslEnvironmentNames = @(
             $previousWslEnvironment -split ":" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
         )
-        $env:WSLENV = (@($existingWslEnvironmentNames + $forwardedEvidenceAgentEnvironmentNames) |
+        $env:WSLENV = (@($existingWslEnvironmentNames + $forwardedModelChannelEnvironmentNames) |
             Select-Object -Unique) -join ":"
     }
     $launcher = Start-Process -FilePath "wsl.exe" -ArgumentList $arguments -WindowStyle Hidden -PassThru

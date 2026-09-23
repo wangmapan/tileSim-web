@@ -100,6 +100,13 @@ export interface BuildExperimentRequestOptions {
   topologyJson: string;
   designSpaceJson: string;
   tracePackageId?: string;
+  /**
+   * Set while the quick-control tab has the structured editors open. The knob
+   * surface can only carry scalars into `overrides`, so requests and devices are
+   * unreachable from it; switching to `custom_inputs` is what makes those edits
+   * effective. Left false, `controls` keeps emitting `overrides` unchanged.
+   */
+  structuredInput?: boolean;
 }
 
 export interface ExperimentRequestPreview {

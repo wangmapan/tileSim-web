@@ -1,21 +1,69 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 const windowsOnly = process.platform === "win32" ? describe : describe.skip;
 const temporaryDirectories = [];
+const fakeGateways = [];
 const scriptsRoot = resolve("scripts");
 const configureScript = join(scriptsRoot, "configure-evidence-agent.ps1");
 const startScript = join(scriptsRoot, "start-evidence-agent.ps1");
 
+const powershellArguments = (script, args) => [
+  "-NoLogo",
+  "-NoProfile",
+  "-NonInteractive",
+  "-ExecutionPolicy",
+  "Bypass",
+  "-File",
+  script,
+  ...args,
+];
+
 function runPowerShell(script, args, input) {
-  return spawnSync(
-    "powershell.exe",
-    ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, ...args],
-    { cwd: resolve("."), encoding: "utf8", input },
-  );
+  return spawnSync("powershell.exe", powershellArguments(script, args), {
+    cwd: resolve("."),
+    encoding: "utf8",
+    input,
+  });
+}
+
+/**
+ * Same call, without blocking the event loop.
+ *
+ * A synchronous child would freeze the very process that is serving `startFakeGateway`,
+ * so the gateway could never answer and every request would look like a timeout. Any
+ * test that talks to a fake service started here has to use this variant.
+ */
+function runPowerShellAsync(script, args, input) {
+  return new Promise((settle) => {
+    const child = spawn("powershell.exe", powershellArguments(script, args), {
+      cwd: resolve("."),
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", (error) => {
+      settle({ status: 1, stdout, stderr: `${stderr}${error.message}` });
+    });
+    child.on("close", (code) => {
+      settle({ status: code ?? 1, stdout, stderr });
+    });
+    if (input !== undefined) {
+      child.stdin.write(input);
+    }
+    child.stdin.end();
+  });
 }
 
 function parseLastJsonLine(output) {
@@ -27,7 +75,31 @@ function parseLastJsonLine(output) {
   return JSON.parse(line);
 }
 
-afterEach(() => {
+/**
+ * Stand in for an OpenAI-compatible gateway. The model catalogue is read over real
+ * HTTP so the PowerShell path under test is exercised end to end, including the
+ * Bearer header it has to build from the DPAPI-protected key.
+ */
+function startFakeGateway(respond) {
+  return new Promise((ready) => {
+    const server = createServer(respond);
+    fakeGateways.push(server);
+    server.listen(0, "127.0.0.1", () => {
+      ready(`http://127.0.0.1:${server.address().port}/v1`);
+    });
+  });
+}
+
+afterEach(async () => {
+  await Promise.all(
+    fakeGateways.splice(0).map(
+      (server) =>
+        new Promise((closed) => {
+          server.closeAllConnections?.();
+          server.close(closed);
+        }),
+    ),
+  );
   while (temporaryDirectories.length) {
     rmSync(temporaryDirectories.pop(), { recursive: true, force: true });
   }
@@ -147,4 +219,84 @@ windowsOnly("desktop launcher model settings", () => {
     expect(text).not.toContain("replacement-secret");
     expect(JSON.parse(text).api_key_dpapi).toBeTruthy();
   });
+});
+
+windowsOnly("desktop launcher model catalogue", () => {
+  it("offers the model identities the service reports", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "tilesim-launcher-"));
+    temporaryDirectories.push(directory);
+    const configPath = join(directory, "evidence-agent.local.json");
+    const gatewayKey = "launcher-model-list-secret";
+    const seen = [];
+    const baseUrl = await startFakeGateway((request, response) => {
+      seen.push(`${request.method} ${request.url} auth=${JSON.stringify(request.headers.authorization ?? null)}`);
+      if (request.url !== "/v1/models" || request.headers.authorization !== `Bearer ${gatewayKey}`) {
+        response.writeHead(401, { "content-type": "application/json" });
+        response.end(JSON.stringify({ error: { message: "unauthorized" } }));
+        return;
+      }
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ object: "list", data: [{ id: "fake-model-a" }, { id: "fake-model-b" }] }));
+    });
+
+    const saved = await runPowerShellAsync(
+      configureScript,
+      [
+        "-Action",
+        "Set",
+        "-ConfigPath",
+        configPath,
+        "-BaseUrl",
+        baseUrl,
+        "-Model",
+        "fake-model-a",
+        "-TimeoutMs",
+        "30000",
+        "-ApiKeyFromStdin",
+      ],
+      `${gatewayKey}\n`,
+    );
+    expect(saved.status, saved.stdout + saved.stderr).toBe(0);
+
+    // Nothing on stdin: the catalogue request has to reuse the saved DPAPI key, which
+    // is what makes the dropdown work without retyping the key every time.
+    const listed = await runPowerShellAsync(configureScript, [
+      "-Action",
+      "ListModels",
+      "-ConfigPath",
+      configPath,
+      "-KeepExistingKey",
+    ]);
+    expect(listed.status, listed.stdout + listed.stderr).toBe(0);
+    expect(parseLastJsonLine(listed.stdout), `gateway saw: ${seen.join(" | ")}`).toMatchObject({
+      schema_version: "tilesim.evidence_agent_model_list.v1",
+      ok: true,
+      count: 2,
+      models: ["fake-model-a", "fake-model-b"],
+      error: "",
+    });
+  }, 120_000);
+
+  it("reports a rejected catalogue request without failing the launcher", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "tilesim-launcher-"));
+    temporaryDirectories.push(directory);
+    const configPath = join(directory, "evidence-agent.local.json");
+    const baseUrl = await startFakeGateway((_request, response) => {
+      response.writeHead(401, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: { message: "unauthorized" } }));
+    });
+
+    const listed = await runPowerShellAsync(
+      configureScript,
+      ["-Action", "ListModels", "-ConfigPath", configPath, "-BaseUrl", baseUrl, "-ApiKeyFromStdin"],
+      "definitely-not-the-key\n",
+    );
+    // A read-only catalogue failure is an in-body verdict, not a crashed script, so the
+    // launcher can show the reason and leave the form usable.
+    expect(listed.status, listed.stdout + listed.stderr).toBe(0);
+    const payload = parseLastJsonLine(listed.stdout);
+    expect(payload.ok).toBe(false);
+    expect(payload.count).toBe(0);
+    expect(payload.error).toBeTruthy();
+  }, 120_000);
 });

@@ -79,7 +79,16 @@ $environmentNames = @(
     "TILESIM_EVIDENCE_AGENT_MODEL",
     "TILESIM_EVIDENCE_AGENT_MODEL_REVISION",
     "TILESIM_EVIDENCE_AGENT_TIMEOUT_MS",
-    "TILESIM_EVIDENCE_AGENT_PROBE_CACHE_SECONDS"
+    "TILESIM_EVIDENCE_AGENT_PROBE_CACHE_SECONDS",
+    # The right-side panel assistant is a second, independent consumer of the same saved endpoint,
+    # credential and model: the console exposes exactly these four fields and nothing else, so a second
+    # set of settings would have to be edited by hand.  Its own timeout is deliberately left alone -
+    # TILESIM_ASSISTANT_TIMEOUT_MS keeps the channel's default, because one full plan takes longer than
+    # the evidence Provider's probe and analysis budget - and an explicit value in the environment is
+    # still forwarded.
+    "TILESIM_ASSISTANT_BASE_URL",
+    "TILESIM_ASSISTANT_API_KEY",
+    "TILESIM_ASSISTANT_MODEL"
 )
 try {
     $secretPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureApiKey)
@@ -93,6 +102,10 @@ try {
     $env:TILESIM_EVIDENCE_AGENT_MODEL_REVISION = $ModelRevision
     $env:TILESIM_EVIDENCE_AGENT_TIMEOUT_MS = [string]$TimeoutMs
     $env:TILESIM_EVIDENCE_AGENT_PROBE_CACHE_SECONDS = [string]$ProbeCacheSeconds
+
+    $env:TILESIM_ASSISTANT_BASE_URL = $BaseUrl
+    $env:TILESIM_ASSISTANT_API_KEY = $apiKey
+    $env:TILESIM_ASSISTANT_MODEL = $Model
 
     & (Join-Path $PSScriptRoot "start-backend.ps1") `
         -ManifestPath $ManifestPath `

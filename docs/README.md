@@ -7,7 +7,8 @@
 1. [`../AGENTS.md`](../AGENTS.md)：仓库规则与完整门禁。
 2. [`AI_HANDOFF.md`](AI_HANDOFF.md)：当前代码、阶段、风险和下一步。
 3. [`getting-started/AI_DEPLOYMENT_AND_HANDOFF.md`](getting-started/AI_DEPLOYMENT_AND_HANDOFF.md)：干净克隆、部署、验证与 AI 接手。
-4. 当前任务对应目录。
+4. [`getting-started/AI_FRONTEND_DEVELOPMENT_REFERENCE.md`](getting-started/AI_FRONTEND_DEVELOPMENT_REFERENCE.md)：**前端开发任务**的代码地图、状态归属、本机可跑命令与硬约束速查。
+5. 当前任务对应目录。
 
 ## 目录分类
 
@@ -26,10 +27,17 @@
 
 本索引是“新文档必须从本页或模块入口可达”这条规则的落地清单。新增活跃文档时必须同时登记到这里。
 
+### 接手与开发参考（`getting-started/`）
+
+- [`getting-started/AI_DEPLOYMENT_AND_HANDOFF.md`](getting-started/AI_DEPLOYMENT_AND_HANDOFF.md)：干净克隆、一键部署、图形启动器与常见故障。
+- [`getting-started/AI_FRONTEND_DEVELOPMENT_REFERENCE.md`](getting-started/AI_FRONTEND_DEVELOPMENT_REFERENCE.md)：前端开发的接手一页图 ——
+  代码地图（`views`/`features`/`stores`/`contracts` 边界）、路由 ↔ view 对照、状态归属（TanStack Query vs Pinia）、
+  契约与生成物规则、**本机无 pnpm 的可跑命令**、实测门禁基线、本机特有的坑、按任务的文档路由与证据红线。
+
 ### Agent 编排模块（`F9_AGENT_ORCHESTRATION/`）
 
 模块入口与阅读顺序见 [`F9_AGENT_ORCHESTRATION/README.md`](F9_AGENT_ORCHESTRATION/README.md)。其中
-`00`–`18` 是规范与流程文档，`23` 是下一批工作包计划。
+`00`–`18` 是规范与流程文档，`23`（Phase 2C Web 集成计划）与 `24`（派发提示词与验收协议）是下一批工作包。
 
 ### 契约审计（`contracts/`）
 

@@ -6,8 +6,9 @@
  * a durable conversation, approval, operation, or create-run request.
  */
 
-export const PHASE1_LOCAL_CONTRACT_REVISION = "tilesim.web.agent_orchestration.phase1.local.v1" as const;
+import type { AgentParameterEdit, AgentParameterReceipt } from "../agent-command";
 
+export const PHASE1_LOCAL_CONTRACT_REVISION = "tilesim.web.agent_orchestration.phase1.local.v1" as const;
 export const PHASE1_AGENT_EXPOSED_FIELD_IDS = [
   "s0.workload.message_size_multiplier",
   "s1.runtime.batch_scheduler",
@@ -25,10 +26,16 @@ export type AgentTaskRoute = "configure" | "capability_check" | "unsupported";
 
 export type AgentCopilotPanelState = "closed" | "collapsed" | "open" | "expanded";
 
+/**
+ * What the sidebar hands to the page owner for one submitted sentence.
+ *
+ * There is deliberately no mode field: the sentence is read as a scenario
+ * description, an explicit assignment or a question, and the panel decides.
+ * A user should not have to pick which internal path answers them.
+ */
 export interface AgentCopilotSubmitPayload {
   instruction: string;
   context_revision: string | null;
-  purpose: "explain" | "draft";
 }
 
 export type ContextAvailability = "available" | "unavailable" | "stale";
@@ -232,6 +239,27 @@ export type IntentCompilerOutput =
   | { kind: "no_op"; route: "configure" | "capability_check"; reason_code: string };
 
 export type AgentTypedBlock =
+  /**
+   * The user's own turn of the panel conversation, kept in the transcript so the
+   * answer below it can be read - and replayed to the assistant model - with the
+   * question that produced it.
+   */
+  | { block_type: "user_message"; block_id: string; text: string }
+  /**
+   * The assistant's answer as it is being written. `text` is the whole answer so
+   * far, not one delta, so a re-render never has to reassemble a stream.
+   */
+  | {
+      block_type: "assistant_message";
+      block_id: string;
+      text: string;
+      /** True while the answer is still arriving; drives the status line only. */
+      streaming: boolean;
+      /** The model that answered, empty while nothing has been served yet. */
+      model_id: string;
+      /** Why the answer stopped early, empty when it finished. */
+      error: string;
+    }
   | { block_type: "explanation"; block_id: string; title: string; body: string }
   | { block_type: "capability_result"; block_id: string; result: UnsupportedCapabilityResult }
   | { block_type: "draft_summary"; block_id: string; draft: CurrentSubsetExperimentDraft }
@@ -243,4 +271,38 @@ export type AgentTypedBlock =
     }
   | { block_type: "clarification"; block_id: string; questions: readonly ClarificationQuestion[] }
   | { block_type: "unsupported"; block_id: string; result: UnsupportedCapabilityResult }
+  | {
+      /**
+       * The parameter-edit prototype. Unlike `draft_summary` this block is not
+       * limited to the frozen eight fields: it carries whatever the catalogue
+       * resolved and, once the owning page has answered, a per-item receipt.
+       */
+      block_type: "parameter_edits";
+      block_id: string;
+      edits: readonly AgentParameterEdit[];
+      rejected: readonly { raw: string; reason: string }[];
+      unknown: readonly { raw: string; reason: string }[];
+      /** null while the plan is still waiting for the user to apply it. */
+      receipts: readonly AgentParameterReceipt[] | null;
+      channelMoved: boolean;
+      note: string;
+      /**
+       * Heading for the plan, e.g. `推荐方案：高吞吐 / 离线批量`. Empty when the
+       * plan came only from what the user typed.
+       */
+      title: string;
+      /** Why these values, and what the catalogue could not honour. */
+      rationale: string;
+      /**
+       * Per-value reasons keyed by edit path. Only a model proposal fills them:
+       * a built-in preset explains the set, a model picked each value separately.
+       */
+      reasons?: Readonly<Record<string, string>>;
+      /**
+       * The page-context revision the plan was computed against. It is cleared
+       * when the page moves on, and applying a plan without it is refused, so a
+       * stale plan can never overwrite newer form state.
+       */
+      plan_revision: string | null;
+    }
   | { block_type: "formal_error"; block_id: string; code: string; message: string; safe_next_action: string };

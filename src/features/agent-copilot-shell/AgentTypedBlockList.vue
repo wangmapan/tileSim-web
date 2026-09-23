@@ -9,15 +9,19 @@ defineProps<{ blocks: readonly AgentTypedBlock[] }>();
 
 const emit = defineEmits<{
   answer: [payload: { question_id: string; option_id: string; serialized_value: string }];
+  apply: [blockId: string];
 }>();
 
 const knownBlockTypes = new Set([
+  "user_message",
+  "assistant_message",
   "explanation",
   "capability_result",
   "draft_summary",
   "validation_result",
   "clarification",
   "unsupported",
+  "parameter_edits",
   "formal_error",
 ]);
 
@@ -53,6 +57,23 @@ function issueTone(issue: DeterministicValidationIssue): string {
 function capabilityHeading(blockType: "capability_result" | "unsupported"): string {
   return blockType === "unsupported" ? "当前能力不支持" : "能力检查结果";
 }
+
+/**
+ * The per-value reasons of one plan, in the order the values are shown.
+ *
+ * Only a model proposal carries them, and only for the values that survived
+ * planning, so a reason is never shown next to a value the panel did not offer.
+ */
+function reasonRows(block: {
+  edits: readonly { path: string; label: string }[];
+  reasons?: Readonly<Record<string, string>>;
+}): { path: string; label: string; reason: string }[] {
+  const reasons = block.reasons;
+  if (!reasons) return [];
+  return block.edits
+    .filter((edit) => Boolean(reasons[edit.path]))
+    .map((edit) => ({ path: edit.path, label: edit.label, reason: reasons[edit.path] }));
+}
 </script>
 
 <template>
@@ -64,7 +85,22 @@ function capabilityHeading(blockType: "capability_result" | "unsupported"): stri
       :data-block-type="block.block_type"
       :role="block.block_type === 'formal_error' || !isKnownBlock(block) ? 'alert' : undefined"
     >
-      <template v-if="block.block_type === 'explanation'">
+      <template v-if="block.block_type === 'user_message'">
+        <p class="agent-block__eyebrow">你</p>
+        <p class="agent-block__body agent-block__utterance">{{ block.text }}</p>
+      </template>
+
+      <template v-else-if="block.block_type === 'assistant_message'">
+        <p class="agent-block__eyebrow">{{ block.model_id ? `助手 · ${block.model_id}` : "助手" }}</p>
+        <p v-if="block.text" class="agent-block__body agent-block__answer">{{ block.text }}</p>
+        <p v-else-if="block.streaming" class="agent-block__body agent-block__answer agent-block__answer--waiting">
+          正在想…
+        </p>
+        <p v-if="block.streaming" class="agent-block__streaming" role="status">正在写回答…</p>
+        <p v-else-if="block.error" class="agent-block__body agent-block__answer-note">{{ block.error }}</p>
+      </template>
+
+      <template v-else-if="block.block_type === 'explanation'">
         <p class="agent-block__eyebrow">理解结果</p>
         <h3>{{ block.title }}</h3>
         <p class="agent-block__body">{{ block.body }}</p>
@@ -218,6 +254,79 @@ function capabilityHeading(blockType: "capability_result" | "unsupported"): stri
         </ol>
       </template>
 
+      <template v-else-if="block.block_type === 'parameter_edits'">
+        <p class="agent-block__eyebrow">{{ block.title ? "推荐方案" : "参数改动" }}</p>
+        <h3>
+          {{ block.title || (block.receipts ? "已写入面板" : `待写入 ${block.edits.length} 项`) }}
+        </h3>
+        <p v-if="block.rationale" class="agent-block__body">{{ block.rationale }}</p>
+        <p v-if="!block.receipts && block.edits.length" class="agent-block__draft-notice">
+          还没写进面板；确认无误后按下按钮才会写入。写入不会创建运行。
+        </p>
+        <template v-else-if="block.receipts">
+          <p class="agent-block__draft-notice">已写入面板；没有创建运行。</p>
+          <p v-if="block.channelMoved" class="agent-block__draft-notice">
+            已同时把提交改走「自定义输入」通道：这些参数只在自定义输入里生效。
+          </p>
+        </template>
+        <ul v-if="block.edits.length" class="agent-block__diff-list">
+          <li v-for="item in block.edits" :key="item.path">
+            <span>
+              {{ item.label }}
+              <br />
+              <small>{{ item.path }}</small>
+            </span>
+            <strong>
+              <template v-if="item.previous !== null">{{ item.previous }} → </template>
+              {{ item.next }}
+            </strong>
+          </li>
+        </ul>
+        <section v-if="reasonRows(block).length" class="agent-block__section">
+          <h4>为什么这么设</h4>
+          <ul>
+            <li v-for="item in reasonRows(block)" :key="`reason:${item.path}`">
+              <strong>{{ item.label }}</strong>
+              <span>{{ item.reason }}</span>
+            </li>
+          </ul>
+        </section>
+        <section v-if="block.rejected.length" class="agent-block__section agent-block__section--warning">
+          <h4>没有写（校验未通过）</h4>
+          <ul>
+            <li v-for="item in block.rejected" :key="`rejected:${item.raw}`">
+              <strong>{{ item.raw }}</strong>
+              <span>{{ item.reason }}</span>
+            </li>
+          </ul>
+        </section>
+        <section v-if="block.unknown.length" class="agent-block__section agent-block__section--warning">
+          <h4>没有看懂</h4>
+          <ul>
+            <li v-for="item in block.unknown" :key="`unknown:${item.raw}`">
+              <strong>{{ item.raw }}</strong>
+              <span>{{ item.reason }}</span>
+            </li>
+          </ul>
+        </section>
+        <div v-if="!block.receipts && block.edits.length" class="agent-block__options">
+          <button type="button" @click="emit('apply', block.block_id)">应用到面板</button>
+        </div>
+        <p v-if="block.receipts && block.note" class="agent-block__body">{{ block.note }}</p>
+        <section
+          v-if="block.receipts && block.receipts.some((item) => item.status === 'rejected')"
+          class="agent-block__section"
+        >
+          <h4>面板拒绝了这几项</h4>
+          <ul>
+            <li v-for="item in block.receipts.filter((entry) => entry.status === 'rejected')" :key="`r:${item.path}`">
+              <strong>{{ item.label }}</strong>
+              <span>{{ item.reason }}</span>
+            </li>
+          </ul>
+        </section>
+      </template>
+
       <template v-else-if="block.block_type === 'formal_error'">
         <p class="agent-block__eyebrow">限制</p>
         <h3>当前结果无法继续处理</h3>
@@ -243,7 +352,10 @@ function capabilityHeading(blockType: "capability_result" | "unsupported"): stri
 
   <div v-else class="agent-block-empty" role="status">
     <strong>从当前页面开始</strong>
-    <p>你可以询问页面含义、检查当前能力，或为正式八参数子集提出草案修改。</p>
+    <p>
+      描述你要跑的场景，例如「低延迟在线服务」「单卡冒烟」「长上下文压力」，助手会先给一份推荐方案供你确认；也可以直接写「参数
+      = 值」，或询问页面含义。
+    </p>
   </div>
 </template>
 
@@ -293,6 +405,37 @@ function capabilityHeading(blockType: "capability_result" | "unsupported"): stri
 .agent-block__next {
   margin: 7px 0 0;
   color: var(--ink-soft);
+}
+
+/* The conversation. The user's own turn is marked so a long answer can still be attributed at a
+   glance, and the answer is pre-wrapped because the model writes it with its own line breaks. */
+.agent-block[data-block-type="user_message"] {
+  border-left: 3px solid var(--accent);
+  background: color-mix(in srgb, var(--surface-muted) 62%, var(--panel));
+}
+
+.agent-block__utterance {
+  color: var(--ink);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.agent-block__answer {
+  white-space: pre-wrap;
+}
+
+.agent-block__answer--waiting {
+  color: var(--muted);
+}
+
+.agent-block__answer-note {
+  color: var(--warning-ink);
+}
+
+.agent-block__streaming {
+  margin: 8px 0 0;
+  color: var(--accent);
+  font-size: var(--text-micro);
 }
 
 .agent-block__draft-notice {
@@ -505,7 +648,7 @@ function capabilityHeading(blockType: "capability_result" | "unsupported"): stri
 }
 
 .agent-block-empty p {
-  max-width: 36ch;
+  max-width: 46ch;
   margin: 0;
 }
 </style>

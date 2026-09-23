@@ -32,7 +32,9 @@ from services import capability_catalog
 from services import run_intake as run_intake_service
 from services import trace_packages
 from services import week7
+from providers import assistant_model
 from providers import evidence_agent as evidence_agent_provider_contract
+from providers.evidence_agent import ProviderError, ProviderStructuredOutputError, ProviderTimeoutError
 
 from contracts import evidence_agent
 from contracts.agent_orchestration_capability import load_catalog
@@ -618,6 +620,12 @@ class BridgeHandler(SimpleHTTPRequestHandler):
                     SCHEMA_SET_REVISION, evidence_agent_provider.capability()
                 ),
             )
+        if path == "/api/agent/assistant-model":
+            descriptor = assistant_model.build_descriptor()
+            descriptor["schema_set_revision"] = SCHEMA_SET_REVISION
+            return write_json(self, HTTPStatus.OK, descriptor)
+        if path == "/api/agent/assistant-model-catalogue":
+            return self.list_assistant_models()
         if path == "/api/agent/orchestration-capabilities":
             try:
                 snapshot = agent_orchestration_capability_snapshot()
@@ -688,6 +696,12 @@ class BridgeHandler(SimpleHTTPRequestHandler):
     def do_POST(self) -> None:
         path = urlparse(self.path).path
         parts = path.strip("/").split("/")
+        if path == "/api/agent/scenario-plan":
+            return self.plan_agent_scenario()
+        if path == "/api/agent/scenario-chat":
+            return self.stream_agent_scenario_chat()
+        if path == "/api/agent/assistant-model-selection":
+            return self.select_agent_assistant_model()
         if path == "/api/agent/run-intake-preview":
             return self.preview_agent_run_intake()
         if path == "/api/week7/calibration-example":
@@ -998,6 +1012,261 @@ class BridgeHandler(SimpleHTTPRequestHandler):
             HTTPStatus.ACCEPTED,
             creation_response(metadata, idempotent_replay=False),
         )
+
+    def plan_agent_scenario(self) -> None:
+        """Ask the configured assistant model for one scenario plan.
+
+        The reply is a proposal only: this endpoint writes no document and creates no run.  Every proposed
+        parameter is validated against the published parameter catalogue before it is returned, and a hidden
+        reasoning trace inside the provider reply is dropped by the provider adapter instead of being
+        returned or retained.
+        """
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if length <= 0 or length > MAX_REQUEST_BYTES:
+                raise ValueError("Request body must be between 1 byte and 2.1 MB.")
+            request = json.loads(self.rfile.read(length), parse_constant=reject_nonfinite_json)
+            if not isinstance(request, dict):
+                raise ValueError("Request body must be a JSON object.")
+            instruction = assistant_model.validate_instruction(request.get("instruction"))
+        except (ValueError, json.JSONDecodeError) as error:
+            return write_error(
+                self,
+                HTTPStatus.BAD_REQUEST,
+                "invalid_assistant_instruction",
+                str(error),
+                field_path="/instruction",
+                retryable=False,
+            )
+        try:
+            plan = assistant_model.plan(instruction)
+        except ProviderTimeoutError:
+            return write_error(
+                self,
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "assistant_model_timeout",
+                "The assistant model channel did not answer within its configured timeout.",
+                retryable=True,
+            )
+        except ProviderError:
+            return write_error(
+                self,
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "assistant_model_unavailable",
+                "The assistant model channel is unavailable.",
+                retryable=True,
+            )
+        plan["schema_set_revision"] = SCHEMA_SET_REVISION
+        return write_json(self, HTTPStatus.OK, plan)
+
+    def stream_agent_scenario_chat(self) -> None:
+        """Answer one conversation turn as a server-sent event stream.
+
+        The client replays the transcript it already shows, the model answers, and every visible answer
+        delta is forwarded as it arrives so the panel can render the answer while it is being written.
+        The stream ends with one validated plan event; nothing here writes a document or creates a run.
+
+        A request that cannot be validated, and a Bridge with no channel configured, are refused with an
+        ordinary JSON response *before* the stream starts, so a client can fall back to its local rules
+        without having to parse a half-open stream.
+        """
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if length <= 0 or length > MAX_REQUEST_BYTES:
+                raise ValueError("Request body must be between 1 byte and 2.1 MB.")
+            request = json.loads(self.rfile.read(length), parse_constant=reject_nonfinite_json)
+            if not isinstance(request, dict):
+                raise ValueError("Request body must be a JSON object.")
+        except (ValueError, json.JSONDecodeError) as error:
+            return write_error(
+                self,
+                HTTPStatus.BAD_REQUEST,
+                "invalid_assistant_conversation",
+                str(error),
+                field_path="/messages",
+                retryable=False,
+            )
+        # The transcript and the panel values are validated one at a time so the reported field path
+        # names the field that actually failed, which is what a client uses to point at its own input.
+        try:
+            conversation = assistant_model.validate_conversation(request.get("messages"))
+        except ValueError as error:
+            return write_error(
+                self,
+                HTTPStatus.BAD_REQUEST,
+                "invalid_assistant_conversation",
+                str(error),
+                field_path="/messages",
+                retryable=False,
+            )
+        try:
+            panel_values = assistant_model.validate_panel_values(request.get("panel_values"))
+        except ValueError as error:
+            return write_error(
+                self,
+                HTTPStatus.BAD_REQUEST,
+                "invalid_assistant_conversation",
+                str(error),
+                field_path="/panel_values",
+                retryable=False,
+            )
+        try:
+            assistant_model.require_channel()
+        except ProviderTimeoutError:
+            return write_error(
+                self,
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "assistant_model_timeout",
+                "The assistant model channel did not answer within its configured timeout.",
+                retryable=True,
+            )
+        except ProviderError:
+            return write_error(
+                self,
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "assistant_model_unavailable",
+                "The assistant model channel is unavailable.",
+                retryable=True,
+            )
+
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Connection", "close")
+        add_contract_headers(self)
+        add_cors_headers(self)
+        self.end_headers()
+
+        try:
+            for event, data in assistant_model.stream_events(conversation, panel_values):
+                if event == "plan":
+                    # Stamped here for the same reason the one-shot route stamps it: a plan is a
+                    # contract-bound payload, and a client has to be able to tell which published
+                    # contract set judged the values it is being offered.
+                    data = {**data, "schema_set_revision": SCHEMA_SET_REVISION}
+                write_sse_event(self, event=event, data=data)
+            write_sse_event(
+                self,
+                event="done",
+                data={"schema_version": assistant_model.CHAT_SCHEMA_VERSION},
+            )
+        except ProviderTimeoutError:
+            write_sse_event(
+                self,
+                event="error",
+                data={
+                    "schema_version": assistant_model.CHAT_SCHEMA_VERSION,
+                    "code": "assistant_model_timeout",
+                    "message": "模型没有在限定时间内答完。",
+                    "retryable": True,
+                },
+            )
+        except ProviderError:
+            write_sse_event(
+                self,
+                event="error",
+                data={
+                    "schema_version": assistant_model.CHAT_SCHEMA_VERSION,
+                    "code": "assistant_model_unavailable",
+                    "message": "模型通道暂时不可用。",
+                    "retryable": True,
+                },
+            )
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            return
+
+    def list_assistant_models(self) -> None:
+        """Read the model identities the configured assistant service publishes.
+
+        Read-only, and the read is made with the credential this process already holds, so the key
+        never leaves the backend and never reaches a browser.  The route is optional like the rest of
+        the channel: a Bridge with no channel configured, or one whose service refuses the read,
+        answers with an error, and a client that does not trust the reply simply keeps the identity it
+        already had.
+        """
+        try:
+            catalogue = assistant_model.build_catalogue()
+        except ProviderTimeoutError:
+            return write_error(
+                self,
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "assistant_model_timeout",
+                "The assistant model channel did not answer within its configured timeout.",
+                retryable=True,
+            )
+        except ProviderStructuredOutputError:
+            # The service answered, but not with a catalogue this Bridge can read.  Retrying the very
+            # same read would fail the very same way, so this one is deliberately not retryable.
+            return write_error(
+                self,
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "assistant_model_catalogue_unreadable",
+                "The assistant model channel did not publish a readable model list.",
+                retryable=False,
+            )
+        except ProviderError:
+            return write_error(
+                self,
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "assistant_model_unavailable",
+                "The assistant model channel is unavailable.",
+                retryable=True,
+            )
+        catalogue["schema_set_revision"] = SCHEMA_SET_REVISION
+        return write_json(self, HTTPStatus.OK, catalogue)
+
+    def select_agent_assistant_model(self) -> None:
+        """Make one model identity the identity this Bridge process uses.
+
+        The switch takes effect for the next request without restarting anything, and the reply says
+        plainly that it was **not persisted**, because the saved configuration belongs to the
+        launcher.  Nothing here writes a document and nothing here creates a run.
+        """
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if length <= 0 or length > MAX_REQUEST_BYTES:
+                raise ValueError("Request body must be between 1 byte and 2.1 MB.")
+            request = json.loads(self.rfile.read(length), parse_constant=reject_nonfinite_json)
+            if not isinstance(request, dict):
+                raise ValueError("Request body must be a JSON object.")
+        except (ValueError, json.JSONDecodeError) as error:
+            return write_error(
+                self,
+                HTTPStatus.BAD_REQUEST,
+                "invalid_assistant_model_selection",
+                str(error),
+                field_path="/model",
+                retryable=False,
+            )
+        try:
+            selection = assistant_model.select_model(request.get("model"))
+        except ValueError as error:
+            return write_error(
+                self,
+                HTTPStatus.BAD_REQUEST,
+                "invalid_assistant_model_selection",
+                str(error),
+                field_path="/model",
+                retryable=False,
+            )
+        except ProviderTimeoutError:
+            return write_error(
+                self,
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "assistant_model_timeout",
+                "The assistant model channel did not answer within its configured timeout.",
+                retryable=True,
+            )
+        except ProviderError:
+            return write_error(
+                self,
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "assistant_model_unavailable",
+                "The assistant model channel is unavailable.",
+                retryable=True,
+            )
+        selection["schema_set_revision"] = SCHEMA_SET_REVISION
+        return write_json(self, HTTPStatus.OK, selection)
 
     def preview_agent_run_intake(self) -> None:
         """Read-only Run Intake v2 preview.

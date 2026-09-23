@@ -332,9 +332,167 @@ describe("Agent copilot shell interaction", () => {
   });
 });
 
+describe("conversation turns", () => {
+  it("shows the user's own turn and the model's answer with the model that wrote it", () => {
+    const wrapper = mount(AgentTypedBlockList, {
+      props: {
+        blocks: [
+          { block_type: "user_message", block_id: "user:1", text: "低延迟在线服务" },
+          {
+            block_type: "assistant_message",
+            block_id: "assistant:1",
+            text: "先压小批量。\n并发上限降一档。",
+            streaming: false,
+            model_id: "deepseek-v4-flash",
+            error: "",
+          },
+        ] as AgentTypedBlock[],
+      },
+    });
+
+    expect(wrapper.get('[data-block-type="user_message"] .agent-block__eyebrow').text()).toBe("你");
+    expect(wrapper.get('[data-block-type="user_message"] .agent-block__utterance').text()).toBe("低延迟在线服务");
+    const answer = wrapper.get('[data-block-type="assistant_message"]');
+    expect(answer.get(".agent-block__eyebrow").text()).toBe("助手 · deepseek-v4-flash");
+    // The line break the model wrote is kept: an answer is prose, not a label.
+    expect(answer.get(".agent-block__answer").text()).toBe("先压小批量。\n并发上限降一档。");
+    expect(answer.find('[role="status"]').exists()).toBe(false);
+  });
+
+  it("keeps saying the answer is unfinished while it is still arriving", async () => {
+    const streaming: AgentTypedBlock[] = [
+      {
+        block_type: "assistant_message",
+        block_id: "assistant:1",
+        text: "先压",
+        streaming: true,
+        model_id: "deepseek-v4-flash",
+        error: "",
+      },
+    ];
+    const wrapper = mount(AgentTypedBlockList, { props: { blocks: streaming } });
+
+    // Both halves matter: the words that have arrived are on screen, and the
+    // block still says it is being written - so a short answer is never mistaken
+    // for a finished one.
+    expect(wrapper.get(".agent-block__answer").text()).toBe("先压");
+    expect(wrapper.get('[role="status"]').text()).toBe("正在写回答…");
+
+    await wrapper.setProps({
+      blocks: [
+        {
+          block_type: "assistant_message",
+          block_id: "assistant:1",
+          text: "先压小批量。",
+          streaming: false,
+          model_id: "deepseek-v4-flash",
+          error: "",
+        },
+      ] as AgentTypedBlock[],
+    });
+
+    expect(wrapper.get(".agent-block__answer").text()).toBe("先压小批量。");
+    // The panel's status role is the shell's footer; the block stops claiming to
+    // be unfinished the moment it is not.
+    expect(wrapper.find('[role="status"]').exists()).toBe(false);
+  });
+
+  it("waits without an empty answer box while the first token is on its way", () => {
+    const wrapper = mount(AgentTypedBlockList, {
+      props: {
+        blocks: [
+          {
+            block_type: "assistant_message",
+            block_id: "assistant:1",
+            text: "",
+            streaming: true,
+            model_id: "",
+            error: "",
+          },
+        ] as AgentTypedBlock[],
+      },
+    });
+
+    // No model is named before the channel has answered, so the eyebrow stays bare.
+    expect(wrapper.get(".agent-block__eyebrow").text()).toBe("助手");
+    expect(wrapper.get(".agent-block__answer--waiting").text()).toBe("正在想…");
+  });
+
+  it("keeps what was written and explains why it stopped", () => {
+    const wrapper = mount(AgentTypedBlockList, {
+      props: {
+        blocks: [
+          {
+            block_type: "assistant_message",
+            block_id: "assistant:1",
+            text: "先压小批量。",
+            streaming: false,
+            model_id: "deepseek-v4-flash",
+            error: "模型回答的连接中断了。",
+          },
+        ] as AgentTypedBlock[],
+      },
+    });
+
+    expect(wrapper.get(".agent-block__answer").text()).toBe("先压小批量。");
+    expect(wrapper.get(".agent-block__answer-note").text()).toBe("模型回答的连接中断了。");
+  });
+});
+
+describe("composer while an answer is arriving", () => {
+  it("offers a stop control instead of submit and never opens a second turn", async () => {
+    const wrapper = mount(AgentComposer, { props: { busy: true } });
+    await wrapper.get("textarea").setValue("再激进一点");
+
+    expect(wrapper.find('button[type="submit"]').exists()).toBe(false);
+    expect(wrapper.text()).toContain("模型正在回答；可以直接停止，也可以先写下一句");
+
+    await wrapper.get(".agent-composer__stop").trigger("click");
+    expect(wrapper.emitted("cancel")).toHaveLength(1);
+
+    // Writing the next sentence while the answer arrives is allowed, but Enter
+    // must not start a second turn on top of the first.
+    await wrapper.get("textarea").trigger("keydown", { key: "Enter" });
+    expect(wrapper.emitted("submit")).toBeUndefined();
+  });
+
+  it("keeps the draft and goes back to submit once the answer is finished", async () => {
+    const wrapper = mount(AgentComposer, { props: { busy: true } });
+    await wrapper.get("textarea").setValue("再激进一点");
+    await wrapper.setProps({ busy: false });
+
+    expect(wrapper.find(".agent-composer__stop").exists()).toBe(false);
+    await wrapper.get("textarea").trigger("keydown", { key: "Enter" });
+    expect(wrapper.emitted("submit")?.[0]).toEqual([{ instruction: "再激进一点" }]);
+  });
+
+  it("passes the stop through the shell so the panel can end the stream", async () => {
+    const wrapper = mount(AgentCopilotShell, {
+      props: { modelValue: "open", context: pageContext(), blocks: [], busy: true },
+    });
+
+    await wrapper.get(".agent-composer__stop").trigger("click");
+
+    expect(wrapper.emitted("cancel")).toHaveLength(1);
+  });
+});
+
 describe("composer, focus and lazy isolation", () => {
+  it("asks for the sentence alone, with no mode to choose first", () => {
+    // The three mode radios are gone on purpose: the panel decides whether a
+    // sentence is a scenario, an assignment or a question, and a user should not
+    // have to pick the internal path before typing.
+    const wrapper = mount(AgentComposer);
+
+    expect(wrapper.find('input[type="radio"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("仅询问");
+    expect(wrapper.text()).not.toContain("提出草案修改");
+    expect(wrapper.text()).not.toContain("直接改参数");
+    expect(wrapper.text()).toContain("描述场景会先给一份推荐方案");
+  });
+
   it("does not submit Enter before Chinese IME composition ends", async () => {
-    const wrapper = mount(AgentComposer, { props: { allowDraft: true } });
+    const wrapper = mount(AgentComposer);
     const textarea = wrapper.get("textarea");
     await textarea.setValue("把最大 batch 调整为 8");
     await textarea.trigger("compositionstart");
@@ -343,7 +501,7 @@ describe("composer, focus and lazy isolation", () => {
 
     await textarea.trigger("compositionend");
     await textarea.trigger("keydown", { key: "Enter" });
-    expect(wrapper.emitted("submit")?.[0]).toEqual([{ instruction: "把最大 batch 调整为 8", purpose: "explain" }]);
+    expect(wrapper.emitted("submit")?.[0]).toEqual([{ instruction: "把最大 batch 调整为 8" }]);
   });
 
   it("loads the shell only after opening and restores focus after close", async () => {
@@ -396,5 +554,116 @@ describe("composer, focus and lazy isolation", () => {
     await nextTick();
     expect(boundary.get('[role="alert"]').text()).toContain("主工作台仍可继续使用");
     consoleError.mockRestore();
+  });
+});
+
+describe("choosing the model from the panel", () => {
+  const openShell = (props: Record<string, unknown> = {}) =>
+    mount(AgentCopilotShell, {
+      props: { modelValue: "open", context: pageContext(), blocks: [], ...props },
+    });
+
+  it("adds nothing to a Bridge that publishes no model channel", () => {
+    // A machine with no model must keep exactly the panel it had before, so the control is absent
+    // rather than present-and-disabled.
+    const wrapper = openShell();
+
+    expect(wrapper.find("[data-agent-model-bar]").exists()).toBe(false);
+    expect(wrapper.find("select").exists()).toBe(false);
+  });
+
+  it("offers the published identities and shows which one is answering", async () => {
+    const wrapper = openShell({
+      modelChannel: true,
+      modelCatalogue: ["deepseek-v4-flash", "glm-5.1"],
+      modelSelected: "glm-5.1",
+    });
+
+    const select = wrapper.get("select");
+    expect(select.element.value).toBe("glm-5.1");
+    expect(wrapper.findAll("option").map((option) => option.element.value)).toEqual(["deepseek-v4-flash", "glm-5.1"]);
+    // The panel says how long the choice lasts; a control that moved silently would promise more
+    // than this page can keep.
+    expect(wrapper.text()).toContain("本次运行有效");
+
+    await select.setValue("deepseek-v4-flash");
+    expect(wrapper.emitted("select-model")?.at(-1)).toEqual(["deepseek-v4-flash"]);
+  });
+
+  it("keeps the answering identity in the list even when the service no longer publishes it", () => {
+    // Showing a different model than the one answering would misdescribe the answer on screen.
+    const wrapper = openShell({
+      modelChannel: true,
+      modelCatalogue: ["glm-5.1"],
+      modelSelected: "deepseek-v4-flash",
+    });
+
+    expect(wrapper.findAll("option").map((option) => option.element.value)).toEqual(["deepseek-v4-flash", "glm-5.1"]);
+    expect(wrapper.get("select").element.value).toBe("deepseek-v4-flash");
+  });
+
+  it("says the list could not be read and offers to try again", async () => {
+    const wrapper = openShell({ modelChannel: true, modelCatalogue: [], modelSelected: "deepseek-v4-flash" });
+
+    expect(wrapper.find("select").exists()).toBe(false);
+    expect(wrapper.text()).toContain("模型列表暂时读不到");
+
+    await wrapper.get("[data-agent-model-bar] button").trigger("click");
+    expect(wrapper.emitted("refresh-models")).toHaveLength(1);
+  });
+
+  it("says it is still reading, and keeps the control disabled while it is", async () => {
+    const wrapper = openShell({ modelChannel: true, modelCatalogue: [], modelPending: true });
+
+    expect(wrapper.text()).toContain("正在读取模型列表…");
+    expect(wrapper.get("[data-agent-model-bar] button").attributes("disabled")).toBeDefined();
+
+    await wrapper.setProps({ modelCatalogue: ["glm-5.1"], modelSelected: "glm-5.1", modelPending: false });
+    expect(wrapper.text()).toContain("本次运行有效");
+    expect(wrapper.get("select").attributes("disabled")).toBeUndefined();
+  });
+
+  it("disables the control while a switch is being applied", () => {
+    const wrapper = openShell({
+      modelChannel: true,
+      modelCatalogue: ["glm-5.1"],
+      modelSelected: "glm-5.1",
+      modelPending: true,
+    });
+
+    expect(wrapper.get("select").attributes("disabled")).toBeDefined();
+    expect(wrapper.text()).toContain("正在切换…");
+  });
+
+  it("hides the control while the panel is folded to its rail", () => {
+    const wrapper = mount(AgentCopilotShell, {
+      props: {
+        modelValue: "collapsed",
+        context: pageContext(),
+        blocks: [],
+        modelChannel: true,
+        modelCatalogue: ["glm-5.1"],
+        modelSelected: "glm-5.1",
+      },
+    });
+
+    expect(wrapper.find("[data-agent-model-bar]").exists()).toBe(false);
+  });
+
+  it("carries the choice through the entry that hosts the panel", async () => {
+    const entry = mount(AgentCopilotEntry, {
+      props: {
+        modelValue: "open",
+        context: pageContext(),
+        blocks: [],
+        modelChannel: true,
+        modelCatalogue: ["deepseek-v4-flash", "glm-5.1"],
+        modelSelected: "deepseek-v4-flash",
+      },
+    });
+    await flushPromises();
+
+    await entry.get("select").setValue("glm-5.1");
+    expect(entry.emitted("select-model")?.at(-1)).toEqual(["glm-5.1"]);
   });
 });

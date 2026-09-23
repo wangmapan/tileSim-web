@@ -50,6 +50,13 @@ const inlineTypeNames = [
   "Week7EvidenceMapResponse",
   "Week7CalibrationResponse",
   "Week7OrchestrationResponse",
+  "AssistantModelChatRequest",
+  "AssistantModelDescriptorResponse",
+  "AssistantModelPlanRequest",
+  "AssistantModelPlanResponse",
+  "AssistantModelCatalogueResponse",
+  "AssistantModelSelectionRequest",
+  "AssistantModelSelectionResponse",
   "EvidenceAgentDescriptorResponse",
   "AgentOrchestrationCapabilitySnapshotResponse",
 ];

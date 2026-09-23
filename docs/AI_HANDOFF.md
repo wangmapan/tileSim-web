@@ -46,16 +46,16 @@ Run Intake Lowering 已落地，Bridge 侧 Run Intake v2 **只读预览**端点�
 
 ### 2026-09-19 实测门禁（本机，工作树 clean；测量点在重建线上，接回 `origin/main` 只新增文档改动，未触碰代码与契约）
 
-| 门禁                                              | 实测                                                       | 本文下文历史值    |
-| ------------------------------------------------- | ---------------------------------------------------------- | ----------------- |
-| Web Vitest（`vitest run`）                        | **721 passed / 8 skipped，79 files**                       | 596 / 8，70 files |
-| Bridge `python -m unittest test_server.py`        | **Ran 143 tests / OK，exit 0**                             | 143（一致）       |
-| `generate-contract-types.mjs --check`             | exit 0                                                     | —                 |
-| `generate-bridge-client.mjs --check`              | exit 0（既有 `unknown format "date-time"` 为提示，非错误） | —                 |
-| `check-doc-links.mjs`（`docs:check`）             | exit 0，**62 篇活跃 Markdown**                             | 43 篇             |
-| `check-frontend-dependencies.mjs`（`deps:check`） | exit 0，**290 源文件**                                     | 255               |
-| `vue-tsc --noEmit`                                | exit 0                                                     | —                 |
-| Playwright 全量 e2e                               | **not-run**（本轮未执行；上批 49/57 中 1 条失败仍未定性）  | —                 |
+| 门禁                                              | 实测                                                                                                               | 本文下文历史值                                        |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+| Web Vitest（`vitest run`）                        | **721 passed / 8 skipped，79 files**                                                                               | 596 / 8，70 files                                     |
+| Bridge `python -m unittest test_server.py`        | **Ran 143 tests / OK，exit 0**                                                                                     | 143（一致）                                           |
+| `generate-contract-types.mjs --check`             | exit 0                                                                                                             | —                                                     |
+| `generate-bridge-client.mjs --check`              | exit 0（既有 `unknown format "date-time"` 为提示，非错误）                                                         | —                                                     |
+| `check-doc-links.mjs`（`docs:check`）             | exit 0，**62 篇活跃 Markdown**                                                                                     | 43 篇                                                 |
+| `check-frontend-dependencies.mjs`（`deps:check`） | exit 0，**290 源文件**                                                                                             | 255                                                   |
+| `vue-tsc --noEmit`                                | exit 0                                                                                                             | —                                                     |
+| Playwright 全量 e2e                               | 见下节「2026-09-19 全量 e2e 复跑」：**63 passed / 6 skipped / 0 failed，全部 69 条已覆盖**，但**非单次干净 tally** | 57 条（49 passed / 1 failed / 6 skipped / 1 not run） |
 
 - Vitest 必须用**原始 PATH** 运行：前插 `/usr/bin:/bin` 会让 GNU tar 遮蔽 bsdtar，使
   `tests/oracles/phase0d-evidence-reproducibility*` 出现唯一红灯（本轮原始 PATH 下为 5/5 绿）。
@@ -65,6 +65,46 @@ Run Intake Lowering 已落地，Bridge 侧 Run Intake v2 **只读预览**端点�
 
 - `127.0.0.1:5173` **未监听**（2026-09-19 实测 `listening=False`）。当前没有工作台服务在运行；
   部署与启停仍只能由人工执行，未获授权不得操作。
+
+### 2026-09-19 全量 e2e 复跑与 `l5-lightweight-a11y.spec.js:82` 就绪性缺陷
+
+本轮复跑**未取得单次干净 tally**，但把 2026-09-18 挂账的「1 条失败未定性」判清了，并新发现且修复 1 条就绪性缺陷。
+本节只读复跑 + 1 处测试修复，未触碰产品代码、契约或运行态。
+
+- **套件规模已变，旧基线不可直接相减**：`--workers=1 --reporter=list` 现报 `Running 69 tests`。
+  2026-09-18 的 57 条基线**早于轻量工作台批次**：`l5-lightweight-a11y.spec.js`（5 条）、
+  `l6-lightweight-closure.spec.js`（6 条）、`topology-editor.spec.js`（1 条）共 **12 条**当时尚不存在。
+- **2026-09-18 挂账的 `dashboard.spec.js:457` 本轮两轮均通过、未复现**（整轮第 9 条，1.4s 量级）。
+  该用例「`setViewportSize` 之后直接测量、无可重试前置断言」的隐患仍然存在，但本轮不构成失败，
+  **未改动**，继续挂账观察。
+- **新发现并已修复：`tests/e2e/l5-lightweight-a11y.spec.js:82`「shared Agent dock reserves the lightweight work
+  surface on narrow desktop widths」**。首轮失败于 `expect(bounds.panel).not.toBeNull()`（取不到 `.agent-copilot-shell`）。
+  根因是**测试就绪性缺陷，不是产品回归**：`src/features/agent-copilot-shell/AgentCopilotEntry.vue` 第 60-62 行以
+  `import("./AgentCopilotShell.vue")` **懒加载**侧栏，模板第 158 行 `v-if="shouldMount"` 决定其**只有懒加载 resolve
+  之后才进入 DOM**（在此之前只有 `.agent-copilot-entry__loading` 占位）。用例点完「打开 TileSim 助手」**立即**
+  `page.evaluate` 测量，中间没有任何自动重试断言 → 抢跑。失败快照同时显示侧栏**已正确渲染**
+  （含 `separator "调整助手侧栏宽度"` 与收起/展开/关闭按钮），证明产品行为本身正确。
+  修复方式与同文件 `:415` 的「先等后测」一致：`click()` 之后加
+  `await expect(page.locator(".agent-copilot-shell")).toBeVisible();`（**仅 +3 行，未放宽、删除或跳过任何既有断言**）。
+  修复后该条通过（耗时 1.3s → 4.3s），并**解开了整轮**：其后 `l6-lightweight-closure` 全部 6 条（此前从未在整轮中
+  跑到）均通过。
+- **本轮 tally（同一代码状态，2026-09-19）**：
+  - 运行 A：`test --workers=1 --reporter=list` → **62 passed / 6 skipped / 0 failed**（warmup 1 条 + `desktop` 67 条中
+    61 passed + 6 skipped，共 68 条已跑到），`exit 1`。**exit 1 的唯一原因是已知 worker 收尾卡死**
+    （`worker-1 process did not exit within 300000ms after stop, force-killed it`，落在 `desktop` 项目收尾处），
+    导致 `large-artifact-worker` 那 1 条 `not-reached`，主进程随后挂住需人工终止；**没有任何用例失败**。
+  - 运行 B（补齐未覆盖项）：`test --project=large-artifact-worker --no-deps --workers=1 --reporter=list` →
+    **1 passed，exit 0**，无卡死。
+  - 合计 **63 passed / 6 skipped / 0 failed = 69/69 全覆盖**。⚠️ 这**不是**「一次干净的全量 tally」：第 69 条由
+    **单 project 复跑**补齐（`desktop` 依赖已在同一代码状态的运行 A 中全绿，故用了 `--no-deps`）。按既有口径
+    `not-reached` 不得当作通过，因此**只能记为「全覆盖但非单次干净 tally」**。
+- **worker 收尾卡死的追加观测**：卡死两次分别出现在「有失败产物待采集之后」与「`desktop` 项目收尾处」。
+  其与用例失败的相关性**尚未定性**，但**不是**本轮改动的产物：运行 A 的失败在 `tests/e2e/**`（与产品代码无关），
+  运行 B 零失败且收尾干净。
+- **本机运行前提**：`pnpm` 不在 PATH，而 `playwright.config.js` 的 `webServer.command` 是 `pnpm dev`；
+  因配置为 `reuseExistingServer: true`，**先在 4173 起 Vite fixture 再运行 Playwright** 即可绕过，无需安装 pnpm。
+- 失败产物已复制到仓库外留存：`C:\Users\mapanwang\_tilesim_rescue\e2e-failure-20260919-1316`
+  （`error-context.md`、`test-failed-1.png`、`trace.zip`）。
 
 ## 双工作台方案状态
 
@@ -170,6 +210,9 @@ scripts bridge` / `vite build` / `contracts:check` / `docs:check`（43 篇）/ `
   **因此本批次 e2e 门禁的结论是：49/57 通过，1 条失败未定性（flake 与回归未区分），不得记为通过。**
   待处置：环境稳定后补一次干净的全量 `--workers=1` 运行；若仍复现，按「`:415` 同款前置自动重试断言」的写法
   单独判定是测试就绪性缺陷还是产品回归（**不得为让用例变绿而放宽、删除或跳过既有断言**）。
+  **2026-09-19 处置**：上述待处置已执行 —— 该条本轮两轮均通过、未复现，**未改动**；同轮另在
+  `l5-lightweight-a11y.spec.js:82` 发现同类的就绪性缺陷，按其写法修复。见本节上方的
+  「2026-09-19 全量 e2e 复跑与 `l5-lightweight-a11y.spec.js:82` 就绪性缺陷」。
 - **契约变更窗口已由指挥方于 2026-09-18 显式重开**：本条取代本文件 §2 上文以及 AO-23 §4、AO-24 §8 中
   「窗口已关闭、后续工作包不得再动 `bridge/contracts/**/*.json`」的表述（那两句是当时的裁决记录，不再具约束力）。
   重开后 current live `sha256:d498092a…abffab` **必然作废**。随窗口一并解锁：`WP-2D-02`（C1 采集四个运行期
@@ -353,6 +396,77 @@ docs/archive/                    历史记录
    至此 **B-2「导出与屏幕同文案同 tone」已完全达成**，`record.status || "—"` 这一形态在本仓库已不存在。
    同文档 §6 内**已无「可立即派发」的工作包**：§6.2 / §6.3 等契约窗口重开，`WP-2D-03` 等结构化输入契约与
    Profile 数据。`WP-2D-05` 未占用 `WP-2D-03` 的编号。
+
+### 2026-09-22 「应用到面板」判据改版与一条上下文声明回归（工作树含未提交改动）
+
+本节记录 2026-09-22 的两处修复与实测门禁。**上方第 47 行的门禁表是 2026-09-19 的历史值，不改写**；本节数字为当日实测。
+
+- **症状**：用户点「应用到面板」反复收到「页面上下文已变化，这份改动没有写入。请重新提交。」（`parameter_plan_stale`）。
+- **根因（代码可证）**：`parameter_edits` 的应用守卫只比 `plan_revision` 与当前 `context_revision` 是否相等，而该令牌
+  在**任何**重发布后都会换号；`plan_revision` 取的是**提交那一刻**的值，模型回答**首字约 60 秒**，期间
+  `state.bridge.checking` 翻转、描述符刷新、页面重进都会换号 ⇒ 计划**出生即过期**，令牌判据必然复发。
+- **修复一（判据换位）**：新增 `src/features/agent-copilot-integration/parameter-plan.ts` 的 `assessParameterPlan()`，
+  改为逐条比对计划读到的 `previous` 与页面当次发布的 `parameter_catalog[].current`：值变了 / 地址不在目录里 /
+  目录为空 / 无编辑 = 拒（错误详情仍 `parameter_plan_stale`，消息指名参数与新旧值）；全相符 = 写入。
+  `markAgentBlocksStale` 不再把 `parameter_edits.plan_revision` 置 null。**注意：这不是契约变更**，revision 字符串格式、
+  `compareAgentContexts`、编译器 staleState 语义都未动。
+- **修复二（上下文声明回归）**：上一版 keeper 在内容未变时 `return`，把**声明上下文**一并省掉。通用投影与页面发布
+  **共用 provider id `app-shell`**，而路由 watch 每次路由变化都发**无参数目录**的通用投影；`ExperimentView` 位于
+  `<KeepAlive include="ExperimentView">` 中（`App.vue:870`），回到页面不重新 setup ⇒ 页面不再声明 ⇒ 通用投影长期生效
+  ⇒ 面板退化为「只解释」，计划令牌也对不上。现在两个页面 publisher **每次运行都发布**（revision 仍由 keeper 钉住），
+  判重移到 `publishExperimentAgentContext()`（生效上下文已是该发布时跳过 registry 更新）。
+- **同日实测门禁**：前端 Vitest **1007 passed / 8 skipped，93 files，exit 0**（`vue-tsc --noEmit` 0、eslint 0、
+  改动文件 prettier 0）；`generate-contract-types.mjs --check` / `generate-bridge-client.mjs --check` 均 exit 0；
+  `check-doc-links.mjs` exit 0（**62 篇**）；`check-frontend-dependencies.mjs` exit 0（**309 源文件**）；
+  Bridge `python -m unittest test_server.py` + `test_assistant_model.py` = **199 passed / 0 failed**。
+  Playwright **子集**（`l5-lightweight-a11y` + `l6-lightweight-closure` + `dashboard`）= **60 passed / 0 failed /
+  0 skipped，exit 0**（7.2 分钟，无 worker 卡死行，单次干净 tally）；修复**前**同子集为 59 passed / 1 failed
+  （`dashboard.spec.js:54`，即上述回归），该条单跑 3 次可稳定复现，修复后通过。
+- **未操作**：未 commit、未 push、未启停 5173、未改契约 JSON；`D:\tileSim` 只读。用户需自行**重新部署**才能看到该修复
+  （`scripts/deploy-local-backend.ps1 -SourceRoot D:\tileSim`；`start-workbench.ps1` 只启动已有部署，不重建前端）。
+- 模块级细节见 `docs/F9_AGENT_ORCHESTRATION/16_RIGHT_SIDE_AGENT_COPILOT_PANEL.md` 末尾的三条 2026-09-22 修订。
+
+### 2026-09-23 助手可写参数面从「13 个旋钮」扩到「整份表单」（工作树含未提交改动）
+
+本节记录 2026-09-23 的参数面扩容与实测门禁。**上方第 47 行的门禁表是 2026-09-19 的历史值，不改写**；本节数字为当日实测。
+
+- **用户诉求（原话）**：「当前可调整的参数中没有显卡数量或 GPU 参与模式……请提供更全面的能力，使其能够对所有参数进行修改」。
+- **根因（代码可证）**：桥接侧 `bridge/providers/assistant_model.py` 的 `PARAMETER_RULES` 只由
+  `bridge/contracts/experiment_descriptor.py` 的 `PARAMETER_DEFINITIONS`（**13 个 `overrides` 旋钮**）生成；
+  `_validated_plan()` 只认这 13 个地址，模型给出的任何表单字段一律按 `unknown_parameter` **静默丢弃**
+  （`topology/devices`、`gpu_participation_mode` 都在此列）。前端 `parameter-catalog.ts` 早就枚举了整份表单，
+  但**验收在桥接侧**，所以「加显卡」这类诉求必然落空 —— 前端能规划、后端不认。
+- **修复一（参数面单一真源）**：新增 `bridge/contracts/parameter_surface.py`，从三份契约 schema
+  （`run-overrides` / `runtime-trace-input` / `topology-request-input`）＋描述符**推导**出全部可写地址，
+  导出 `SURFACE_ADDRESSES`（**64 条**）、`resolve_address()`、`surface_catalogue_text()`。
+  `assistant_model.py` 的规则表、`_validated_plan()`、目录文本（交给模型的 `parameter_catalogue_text()`）
+  全部改为读它 ⇒ **校验口径与目录文本同源**，不会再出现「没告诉模型的地址反而被判未知」。
+  引用型字段（`device_id`/`domain_id`/`module_name`/`src_device`/`dst_device`/`module_binding`）与容器、数组本身继续**排除**
+  （一次标量赋值不能安全改名/重写引用）。元素地址用 `[i]` 占位；模型直接写 `devices[i]/...` 会被
+  `address_needs_an_index` 明确拒绝（而不是含糊的未知参数）。
+- **修复二（集合规模可写）**：前端新增 `kind: "count"`（**集合规模，不是 JSON 类型**），
+  `parameter-catalog.ts` 增加 `topology/devices`（文案「设备数量（显卡数量）」）与 `runtime_trace/requests`
+  两条规模地址；`parameter-edit.ts` 的 `COLLECTION_RESIZERS` 用既有 `setDeviceCount` 与新增 `setRequestCount`
+  完成增删（缩容时若有 link/domain 仍引用将消失的设备，抛 `StructuredInputError` 并点名该设备，不静默破坏）。`gpu_participation_mode` 属顶层表单字段，随之进入可写面。
+- **修复三（一次方案的长度上限）**：`MAXIMUM_SETTINGS` **20 → 40**。真机实测（8 卡方案）显示：40 条以下模型
+  会同时写「集合规模 + 逐卡字段 + fabric/knob」，20 条会把后半截按 `settings_limit_exceeded` 全丢，
+  与它自己写的理由矛盾。上限现随目录文本一起告知模型（SYSTEM_PROMPT 明确写出条数），
+  前端 `scenario-recommendation.ts` 把 `dropped` 条数写进方案理由（`App.vue` 透传），用户能看到「还有几项没列进来」。
+- **同日实测门禁**：Bridge `test_parameter_surface.py`（新）**25 passed**、`test_assistant_model.py` **62 passed**（原 55，+7）、
+  `test_server.py` **170 passed** —— 三文件合计 **257 passed / 0 failed**；
+  前端 Vitest **1056 passed / 8 skipped，93 files，exit 0**（`vue-tsc --noEmit` 0、eslint 0、
+  改动文件 prettier 0）；`generate-contract-types.mjs --check` / `generate-bridge-client.mjs --check` 均 exit 0；
+  `bridge/test_f8_schemas.mjs` 1 passed；`check-doc-links.mjs` exit 0（**62 篇**）；
+  `check-frontend-dependencies.mjs` exit 0（**309 源文件**）；改动文件 `git diff --check` 0。
+- **真机验证（只读，不进仓库）**：用启动器已保存的通道配置（`runtime/evidence-agent.local.json`，模型 `gpt-5.6-sol`）
+  跑参数面探针。目录文本 78 行，四个关键地址全部命中（`topology/devices`、`集合规模`、
+  `gpu_participation_mode`、`runtime_trace/requests[i]/tp_degree`）；模型成功给出「8 张 GPU」方案
+  （`topology/devices = 8` + 逐卡 `device_type`/`group_id` + fabric/knob），当时受 20 条上限丢弃 24 条 —— 即上条修复的触发证据。
+  该网关（`https://x.mkai.de5.net`）随后开始整体拒绝 chat 调用（`/v1/models` 与 `/v1/chat/completions` 均
+  `HTTP 403: error code: 1010`）⇒ **这是网关侧拒绝，不是本仓库缺陷**；密钥不出后端（`no_credential_in_report: true`）。
+- **未操作**：未 commit、未 push、未启停 5173、未改契约 JSON（参数面是**读**契约推导，不新增/修改任何 schema）；`D:\tileSim` 只读。
+  用户需自行**重新部署**才能看到该能力（`scripts/deploy-local-backend.ps1 -SourceRoot D:\tileSim`）。
+- 模块级细节见 `docs/F9_AGENT_ORCHESTRATION/16_RIGHT_SIDE_AGENT_COPILOT_PANEL.md` 末尾的 2026-09-23 修订。
 
 ## 7. 完整门禁
 

@@ -687,9 +687,14 @@ export interface RejectedArtifactManifestEntry {
 }
 export interface TileSimControlledS0S1S6RunOverrides {
   runtime?: {
-    batch_scheduler?: "fifo" | "decode_priority" | "fabric_backpressure_aware";
+    batch_scheduler?: "fifo" | "decode_priority" | "fabric_backpressure_aware" | "starvation_aware";
     max_batch_size?: number;
     kv_capacity_tokens?: number;
+    max_active_requests?: number;
+    initial_kv_tokens?: number;
+    kv_admission_watermark?: number;
+    long_context_threshold_tokens?: number;
+    decode_penalty_per_threshold?: number;
   };
   workload?: {
     message_size_multiplier?: number;
@@ -731,7 +736,7 @@ export interface ControlledS1RuntimeTraceRequestInput {
     initial_kv_tokens?: number;
     max_active_requests?: number;
     max_batch_size?: number;
-    batch_scheduler?: "fifo" | "decode_priority" | "fabric_backpressure_aware";
+    batch_scheduler?: "fifo" | "decode_priority" | "fabric_backpressure_aware" | "starvation_aware";
     prefill_starvation_threshold_ps?: number;
     pd_handoff_delay_ps?: number;
     pd_handoff_queue_service_ps?: number;
@@ -1085,10 +1090,15 @@ export interface ExperimentDescriptorResponse {
     },
   ];
   /**
-   * @minItems 8
-   * @maxItems 8
+   * @minItems 13
+   * @maxItems 13
    */
   parameter_descriptors: [
+    ParameterDescriptor,
+    ParameterDescriptor,
+    ParameterDescriptor,
+    ParameterDescriptor,
+    ParameterDescriptor,
     ParameterDescriptor,
     ParameterDescriptor,
     ParameterDescriptor,
@@ -2880,6 +2890,456 @@ export interface Week7OrchestrationResponse {
     [k: string]: unknown;
   }[];
   [k: string]: unknown;
+}
+
+export interface AssistantModelChatRequest {
+  /**
+   * The transcript the client already shows, oldest first, ending with the user's turn. Only the user and assistant roles are accepted.
+   *
+   * @minItems 1
+   * @maxItems 12
+   */
+  messages:
+    | [
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+      ]
+    | [
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+      ]
+    | [
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+      ]
+    | [
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+      ]
+    | [
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+      ]
+    | [
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+      ]
+    | [
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+      ]
+    | [
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+      ]
+    | [
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+      ]
+    | [
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+      ]
+    | [
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+      ]
+    | [
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+      ];
+  /**
+   * The current panel values, keyed by bare parameter name. Read-only context for the model; never executed or written.
+   */
+  panel_values?: {
+    [k: string]: string;
+  };
+}
+
+export interface AssistantModelDescriptorResponse {
+  schema_version: string;
+  schema_set_revision: string;
+  protocol: string;
+  availability: "available" | "unavailable";
+  configured: boolean;
+  degradation_state: "available" | "not_configured" | "misconfigured";
+  detail: string;
+  provider: {
+    configured: boolean;
+    provider_id: string;
+    model_id: string;
+    model_revision: string;
+  };
+  limits: {
+    maximum_instruction_characters: number;
+    maximum_settings: number;
+  };
+}
+
+export interface AssistantModelPlanRequest {
+  instruction: string;
+}
+
+export interface AssistantModelPlanResponse {
+  schema_version: string;
+  schema_set_revision: string;
+  protocol: string;
+  provider_id: string;
+  model_id: string;
+  served_model: string;
+  instruction: string;
+  /**
+   * settings: a settings block was read. prose_only: the model answered in prose and proposed nothing. settings_unparsed: a settings block was present but could not be read, so no value is proposed.
+   */
+  answer_state: "settings" | "prose_only" | "settings_unparsed";
+  title: string;
+  rationale: string;
+  settings: {
+    key: string;
+    value: string;
+    why: string;
+  }[];
+  dropped: {
+    key: string;
+    reason: string;
+  }[];
+  applied: boolean;
+  executed: boolean;
+}
+
+export interface AssistantModelCatalogueResponse {
+  schema_version: string;
+  schema_set_revision: string;
+  protocol: string;
+  provider_id: string;
+  /**
+   * The model identities the configured service publishes, in the order it published them and without duplicates. Read with the credential the channel already holds; the credential is never part of this response.
+   *
+   * @minItems 1
+   */
+  models: [string, ...string[]];
+  count: number;
+  /**
+   * The identity the next request will use: a panel selection when one is in force for this process, otherwise the configured identity.
+   */
+  selected_model: string;
+  /**
+   * True when selected_model came from a panel selection for this process rather than from the saved configuration.
+   */
+  session_override: boolean;
+}
+
+export interface AssistantModelSelectionRequest {
+  model: string;
+}
+
+export interface AssistantModelSelectionResponse {
+  schema_version: string;
+  schema_set_revision: string;
+  protocol: string;
+  provider_id: string;
+  selected_model: string;
+  previous_model: string;
+  /**
+   * True, always: the identity is the one this Bridge process uses from the next request on.
+   */
+  in_force: boolean;
+  /**
+   * False, always: this endpoint never writes the saved configuration, which stays owned by the launcher.
+   */
+  persisted: boolean;
+  /**
+   * True, always: the selection lasts until this Bridge process is restarted.
+   */
+  session_only: boolean;
 }
 
 export type Revision = string;

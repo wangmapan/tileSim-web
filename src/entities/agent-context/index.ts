@@ -14,3 +14,4 @@ export {
   type AgentContextRegistryListener,
   type AgentContextStaleReason,
 } from "./registry";
+export { UNPUBLISHED_CONTEXT_REVISION, createPageContextRevisionKeeper, type PageContextRevision } from "./revision";

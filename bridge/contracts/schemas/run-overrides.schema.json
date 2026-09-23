@@ -11,10 +11,15 @@
       "additionalProperties": false,
       "properties": {
         "batch_scheduler": {
-          "enum": ["fifo", "decode_priority", "fabric_backpressure_aware"]
+          "enum": ["fifo", "decode_priority", "fabric_backpressure_aware", "starvation_aware"]
         },
         "max_batch_size": { "type": "integer", "minimum": 1, "maximum": 64 },
-        "kv_capacity_tokens": { "type": "integer", "minimum": 256, "maximum": 1000000 }
+        "kv_capacity_tokens": { "type": "integer", "minimum": 256, "maximum": 1000000 },
+        "max_active_requests": { "type": "integer", "minimum": 1, "maximum": 1024 },
+        "initial_kv_tokens": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+        "kv_admission_watermark": { "type": "number", "minimum": 0.05, "maximum": 1.0 },
+        "long_context_threshold_tokens": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+        "decode_penalty_per_threshold": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
       }
     },
     "workload": {

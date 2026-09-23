@@ -135,6 +135,9 @@ Key 只经隐藏输入进入脚本，以 Windows 当前用户 DPAPI 密文保存
 7. 不以 archive、fixture 或 synthetic consistency 证明 live/calibrated/held-out；
 8. view 只编排，跨 feature 走公开入口，canonical request/citation/uint64/provenance 不复制实现。
 
+**前端开发任务**另见 [`AI_FRONTEND_DEVELOPMENT_REFERENCE.md`](AI_FRONTEND_DEVELOPMENT_REFERENCE.md)：代码地图、
+路由 ↔ view 对照、状态归属、契约与生成物规则、本机无 pnpm 的可跑命令与实测门禁基线。
+
 ## 8. 验收命令
 
 ```powershell
