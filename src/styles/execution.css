@@ -1249,6 +1249,15 @@
 .json-artifact-panel {
   overflow: hidden;
 }
+.raw-evidence-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+.raw-evidence-view {
+  gap: 14px;
+}
 .json-artifact-panel > summary {
   display: flex;
   align-items: center;
@@ -1262,12 +1271,6 @@
   display: none;
 }
 .json-artifact-panel > summary > span:first-child {
-  display: flex;
-  gap: 9px;
-  align-items: center;
-  color: var(--accent);
-}
-.json-artifact-panel > summary > span:first-child > span {
   display: grid;
   gap: 2px;
 }
@@ -1334,6 +1337,9 @@
   color: var(--muted);
   font-size: var(--text-xs);
 }
+.json-artifact-meta > .guided-help-trigger {
+  margin-left: auto;
+}
 .artifact-viewer-toolbar {
   display: flex;
   min-height: 34px;
@@ -1356,10 +1362,10 @@
   margin: 0 0 8px;
   padding: 9px 11px;
   overflow-wrap: anywhere;
-  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--line));
-  border-radius: 6px;
+  border: 0;
+  border-left: 2px solid var(--danger);
   color: var(--danger);
-  background: var(--danger-soft);
+  background: transparent;
   font-size: var(--text-sm);
   line-height: 1.5;
 }

@@ -74,7 +74,7 @@ test("Phase 1 Agent copilot drafts only the eight-field subset without writing a
   await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
   const panel = page.locator("#tilesim-agent-copilot");
   await expect(panel).toBeVisible();
-  await panel.getByRole("textbox", { name: "描述你想理解或调整的内容" }).fill("说明当前页面能做什么");
+  await panel.getByRole("textbox", { name: "描述要理解或调整的内容" }).fill("说明当前页面能做什么");
   await panel.getByRole("button", { name: "提交", exact: true }).click();
   await expect(panel).toContainText("这里可以核对当前实验参数");
   expect(capabilityRequests).toBe(0);
@@ -103,7 +103,7 @@ test("Phase 1 Agent copilot drafts only the eight-field subset without writing a
   // request the frozen eight-field compiler understands simply goes to it.
   await expect(panel.getByRole("radio")).toHaveCount(0);
   await panel
-    .getByRole("textbox", { name: "描述你想理解或调整的内容" })
+    .getByRole("textbox", { name: "描述要理解或调整的内容" })
     .fill("把最大 batch 调整为 8，把横向扩展网络带宽改为 100 Gbps per-link");
   await panel.getByRole("button", { name: "提交", exact: true }).click();
 
@@ -131,11 +131,11 @@ test("Phase 1 Agent copilot drafts only the eight-field subset without writing a
   await expect(batchInput).toHaveValue("6");
   expect(new URL(page.url()).searchParams.get("run")).toBe(originalUrl.searchParams.get("run"));
 
-  await panel.getByRole("textbox", { name: "描述你想理解或调整的内容" }).fill("把带宽改为 100");
+  await panel.getByRole("textbox", { name: "描述要理解或调整的内容" }).fill("把带宽改为 100");
   await panel.getByRole("button", { name: "提交", exact: true }).click();
   await expect(panel).toContainText("需要补充的信息");
 
-  await panel.getByRole("textbox", { name: "描述你想理解或调整的内容" }).fill("把 TP 改成 8");
+  await panel.getByRole("textbox", { name: "描述要理解或调整的内容" }).fill("把 TP 改成 8");
   await panel.getByRole("button", { name: "提交", exact: true }).click();
   await expect(panel).toContainText("当前能力不支持");
 
@@ -169,7 +169,7 @@ test("Phase 1 Agent copilot drafts only the eight-field subset without writing a
   const accessibility = await new AxeBuilder({ page }).analyze();
   expect(accessibility.violations.filter((item) => ["serious", "critical"].includes(item.impact))).toEqual([]);
 
-  const composer = panel.getByRole("textbox", { name: "描述你想理解或调整的内容" });
+  const composer = panel.getByRole("textbox", { name: "描述要理解或调整的内容" });
   await composer.fill("保留这段尚未提交的中文输入");
   await panel.getByRole("button", { name: "关闭", exact: true }).click();
   await expect(page.getByRole("button", { name: "打开 TileSim 助手", exact: true })).toBeFocused();
@@ -200,7 +200,7 @@ test("Phase 1 Agent copilot fails closed when the formal field binding drifts", 
   });
   await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
   const panel = page.locator("#tilesim-agent-copilot");
-  await panel.getByRole("textbox", { name: "描述你想理解或调整的内容" }).fill("把消息大小倍率改为 2");
+  await panel.getByRole("textbox", { name: "描述要理解或调整的内容" }).fill("把消息大小倍率改为 2");
   await panel.getByRole("button", { name: "提交", exact: true }).click();
   await expect(panel.getByRole("alert")).toContainText("当前结果无法继续处理");
   await expect(panel.locator('[data-block-type="draft_summary"]')).toHaveCount(0);
@@ -1718,7 +1718,8 @@ test("synthetic evidence view is stable, accessible, and field-complete", async 
     await page.evaluate(() => document.documentElement.clientWidth),
   );
 
-  await page.locator(".json-artifact-panel").evaluate((element) => (element.open = true));
+  await page.getByRole("button", { name: "原始证据", exact: true }).click();
+  await expect(page.locator(".json-artifact-panel")).toHaveAttribute("open", "");
   await page.locator(".json-artifact-panel select").selectOption("metrics");
   await expect(page.locator(".json-artifact-meta")).toContainText("Worker 已索引");
   await page.locator(".json-artifact-panel select").evaluate((select) => {
@@ -1739,6 +1740,7 @@ test("synthetic evidence view is stable, accessible, and field-complete", async 
   await page.keyboard.press("Tab");
   expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe("BODY");
   expect(browserFailures).toEqual([]);
+  await page.getByRole("button", { name: "执行过程", exact: true }).click();
   await page.evaluate(() => window.scrollTo(0, 0));
   await expect(page).toHaveScreenshot(`synthetic-evidence-${testInfo.project.name}.png`, { fullPage: true });
 });
@@ -1849,7 +1851,7 @@ test("F6B request evidence stays run-bound across peer resources and S7-S9 pages
   await expect(page).toHaveScreenshot(`request-evidence-${testInfo.project.name}.png`, { fullPage: true });
 
   await panel.getByRole("link", { name: "执行过程" }).click();
-  await expect(page).toHaveURL(/\/execution\?/);
+  await expect(page).toHaveURL(/\/raw-evidence\?/);
   expect(new URL(page.url()).searchParams.get("run")).toBe(runId);
   expect(new URL(page.url()).searchParams.get("evidence_request")).toBe(longRequestId);
   await expect(page.locator(".run-bound-evidence-panel")).toHaveCount(0);
@@ -2203,7 +2205,10 @@ test("hash-bound evidence links locate JSON Pointers and survive reload", async 
   await expectNoUnexpectedTextOverflow(page);
   await evidenceLink.click();
 
-  await expect(page).toHaveURL(/\/execution\?run=run-fixture-f1&evidence_artifact=metrics/);
+  await expect(page).toHaveURL(/\/raw-evidence\?run=run-fixture-f1&evidence_artifact=metrics/);
+  await expect(page.getByRole("heading", { name: "原始证据", exact: true, level: 1 })).toBeVisible();
+  await expect(page.getByRole("button", { name: "原始证据", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(page.locator(".execution-view")).toHaveCount(0);
   await expect(page.locator(".json-artifact-panel")).toHaveAttribute("open", "");
   await expect(page.locator(".artifact-evidence-target")).toContainText("/summary/throughput_requests_per_second");
   await expect(page.locator(".artifact-virtual-line--active")).toContainText("throughput_requests_per_second");
@@ -2238,8 +2243,42 @@ test("hash-bound evidence links locate JSON Pointers and survive reload", async 
       "b".repeat(64) +
       "&evidence_pointer=%2Fsummary%2Fthroughput_requests_per_second",
   );
+  await expect(page).toHaveURL(/\/raw-evidence\?run=run-fixture-f1&evidence_artifact=metrics/);
   await expect(page.locator(".json-artifact-empty--error")).toContainText("SHA-256");
+  await expect(page.locator(".artifact-virtual-viewer")).toHaveCount(0);
   expect(browserFailures).toEqual([]);
+});
+
+test("raw evidence is a standalone workspace tool, while execution remains focused", async ({ page }) => {
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  const browserFailures = await openFixture(page, fixture, "execution");
+  await expect(page.locator(".evidence-identity strong")).toHaveText(fixture.id);
+  await expect(page.locator(".json-artifact-panel")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "AI 解释", exact: true })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "原始证据", exact: true }).click();
+  await expect(page).toHaveURL(/\/raw-evidence\?run=run-fixture-f1$/);
+  await expect(page.locator(".json-artifact-panel")).toHaveAttribute("open", "");
+  await expect(page.locator(".artifact-virtual-viewer")).toBeVisible();
+  await expectNoUnexpectedTextOverflow(page);
+  await page.setViewportSize({ width: 1100, height: 900 });
+  await page.getByRole("button", { name: "切换到深色模式" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-appearance", "dark");
+  await expectNoUnexpectedTextOverflow(page);
+  expect(browserFailures).toEqual([]);
+});
+
+test("demo metrics remains inspectable after lossless integer normalization", async ({ page }) => {
+  await page.goto("/raw-evidence", { waitUntil: "domcontentloaded" });
+  const panel = page.locator(".json-artifact-panel");
+  await expect(panel).toHaveAttribute("open", "");
+  await panel.locator("select").selectOption("metrics");
+  await expect(panel.locator(".artifact-virtual-viewer")).toBeVisible();
+  await expect(panel.locator(".json-artifact-meta")).toContainText("Worker 已索引");
+  await expect(panel.locator(".json-artifact-empty--error")).toHaveCount(0);
+  await expect(panel.getByRole("button", { name: "复制完整 JSON" })).toBeEnabled();
+  await panel.getByRole("searchbox", { name: "搜索字段或值" }).fill("record_count");
+  await expect(panel.locator(".artifact-virtual-line--active")).toContainText('"record_count": 49');
 });
 
 test("analysis charts keep complete tables and bind selected points to the current run artifact identity", async ({
@@ -2317,6 +2356,7 @@ test("a missing evidence Pointer remains visible as a persistent error", async (
     `/execution?run=${runId}&evidence_artifact=metrics&evidence_sha=${metrics.sha256}&evidence_pointer=%2Fnot-present`,
   );
 
+  await expect(page).toHaveURL(/\/raw-evidence\?/);
   await expect(page.locator(".json-artifact-alert")).toContainText("/not-present");
   await expect(page.locator(".artifact-virtual-viewer")).toBeVisible();
 });
@@ -2587,10 +2627,14 @@ test("quick-control tab hosts the structured editors and swaps the submission ch
   // same parameters are never painted twice on one screen.
   await expect(page.locator(".structured-block--policy")).toContainText("进阶运行策略");
   await expect(page.locator("[data-input-path='/custom_inputs/runtime_trace/policy/max_batch_size']")).toHaveCount(0);
+  const omittedDelay = page.locator("[data-input-path='/custom_inputs/runtime_trace/policy/pd_handoff_delay_ps']");
+  await expect(omittedDelay).toContainText("后端默认 0 ps（未写入）");
+  await expect(omittedDelay.locator("input")).toHaveAttribute("placeholder", "0");
 
   const structuredRequest = await previewRequest();
   expect(structuredRequest.overrides).toBeUndefined();
   expect(structuredRequest.custom_inputs.runtime_trace.policy).toBeDefined();
+  expect(structuredRequest.custom_inputs.runtime_trace.policy.pd_handoff_delay_ps).toBeUndefined();
   expect(structuredRequest.custom_inputs.runtime_trace.requests).toHaveLength(1);
   expect(structuredRequest.custom_inputs.topology.topology.devices).toHaveLength(2);
 
@@ -2992,7 +3036,7 @@ test("help documentation is keyboard-complete, bilingual, accessible, and reduce
   await page.keyboard.press("Enter");
   const panel = page.locator("dialog.help-documentation");
   await expect(panel).toBeVisible();
-  await expect(panel.locator("[data-guide-id]")).toHaveCount(13);
+  await expect(panel.locator("[data-guide-id]")).toHaveCount(12);
   await expect(panel.getByRole("button", { name: "关闭帮助" })).toBeFocused();
   expect(await page.evaluate(() => window.__guidedHelpScrollBehaviors)).toEqual([]);
   await expect(page.locator("[data-help-active]")).toHaveCount(0);
@@ -3009,7 +3053,6 @@ test("help documentation is keyboard-complete, bilingual, accessible, and reduce
     "attribution",
     "design_space",
     "validation",
-    "evidence_agent",
     "evidence_lab",
     "raw_evidence",
     "unsupported_schema",
@@ -3059,7 +3102,7 @@ test("raw and unsupported evidence guides remain available at fail-closed bounda
   await page.getByRole("button", { name: "原始证据帮助", exact: true }).click();
   await expect(panel.getByRole("heading", { name: "原始证据", exact: true })).toBeVisible();
   await expect(panel).toContainText("uint64");
-  await expect(panel.locator("[data-guide-id]")).toHaveCount(13);
+  await expect(panel.locator("[data-guide-id]")).toHaveCount(12);
   await expect(page.locator("[data-help-active]")).toHaveCount(0);
   await expectNoUnexpectedTextOverflow(page);
   expect(browserFailures).toEqual([]);

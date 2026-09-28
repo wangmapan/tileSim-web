@@ -74,7 +74,7 @@ MAXIMUM_INSTRUCTION_CHARACTERS = 2_000
 # 20 while only thirteen knobs were addressable; with element addresses ("set every device") a
 # coherent whole-set plan legitimately exceeds that, and a plan truncated at 20 would contradict its
 # own rationale - a live run asked for eight devices and lost every fabric setting to the cap.
-MAXIMUM_SETTINGS = 40
+MAXIMUM_SETTINGS = 64
 MAXIMUM_TITLE_CHARACTERS = 80
 MAXIMUM_RATIONALE_CHARACTERS = 600
 MAXIMUM_REASON_CHARACTERS = 240
@@ -84,8 +84,8 @@ MAXIMUM_REASON_CHARACTERS = 240
 # client's memory before the stream is closed.
 MAXIMUM_CONVERSATION_MESSAGES = 12
 MAXIMUM_CONVERSATION_CHARACTERS = 12_000
-MAXIMUM_ANSWER_CHARACTERS = 12_000
-MAXIMUM_PANEL_VALUES = 40
+MAXIMUM_ANSWER_CHARACTERS = 24_000
+MAXIMUM_PANEL_VALUES = 128
 MAXIMUM_PANEL_VALUE_CHARACTERS = 120
 
 # Bounds for the model catalogue the service publishes.  The identity bound matches the one the
@@ -121,6 +121,11 @@ SYSTEM_PROMPT = (
     "keeps an integer value.\n"
     "3. Choose a coherent whole set for the scenario, not one isolated tweak. Decide the trade-off between "
     "throughput and latency explicitly.\n"
+    "When increasing topology/devices, include every requested new device's device_type and group_id, "
+    "and any requested runtime_trace/requests[i]/tp_degree. A device group_id alone does not define "
+    "links or domains; never claim a complete connected fabric without explicit link/domain data. "
+    "If the full required set cannot fit or cannot be expressed by these scalar addresses, explain "
+    "the gap honestly instead of presenting a partial plan as complete.\n"
     "4. For every parameter write one short sentence saying why that value serves this scenario and what it "
     "does to throughput or to latency.\n"
     "5. If the request cannot be honoured from this list, say so plainly and name the address that would "
@@ -145,6 +150,9 @@ CHAT_SYSTEM_PROMPT = (
     "3. key 必须是下面列出的地址，原样照抄。含 [i] 的地址表示元素，把 [i] 换成真实下标（第一个是 0）。"
     "列在「集合规模」下的地址写的就是元素个数 —— 要增减显卡就改 topology/devices，不要另找一个不存在的字段。\n"
     "4. 每个值必须满足给定的范围或取值列表，整数参数必须给整数。\n"
+    "扩容 topology/devices 时，列出所有新增设备的 device_type 和 group_id，并列出请求所需的 "
+    "runtime_trace/requests[i]/tp_degree。group_id 不能替代 links/domains；没有明确链路和域数据时，"
+    "不得宣称互联拓扑已完整。若条数上限或可写字段无法覆盖完整方案，明确说明缺口，不要声称已配置完成。\n"
     "5. 如果这件事用下面的地址办不到，就直说办不到，并点名本该由哪个地址承担；不要编造地址。\n"
     "6. 如果不打算改任何参数（例如用户只是在提问），把 settings 写成空数组。\n"
     "7. json 代码块必须放在最后，代码块之后不要再写任何内容。\n"

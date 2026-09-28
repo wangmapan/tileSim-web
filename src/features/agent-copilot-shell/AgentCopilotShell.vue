@@ -66,6 +66,7 @@ const emit = defineEmits<{
   "select-model": [model: string];
   /** The user asked for the model catalogue to be read again. */
   "refresh-models": [];
+  start: [task: "configure" | "analyze" | "learn"];
 }>();
 
 /** The one id the model label points at; the panel is a single instance in this app. */
@@ -302,7 +303,7 @@ onBeforeUnmount(() => {
 
     <header v-show="modelValue !== 'collapsed'" class="agent-copilot-shell__header">
       <div>
-        <span>TileSim 助手</span>
+        <span>小拓 · TileSim 助手</span>
         <strong>{{ currentTask }}</strong>
       </div>
       <div class="agent-copilot-shell__header-actions">
@@ -348,7 +349,12 @@ onBeforeUnmount(() => {
       aria-live="polite"
       aria-relevant="additions text"
     >
-      <AgentTypedBlockList :blocks="blocks" @answer="emit('answer', $event)" @apply="emit('apply', $event)" />
+      <AgentTypedBlockList
+        :blocks="blocks"
+        @answer="emit('answer', $event)"
+        @apply="emit('apply', $event)"
+        @start="emit('start', $event)"
+      />
     </div>
 
     <AgentComposer
@@ -363,7 +369,7 @@ onBeforeUnmount(() => {
 
     <footer v-show="modelValue !== 'collapsed'" class="agent-copilot-shell__footer" role="status" aria-live="polite">
       <span>{{ statusText }}</span>
-      <span v-if="allowParameterEdit">描述场景或接着追问 · 只有你确认才会写入，不会创建运行</span>
+      <span v-if="allowParameterEdit">描述场景或接着追问 · 仅在确认后写入，不会创建运行</span>
       <span v-else>{{ canDraft ? "仅生成草案 · 不会开始运行" : "仅解释当前页面 · 不会修改实验或开始运行" }}</span>
     </footer>
   </aside>
@@ -384,6 +390,7 @@ onBeforeUnmount(() => {
   background: var(--panel);
   box-shadow: -8px 0 24px rgb(20 33 44 / 8%);
   overflow: hidden;
+  animation: agent-panel-in 260ms var(--ease-emphasized) backwards;
 }
 
 .agent-copilot-shell--expanded {
@@ -430,6 +437,7 @@ onBeforeUnmount(() => {
   padding: 9px 10px 9px 14px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .agent-copilot-shell__header > div:first-child {
@@ -438,8 +446,20 @@ onBeforeUnmount(() => {
 }
 
 .agent-copilot-shell__header > div:first-child span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--muted);
   font-size: var(--text-micro);
+}
+
+.agent-copilot-shell__header > div:first-child span::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 13%, transparent);
 }
 
 .agent-copilot-shell__header > div:first-child strong {
@@ -473,6 +493,20 @@ onBeforeUnmount(() => {
   border-color: var(--line);
   color: var(--ink);
   background: var(--surface-muted);
+}
+
+.agent-copilot-shell__header-actions button,
+.agent-copilot-shell__rail button {
+  transition:
+    color var(--motion-interaction) var(--ease-standard),
+    background-color var(--motion-interaction) var(--ease-standard),
+    border-color var(--motion-interaction) var(--ease-standard),
+    transform var(--motion-interaction) var(--ease-emphasized);
+}
+
+.agent-copilot-shell__header-actions button:hover,
+.agent-copilot-shell__rail button:hover {
+  transform: translateY(-1px);
 }
 
 .agent-copilot-shell__model {
@@ -535,7 +569,16 @@ onBeforeUnmount(() => {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  background: var(--panel);
+  background: color-mix(in srgb, var(--surface-subtle) 88%, var(--canvas));
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+/* Grid items otherwise retain their min-content width. Long evidence paths and
+   model responses must wrap inside the bounded panel instead of widening its
+   fixed host by a few pixels. */
+.agent-copilot-shell__timeline > :deep(*) {
+  min-width: 0;
+  max-width: 100%;
 }
 .agent-copilot-shell__footer {
   min-width: 0;
@@ -548,6 +591,15 @@ onBeforeUnmount(() => {
   color: var(--muted);
   background: var(--surface-subtle);
   font-size: var(--text-micro);
+}
+
+@keyframes agent-panel-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .agent-copilot-shell__footer span {

@@ -18,7 +18,7 @@
  * one-click recommendation silently switch the submission channel.
  */
 import { assignmentSegments, planParameterEdits, type ParameterEditPlan } from "./parameter-edit";
-import type { ParameterCatalogEntry, ParameterTarget } from "./parameter-catalog";
+import { projectCollectionEntries, type ParameterCatalogEntry, type ParameterTarget } from "./parameter-catalog";
 import { matchScenarioProfiles, looksInterrogative, type ScenarioProfile } from "./scenario-profiles";
 
 /**
@@ -53,6 +53,8 @@ export type ScenarioRecommendation = {
    * explaining because a model picked each value separately.
    */
   reasons?: Readonly<Record<string, string>>;
+  /** Missing/refused model values make the proposed set unsafe to apply as a whole. */
+  incomplete?: readonly string[];
 };
 
 /** Case- and spacing-insensitive, so `大 batch` and `大batch` are one name. */
@@ -260,8 +262,9 @@ export function modelScenarioRecommendation(
   const lines: string[] = [];
   const proposed: Record<string, string> = {};
   const skipped: string[] = [];
+  const projected = projectCollectionEntries(catalog, payload.settings);
   payload.settings.forEach((setting) => {
-    const path = resolveCatalogPath(setting.key, catalog);
+    const path = resolveCatalogPath(setting.key, projected);
     if (!path) {
       skipped.push(setting.key);
       return;
@@ -289,7 +292,44 @@ export function modelScenarioRecommendation(
   // `dropped` is what the Bridge refused before the page ever saw it, so an empty
   // list is the ordinary case and only a non-empty one is worth a sentence.
   const refused = payload.dropped?.length ?? 0;
-  if (refused) parts.push(`模型另外提了 ${refused} 项，受一次方案的长度上限或取值范围限制，没有列进这份改动。`);
+  if (refused)
+    parts.push(
+      `模型另外提了 ${refused} 项，Bridge 未接受：${payload.dropped?.map((item) => `${item.key}（${item.reason}）`).join("、")}。`,
+    );
+  const incomplete = [
+    ...skipped.map((key) => `${key}：当前页面无此参数`),
+    ...(payload.dropped ?? []).map((item) => `${item.key}：${item.reason}`),
+    ...plan.rejected.map((item) => `${item.raw}：${item.reason}`),
+    ...plan.unknown.map((item) => `${item.raw}：${item.reason}`),
+  ];
+  const deviceCount = plan.items.find((item) => item.path === "topology/devices");
+  const targetCount = deviceCount && typeof deviceCount.value === "number" ? deviceCount.value : null;
+  const currentCount = Number(catalog.find((entry) => entry.path === "topology/devices")?.current);
+  const describesNodes = /多节点|\d+\s*个?节点|multi.?node/iu.test(`${payload.title} ${payload.rationale}`);
+  const assignsGroups = plan.items.some((item) => /^topology\/devices\[\d+\]\/group_id$/u.test(item.path));
+  if (targetCount !== null && targetCount > currentCount && (describesNodes || assignsGroups)) {
+    for (let index = 0; index < targetCount; index += 1) {
+      const path = `topology/devices[${index}]/group_id`;
+      const proposedGroup = plan.items.find((item) => item.path === path)?.next;
+      const existingGroup = index < currentCount ? catalog.find((entry) => entry.path === path)?.current : null;
+      if (!proposedGroup && !existingGroup) incomplete.push(`${path}：多节点方案缺少设备分组`);
+    }
+  }
+  const tpClaim = /\bTP\s*[-:]?\s*(\d+)\b/iu.exec(`${payload.title} ${payload.rationale}`);
+  if (tpClaim) {
+    const path = "runtime_trace/requests[0]/tp_degree";
+    const proposedTp = plan.items.find((item) => item.path === path)?.next;
+    const existingTp = catalog.find((entry) => entry.path === path)?.current;
+    if ((proposedTp ?? existingTp) !== tpClaim[1])
+      incomplete.push(`${path}：方案声称 TP${tpClaim[1]}，但未配置对应并行度`);
+  }
+  if (
+    targetCount !== null &&
+    targetCount > currentCount &&
+    /完整.*(?:互联|拓扑)|(?:互联|拓扑).*完整/iu.test(`${payload.title} ${payload.rationale}`)
+  ) {
+    incomplete.push("topology/links、topology/domains：无法从设备分组推断连接关系，请在结构化输入核对后再运行");
+  }
   return {
     profile: null,
     tie: [],
@@ -299,5 +339,6 @@ export function modelScenarioRecommendation(
     skipped,
     overridden: [],
     reasons,
+    incomplete,
   };
 }

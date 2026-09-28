@@ -16,7 +16,12 @@
  * came from, so they are validated and reported identically.
  */
 import type { AgentParameterEdit } from "../../entities/agent-command";
-import type { ParameterCatalogEntry, ParameterKind, ParameterTarget } from "./parameter-catalog";
+import {
+  projectCollectionEntries,
+  type ParameterCatalogEntry,
+  type ParameterKind,
+  type ParameterTarget,
+} from "./parameter-catalog";
 import {
   StructuredInputError,
   deviceIdsOf,
@@ -283,7 +288,11 @@ export function assignmentSegments(instruction: string): string[] {
  * this mode writes to the form and a guess would be a silent wrong value.
  */
 export function planParameterEdits(instruction: string, catalog: readonly ParameterCatalogEntry[]): ParameterEditPlan {
-  const index = indexCatalog(catalog);
+  const assignments = instruction
+    .split(LINE_PATTERN)
+    .flatMap((line) => splitAssignments(line))
+    .flatMap((line) => pairsOf(line).pairs.map((pair) => ({ key: pair.name.trim(), value: pair.value.trim() })));
+  const index = indexCatalog(projectCollectionEntries(catalog, assignments));
   const items: ParameterEditItem[] = [];
   const rejected: ParameterEditProblem[] = [];
   const unknown: ParameterEditProblem[] = [];
@@ -337,6 +346,7 @@ export function planParameterEdits(instruction: string, catalog: readonly Parame
           previous: entry.current,
           next: serializeForDisplay(parsed.value),
           value: parsed.value,
+          ...(entry.dependsOn ? { dependsOn: entry.dependsOn } : {}),
         });
       });
     });
@@ -447,6 +457,7 @@ function toApplied(item: AgentParameterEdit): AppliedParameterEdit {
     previous: item.previous,
     next: item.next,
     value: item.value,
+    ...(item.dependsOn ? { dependsOn: item.dependsOn } : {}),
   };
 }
 
@@ -514,11 +525,13 @@ export function applyParameterEdits(options: {
   const documentItems = options.items.filter((item) => item.target === "runtime_trace" || item.target === "topology");
   const stateItems = options.items.filter((item) => item.target === "control" || item.target === "form");
 
-  stateItems.forEach((item) => {
-    applied.push(toApplied(item));
-  });
-
-  documentItems.forEach((item) => {
+  // Resize before projected element leaves regardless of the model's order. Work
+  // only on local strings; a single failure rolls back the entire plan, including
+  // form edits, so the page never receives a half-built topology.
+  const ordered = [...documentItems].sort(
+    (a, b) => Number(Boolean(COLLECTION_RESIZERS[b.path])) - Number(Boolean(COLLECTION_RESIZERS[a.path])),
+  );
+  ordered.forEach((item) => {
     const root = payloadRootOf(item.target);
     const segments = segmentsOf(item.path);
     // The address must name the document it claims to write to. These items
@@ -564,5 +577,40 @@ export function applyParameterEdits(options: {
     }
   });
 
+  // The shipped runtime template pins participants to specific GPUs. Changing
+  // tp_degree alone cannot make that fixed list a larger tensor-parallel group;
+  // leaving it behind would make a 16-card receipt misleading. The editor owns
+  // the explicit clear/rewrite choice, so refuse this batch and direct the user
+  // there instead of silently changing an unlisted array.
+  if (!rejected.length) {
+    const tpEdits = documentItems.filter((item) => /^runtime_trace\/requests\[\d+\]\/tp_degree$/u.test(item.path));
+    if (tpEdits.length && runtimeJson.trim()) {
+      const requests = (JSON.parse(runtimeJson) as { requests?: { participants?: unknown }[] }).requests;
+      for (const item of tpEdits) {
+        const index = Number(/\[(\d+)\]/u.exec(item.path)?.[1]);
+        const participants = requests?.[index]?.participants;
+        if (Array.isArray(participants) && participants.length !== item.value) {
+          rejected.push({
+            raw: item.path,
+            reason: `请求的 participants 仍固定为 ${participants.length} 张卡，与 TP${item.value} 不一致；请先在结构化输入中清空或重写参与设备。`,
+          });
+        }
+      }
+    }
+  }
+
+  if (rejected.length) {
+    return {
+      applied: [],
+      rejected: rejected.map((item) => ({
+        ...item,
+        reason: `${item.reason} 整份方案已回滚，其他改动也未写入。`,
+      })),
+      runtimeJson: options.runtimeJson,
+      topologyJson: options.topologyJson,
+      requiresStructuredInput: false,
+    };
+  }
+  applied.unshift(...stateItems.map(toApplied));
   return { applied, rejected, runtimeJson, topologyJson, requiresStructuredInput };
 }

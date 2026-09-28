@@ -74,12 +74,13 @@
 | -------------------------- | ----------------------------------------------------- | ----------------------------------------- |
 | `/`                        | （重定向）                                            | —                                         |
 | `/overview`                | `OverviewView.vue`                                    | 兜底路由也指向它                          |
-| `/execution`               | `ExecutionView.vue`                                   | —                                         |
+| `/execution`               | `ExecutionView.vue`                                   | 旧 `evidence_*` 深链转向原始证据          |
+| `/raw-evidence`            | `RawEvidenceView.vue`                                 | 独立完整 JSON 与 Pointer 定位             |
 | `/metrics`                 | `MetricsView.vue`                                     | —                                         |
 | `/fabric`                  | `FabricView.vue`                                      | —                                         |
 | `/attribution`             | `AttributionView.vue`                                 | —                                         |
 | `/validation`              | `ValidationView.vue`                                  | —                                         |
-| `/evidence-agent`          | `EvidenceAgentView.vue`                               | —                                         |
+| `/evidence-agent`          | `EvidenceAgentView.vue`                               | 旧深链兼容，不在主导航                    |
 | `/evidence-lab`            | `Week7EvidenceView.vue`                               | —                                         |
 | `/design-space`            | `DesignSpaceView.vue`                                 | —                                         |
 | `/history`                 | `HistoryView.vue`                                     | —                                         |

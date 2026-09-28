@@ -199,6 +199,47 @@ describe("structured input panel", () => {
     expect(paths).toHaveLength(9);
   });
 
+  it("shows backend defaults without writing omitted policy fields, then restores omission on clear", async () => {
+    const { wrapper, panel } = mountPanel({ structuredInput: true });
+    const expected: Record<string, [string, string]> = {
+      prefill_starvation_threshold_ps: ["0", "0 ps"],
+      pd_handoff_delay_ps: ["0", "0 ps"],
+      pd_handoff_queue_service_ps: ["0", "0 ps"],
+      kv_page_size_tokens: ["16", "16 tokens"],
+      kv_fragmentation_overhead: ["0", "0"],
+      fabric_backpressure_delay_us: ["0", "0 us"],
+      fabric_backpressure_throttle_threshold_us: ["0", "0 us"],
+      fabric_backpressure_prefill_batch_limit: ["1", "1"],
+    };
+    for (const [key, [placeholder, label]] of Object.entries(expected)) {
+      const field = wrapper.get(`[data-input-path="/custom_inputs/runtime_trace/policy/${key}"]`);
+      expect(field.get("input").attributes("placeholder")).toBe(placeholder);
+      expect(field.text()).toContain(`后端默认 ${label}（未写入）`);
+      expect((field.get("input").element as HTMLInputElement).value).toBe("");
+    }
+    const switchField = wrapper.get(
+      '[data-input-path="/custom_inputs/runtime_trace/policy/fabric_backpressure_active"]',
+    );
+    expect(switchField.get('option[value=""]').text()).toBe("后端默认 false（省略字段）");
+    expect(panel().emitted("update:runtimeJson")).toBeUndefined();
+
+    const delay = wrapper.get<HTMLInputElement>(
+      '[data-input-path="/custom_inputs/runtime_trace/policy/pd_handoff_delay_ps"] input',
+    );
+    await editNumber(delay, "42");
+    let written = JSON.parse(panel().emitted("update:runtimeJson")?.at(-1)?.[0] as string);
+    expect(written.policy.pd_handoff_delay_ps).toBe(42);
+    expect("kv_page_size_tokens" in written.policy).toBe(false);
+    expect(
+      wrapper.get('[data-input-path="/custom_inputs/runtime_trace/policy/pd_handoff_delay_ps"]').text(),
+    ).not.toContain("后端默认");
+
+    await editNumber(delay, "");
+    written = JSON.parse(panel().emitted("update:runtimeJson")?.at(-1)?.[0] as string);
+    expect("pd_handoff_delay_ps" in written.policy).toBe(false);
+    expect(delay.attributes("placeholder")).toBe("0");
+  });
+
   it("collapses the advanced run-policy grid on demand", async () => {
     const { wrapper } = mountPanel({ structuredInput: true });
     await wrapper.get(".policy-advanced-toggle").trigger("click");

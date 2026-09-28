@@ -248,6 +248,9 @@ describe("Agent copilot shell interaction", () => {
     });
 
     expect(wrapper.attributes("data-state")).toBe("open");
+    expect(wrapper.get(".agent-copilot-shell__header").text()).toContain("小拓 · TileSim 助手");
+    expect(wrapper.get(".agent-composer__label").text()).toBe("描述要理解或调整的内容");
+    expect(wrapper.get("textarea").attributes("placeholder")).not.toContain("你");
     expect(wrapper.findAll(".agent-block")).toHaveLength(blocks.length);
     await wrapper.get('button[aria-pressed="false"]').trigger("click");
     expect(wrapper.emitted("update:modelValue")?.at(-1)).toEqual(["expanded"]);
@@ -333,6 +336,17 @@ describe("Agent copilot shell interaction", () => {
 });
 
 describe("conversation turns", () => {
+  it("opens with task choices and forwards each choice without creating a run", async () => {
+    const wrapper = mount(AgentTypedBlockList, { props: { blocks: [] } });
+    expect(wrapper.text()).toContain("你好，需要小拓帮忙做些什么");
+    const choices = wrapper.findAll(".agent-block-empty__choices button");
+    expect(choices.map((button) => button.text())).toEqual(["配置实验", "分析实验结果", "学习怎么看结果"]);
+    await choices[0].trigger("click");
+    await choices[1].trigger("click");
+    await choices[2].trigger("click");
+    expect(wrapper.emitted("start")?.map(([task]) => task)).toEqual(["configure", "analyze", "learn"]);
+  });
+
   it("shows the user's own turn and the model's answer with the model that wrote it", () => {
     const wrapper = mount(AgentTypedBlockList, {
       props: {
@@ -350,10 +364,14 @@ describe("conversation turns", () => {
       },
     });
 
-    expect(wrapper.get('[data-block-type="user_message"] .agent-block__eyebrow').text()).toBe("你");
+    const user = wrapper.get('[data-block-type="user_message"]');
+    expect(user.get(".agent-block__eyebrow").text()).toBe("用户");
+    expect(user.get(".agent-block__speaker img").attributes("src")).toContain("user-avatar.svg");
+    expect(user.get(".agent-block__speaker img").attributes("alt")).toBe("");
     expect(wrapper.get('[data-block-type="user_message"] .agent-block__utterance').text()).toBe("低延迟在线服务");
     const answer = wrapper.get('[data-block-type="assistant_message"]');
-    expect(answer.get(".agent-block__eyebrow").text()).toBe("助手 · deepseek-v4-flash");
+    expect(answer.get(".agent-block__eyebrow").text()).toBe("小拓 · deepseek-v4-flash");
+    expect(answer.get(".agent-block__speaker img").attributes("src")).toContain("atuo-avatar.svg");
     // The line break the model wrote is kept: an answer is prose, not a label.
     expect(answer.get(".agent-block__answer").text()).toBe("先压小批量。\n并发上限降一档。");
     expect(answer.find('[role="status"]').exists()).toBe(false);
@@ -414,7 +432,7 @@ describe("conversation turns", () => {
     });
 
     // No model is named before the channel has answered, so the eyebrow stays bare.
-    expect(wrapper.get(".agent-block__eyebrow").text()).toBe("助手");
+    expect(wrapper.get(".agent-block__eyebrow").text()).toBe("小拓");
     expect(wrapper.get(".agent-block__answer--waiting").text()).toBe("正在想…");
   });
 

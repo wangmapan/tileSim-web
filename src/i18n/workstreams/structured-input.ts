@@ -43,8 +43,10 @@ export const structuredInputEnglishCatalog: Readonly<Record<string, string>> = {
 
   /* Advanced run policy: only the runtime_trace.policy keys the knobs cannot reach. */
   进阶运行策略: "Advanced run policy",
-  "只放旋钮管不到的 {count} 个参数；留空表示不写入。鼠标悬停字段名可看到契约里的原始字段名。":
-    "Only the {count} parameters the knobs cannot reach; leave blank to omit them. Hover a field name to see its raw contract key.",
+  "只放旋钮管不到的 {count} 个参数；浅色数字是后端缺省值，不写入输入 JSON。填写后覆盖，清空则恢复缺省值。":
+    "Only the {count} parameters the knobs cannot reach. Faint numbers are backend defaults, not written to input JSON. Enter a value to override; clear it to restore the default.",
+  "后端默认 {value}（未写入）": "Backend default {value} (not written)",
+  "后端默认 {value}（省略字段）": "Backend default {value} (field omitted)",
   "runtime trace 缺少 policy 对象，运行策略暂不可编辑。":
     "The runtime trace has no policy object, so the run policy cannot be edited yet.",
   "runtime trace 缺少 policy 对象。": "The runtime trace has no policy object.",

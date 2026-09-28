@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
-import { RouterView, useRoute } from "vue-router";
+import { RouterView, useRoute, useRouter } from "vue-router";
 import AppHeader from "./components/AppHeader.vue";
 import AppSidebar from "./components/AppSidebar.vue";
 import EvidenceStrip from "./components/EvidenceStrip.vue";
@@ -51,9 +51,18 @@ import {
 } from "./lib/api/assistant-model";
 import { getAgentOrchestrationCapabilitySnapshot } from "./lib/api/agent-orchestration-capabilities";
 import { LightweightWorkbenchShell } from "./features/lightweight-workbench";
+import { useLightweightStore } from "./stores/lightweight";
+import {
+  summarizeRunResult,
+  teachingForQuestion,
+  wantsResultAnalysis,
+  type GuidanceSection,
+} from "./features/agent-copilot-integration";
 
 const activeRoute = useRoute();
+const router = useRouter();
 const { state, initialize, synchronizeNavigation, ensureBridgeReady } = useDashboard();
+const lightweightStore = useLightweightStore();
 const isEntryRoute = computed(() => activeRoute.meta.layout === "entry");
 const isLightweightRoute = computed(() => activeRoute.meta.workspace === "lightweight");
 const dashboardInitialized = ref(false);
@@ -96,6 +105,14 @@ const agentCanEditParameters = computed(
 );
 let agentEditSequence = 0;
 let agentTurnSequence = 0;
+let pendingResultAnalysisRunId: string | null = null;
+let pendingResultAnalysisTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearPendingResultAnalysis(): void {
+  pendingResultAnalysisRunId = null;
+  if (pendingResultAnalysisTimer) clearTimeout(pendingResultAnalysisTimer);
+  pendingResultAnalysisTimer = null;
+}
 const agentBlocks = shallowRef<readonly AgentTypedBlock[]>([]);
 const agentPanelState = ref<AgentCopilotPanelState>("closed");
 const agentPanelWidth = ref(420);
@@ -172,6 +189,7 @@ function genericPageContext(): PageContextEnvelope {
         // the assistant never exposes an internal route name to users.
         lightweight_status: "轻量运行状态",
         lightweight_results: "轻量结果摘要",
+        raw_evidence: "原始证据",
       } as Record<string, string>
     )[routeName] || routeName;
   const schemaRevision = state.bridge.manifest?.schema_set_revision || "schema-unavailable";
@@ -537,10 +555,13 @@ async function planAgentModelRecommendation(instruction: string, context: PageCo
           title: recommendation.title,
           rationale: recommendation.rationale,
           reasons: recommendation.reasons ?? {},
+          incomplete: recommendation.incomplete ?? [],
           plan_revision: context.context_revision,
         },
       ];
-      agentStatus.value = `模型给了 ${recommendation.plan.items.length} 项建议，尚未写入面板`;
+      agentStatus.value = recommendation.incomplete?.length
+        ? `模型方案有 ${recommendation.incomplete.length} 项缺口，未写入面板`
+        : `模型给了 ${recommendation.plan.items.length} 项建议，尚未写入面板`;
       return true;
     }
     updateAgentAnswerBlock(answerBlockId, { error: "模型给的参数方案没有读懂，可以让它再说一次。" });
@@ -595,6 +616,11 @@ function planAgentRecommendation(instruction: string, context: PageContextEnvelo
       title: recommendation.title,
       rationale: recommendation.rationale,
       reasons: recommendation.reasons ?? {},
+      incomplete: [
+        ...recommendation.skipped.map((key) => `${key}：当前页面无此参数`),
+        ...recommendation.plan.rejected.map((item) => `${item.raw}：${item.reason}`),
+        ...recommendation.plan.unknown.map((item) => `${item.raw}：${item.reason}`),
+      ],
       plan_revision: context.context_revision,
     },
   ]);
@@ -604,13 +630,163 @@ function planAgentRecommendation(instruction: string, context: PageContextEnvelo
       recommendation.plan.items.map((item) => ({ key: parameterKeyOf(item.path), value: item.next })),
     )}`,
   );
-  agentStatus.value = recommendation.plan.items.length
-    ? `待确认 ${recommendation.plan.items.length} 项改动，尚未写入面板`
-    : "这份推荐在当前页面没有可写入的项";
+  agentStatus.value =
+    recommendation.skipped.length || recommendation.plan.rejected.length || recommendation.plan.unknown.length
+      ? "方案有缺口，未写入面板"
+      : recommendation.plan.items.length
+        ? `待确认 ${recommendation.plan.items.length} 项改动，尚未写入面板`
+        : "这份推荐在当前页面没有可写入的项";
   return true;
 }
 
+/** Return only the report belonging to the run currently shown by this route. */
+function currentGuidanceBundle(): { bundle: import("./contracts/report-model").ReportBundle; runId: string } | null {
+  const querySchema = Array.isArray(activeRoute.query.schema_set_revision)
+    ? activeRoute.query.schema_set_revision[0]
+    : activeRoute.query.schema_set_revision;
+  const querySha = Array.isArray(activeRoute.query.artifact_sha256)
+    ? activeRoute.query.artifact_sha256[0]
+    : activeRoute.query.artifact_sha256;
+  if (isLightweightRoute.value) {
+    const runId =
+      lightweightAgentRunId() ||
+      (activeRoute.name === "lightweight_results" ? lightweightStore.run.value?.runId : null);
+    const manifest = lightweightStore.reports.artifactManifest;
+    const manifestRunId = manifest?.run_id;
+    const bundle = lightweightStore.reports.bundle;
+    if (!runId || !bundle || (manifestRunId && manifestRunId !== runId)) return null;
+    if (lightweightStore.run.value && lightweightStore.run.value.runId !== runId) return null;
+    if (querySchema && manifest?.schema_set_revision !== querySchema) return null;
+    if (
+      querySha &&
+      !manifest?.artifacts.some((item) =>
+        [String(item.sha256).toLowerCase(), `sha256:${String(item.sha256).toLowerCase()}`].includes(
+          querySha.toLowerCase(),
+        ),
+      )
+    )
+      return null;
+    const reportIds = [bundle.run?.run_id, bundle.metrics?.run_id].filter(Boolean);
+    if ((!manifestRunId && !reportIds.length) || reportIds.some((value) => value !== runId)) return null;
+    if (
+      manifest?.rejected_artifacts.length ||
+      manifest?.artifacts.some((item) => !["supported", "not_applicable"].includes(item.contract_status))
+    )
+      return null;
+    if (Object.values(bundle.compatibility || {}).some((item) => item && !item.supported)) return null;
+    return { bundle, runId };
+  }
+  const runId = state.runId;
+  const manifestRunId = state.artifactManifest?.run_id;
+  if (!runId || state.isDemo || !state.bundle || (manifestRunId && manifestRunId !== runId)) return null;
+  if (navigationSnapshot().runId && navigationSnapshot().runId !== runId) return null;
+  if (querySchema && state.artifactManifest?.schema_set_revision !== querySchema) return null;
+  if (state.artifactManifest?.rejected_artifacts.length || unsupportedSchemaReports(state.bundle).length) return null;
+  const reportIds = [state.bundle.run?.run_id, state.bundle.metrics?.run_id].filter(Boolean);
+  if ((!manifestRunId && !reportIds.length) || reportIds.some((value) => value !== runId)) return null;
+  const compatibility = Object.values(state.bundle.compatibility || {});
+  if (compatibility.some((item) => item && item.supported === false)) return null;
+  return { bundle: state.bundle, runId };
+}
+
+function appendGuidance(instruction: string, sections: readonly GuidanceSection[]): void {
+  const turn = openAgentTurn(instruction);
+  appendAgentAnswerBlocks(
+    turn,
+    sections.map((section, index) => ({
+      block_type: "explanation" as const,
+      block_id: `agent-guidance:${index}`,
+      title: section.title,
+      body: section.body,
+    })),
+  );
+  recordAgentTurn(instruction, sections.map((section) => `${section.title}：${section.body}`).join("\n"));
+  agentStatus.value = "小拓已整理当前信息";
+}
+
+function handleAgentStart(task: "configure" | "analyze" | "learn"): void {
+  clearPendingResultAnalysis();
+  if (task === "configure") {
+    agentBlocks.value = [];
+    agentConversation.value = [];
+    agentStatus.value = "正在打开实验配置";
+    void router.push({ name: isLightweightRoute.value ? "lightweight_prepare" : "experiment" });
+    return;
+  }
+  if (task === "learn") {
+    const result = currentGuidanceBundle();
+    appendGuidance("（学习怎么看结果）", [
+      teachingForQuestion("怎么读实验结果？", result?.bundle || null) || {
+        title: "三步读懂实验结果",
+        body: "先确认运行状态与报告身份，再看吞吐、TTFT/TPOT P99，最后读后端瓶颈和验证边界。缺失项保持“未报告”，不要当作零。",
+      },
+    ]);
+    return;
+  }
+  const result = currentGuidanceBundle();
+  if (!result && isLightweightRoute.value && activeRoute.name !== "lightweight_results") {
+    const runId = lightweightAgentRunId() || lightweightStore.run.value?.runId;
+    if (runId) {
+      pendingResultAnalysisRunId = runId;
+      agentStatus.value = "正在打开当前运行的结果页…";
+      pendingResultAnalysisTimer = setTimeout(() => {
+        if (pendingResultAnalysisRunId !== runId) return;
+        clearPendingResultAnalysis();
+        appendGuidance("（分析实验结果）", [
+          {
+            title: "报告暂不可用",
+            body: "结果页未能载入当前 run 的可分析报告。请核对结果页的错误状态，稍后重新点击分析。",
+          },
+        ]);
+      }, 15_000);
+      void router.push({ name: "lightweight_results", query: { run: runId } }).catch(() => {
+        clearPendingResultAnalysis();
+        agentStatus.value = "结果页未能打开";
+      });
+      return;
+    }
+  }
+  if (!result) {
+    appendGuidance("（分析实验结果）", [
+      {
+        title: "暂时不能分析",
+        body: "当前页面没有与本次 run 身份匹配的已加载报告，或报告仍是示例/过期 schema。请先打开对应运行的结果页并等待报告载入；小拓不会用旧报告或示例数据代替。",
+      },
+    ]);
+    return;
+  }
+  appendGuidance("（分析实验结果）", summarizeRunResult(result.bundle, result.runId));
+}
+
+watch(
+  () => [activeRoute.name, lightweightStore.reports.bundle, lightweightStore.reports.artifactManifest] as const,
+  () => {
+    const pendingRunId = pendingResultAnalysisRunId;
+    if (!pendingRunId) return;
+    if (activeRoute.name !== "lightweight_results") {
+      if (activeRoute.name !== "lightweight") clearPendingResultAnalysis();
+      return;
+    }
+    const result = currentGuidanceBundle();
+    if (!result || result.runId !== pendingRunId) {
+      if (lightweightStore.reports.artifactManifest?.run_id === pendingRunId && lightweightStore.reports.bundle) {
+        clearPendingResultAnalysis();
+        appendGuidance("（分析实验结果）", [
+          {
+            title: "暂时不能分析",
+            body: "当前报告的身份、schema 或 artifact 状态不符合分析条件；请在结果页核对报告状态。",
+          },
+        ]);
+      }
+      return;
+    }
+    clearPendingResultAnalysis();
+    appendGuidance("（分析实验结果）", summarizeRunResult(result.bundle, result.runId));
+  },
+);
+
 async function submitAgentInstruction(payload: AgentCopilotSubmitPayload): Promise<void> {
+  clearPendingResultAnalysis();
   const context = agentContext.value;
   if (!context || payload.context_revision !== context.context_revision) {
     appendAgentAnswerBlocks(openAgentTurn(payload.instruction), [
@@ -620,12 +796,32 @@ async function submitAgentInstruction(payload: AgentCopilotSubmitPayload): Promi
     return;
   }
   const instruction = redactSingleTurnInstruction(payload.instruction);
+  const report = currentGuidanceBundle();
   // One box, three possible readings, decided in this order: a described
-  // scenario is answered by the assistant model when this Bridge has a channel
-  // and by the local rule table otherwise; an explicit assignment answers with
-  // the deterministic plan; everything else stays with the read-only paths below.
-  if (await planAgentModelRecommendation(instruction, context)) return;
+  // scenario is answered by the local rule table before any broad teaching
+  // keyword is considered. This keeps “高吞吐场景” from being mistaken for a
+  // question about the word “吞吐”.
   if (planAgentRecommendation(instruction, context)) return;
+  const teaching = teachingForQuestion(instruction, report?.bundle || null);
+  if (teaching) {
+    appendGuidance(instruction, [teaching]);
+    return;
+  }
+  if (wantsResultAnalysis(instruction)) {
+    appendGuidance(
+      instruction,
+      report
+        ? summarizeRunResult(report.bundle, report.runId)
+        : [
+            {
+              title: "暂时不能分析",
+              body: "当前页面没有与本次 run 身份匹配的已加载报告，或报告仍是示例/过期 schema。请先打开对应运行的结果页并等待报告载入。",
+            },
+          ],
+    );
+    return;
+  }
+  if (await planAgentModelRecommendation(instruction, context)) return;
   // A question, or a page that cannot carry a draft, is answered from the page
   // itself. That keeps read-only pages free of any capability round trip.
   if (looksInterrogative(instruction) || !context.allowed_purposes.includes("draft")) {
@@ -753,6 +949,13 @@ function applyAgentParameterEdits(blockId: string): void {
       candidate.block_type === "parameter_edits" && candidate.block_id === blockId,
   );
   if (!block || block.receipts) return;
+  if (block.incomplete?.length || block.rejected.length || block.unknown.length) {
+    appendAgentAnswerBlocks(openAgentTurn("（按了应用到面板）"), [
+      formalErrorBlock("parameter_plan_incomplete", "这份方案有未写入的参数，未对面板作任何改动。请补齐后重新生成。"),
+    ]);
+    agentStatus.value = "方案不完整，未写入";
+    return;
+  }
   const assessment = assessParameterPlan({
     edits: block.edits,
     live: agentParameterCatalog.value,
@@ -925,6 +1128,7 @@ onMounted(() => {
   void initialize({ ...navigation, runId: navigation.runId || state.runId });
 });
 onBeforeUnmount(() => {
+  clearPendingResultAnalysis();
   cancelAgentStream();
   unsubscribeAgentContext();
   unregisterAgentContext();
@@ -1004,5 +1208,6 @@ onBeforeUnmount(() => {
     @cancel="cancelAgentStream"
     @select-model="switchAgentModel"
     @refresh-models="loadAgentModels"
+    @start="handleAgentStart"
   />
 </template>

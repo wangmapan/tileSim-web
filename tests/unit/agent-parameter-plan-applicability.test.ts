@@ -142,6 +142,40 @@ describe("parameter plan applicability", () => {
     });
   });
 
+  it("accepts only future leaves covered by a still-current growth edit", () => {
+    const growth: AgentParameterEdit = {
+      path: "topology/devices",
+      label: "显卡数量",
+      target: "topology",
+      fieldId: null,
+      previous: "4",
+      next: "16",
+      value: 16,
+    };
+    const future: AgentParameterEdit = {
+      path: "topology/devices[15]/group_id",
+      label: "group_id",
+      target: "topology",
+      fieldId: null,
+      previous: null,
+      next: "node3",
+      value: "node3",
+      dependsOn: "topology/devices",
+    };
+    const assess = (changes: readonly AgentParameterEdit[], count = "4") =>
+      assessParameterPlan({
+        edits: changes,
+        live: [{ path: "topology/devices", current: count }],
+        planRevision: "old",
+        currentRevision: "new",
+      });
+    expect(assess([future, growth])).toEqual({ applicable: true, basis: "values" });
+    expect(assess([future, growth], "8").applicable).toBe(false);
+    expect(assess([future]).applicable).toBe(false);
+    expect(assess([{ ...future, path: "topology/devices[16]/group_id" }, growth]).applicable).toBe(false);
+    expect(assess([{ ...future, dependsOn: "runtime_trace/requests" }, growth]).applicable).toBe(false);
+  });
+
   it("refuses an empty plan instead of reporting a write it cannot make", () => {
     const assessment = assessParameterPlan({
       edits: [],

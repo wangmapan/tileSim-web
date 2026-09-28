@@ -10,8 +10,8 @@
 }
 .service-warning {
   color: var(--warning-ink);
-  border: 1px solid color-mix(in srgb, var(--warning) 35%, var(--line));
-  background: var(--warning-soft);
+  border-left-color: var(--warning);
+  background: color-mix(in srgb, var(--warning-soft) 36%, transparent);
 }
 .service-warning div {
   display: grid;
@@ -237,11 +237,23 @@
   gap: 15px;
   padding: 0 25px;
 }
+/**
+ * Sections used to draw their own border and fill inside the panel's border
+ * and fill — two outlines in the same colour family for one level of grouping,
+ * and a third once the knob groups and the structured area were added. They
+ * are separated by a hairline now, which keeps the same grouping visible while
+ * leaving the panel as the only raised surface on the page.
+ */
 .control-sections > section {
-  padding: 17px 0 20px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface-subtle);
+  padding: 18px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+.control-sections > section:first-child {
+  padding-top: 0;
+  border-top: 0;
 }
 .control-sections section > header {
   display: flex;
@@ -921,6 +933,7 @@
 .run-scope-note {
   padding: 10px;
   color: var(--ink-soft);
+  border-left-color: var(--positive);
   background: color-mix(in srgb, var(--panel-strong) 68%, transparent);
 }
 .run-scope-note svg {
@@ -1578,14 +1591,32 @@ details > summary:hover {
   gap: 14px;
   min-width: 0;
 }
+/**
+ * Same reasoning as `.structured-area` above, one tier down: the block already
+ * sits inside a bordered panel, so its own outline was a third box in the same
+ * colour family. It becomes an inset well instead — a real grey fill with no
+ * stroke — which also lets the white rows and controls inside it read as the
+ * only raised objects on the page.
+ */
 .structured-block {
   display: grid;
   gap: 12px;
   min-width: 0;
   padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface-subtle);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--surface-inset);
+}
+/**
+ * Rows are now the only raised objects inside an inset well, so they need to
+ * read as raised. A hairline of contact shadow does that regardless of the
+ * surface colours, which differ per theme: in the default theme the row fill
+ * and the well fill are within one step of each other, so the stroke alone
+ * carried the grouping before.
+ */
+.device-inventory-row,
+.domain-inventory-row {
+  box-shadow: var(--shadow-hairline);
 }
 .structured-block__header {
   display: flex;
@@ -1616,19 +1647,20 @@ details > summary:hover {
 .structured-note {
   margin: 0;
   padding: 9px 11px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
+  border: 0;
+  border-left: 2px solid var(--line-strong);
+  border-radius: 0;
   color: var(--ink-soft);
-  background: var(--surface-muted);
+  background: transparent;
   overflow-wrap: anywhere;
   font-size: var(--text-sm);
 }
 .structured-note--warning {
-  border-color: var(--warning-ink, var(--line-strong));
-  background: var(--warning-soft);
+  border-left-color: var(--warning-ink, var(--line-strong));
+  background: transparent;
 }
 .structured-note--error {
-  border-color: var(--danger);
+  border-left-color: var(--danger);
   color: var(--danger);
 }
 .structured-actions {
@@ -1744,9 +1776,9 @@ details > summary:hover {
   gap: 10px;
   min-width: 0;
   padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface-subtle);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--surface-inset);
 }
 .device-inventory__count {
   display: flex;
@@ -1814,9 +1846,9 @@ details > summary:hover {
   gap: 10px;
   min-width: 0;
   padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface-subtle);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--surface-inset);
 }
 .domain-inventory__rows {
   display: grid;
@@ -1861,6 +1893,8 @@ details > summary:hover {
   background: var(--control-bg);
   font-size: var(--text-sm);
 }
+/* Fourth outline in the same stack: this fieldset lives inside an already
+   bordered row, so it reads as a separated band rather than another box. */
 .domain-inventory-row__members {
   display: flex;
   flex: 1 1 100%;
@@ -1869,9 +1903,9 @@ details > summary:hover {
   align-items: center;
   min-width: 0;
   margin: 0;
-  padding: 6px 10px 8px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
+  padding: 8px 0 2px;
+  border: 0;
+  border-top: 1px solid var(--line);
   color: var(--ink-soft);
   font-size: var(--text-xs);
 }

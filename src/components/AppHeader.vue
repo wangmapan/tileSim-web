@@ -19,6 +19,7 @@ const headerKickers = {
   validation: "实验结果",
   design_space: "方案探索",
   history: "实验管理",
+  raw_evidence: "证据工具",
   evidence_agent: "辅助解释",
   evidence_lab: "证据工具",
   experiment: "实验配置",

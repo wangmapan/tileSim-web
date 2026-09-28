@@ -62,6 +62,7 @@
 - [`architecture/BACKEND_SIMULATION_FLOW_UI_COVERAGE.md`](architecture/BACKEND_SIMULATION_FLOW_UI_COVERAGE.md)：后端仿真流程与前端专业工作台的
   展示覆盖度审计、四类缺口（C0 纯前端 / C1 Bridge 采集 / C2 契约面 / C3 输入面）与 `WP-2D-01` 派发提示词。
 - [`deployment/F10_RELEASE_HARDENING.md`](deployment/F10_RELEASE_HARDENING.md)：发布加固与回滚。
+- [`deployment/LAUNCHER_BUILD_DEPLOYMENT_ROLLBACK.md`](deployment/LAUNCHER_BUILD_DEPLOYMENT_ROLLBACK.md)：Windows 启动器构建、验收和回滚。
 - [`research/F9_AGENT_BASED_SIMULATION_ORCHESTRATION_PLAN.md`](research/F9_AGENT_BASED_SIMULATION_ORCHESTRATION_PLAN.md)：Agent 编排总方案。
 - [`research/F9_EVIDENCE_AGENT_FRONTIER_EXPANSION_PLAN.md`](research/F9_EVIDENCE_AGENT_FRONTIER_EXPANSION_PLAN.md)：Evidence Agent 前沿扩展研究。
 

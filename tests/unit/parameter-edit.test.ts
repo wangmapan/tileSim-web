@@ -371,11 +371,27 @@ describe("parameter edit apply", () => {
 
   it("writes one array element without touching its siblings", () => {
     const plan = planParameterEdits("runtime_trace/requests[1]/tp_degree = 4", catalogOf());
-    const outcome = applyParameterEdits({ items: plan.items, runtimeJson, topologyJson });
+    const withoutPinnedParticipants = JSON.stringify({
+      ...JSON.parse(runtimeJson),
+      requests: [
+        { ...JSON.parse(runtimeJson).requests[0] },
+        { ...JSON.parse(runtimeJson).requests[1], participants: undefined },
+      ],
+    });
+    const outcome = applyParameterEdits({ items: plan.items, runtimeJson: withoutPinnedParticipants, topologyJson });
     const document = JSON.parse(outcome.runtimeJson);
     expect(document.requests[1].tp_degree).toBe(4);
     expect(document.requests[0].tp_degree).toBe(2);
     expect(document.requests[1].request_id).toBe("req_b");
+  });
+
+  it("refuses TP16 over a pinned two-card participants list without changing any document", () => {
+    const plan = planParameterEdits("topology/devices = 16\nruntime_trace/requests[0]/tp_degree = 16", catalogOf());
+    const outcome = applyParameterEdits({ items: plan.items, runtimeJson, topologyJson });
+    expect(outcome.applied).toEqual([]);
+    expect(outcome.rejected[0].reason).toContain("participants 仍固定为 2 张卡");
+    expect(outcome.topologyJson).toBe(topologyJson);
+    expect(outcome.runtimeJson).toBe(runtimeJson);
   });
 
   it("patches the topology document and keeps unrendered keys", () => {
@@ -553,9 +569,55 @@ describe("collection sizes", () => {
     expect(document.topology.devices[3]).toEqual({ device_id: "gpu3", device_type: "GPU" });
   });
 
+  it("plans and applies a 16-card four-node set even when growth is listed last", () => {
+    const assignments = Array.from(
+      { length: 16 },
+      (_, index) => `topology/devices[${index}]/group_id = node${Math.floor(index / 4)}`,
+    );
+    assignments.unshift("runtime_trace/requests[0]/tp_degree = 16");
+    assignments.push("topology/devices = 16");
+    const plan = planParameterEdits(assignments.join("\n"), catalogOf());
+    expect(plan.rejected).toEqual([]);
+    expect(plan.unknown).toEqual([]);
+    expect(plan.items).toHaveLength(18);
+    expect(plan.items.find((item) => item.path === "topology/devices[15]/group_id")?.dependsOn).toBe(
+      "topology/devices",
+    );
+    const unpinned = JSON.stringify({
+      ...JSON.parse(runtimeJson),
+      requests: JSON.parse(runtimeJson).requests.map((row: { participants?: string[] }) => {
+        const copy = { ...row };
+        delete copy.participants;
+        return copy;
+      }),
+    });
+    const outcome = applyParameterEdits({ items: plan.items, runtimeJson: unpinned, topologyJson });
+    expect(outcome.rejected).toEqual([]);
+    expect(outcome.applied).toHaveLength(18);
+    expect(
+      JSON.parse(outcome.topologyJson).topology.devices.map((device: { group_id: string }) => device.group_id),
+    ).toEqual(Array.from({ length: 16 }, (_, index) => `node${Math.floor(index / 4)}`));
+    expect(JSON.parse(outcome.runtimeJson).requests[0].tp_degree).toBe(16);
+  });
+
+  it("rolls back a complete batch if a later projected write fails", () => {
+    const plan = planParameterEdits(
+      "run_name = sixteen\ntopology/devices = 16\ntopology/devices[15]/group_id = node3",
+      catalogOf(),
+    );
+    const invalid = plan.items.map((item) =>
+      item.path.endsWith("[15]/group_id") ? { ...item, path: "topology/devices[16]/group_id" } : item,
+    );
+    const outcome = applyParameterEdits({ items: invalid, runtimeJson, topologyJson });
+    expect(outcome.applied).toEqual([]);
+    expect(outcome.rejected[0].reason).toContain("回滚");
+    expect(outcome.topologyJson).toBe(topologyJson);
+    expect(outcome.runtimeJson).toBe(runtimeJson);
+    expect(outcome.requiresStructuredInput).toBe(false);
+  });
+
   it("does not address an element that does not exist yet", () => {
-    // Growth and the new element cannot be planned in one sentence: the catalogue is built from the
-    // document as it is now, so index 2 is not an address until a device is actually there.
+    // A future index without a matching growth in this same plan stays unavailable.
     const plan = planParameterEdits("topology/devices[2]/device_type = H100", catalogOf());
     expect(plan.items).toEqual([]);
     expect(plan.unknown).toHaveLength(1);

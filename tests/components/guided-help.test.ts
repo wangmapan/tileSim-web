@@ -75,7 +75,7 @@ describe("help documentation", () => {
     expect(trigger.attributes("aria-expanded")).toBe("true");
     expect(panel.open).toBe(true);
     const topicIds = [...panel.querySelectorAll<HTMLElement>("[data-guide-id]")].map((topic) => topic.dataset.guideId);
-    expect(topicIds.sort()).toEqual([...professionalGuideIds].sort());
+    expect(topicIds.sort()).toEqual([...professionalGuideIds].filter((id) => id !== "evidence_agent").sort());
     expect(topicIds).not.toEqual(expect.arrayContaining([...lightweightGuideIds]));
     expect(panel.textContent).toContain("专业版页面帮助");
     expect(panel.textContent).not.toContain("轻量版页面帮助");

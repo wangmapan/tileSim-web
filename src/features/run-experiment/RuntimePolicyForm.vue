@@ -41,6 +41,36 @@ const POLICY_LABEL_SOURCE: Record<string, string> = {
   fabric_backpressure_prefill_batch_limit: "Fabric 反压 prefill 批上限",
 };
 
+// Mirrors the missing-field fallbacks in D:/tileSim/src/Core/LayerAdapters.cpp
+// (S1 runtime policy parser). Display only: omission remains omission in JSON.
+const BACKEND_POLICY_DEFAULTS: Readonly<Record<string, number | boolean>> = {
+  prefill_starvation_threshold_ps: 0,
+  pd_handoff_delay_ps: 0,
+  pd_handoff_queue_service_ps: 0,
+  kv_page_size_tokens: 16,
+  kv_fragmentation_overhead: 0,
+  fabric_backpressure_active: false,
+  fabric_backpressure_delay_us: 0,
+  fabric_backpressure_throttle_threshold_us: 0,
+  fabric_backpressure_prefill_batch_limit: 1,
+};
+
+function backendDefault(field: SchemaFieldMeta): string {
+  const value = BACKEND_POLICY_DEFAULTS[field.key];
+  const unit = field.key.endsWith("_ps")
+    ? " ps"
+    : field.key.endsWith("_us")
+      ? " us"
+      : field.key === "kv_page_size_tokens"
+        ? " tokens"
+        : "";
+  return `${value}${unit}`;
+}
+
+function isOmitted(field: SchemaFieldMeta): boolean {
+  return field.key in BACKEND_POLICY_DEFAULTS && policy.value?.[field.key] === undefined;
+}
+
 function policyLabel(key: string): string {
   const source = POLICY_LABEL_SOURCE[key];
   return source ? t(source) : key;
@@ -145,7 +175,7 @@ function fieldPathFor(key: string): string {
       <div>
         <strong>{{ t("进阶运行策略") }}</strong>
         <small>{{
-          t("只放旋钮管不到的 {count} 个参数；留空表示不写入。鼠标悬停字段名可看到契约里的原始字段名。", {
+          t("只放旋钮管不到的 {count} 个参数；浅色数字是后端缺省值，不写入输入 JSON。填写后覆盖，清空则恢复缺省值。", {
             count: advancedFields.length,
           })
         }}</small>
@@ -176,7 +206,12 @@ function fieldPathFor(key: string): string {
           :class="{ 'policy-field--invalid': fieldPath === fieldPathFor(field.key) }"
           :data-input-path="fieldPathFor(field.key)"
         >
-          <span :title="field.key">{{ policyLabel(field.key) }}</span>
+          <span :title="field.key">
+            {{ policyLabel(field.key) }}
+            <small v-if="isOmitted(field)">{{
+              t("后端默认 {value}（未写入）", { value: backendDefault(field) })
+            }}</small>
+          </span>
           <select
             v-if="field.kind === 'enum'"
             :value="displayValue(field)"
@@ -194,13 +229,14 @@ function fieldPathFor(key: string): string {
             :aria-invalid="fieldPath === fieldPathFor(field.key)"
             @change="updateBoolean(field, $event)"
           >
-            <option value="">{{ t("未设置（省略字段）") }}</option>
+            <option value="">{{ t("后端默认 {value}（省略字段）", { value: backendDefault(field) }) }}</option>
             <option value="true">true</option>
             <option value="false">false</option>
           </select>
           <input
             v-else
             :value="displayValue(field)"
+            :placeholder="field.key in BACKEND_POLICY_DEFAULTS ? String(BACKEND_POLICY_DEFAULTS[field.key]) : undefined"
             type="number"
             step="any"
             :title="boundsHint(field).title"

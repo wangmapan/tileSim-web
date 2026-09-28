@@ -454,3 +454,13 @@ Conversation/Turn/Goal、retention 和 approval contract 发布后，启用可�
 > 门禁：桥接三文件 **257 passed**（`test_parameter_surface` 25、`test_assistant_model` 62、`test_server` 170），
 > 前端 Vitest **1056 passed / 8 skipped**；真机通道验证显示目录文本 78 行且命中所列四类地址，模型能给出 8 卡方案。
 > 详见 `docs/AI_HANDOFF.md` 的 2026-09-23 节。
+
+> **2026-09-23 同批扩容修订（工作树，未部署）**：`parameter-catalog.ts` 对同一方案中合法的集合增长，按契约字段投影被明确提及的新设备/请求索引；`scenario-recommendation.ts` 在模型地址解析前使用该投影。`parameter-plan.ts` 只允许规模值仍与计划前值一致、且下标落在增长区间的未来地址通过 stale 守卫。`parameter-edit.ts` 先扩容再写元素，任何写入失败时原子回滚整批（表单与两个 JSON 文档）；被修改请求的显式 `participants` 若与新 TP 不匹配，同样拒绝整批并提示到结构化输入清空或重写。模型/Bridge 丢弃或前端拒绝的字段逐项展示并禁止应用；多节点分组缺漏或声称 TPn 但第 0 条请求没有对应并行度也禁止应用。Bridge 上限为 64 项，提示词明确组号不等于 links/domains；既有 `participants` 与真实连接关系不自动补造，用户仍需在结构化输入中核对。该改动不创建运行，不改变 Phase 2 的执行能力边界。
+
+> **2026-09-23 对话身份修订（工作树，未部署）**：`AgentTypedBlockList.vue` 的用户/模型消息分别显示 `user-avatar.svg` 中性人物与 `atuo-avatar.svg` 阿拓头像，文字标识是「用户」与「阿拓 · 模型 ID」；头像为装饰，发言者文字仍供读屏识别。侧栏标题显示「阿拓 · TileSim 助手」，对话输入与提示文案不再用「你」指代用户。该 UI 修订不新增个人身份资料、会话权限或 Agent 执行能力。
+
+> **2026-09-23 小拓引导与结果教学（工作树，未部署）**：空会话呈现三项任务选择；「配置实验」导航到当前工作台的新建实验页，「分析实验结果」从身份匹配的当前 run 报告提供三段式速览、后端原文重点与证据边界；轻量工作台首页带 run 时会先进入结果页并在载入后自动整理。「学习怎么看结果」及对应自然语言提问提供指标教学。报告整理为前端只读显示级变换，不调用 Provider、不改报告、不创建运行；无报告、示例、旧 run、unsupported schema 时不作分析。报告字段路径只用于定位，不代表正式 citation。界面称呼由「阿拓」调整为「小拓」，原 SVG 文件名保留。
+
+> **2026-09-24 视觉收口（工作树，未部署）**：小拓侧栏增加有限的开合和选择反馈；具体时长使用独立 `--motion-interaction`，不改动 e2e 依赖的颜色过渡时长。轻量工作台空状态增加三步流程说明、accent rule entrance 与状态反馈，均为表现层改动；`prefers-reduced-motion` 会关闭新增动画。
+
+> **2026-09-24 专业工作台状态组件视觉收口（工作树，未部署）**：侧栏 header、时间线、输入区和 welcome choice 保持窄桌面工作流的轻量密度；本轮补充输入区 focus、提交/停止和控件 hover 的细微反馈，并将状态组件视觉对齐到专业工作台的语义边轨体系。时间使用独立 `--motion-interaction`，沿用全局 reduced-motion 规则；不改变 typed block、context、model selection、草案应用或执行边界。专业工作台的证据范围提示、状态标签和 `AvailabilityBadge` 同步增强层级、边框和状态点，但不添加数据或装饰性插画。定向 dashboard motion/P99、L6 小拓引导/闭环 E2E 共 4 条通过。

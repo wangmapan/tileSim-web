@@ -502,6 +502,7 @@ describe("model proposals across the whole surface", () => {
     );
 
     expect(recommendation?.skipped).toEqual(["topology/workload/requests"]);
+    expect(recommendation?.incomplete).toContain("topology/workload/requests：当前页面无此参数");
     expect(recommendation?.plan.items.map((item) => item.path)).toEqual(["topology/devices"]);
   });
 
@@ -522,7 +523,57 @@ describe("model proposals across the whole surface", () => {
     );
 
     expect(recommendation?.rationale).toBe(
-      "先把卡数加上去。模型另外提了 2 项，受一次方案的长度上限或取值范围限制，没有列进这份改动。",
+      "先把卡数加上去。模型另外提了 2 项，Bridge 未接受：overrides/fabric/scale_up_bandwidth_gbps（settings_limit_exceeded）、overrides/fabric/scale_up_latency_us（settings_limit_exceeded）。",
+    );
+    expect(recommendation?.incomplete).toHaveLength(2);
+  });
+
+  it("resolves future element paths against an accompanying collection growth", () => {
+    const settings = Array.from({ length: 16 }, (_, index) => ({
+      key: `topology/devices[${index}]/group_id`,
+      value: `node${Math.floor(index / 4)}`,
+      why: "四卡一组。",
+    }));
+    settings.unshift({ key: "runtime_trace/requests[0]/tp_degree", value: "16", why: "16 路 TP。" });
+    settings.push({ key: "topology/devices", value: "16", why: "扩容。" });
+    const recommendation = modelScenarioRecommendation(
+      { title: "16 卡 TP16", rationale: "4 个节点方案。", settings },
+      catalogOf(),
+    );
+    expect(recommendation?.skipped).toEqual([]);
+    expect(recommendation?.incomplete).toEqual([]);
+    expect(recommendation?.plan.items).toHaveLength(18);
+    expect(recommendation?.plan.items.find((item) => item.path === "topology/devices[15]/group_id")?.dependsOn).toBe(
+      "topology/devices",
+    );
+  });
+
+  it("blocks a claimed multi-node TP16 plan that omits groups or TP", () => {
+    const recommendation = modelScenarioRecommendation(
+      {
+        title: "16 卡 TP16 多节点",
+        rationale: "4 个节点，每节点 4 卡。",
+        settings: [{ key: "topology/devices", value: "16", why: "扩容。" }],
+      },
+      catalogOf(),
+    );
+    expect(recommendation?.incomplete).toContain(
+      "runtime_trace/requests[0]/tp_degree：方案声称 TP16，但未配置对应并行度",
+    );
+    expect(recommendation?.incomplete).toContain("topology/devices[15]/group_id：多节点方案缺少设备分组");
+  });
+
+  it("does not present a group-only expansion as a complete connected topology", () => {
+    const recommendation = modelScenarioRecommendation(
+      {
+        title: "完整互联拓扑",
+        rationale: "仅改变卡数和分组。",
+        settings: [{ key: "topology/devices", value: "16", why: "扩容。" }],
+      },
+      catalogOf(),
+    );
+    expect(recommendation?.incomplete).toContain(
+      "topology/links、topology/domains：无法从设备分组推断连接关系，请在结构化输入核对后再运行",
     );
   });
 

@@ -325,7 +325,7 @@ test.describe("L6 lightweight formal-run closure", () => {
     await expect(panel.getByRole("radio")).toHaveCount(0);
     await expect(page.locator(".lightweight-conversation")).toHaveCount(0);
 
-    await panel.getByRole("textbox", { name: "描述你想理解或调整的内容" }).fill("把最大 batch 调整为 8");
+    await panel.getByRole("textbox", { name: "描述要理解或调整的内容" }).fill("把最大 batch 调整为 8");
     await panel.getByRole("button", { name: "提交", exact: true }).click();
 
     await expect(panel).toContainText("这是草案，尚未创建运行。");
@@ -334,7 +334,7 @@ test.describe("L6 lightweight formal-run closure", () => {
     expect(api.getPostCount()).toBe(0);
     expect(prohibitedRequests).toEqual([]);
 
-    const composer = panel.getByRole("textbox", { name: "描述你想理解或调整的内容" });
+    const composer = panel.getByRole("textbox", { name: "描述要理解或调整的内容" });
     await composer.fill("保留这段跨工作台输入");
     await panel.getByRole("button", { name: "收起", exact: true }).click();
     await page.getByRole("link", { name: "切换到专业工作台", exact: true }).click();
@@ -367,8 +367,15 @@ test.describe("L6 lightweight formal-run closure", () => {
 
     await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
     const panel = page.locator("#tilesim-agent-copilot");
-    await panel.getByRole("textbox", { name: "描述你想理解或调整的内容" }).fill("跑一个高吞吐离线批处理场景");
+    await panel.getByRole("textbox", { name: "描述要理解或调整的内容" }).fill("跑一个高吞吐离线批处理场景");
     await panel.getByRole("button", { name: "提交", exact: true }).click();
+
+    const userTurn = panel.locator('[data-block-type="user_message"]');
+    await expect(userTurn.locator(".agent-block__eyebrow")).toHaveText("用户");
+    await expect
+      .poll(() => userTurn.locator(".agent-block__speaker img").evaluate((img) => img.complete && img.naturalWidth > 0))
+      .toBe(true);
+    await expect(panel.locator(".agent-copilot-shell__header")).toContainText("小拓 · TileSim 助手");
 
     // The sentence was read as a scenario, so the panel shows a plan and writes
     // nothing yet. Reading a scenario is local: it must not need the capability
@@ -389,6 +396,43 @@ test.describe("L6 lightweight formal-run closure", () => {
     expect(prohibitedRequests).toEqual([]);
   });
 
+  test("user turn uses its own avatar and identity across themes and narrow desktop width", async ({ page }) => {
+    await installApi(page);
+    await page.goto("/lightweight/prepare", { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
+    const panel = page.locator("#tilesim-agent-copilot");
+    await panel.getByRole("textbox", { name: "描述要理解或调整的内容" }).fill("run_name = avatar-check");
+    await panel.getByRole("button", { name: "提交", exact: true }).click();
+    const turn = panel.locator('[data-block-type="user_message"]');
+    await expect(turn.locator(".agent-block__eyebrow")).toHaveText("用户");
+    await expect
+      .poll(() => turn.locator(".agent-block__speaker img").evaluate((img) => img.complete && img.naturalWidth > 0))
+      .toBe(true);
+    await expect(turn.locator(".agent-block__speaker img")).toHaveAttribute("alt", "");
+    await page.getByRole("link", { name: "切换到专业工作台", exact: true }).click();
+    await panel.getByRole("button", { name: "收起", exact: true }).click();
+    await page.getByRole("button", { name: "切换到深色模式", exact: true }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-appearance", "dark");
+    await panel.getByRole("button", { name: "展开 TileSim 助手", exact: true }).click();
+    await page.setViewportSize({ width: 980, height: 780 });
+    await expect(turn.locator(".agent-block__speaker")).toBeVisible();
+  });
+
+  test("an incomplete collection plan names the missing field and cannot write a partial form", async ({ page }) => {
+    const api = await installApi(page);
+    await page.goto("/lightweight/prepare", { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
+    const panel = page.locator("#tilesim-agent-copilot");
+    await panel
+      .getByRole("textbox", { name: "描述要理解或调整的内容" })
+      .fill("run_name = sixteen; topology/devices[15]/group_id = node3");
+    await panel.getByRole("button", { name: "提交", exact: true }).click();
+    await expect(panel.getByRole("alert")).toContainText("方案不完整，已禁止应用");
+    await expect(panel).toContainText("topology/devices[15]/group_id");
+    await expect(panel.getByRole("button", { name: "应用到面板", exact: true })).toHaveCount(0);
+    expect(api.getPostCount()).toBe(0);
+  });
+
   test("unavailable formal capability stays visible and keeps the shared Agent explain-only", async ({ page }) => {
     await installApi(page, "complete", { unavailableFieldId: "s1.runtime.max_batch_size" });
     await page.goto("/lightweight/prepare", { waitUntil: "networkidle" });
@@ -402,7 +446,7 @@ test.describe("L6 lightweight formal-run closure", () => {
     await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
     const panel = page.locator("#tilesim-agent-copilot");
     await expect(panel).toBeVisible();
-    await expect(panel.getByRole("textbox", { name: "描述你想理解或调整的内容" })).toBeVisible();
+    await expect(panel.getByRole("textbox", { name: "描述要理解或调整的内容" })).toBeVisible();
     await expect(panel.getByRole("radio")).toHaveCount(0);
   });
 
@@ -415,7 +459,7 @@ test.describe("L6 lightweight formal-run closure", () => {
     await expect(panel).toBeVisible();
     await expect(panel).toContainText(`轻量运行状态 · ${runId}`);
     await expect(panel).toContainText("上下文可用");
-    await expect(panel.getByRole("textbox", { name: "描述你想理解或调整的内容" })).toBeVisible();
+    await expect(panel.getByRole("textbox", { name: "描述要理解或调整的内容" })).toBeVisible();
     await expect(panel.getByRole("radio")).toHaveCount(0);
 
     await page.goto(`/lightweight/results?run=${runId}`, { waitUntil: "networkidle" });
@@ -426,6 +470,26 @@ test.describe("L6 lightweight formal-run closure", () => {
     const resultsPanel = page.locator("#tilesim-agent-copilot");
     await expect(resultsPanel).toContainText(`轻量结果摘要 · ${runId}`);
     await expect(resultsPanel.getByRole("radio")).toHaveCount(0);
+  });
+
+  test("小拓的首次引导可教学、导航配置，且无运行时不伪造分析", async ({ page }) => {
+    const api = await installApi(page);
+    await page.goto("/lightweight", { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
+    const panel = page.locator("#tilesim-agent-copilot");
+    await expect(panel).toContainText("你好，需要小拓帮忙做些什么");
+    await panel.getByRole("button", { name: "分析实验结果", exact: true }).click();
+    await expect(panel).toContainText("暂时不能分析");
+    await panel.getByRole("textbox", { name: "描述要理解或调整的内容" }).fill("TTFT 是什么意思？");
+    await panel.getByRole("button", { name: "提交", exact: true }).click();
+    await expect(panel).toContainText("当前报告没有可引用的 TTFT P99");
+    expect(api.getPostCount()).toBe(0);
+
+    await page.reload();
+    await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
+    await panel.getByRole("button", { name: "配置实验", exact: true }).click();
+    await expect(page).toHaveURL(/\/lightweight\/prepare/);
+    expect(api.getPostCount()).toBe(0);
   });
 
   test("new experiment → submit → status → real fixture results → professional round trip", async ({ page }) => {
@@ -458,6 +522,23 @@ test.describe("L6 lightweight formal-run closure", () => {
     await expect(page.getByText("missing").first()).toBeVisible();
     await expect(page.getByText("synthetic_trace")).toBeVisible();
     await expect(page.getByText("演示数字")).toHaveCount(0);
+    await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
+    const resultPanel = page.locator("#tilesim-agent-copilot");
+    await resultPanel.getByRole("button", { name: "分析实验结果", exact: true }).click();
+    await expect(resultPanel).toContainText(`运行 ${runId}`);
+    await expect(resultPanel).toContainText("先看这些重点");
+    await expect(resultPanel).toContainText("可信范围与下一步");
+    expect(api.getPostCount()).toBe(1);
+    await resultPanel.getByRole("button", { name: "关闭", exact: true }).click();
+    await page.getByRole("link", { name: "开始", exact: true }).click();
+    await expect(page).toHaveURL((url) => url.pathname === "/lightweight");
+    await page.reload();
+    await expect(page).toHaveURL((url) => url.pathname === "/lightweight");
+    await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
+    await page.locator("#tilesim-agent-copilot").getByRole("button", { name: "分析实验结果", exact: true }).click();
+    await expect(page).toHaveURL(/\/lightweight\/results/);
+    await expect(page.locator("#tilesim-agent-copilot")).toContainText(`运行 ${runId}`);
+    await page.locator("#tilesim-agent-copilot").getByRole("button", { name: "关闭", exact: true }).click();
     await page.getByRole("link", { name: /进入专业版/ }).click();
     await expect(page).toHaveURL((url) => url.pathname === "/overview" && url.searchParams.get("run") === runId);
     await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();

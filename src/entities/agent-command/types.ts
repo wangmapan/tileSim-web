@@ -20,6 +20,8 @@ export type AgentParameterEdit = {
   previous: string | null;
   next: string;
   value: string | number | boolean;
+  /** A future array element exists only after this collection-size edit in the same plan. */
+  dependsOn?: "topology/devices" | "runtime_trace/requests";
 };
 
 export type AgentParameterReceipt = {

@@ -60,6 +60,7 @@ const emit = defineEmits<{
   "select-model": [model: string];
   /** The user asked for the model catalogue to be read again. */
   "refresh-models": [];
+  start: [task: "configure" | "analyze" | "learn"];
 }>();
 
 const state = shallowRef<AgentCopilotPanelState>(props.modelValue);
@@ -205,6 +206,7 @@ onMounted(() => {
           @resize="emit('resize', $event)"
           @select-model="emit('select-model', $event)"
           @refresh-models="emit('refresh-models')"
+          @start="emit('start', $event)"
         />
       </AgentCopilotErrorBoundary>
     </div>
@@ -223,6 +225,7 @@ onMounted(() => {
      itself is collapsed to a narrow rail. Let clicks pass through that
      transparent host area so workspace controls underneath remain usable. */
   pointer-events: none;
+  overflow-x: hidden;
 }
 
 .agent-copilot-entry > * {
@@ -252,7 +255,9 @@ onMounted(() => {
 
 .agent-copilot-entry__panel-host {
   min-width: 0;
+  max-width: 100%;
   height: 100dvh;
+  overflow-x: hidden;
 }
 
 /* v-show keeps the shell mounted while it is collapsed. Constrain the flex

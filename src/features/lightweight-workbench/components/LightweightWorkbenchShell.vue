@@ -138,24 +138,28 @@ const guide = computed(() => {
 .lightweight-shell__nav-link {
   display: grid;
   gap: 3px;
-  padding: 11px 13px;
-  border-left: 3px solid transparent;
-  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+  padding: 10px 13px;
+  border-radius: var(--radius-control);
   color: var(--muted);
   text-decoration: none;
   transition:
     color var(--motion-fast) var(--ease-standard),
-    border-color var(--motion-fast) var(--ease-standard),
-    background-color var(--motion-fast) var(--ease-standard);
+    background-color var(--motion-fast) var(--ease-standard),
+    box-shadow var(--motion-fast) var(--ease-standard);
 }
-.lightweight-shell__nav-link:hover,
+.lightweight-shell__nav-link:hover {
+  color: var(--ink);
+  background: var(--surface-muted);
+}
+/* The active item is marked with an inset rule rather than a 3px border, so the
+   highlight stays inside the rounded shape instead of cutting it off. */
 .lightweight-shell__nav-link.is-active {
-  border-left-color: var(--accent);
   color: var(--ink);
   background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 .lightweight-shell__nav-link span {
-  font-weight: 650;
+  font-weight: 500;
 }
 .lightweight-shell__content {
   min-width: 0;
@@ -200,15 +204,11 @@ const guide = computed(() => {
   }
   .lightweight-shell__nav-link {
     padding: 9px 7px;
-    border-left: 0;
-    border-bottom: 3px solid transparent;
-    border-radius: var(--radius-control);
     text-align: center;
   }
-  .lightweight-shell__nav-link:hover,
   .lightweight-shell__nav-link.is-active {
-    border-bottom-color: var(--accent);
-    border-left-color: transparent;
+    background: var(--accent-soft);
+    box-shadow: inset 0 -2px 0 var(--accent);
   }
 }
 @media (max-width: 440px) {

@@ -10,6 +10,8 @@ coverage/
 test-results/
 playwright-report/
 .playwright-cli/
+/tools/workbench-launcher/src-tauri/target/
+/tools/workbench-launcher/dist/
 output/
 .workbuddy/
 __pycache__/

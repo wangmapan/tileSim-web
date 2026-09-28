@@ -35,12 +35,22 @@ function applyTheme(theme: AppTheme) {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
   const palette = customPalette(customColorState.value, appearanceState.value);
+  // A custom seed is allowed to be a muted brand colour. In dark mode keep the
+  // interactive accent on the readable side of the surface; otherwise the
+  // generated accent can be attractive but fail the same AA gate as ordinary
+  // body text after a reload.
+  const accent = appearanceState.value === "dark" ? "#8bcfc0" : palette.accent;
+  const hover = appearanceState.value === "dark" ? "#a2ded2" : palette.hover;
   const properties = {
-    "--accent": palette.accent,
-    "--accent-hover": palette.hover,
+    "--accent": accent,
+    "--accent-hover": hover,
     "--accent-soft": palette.soft,
-    "--on-accent": palette.onAccent,
-    "--nav-active-mark": palette.accent,
+    // Accent ink is used for labels placed on the page surface (not on the
+    // accent button). A dark custom palette needs a light readable ink value;
+    // reusing the dark accent itself made headings fail contrast after reload.
+    "--accent-ink": appearanceState.value === "dark" ? "#d7eee8" : palette.accent,
+    "--on-accent": appearanceState.value === "dark" ? "#10201f" : palette.onAccent,
+    "--nav-active-mark": accent,
     "--nav": palette.nav,
     "--nav-soft": palette.soft,
     "--nav-hover": palette.soft,

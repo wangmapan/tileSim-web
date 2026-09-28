@@ -8,6 +8,37 @@
 Run Intake Lowering 已落地，Bridge 侧 Run Intake v2 **只读预览**端点（WP-2C-01a/01b，工作树未提交）已注册但仍未与 lowering
 接线；五类 Profile 真实记录仍为 `0/unavailable`，因此 Phase 2 的执行与数据侧仍被阻塞；未部署 5173
 
+## 2026-09-24 专业原始证据入口（工作树，未部署）
+
+- 专业导航以「原始证据」替代独立「AI 解释」入口；小拓仍是常用的结果分析与教学入口。旧 `/evidence-agent` 页面暂保留为深链兼容，不再出现在主导航，原 Evidence Agent 契约与历史记录未删除或改写。
+- 完整 JSON 查看器从执行过程页移到独立 `/raw-evidence`，保留按需索引、搜索、复制、原始文件、manifest/SHA-256/JSON Pointer 校验；从图表和字段点击原始证据直接进入该页。旧 `/execution?...evidence_*` URL 保留查询参数并转向新入口；普通 `/execution` 不变。
+- 本轮只改变页面归属和链接，不补造报告值、不改变证据身份与 Bridge 读取路径。工作树有其他未提交改动，本批未部署 5173、未提交或推送。
+- 本批回归：Vitest **1070 passed / 8 skipped（95 files）**；`contracts:check`、`docs:check`、`deps:check`、`typecheck`、`lint`（2 条 warning）、`build`、`git diff --check` 通过。证据深链/失配/缺失、独立入口、帮助目录的定向 Playwright **6 passed**；执行页浅色快照及深色快照按页面归属变化重录。全仓 `format:check` 仍因其他既有/并行文件不合规而失败，本批文件单独检查通过。深色执行页旧用例的执行页快照已通过，但继续到实验配置页时检测到对比度违例（不在本批证据页范围，尚未归因）；全量 E2E 未跑。
+
+## 2026-09-23 小拓引导与结果教学（工作树，未部署）
+
+- 侧栏空会话询问「配置实验／分析实验结果／学习怎么看结果」。配置入口进入当前工作台的实验配置页；轻量工作台首页若带当前 run，分析入口先导航到该 run 的结果页，待报告载入后自动整理。教学解释 TTFT、TPOT、P99、吞吐与证据可信范围。自然语言的结果分析和教学问题也走这条只读路径，不创建运行、不写配置、不调用模型 Provider。
+- 分析守卫核对路由 run、报告 run 与 artifact manifest 身份，轻量与专业工作台分别读取各自 store；拒绝内置示例、旧 run、schema 不支持或不匹配的报告。只引用报告已有值与后端瓶颈/原因/下一步原文，缺失值不补零、不将验证完整度视为准确率，也不将合成一致性视为真实验证。本地字段路径是报告内定位提示，不冒充正式 Evidence Agent citation。
+- 用户可在结果载入后重新提问；现有对话随页面上下文变化按原规则标记过期。此节仅说明本地工作树，尚未部署到 5173。
+
+## 2026-09-24 前端视觉收口（工作树，未部署）
+
+- 轻量工作台首页补充三步实验流程（配置、运行观察、结果分析），空状态与最近运行卡片共享同一层级和进入动效；运行中状态点增加低频脉冲，尊重 `prefers-reduced-motion`。
+- 全局交互补充独立的 `--motion-interaction` 时长，按钮、卡片、导航和小拓侧栏的悬停/开合反馈不再依赖门禁用的颜色过渡时长；专业工作台的结构与证据语义未改变。
+- 本轮只做表现层改动，未新增模拟数据、图表或美术素材；已检查浅色/深色、助手侧栏和窄桌面路径。当前工作树仍未部署到 5173。
+
+### 2026-09-24 专业工作台状态组件视觉收口（工作树，未部署）
+
+- 证据范围提示、演示数据提示、状态标签与 `AvailabilityBadge` 统一为带语义边轨、层级文字和轻量入场/悬停反馈的状态组件；服务告警、范围说明和运行范围提示采用同一组边框/阴影节奏。小拓输入区补充桌面端式聚焦、提交与停止反馈。
+- 具体时长使用独立 `--motion-interaction`，不改变 `--motion-fast` / `--motion-base` 的 0ms 约束；所有新增动画在 `prefers-reduced-motion` 下压平。未改变报告字段、证据语义、数据来源或运行流程；未生成额外插画素材（这些组件的视觉任务是语义状态表达，不需要装饰性图像）。
+- 本轮验证：Vitest **1070 passed / 8 skipped（95 files）**、`vue-tsc --noEmit`、`vite build`、`git diff --check` 通过；定向 dashboard motion/P99 与 L6 小拓引导/轻量闭环 E2E **4 passed**。未部署 5173，未执行 run、Provider、commit 或 push。
+
+### 2026-09-24 专业概览宽屏布局与结论区（工作树，未部署）
+
+- 宽屏主容器由居中 1560px 改为侧栏后左对齐、最多 1760px（含左右内边距）。2166px 实测：内容起点 x=439 → x=240，内容宽 1496px → 1696px；1100px 窄桌面和宽屏小拓停靠态均未出现文档横向溢出。
+- 概览「后端结论」由重复技术字段标题改为单一中文标题，`cause` 与 `next_action` 仍作为后端原文字段逐行显示；缺失 badge 与其说明保持不变。不改报告、证据状态或指标计算。
+- 门禁：`vue-tsc --noEmit`、改动文件 ESLint/Prettier、`vite build`、`docs:check`、`deps:check`、`git diff --check` 通过；定向 Vitest **54 passed**；概览首屏与 reduced-motion E2E **2 passed**。深色外观 E2E 的可访问性/溢出断言已通过，但旧的 execution 全页图片快照在 1440px 下尺寸 1898 → 1906、像素差异 4% 而失败；该用例并非概览页，本轮未改写既有快照。4173 仅作独立视觉检查，未触碰 5173；未部署、commit 或 push。
+
 ## 2026-09-19 仓库与基线更正（**优先于下文所有 revision 与测试数字**）
 
 本节由 2026-09-19 的盘点、文档修正与推送处置得出，未改动任何代码、契约或运行态。**下文所有 `HEAD`/revision 表述与门禁数字均为历史记录，读取时以本节为准。**
@@ -467,6 +498,67 @@ docs/archive/                    历史记录
 - **未操作**：未 commit、未 push、未启停 5173、未改契约 JSON（参数面是**读**契约推导，不新增/修改任何 schema）；`D:\tileSim` 只读。
   用户需自行**重新部署**才能看到该能力（`scripts/deploy-local-backend.ps1 -SourceRoot D:\tileSim`）。
 - 模块级细节见 `docs/F9_AGENT_ORCHESTRATION/16_RIGHT_SIDE_AGENT_COPILOT_PANEL.md` 末尾的 2026-09-23 修订。
+
+### 2026-09-23 原版 Tauri 启动器接线（未执行部署）
+
+- 原路径 `启动TileSim工作台.exe` 的原版是 Tauri 2 侧栏工作台，不是 `tools/launcher/tilesim_launcher.py` 的 Tk 界面。
+  从保留的 `origin/codex/launcher-tauri-v2` 源码恢复 `tools/workbench-launcher/`；旧构建入口现转向 Tauri，
+  防止再次以 PyInstaller 覆盖原版。原版窗口的概览、服务、模型、诊断、日志、主题均保留。
+- 在“更新与部署”页并列提供远端 `origin/main` 更新和“部署本地工作树”。后者的 typed Rust 请求仅允许
+  `scripts/deploy-local-backend.ps1 -SourceRoot <所选 Git 后端工作树> -WslDistro <校验名称>`；使用当前 Web checkout，
+  不调用个人桌面 `.cmd`，不 fetch/push，不强制结束开发进程。确认框明确提示未提交文件与 5173 重启。
+- Tauri 单元测试 **14 passed**、组件/状态测试 **11 passed**、fixture E2E **15 passed**，`launcher:typecheck`、
+  Rust fmt/Clippy、改动文件 ESLint/Prettier、`docs:check`（62 篇）与 `deps:check`（309 源文件）通过。
+  主站 `pnpm test` **93 files / 1056 passed / 8 skipped**，`pnpm typecheck`、`pnpm build`、`contracts:check`
+  通过；全仓 ESLint **0 errors / 2 既有 warnings**。主站全量 e2e 本轮未跑。
+  本机 Tauri 构建和 packaged self-check 通过，发布到原路径；旧版 EXE 原子备份在被 Git 忽略的
+  `runtime/launcher-fallback/`。正式 EXE 的新增入口和确认框已人工检查并取消。
+- **未执行本地或远端部署**，未停止/重启 5173、未读取 Provider credential、未 commit/push；工作树先前的
+  界面和截图未提交改动保留。launcher fixture 使用独立 4187，检查后已停止。
+
+### 2026-09-23 Tauri 启动器日常入口收敛
+
+- 保留原版 Tauri 侧栏工作台，在概览页收敛为“一键启动工作台”和“重新部署当前代码”两项日常操作；
+  移除重复的“启动与服务”页。已有服务就绪时只打开网页，未运行时验证并启动已有 release 后打开；
+  首次无部署清单时转入本地部署确认，不隐式启动旧产物。
+- 重新部署使用当前后端和 Web 工作树文件（含未提交改动），保持确认、构建、测试、发布和 5173 重启，
+  成功后打开网页，失败不打开。后端目录与 WSL 配置在“部署设置”；远端 main 更新、停止服务降为折叠高级操作。
+  启动器不调用个人桌面 `.cmd`，不强制结束开发进程。
+- Rust 单元测试 14 passed、fixture 单元/组件 11 passed、独立 4187 E2E 17 passed、launcher typecheck exit 0；
+  浅深主题与 800×600 窗口已人工检查。Tauri 构建与 packaged self-check 通过，原路径 EXE 已原子替换，
+  SHA-256 `ae2aa95dfb548e4dc8b796aa463d14d4f784cbdf19e80d2a38f58ab029c9e3ff`；替换前一版在
+  `runtime/launcher-fallback/启动TileSim工作台.previous-20260923-180827-42252.exe`（此前原版另有备份）。
+  此批**没有执行真实部署或启停 5173**。
+
+### 2026-09-23 启动与部署进度可见性
+
+- 原版 Tauri 概览的启动、本地重新部署，以及折叠高级操作中的远端更新运行时，页面顶部显示
+  真实脚本阶段、动态进度条、持续计时、最近一行脱敏输出和“查看完整日志”入口。
+  进度条表示任务正在运行，**不显示未经脚本提供的完成百分比**；失败时解决办法置于进度区之前。
+- 仍只使用 Rust typed operation 的现有阶段/日志事件，不修改部署脚本、部署清单或 5173 服务。
+- Rust 单元测试 14 passed、组件测试 11 passed、4187 fixture E2E 20 passed、launcher typecheck、改动文件
+  ESLint/Prettier、docs:check、`git diff --check` 均通过。800×600 浅/深主题运行态进度条已人工检查。
+  Tauri packaged self-check 通过并原子更新原路径 EXE，SHA-256
+  `9ea14da6bdb8d5cad1346ef75fa7b3dac8470213832888357326f0a4ac12f7b6`；更新前一版备份为
+  `runtime/launcher-fallback/启动TileSim工作台.previous-20260923-183356-48660.exe`。
+  未执行真实部署或启停 5173，监听进程仍为 PID 17252；没有 commit/push。
+
+### 2026-09-23 助手同批扩容方案完整性修复（工作树，未部署）
+
+- 16 卡示例暴露的缺口：目录此前只含已存在的设备索引；模型方案的新增设备字段被跳过，Bridge 40 项上限截断其余字段；逐项应用会留下半套配置。
+- 现在仅在同一方案合法增加 `topology/devices` 或 `runtime_trace/requests` 时，投影方案明确点名的未来元素标量字段；页面应用前核对原集合规模未变，写入时先扩容再写字段，任一文档写入失败则整批回滚（包括表单改动）。未提及的 links/domains 不会被编造。
+- 模型方案的 skipped、Bridge dropped、校验拒绝和未识别项逐地址列出，禁止直接应用；多节点扩容缺组号、声称 TPn 但未配置第 0 条请求的对应并行度，同样标为不完整。Bridge 设置上限提高到 64，并要求模型诚实区分设备分组与完整互联。若被修改的请求仍固定着与新 TP 不匹配的 `participants`，整批拒绝并提示先在结构化输入清空或重写；实际域与链路仍需人工核对，不能由组号推断。
+- 定向前端测试覆盖 16 卡四节点乱序配置、TP16、过期规模、越界索引、回滚和不完整方案；Bridge 以及其它门禁的本轮实测结果以当前交付报告为准。没有创建运行、使用 live Provider、部署或重启 5173；现有其它工作树改动保留。
+
+### 2026-09-23 助手与用户对话身份（工作树，未部署）
+
+- 侧栏对话中，用户发言显示中性人物 SVG 头像和「用户」；模型发言显示「阿拓」头像及名称，保留模型 identity 的次级标识。输入标签、占位说明、空状态与页脚不再使用第二人称「你」。图像只作装饰，文字保留可访问的发言者身份；不读取个人资料或推断用户身份。
+- 仅更改静态视觉资产与文案，不改变 Agent typed-block payload、上下文、模型选择、草案或执行流程；现有 5173 服务未部署。浅色/深色与窄桌面的实际验证结果见交付报告。
+
+### 2026-09-23 进阶运行参数缺省值展示（工作树，未部署）
+
+- `RuntimePolicyForm.vue` 对未写入 `runtime_trace.policy` 的 9 个进阶字段显示后端缺省值：数字输入以浅色 placeholder 展示，并标注「后端默认…（未写入）」；布尔下拉的空选项也明确写出默认值。填写字段才写入 JSON，清空恢复省略字段，提交语义不变。
+- 展示值逐项对照当前后端 `D:\tileSim\src\Core\LayerAdapters.cpp` 缺失字段回退值；这是本地源码的静态说明，不是 Bridge descriptor 提供的动态 Profile 默认，也不保证连接到异版后端时仍相同。未改契约、Bridge 或核心仿真代码，未部署 5173。
 
 ## 7. 完整门禁
 

@@ -24,13 +24,16 @@ bootstrap 会在完整部署前验证该 revision 可达性并失败关闭。当
 
 API Key、运行结果、deployment manifest、release snapshot 和构建产物不会进入 Git。Evidence Agent 的外部模型服务是可选能力，不影响基础工作台安装。
 
-需要图形启动器时，在前端仓库内执行：
+需要保留侧栏、主题和环境诊断的 Tauri 图形启动器时，在前端仓库内执行：
 
 ```powershell
 .\tools\launcher\build-launcher.ps1
 ```
 
-产物为仓库根目录下的 `启动TileSim工作台.exe`。EXE 从自身目录定位前端，不应复制到独立的团队资料目录。
+该入口转到 `tools/workbench-launcher/build-launcher.ps1`；产物仍是仓库根目录下的
+`启动TileSim工作台.exe`。EXE 从自身目录定位前端，不应复制到独立的团队资料目录。
+“更新与部署”页提供远端 `origin/main` 更新与本地工作树部署两个独立操作；后者使用所选后端与当前 Web 文件，
+不 fetch/push，但会验证、发布并重启 5173，必须在确认框中明确同意。
 
 ## AI 接手
 

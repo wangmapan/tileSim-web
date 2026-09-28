@@ -21,12 +21,31 @@ const tone = computed(() => availabilityTone(props.availability));
   display: inline-flex;
   flex-direction: column;
   gap: 2px;
+  position: relative;
   padding: 3px 8px;
+  padding-left: 18px;
   border: 1px solid var(--line-strong);
   border-radius: 6px;
   background: var(--surface-subtle);
   font: var(--text-sm) var(--font-sans);
   line-height: 1.35;
+  box-shadow: var(--shadow-hairline);
+  animation: ts-fade var(--motion-enter) var(--ease-standard) backwards;
+  transition:
+    border-color var(--motion-interaction) var(--ease-standard),
+    background-color var(--motion-interaction) var(--ease-standard),
+    box-shadow var(--motion-interaction) var(--ease-standard);
+}
+.availability-badge::before {
+  content: "";
+  position: absolute;
+  top: 9px;
+  left: 8px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.82;
 }
 .availability-badge__label {
   font-weight: 600;
@@ -55,10 +74,17 @@ const tone = computed(() => availabilityTone(props.availability));
   background: var(--surface-muted);
   color: var(--neutral-ink);
 }
+.availability-badge:hover {
+  box-shadow: var(--shadow);
+}
+/* No opacity here. The label/detail hierarchy is already carried by weight
+   (600 against 400), and dimming the detail on top of that pushed 14px
+   `--warning-ink` on `--warning-soft` down to 4.26:1 — under the 4.5:1 the
+   accessibility suite requires, and short of it in a way that only showed up
+   once the surrounding surfaces resolved to a colour axe could measure. */
 .availability-badge--positive .availability-badge__detail,
 .availability-badge--warning .availability-badge__detail,
 .availability-badge--danger .availability-badge__detail {
   color: inherit;
-  opacity: 0.85;
 }
 </style>

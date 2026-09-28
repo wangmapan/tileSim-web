@@ -170,7 +170,7 @@ describe("parameter edit block", () => {
       },
     });
 
-    expect(wrapper.text()).toContain("已写入面板");
+    expect(wrapper.text()).toContain("没有写入面板");
     expect(wrapper.text()).toContain("面板拒绝了这几项");
     expect(wrapper.text()).toContain("KV 容量");
     expect(wrapper.text()).toContain("面板里的控件不接受这个值。");
@@ -193,8 +193,8 @@ describe("parameter edit block", () => {
     expect(wrapper.text()).toContain("没有写（校验未通过）");
     expect(wrapper.text()).toContain("没有看懂");
     expect(wrapper.text()).toContain("这一行没有「=」。");
-    // A partly-understood instruction is still actionable, so the button stays.
-    expect(section(wrapper, "parameter_edits").find(".agent-block__options button").exists()).toBe(true);
+    // A partly-understood batch must not be applied as if it were complete.
+    expect(section(wrapper, "parameter_edits").find(".agent-block__options button").exists()).toBe(false);
   });
 });
 

@@ -50,7 +50,7 @@ export function parseArtifactPointerSource(sourcePath: string): ArtifactPointerS
 
 export function artifactEvidenceRoute(target: ArtifactEvidenceTarget): RouteLocationRaw {
   return {
-    name: "execution",
+    name: "raw_evidence",
     query: {
       run: target.runId,
       evidence_artifact: target.artifactId,

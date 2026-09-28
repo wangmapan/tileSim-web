@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"TileSim launcher core window and event permissions only","local":true,"windows":["main"],"permissions":["core:default"]}}

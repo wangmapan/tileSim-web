@@ -13,7 +13,6 @@ import {
 } from "@lucide/vue";
 import { computed, ref } from "vue";
 import EmptyState from "../components/EmptyState.vue";
-import JsonArtifactPanel from "../components/JsonArtifactPanel.vue";
 import StatusPill from "../components/StatusPill.vue";
 import {
   attributionSource,
@@ -443,7 +442,7 @@ async function exportStructuredReport() {
         <summary>
           <Layers3 :size="18" />
           <div>
-            <small>RESOURCE CONVERGENCE</small><strong>{{ t("资源语义汇合") }}</strong>
+            <strong>{{ t("资源语义汇合") }}</strong>
           </div>
           <span>{{ result.resourceConvergence ? t("已报告") : t("未报告") }}</span>
           <ChevronDown :size="17" />
@@ -494,7 +493,5 @@ async function exportStructuredReport() {
     </section>
 
     <ReportCoveragePanel section="execution_envelope" :bundle="state.bundle" />
-
-    <JsonArtifactPanel />
   </div>
 </template>

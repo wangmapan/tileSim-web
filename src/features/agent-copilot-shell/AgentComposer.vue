@@ -54,14 +54,14 @@ defineExpose({ focus, value: instruction });
 <template>
   <form class="agent-composer" aria-label="助手输入" @submit.prevent="submit">
     <label class="agent-composer__field">
-      <span class="agent-composer__label">描述你想理解或调整的内容</span>
+      <span class="agent-composer__label">描述要理解或调整的内容</span>
       <textarea
         ref="textarea"
         v-model="instruction"
         rows="3"
         :maxlength="maxLength"
         :disabled="disabled"
-        placeholder="描述你要跑的场景，例如：低延迟在线服务；也可以直接写「最大 batch = 32」"
+        placeholder="描述要运行的场景，例如：低延迟在线服务；也可以直接写「最大 batch = 32」"
         @compositionstart="composing = true"
         @compositionend="composing = false"
         @keydown="onKeydown"
@@ -89,7 +89,7 @@ defineExpose({ focus, value: instruction });
   gap: 8px;
   padding: 12px 14px 14px;
   border-top: 1px solid var(--line);
-  background: var(--panel);
+  background: color-mix(in srgb, var(--panel) 92%, var(--surface-muted));
 }
 
 .agent-composer__field {
@@ -113,6 +113,19 @@ defineExpose({ focus, value: instruction });
   color: var(--ink);
   background: var(--control-bg);
   line-height: 1.5;
+  box-shadow: inset 0 1px 2px rgb(18 29 39 / 4%);
+  transition:
+    border-color var(--motion-interaction) var(--ease-standard),
+    box-shadow var(--motion-interaction) var(--ease-standard),
+    background-color var(--motion-interaction) var(--ease-standard);
+}
+
+.agent-composer textarea:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow:
+    var(--ring),
+    inset 0 1px 2px rgb(18 29 39 / 4%);
 }
 
 .agent-composer textarea:disabled {
@@ -144,6 +157,18 @@ defineExpose({ focus, value: instruction });
   background: var(--accent);
   cursor: pointer;
   font-weight: 600;
+  transition:
+    background-color var(--motion-interaction) var(--ease-standard),
+    border-color var(--motion-interaction) var(--ease-standard),
+    transform var(--motion-interaction) var(--ease-emphasized),
+    box-shadow var(--motion-interaction) var(--ease-standard);
+}
+
+.agent-composer button:not(:disabled):hover {
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-hairline);
 }
 
 .agent-composer button:disabled {
@@ -156,6 +181,12 @@ defineExpose({ focus, value: instruction });
   border-color: var(--line-strong);
   color: var(--ink);
   background: var(--panel);
+}
+
+.agent-composer .agent-composer__stop:not(:disabled):hover {
+  color: var(--danger-ink);
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--line));
+  background: var(--danger-soft);
 }
 
 @media (max-width: 560px) {

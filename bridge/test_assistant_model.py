@@ -420,6 +420,9 @@ class AssistantModelPlanTest(unittest.TestCase):
         self.plan_with(build_reply(plan_document([])))
         system = self.payloads[0]["messages"][0]["content"]
         self.assertIn(str(assistant_model.MAXIMUM_SETTINGS), system)
+        self.assertGreaterEqual(assistant_model.MAXIMUM_SETTINGS, 34)
+        self.assertIn("device_type and group_id", system)
+        self.assertIn("links or domains", system)
 
     def test_an_answer_without_settings_returns_an_empty_plan(self) -> None:
         result = self.plan_with(build_reply(plan_document([])))

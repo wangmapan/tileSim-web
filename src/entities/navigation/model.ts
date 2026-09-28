@@ -7,12 +7,12 @@ export const navItems = [
   { id: "validation", group: "分析", label: "结果可信度", description: "这些结果能信到什么程度" },
   { id: "design_space", group: "实验", label: "方案对比", description: "比较不同配置方案" },
   { id: "history", group: "实验", label: "运行记录", description: "查找、打开与对比" },
-  { id: "evidence_agent", group: "工具", label: "AI 解释", description: "基于已有证据解释结果" },
+  { id: "raw_evidence", group: "工具", label: "原始证据", description: "检索与核对运行工件" },
   { id: "evidence_lab", group: "工具", label: "校准与追踪", description: "查看校准状态和数据来源" },
 ] as const;
 
-export type WorkspaceView = (typeof navItems)[number]["id"] | "experiment";
+export type WorkspaceView = (typeof navItems)[number]["id"] | "experiment" | "evidence_agent";
 
 export function isWorkspaceView(value: unknown): value is WorkspaceView {
-  return value === "experiment" || navItems.some((item) => item.id === value);
+  return value === "experiment" || value === "evidence_agent" || navItems.some((item) => item.id === value);
 }

@@ -259,8 +259,7 @@ const primarySubsystemName = computed(() => {
     -->
     <section v-if="runVerdict" class="panel run-verdict" data-help-anchor="overview-verdict">
       <header>
-        <p class="section-kicker">{{ t("后端结论") }}</p>
-        <h2>{{ t("cause 与 next_action") }}</h2>
+        <h2>{{ t("后端结论") }}</h2>
         <p>{{ t("这两个字段由后端原样给出，前端不改写、不摘编、不降级为提示文案。") }}</p>
       </header>
       <dl>
@@ -293,15 +292,17 @@ const primarySubsystemName = computed(() => {
 .run-verdict {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
+  gap: 14px;
+  padding: 18px 20px 8px;
   min-width: 0;
 }
 .run-verdict header h2 {
-  margin: 4px 0 0;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
 }
 .run-verdict header p {
-  margin: 4px 0 0;
+  margin: 5px 0 0;
   max-width: 72ch;
   color: var(--muted);
   font-size: var(--text-xs);
@@ -309,17 +310,22 @@ const primarySubsystemName = computed(() => {
 .run-verdict dl {
   display: flex;
   flex-direction: column;
-  gap: 8px;
   margin: 0;
 }
 .run-verdict dl > div {
   display: grid;
-  grid-template-columns: minmax(120px, 180px) minmax(0, 1fr);
-  gap: 4px 12px;
+  grid-template-columns: minmax(112px, 140px) minmax(0, 1fr);
+  gap: 8px 16px;
+  align-items: start;
   min-width: 0;
+  padding: 11px 0;
+  border-top: 1px solid var(--line);
+}
+.run-verdict dt {
+  color: var(--muted);
 }
 .run-verdict dt code {
-  font: 600 var(--text-xs) var(--font-mono);
+  font: 600 var(--text-xs)/1.6 var(--font-mono);
 }
 .run-verdict dd {
   display: flex;
@@ -328,6 +334,7 @@ const primarySubsystemName = computed(() => {
   gap: 8px;
   margin: 0;
   min-width: 0;
+  line-height: 1.55;
 }
 .run-verdict__text {
   overflow-wrap: anywhere;

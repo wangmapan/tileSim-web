@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import assistantAvatar from "../../assets/atuo-avatar.svg";
+import userAvatar from "../../assets/user-avatar.svg";
 import type {
   AgentTypedBlock,
   DeterministicValidationIssue,
@@ -10,6 +12,7 @@ defineProps<{ blocks: readonly AgentTypedBlock[] }>();
 const emit = defineEmits<{
   answer: [payload: { question_id: string; option_id: string; serialized_value: string }];
   apply: [blockId: string];
+  start: [task: "configure" | "analyze" | "learn"];
 }>();
 
 const knownBlockTypes = new Set([
@@ -74,6 +77,10 @@ function reasonRows(block: {
     .filter((edit) => Boolean(reasons[edit.path]))
     .map((edit) => ({ path: edit.path, label: edit.label, reason: reasons[edit.path] }));
 }
+
+function hasAppliedReceipt(block: { receipts?: readonly { status: string }[] | null }): boolean {
+  return Boolean(block.receipts?.some((receipt) => receipt.status === "applied"));
+}
 </script>
 
 <template>
@@ -86,12 +93,18 @@ function reasonRows(block: {
       :role="block.block_type === 'formal_error' || !isKnownBlock(block) ? 'alert' : undefined"
     >
       <template v-if="block.block_type === 'user_message'">
-        <p class="agent-block__eyebrow">你</p>
+        <div class="agent-block__speaker">
+          <img :src="userAvatar" alt="" aria-hidden="true" width="28" height="28" />
+          <p class="agent-block__eyebrow">用户</p>
+        </div>
         <p class="agent-block__body agent-block__utterance">{{ block.text }}</p>
       </template>
 
       <template v-else-if="block.block_type === 'assistant_message'">
-        <p class="agent-block__eyebrow">{{ block.model_id ? `助手 · ${block.model_id}` : "助手" }}</p>
+        <div class="agent-block__speaker">
+          <img :src="assistantAvatar" alt="" aria-hidden="true" width="28" height="28" />
+          <p class="agent-block__eyebrow">{{ block.model_id ? `小拓 · ${block.model_id}` : "小拓" }}</p>
+        </div>
         <p v-if="block.text" class="agent-block__body agent-block__answer">{{ block.text }}</p>
         <p v-else-if="block.streaming" class="agent-block__body agent-block__answer agent-block__answer--waiting">
           正在想…
@@ -103,7 +116,7 @@ function reasonRows(block: {
       <template v-else-if="block.block_type === 'explanation'">
         <p class="agent-block__eyebrow">理解结果</p>
         <h3>{{ block.title }}</h3>
-        <p class="agent-block__body">{{ block.body }}</p>
+        <p class="agent-block__body agent-block__body--guidance">{{ block.body }}</p>
       </template>
 
       <template v-else-if="block.block_type === 'capability_result' || block.block_type === 'unsupported'">
@@ -257,14 +270,41 @@ function reasonRows(block: {
       <template v-else-if="block.block_type === 'parameter_edits'">
         <p class="agent-block__eyebrow">{{ block.title ? "推荐方案" : "参数改动" }}</p>
         <h3>
-          {{ block.title || (block.receipts ? "已写入面板" : `待写入 ${block.edits.length} 项`) }}
+          {{
+            block.title ||
+            (block.receipts
+              ? hasAppliedReceipt(block)
+                ? "已写入面板"
+                : "面板拒绝了方案"
+              : `待写入 ${block.edits.length} 项`)
+          }}
         </h3>
         <p v-if="block.rationale" class="agent-block__body">{{ block.rationale }}</p>
-        <p v-if="!block.receipts && block.edits.length" class="agent-block__draft-notice">
+        <p v-if="block.incomplete?.length" class="agent-block__draft-notice" role="alert">
+          方案不完整，已禁止应用。请补齐以下参数后重新生成；当前面板没有写入任何改动。
+        </p>
+        <section v-if="block.incomplete?.length" class="agent-block__section agent-block__section--warning">
+          <h4>待修正的参数</h4>
+          <ul>
+            <li v-for="(item, index) in block.incomplete" :key="`incomplete:${index}`">{{ item }}</li>
+          </ul>
+        </section>
+        <p
+          v-if="
+            !block.receipts &&
+            block.edits.length &&
+            !block.incomplete?.length &&
+            !block.rejected.length &&
+            !block.unknown.length
+          "
+          class="agent-block__draft-notice"
+        >
           还没写进面板；确认无误后按下按钮才会写入。写入不会创建运行。
         </p>
         <template v-else-if="block.receipts">
-          <p class="agent-block__draft-notice">已写入面板；没有创建运行。</p>
+          <p class="agent-block__draft-notice">
+            {{ hasAppliedReceipt(block) ? "已写入面板；没有创建运行。" : "没有写入面板；没有创建运行。" }}
+          </p>
           <p v-if="block.channelMoved" class="agent-block__draft-notice">
             已同时把提交改走「自定义输入」通道：这些参数只在自定义输入里生效。
           </p>
@@ -291,7 +331,10 @@ function reasonRows(block: {
             </li>
           </ul>
         </section>
-        <section v-if="block.rejected.length" class="agent-block__section agent-block__section--warning">
+        <section
+          v-if="block.rejected.length && !block.incomplete?.length"
+          class="agent-block__section agent-block__section--warning"
+        >
           <h4>没有写（校验未通过）</h4>
           <ul>
             <li v-for="item in block.rejected" :key="`rejected:${item.raw}`">
@@ -300,7 +343,10 @@ function reasonRows(block: {
             </li>
           </ul>
         </section>
-        <section v-if="block.unknown.length" class="agent-block__section agent-block__section--warning">
+        <section
+          v-if="block.unknown.length && !block.incomplete?.length"
+          class="agent-block__section agent-block__section--warning"
+        >
           <h4>没有看懂</h4>
           <ul>
             <li v-for="item in block.unknown" :key="`unknown:${item.raw}`">
@@ -309,7 +355,16 @@ function reasonRows(block: {
             </li>
           </ul>
         </section>
-        <div v-if="!block.receipts && block.edits.length" class="agent-block__options">
+        <div
+          v-if="
+            !block.receipts &&
+            block.edits.length &&
+            !block.incomplete?.length &&
+            !block.rejected.length &&
+            !block.unknown.length
+          "
+          class="agent-block__options"
+        >
           <button type="button" @click="emit('apply', block.block_id)">应用到面板</button>
         </div>
         <p v-if="block.receipts && block.note" class="agent-block__body">{{ block.note }}</p>
@@ -351,17 +406,25 @@ function reasonRows(block: {
   </div>
 
   <div v-else class="agent-block-empty" role="status">
-    <strong>从当前页面开始</strong>
-    <p>
-      描述你要跑的场景，例如「低延迟在线服务」「单卡冒烟」「长上下文压力」，助手会先给一份推荐方案供你确认；也可以直接写「参数
-      = 值」，或询问页面含义。
-    </p>
+    <div class="agent-block__speaker">
+      <img :src="assistantAvatar" alt="" aria-hidden="true" width="28" height="28" />
+      <strong>小拓</strong>
+    </div>
+    <p>你好，需要小拓帮忙做些什么？可以配置实验、分析实验结果，或先学习怎么看报告。</p>
+    <div class="agent-block-empty__choices" aria-label="选择助手任务">
+      <button type="button" @click="emit('start', 'configure')">配置实验</button>
+      <button type="button" @click="emit('start', 'analyze')">分析实验结果</button>
+      <button type="button" @click="emit('start', 'learn')">学习怎么看结果</button>
+    </div>
+    <small>分析只读取当前运行的报告；参数仅在确认后写入，不会自动创建运行。</small>
   </div>
 </template>
 
 <style scoped>
 .agent-block-list {
   display: grid;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .agent-block {
@@ -382,6 +445,63 @@ function reasonRows(block: {
   font-size: var(--text-micro);
   font-weight: 700;
   letter-spacing: 0.04em;
+}
+
+.agent-block__speaker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 4px;
+}
+
+.agent-block__speaker img {
+  flex: none;
+  width: 28px;
+  height: 28px;
+}
+
+.agent-block__speaker .agent-block__eyebrow {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.agent-block-empty__choices {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0 10px;
+}
+
+.agent-block-empty__choices button {
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  color: var(--ink);
+  background: var(--panel);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    transform var(--motion-interaction) var(--ease-emphasized),
+    border-color var(--motion-fast) var(--ease-standard),
+    background-color var(--motion-fast) var(--ease-standard),
+    box-shadow var(--motion-interaction) var(--ease-standard);
+}
+
+.agent-block-empty__choices button:hover,
+.agent-block-empty__choices button:focus-visible {
+  border-color: var(--accent);
+  background: var(--surface-muted);
+}
+.agent-block-empty__choices button:hover {
+  transform: translateX(3px);
+  box-shadow: var(--shadow-hairline);
+}
+
+.agent-block-empty > small {
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 .agent-block h3,
@@ -405,6 +525,10 @@ function reasonRows(block: {
 .agent-block__next {
   margin: 7px 0 0;
   color: var(--ink-soft);
+}
+
+.agent-block__body--guidance {
+  white-space: pre-wrap;
 }
 
 /* The conversation. The user's own turn is marked so a long answer can still be attributed at a

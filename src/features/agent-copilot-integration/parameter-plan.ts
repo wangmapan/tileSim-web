@@ -69,8 +69,32 @@ export function assessParameterPlan(input: {
   // which address went missing.
   if (!input.live.length) return { applicable: false, moved: null };
   const live = new Map(input.live.map((entry) => [entry.path, entry.current]));
+  const growth = new Map(
+    input.edits
+      .filter((edit) => edit.path === "topology/devices" || edit.path === "runtime_trace/requests")
+      .map((edit) => [edit.path, edit]),
+  );
   for (const edit of input.edits) {
     if (!live.has(edit.path)) {
+      if (edit.dependsOn) {
+        const size = growth.get(edit.dependsOn);
+        const match = /^(topology\/devices|runtime_trace\/requests)\[(\d+)\]\/[^/]+$/u.exec(edit.path);
+        const current = live.get(edit.dependsOn);
+        const index = match ? Number(match[2]) : -1;
+        if (
+          match?.[1] === edit.dependsOn &&
+          size &&
+          size.previous === current &&
+          Number.isSafeInteger(index) &&
+          current !== undefined &&
+          Number.isSafeInteger(Number(current)) &&
+          index >= Number(current) &&
+          typeof size.value === "number" &&
+          Number.isSafeInteger(size.value) &&
+          index < size.value
+        )
+          continue;
+      }
       // The page does not offer this address any more, so the plan cannot be
       // written at all. The page's own editors reject unknown addresses, and a
       // knob no longer in the catalogue would be written into a field the

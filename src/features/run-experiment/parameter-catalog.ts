@@ -82,6 +82,8 @@ export type ParameterCatalogEntry = {
   referenceKey?: boolean;
   /** When set, the written value must be one of these existing ids. */
   referenceValues?: readonly string[] | null;
+  /** Projected element: only addressable when the same plan grows this collection. */
+  dependsOn?: "topology/devices" | "runtime_trace/requests";
 };
 
 export type ParameterCatalogSource = {
@@ -198,6 +200,55 @@ function arrayEntries(
     });
   });
   return entries;
+}
+
+/**
+ * Expose only the future leaves a proposal actually names, and only when that
+ * proposal also contains a valid growth of their owning collection. The schema
+ * metadata is the same as for existing rows; no arbitrary path or new link is
+ * made addressable. The application step creates the rows before writing them.
+ */
+export function projectCollectionEntries(
+  catalog: readonly ParameterCatalogEntry[],
+  settings: readonly { key: string; value: string }[],
+): ParameterCatalogEntry[] {
+  const projected = [...catalog];
+  const known = new Set(catalog.map((entry) => entry.path));
+  const collections = [
+    { path: "topology/devices" as const, fields: topologyDeviceFields, target: "topology" as const },
+    { path: "runtime_trace/requests" as const, fields: runtimeRequestFields, target: "runtime_trace" as const },
+  ];
+  for (const collection of collections) {
+    const size = catalog.find((entry) => entry.path === collection.path && entry.kind === "count");
+    const proposed = settings.find((setting) => setting.key === collection.path || setting.key === size?.label);
+    if (!size || !proposed || !/^\d+$/u.test(proposed.value.trim())) continue;
+    const current = Number(size.current);
+    const next = Number(proposed.value.trim());
+    if (!Number.isSafeInteger(next) || next <= current || next > (size.maximum ?? current)) continue;
+    for (const setting of settings) {
+      const match = /^(topology\/devices|runtime_trace\/requests)\[(\d+)\]\/([^/]+)$/u.exec(setting.key);
+      if (!match || match[1] !== collection.path) continue;
+      const index = Number(match[2]);
+      if (!Number.isSafeInteger(index) || index < current || index >= next || known.has(setting.key)) continue;
+      const meta = collection.fields.find((field) => field.key === match[3]);
+      if (!meta) continue;
+      const inherited =
+        collection.path === "topology/devices"
+          ? meta.key === "device_type"
+            ? "GPU"
+            : undefined
+          : ["arrival_time_ps", "tp_degree"].includes(meta.key)
+            ? catalog.find((entry) => entry.path === `${collection.path}[${current - 1}]/${meta.key}`)?.current
+            : undefined;
+      const entry = metaEntry(setting.key, meta, collection.target, inherited);
+      if (!entry) continue;
+      entry.dependsOn = collection.path;
+      if (meta.key === "device_id" || meta.key === "request_id") entry.referenceKey = true;
+      projected.push(entry);
+      known.add(entry.path);
+    }
+  }
+  return projected;
 }
 
 function overrideParamEntries(prefix: string, bindings: readonly unknown[]): ParameterCatalogEntry[] {

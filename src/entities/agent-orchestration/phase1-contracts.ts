@@ -298,6 +298,8 @@ export type AgentTypedBlock =
        * a built-in preset explains the set, a model picked each value separately.
        */
       reasons?: Readonly<Record<string, string>>;
+      /** Proposed values omitted or refused during planning; the entire set is not applicable. */
+      incomplete?: readonly string[];
       /**
        * The page-context revision the plan was computed against. It is cleared
        * when the page moves on, and applying a plan without it is refused, so a

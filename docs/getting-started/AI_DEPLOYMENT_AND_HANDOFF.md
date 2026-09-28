@@ -89,11 +89,18 @@ pnpm preview
 .\tools\launcher\build-launcher.ps1
 ```
 
+兼容构建入口现在转到 `tools/workbench-launcher/build-launcher.ps1`（Tauri 2，不再使用 PyInstaller）。
 默认产物为 `<tileSim-web>/启动TileSim工作台.exe`，并被 Git 忽略。打包后的 EXE 从自身目录定位前端仓库；
 不要将它放入独立的团队资料目录，否则仓库迁移或多 checkout 环境下容易指向错误版本。启动器可以启动已有 release，
 也可以拉取后端 `origin/main`、重新验证并部署。WSL 构建缓存同时绑定后端 revision 和 deployment 源码路径，
 因此不同 clone/worktree 不会复用错误的 CMake source cache。构建脚本会把当前 Node.js 运行时嵌入 EXE；从资源管理器
 双击启动时不依赖其继承的 PATH。PowerShell 部署脚本本身仍要求 Node.js 20+。
+概览页的“一键启动工作台”启动已有验证版本（服务就绪则只打开网页）；首次无部署清单时先确认本地部署。
+“重新部署当前代码”调用仓库内 `deploy-local-backend.ps1 -SourceRoot <所选后端>`，使用后端与 Web 当前文件
+（含未提交改动），不 fetch/push、不切换分支；经确认后验证、发布、重启 5173 并打开网页。
+远端 `origin/main` 更新与停止服务仍可在“部署设置”的折叠“高级操作”中使用。
+启动器不调用个人桌面 `.cmd`、不强制结束 Vite/Playwright。打包门禁与回退见
+[`LAUNCHER_BUILD_DEPLOYMENT_ROLLBACK.md`](../deployment/LAUNCHER_BUILD_DEPLOYMENT_ROLLBACK.md)。
 
 ## 4. 日常运行
 

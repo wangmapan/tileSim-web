@@ -38,24 +38,42 @@
   white-space: nowrap;
 }
 .evidence-friendly-summary {
-  display: flex;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 8px;
   align-items: center;
   min-width: 0;
-  padding: 0;
-  color: var(--positive-ink);
+  min-height: 34px;
+  padding: 4px 12px 4px 10px;
+  border-left: 2px solid var(--positive);
+  color: var(--ink-soft);
   background: transparent;
 }
 .evidence-friendly-summary[data-limited="true"] {
-  color: var(--warning-ink);
-  background: transparent;
+  border-left-color: var(--warning);
+}
+.evidence-friendly-summary > svg {
+  flex: 0 0 auto;
+  color: var(--positive);
+}
+.evidence-friendly-summary[data-limited="true"] > svg {
+  color: var(--warning);
 }
 .evidence-friendly-summary > span {
   display: grid;
+  gap: 1px;
   min-width: 0;
 }
+.evidence-friendly-summary strong {
+  color: var(--positive-ink);
+  font-size: var(--text-xs);
+  line-height: 1.25;
+}
+.evidence-friendly-summary[data-limited="true"] strong {
+  color: var(--warning-ink);
+}
 .evidence-friendly-summary small {
-  color: inherit;
+  color: var(--muted);
   font-size: var(--text-xs);
 }
 .evidence-technical-disclosure {
@@ -83,11 +101,11 @@
   display: grid;
   width: min(520px, 80vw);
   gap: 10px;
-  padding: 14px;
+  padding: 13px 14px;
   border: 1px solid var(--line-strong);
-  border-radius: 9px;
+  border-radius: 4px;
   background: var(--panel);
-  box-shadow: var(--shadow-overlay);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--ink) 12%, transparent);
 }
 .evidence-technical-content code {
   overflow-wrap: anywhere;
@@ -141,15 +159,19 @@
   font-weight: 650;
   text-align: left;
   transition:
-    background-color var(--motion-fast) var(--ease-standard),
-    transform var(--motion-fast) var(--ease-emphasized);
+    background-color var(--motion-interaction) var(--ease-standard),
+    border-color var(--motion-interaction) var(--ease-standard),
+    transform var(--motion-interaction) var(--ease-emphasized),
+    box-shadow var(--motion-interaction) var(--ease-standard);
 }
 .evidence-warning > svg {
   flex: 0 0 auto;
 }
 .evidence-warning:hover {
   background: color-mix(in srgb, var(--warning-soft) 88%, var(--panel));
+  border-color: var(--warning);
   transform: translateY(-1px);
+  box-shadow: var(--shadow-hairline);
 }
 .evidence-warning strong {
   overflow-wrap: anywhere;
@@ -157,28 +179,47 @@
 .status-pill {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   max-width: 100%;
   padding: 4px 7px;
+  border: 1px solid transparent;
   border-radius: var(--radius-control);
   font-size: var(--text-xs);
   font-weight: 600;
   line-height: 1.15;
+  transition:
+    background-color var(--motion-interaction) var(--ease-standard),
+    border-color var(--motion-interaction) var(--ease-standard);
+  animation: ts-fade var(--motion-enter) var(--ease-standard) backwards;
+}
+.status-pill::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  flex: 0 0 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.78;
 }
 .status-pill--positive {
   color: var(--positive-ink);
   background: var(--positive-soft);
+  border-color: color-mix(in srgb, var(--positive) 24%, transparent);
 }
 .status-pill--warning {
   color: var(--warning-ink);
   background: var(--warning-soft);
+  border-color: color-mix(in srgb, var(--warning) 26%, transparent);
 }
 .status-pill--danger {
   color: var(--danger-ink);
   background: var(--danger-soft);
+  border-color: color-mix(in srgb, var(--danger) 24%, transparent);
 }
 .status-pill--neutral {
   color: var(--neutral-ink);
   background: var(--surface-muted);
+  border-color: var(--line);
 }
 
 .view-stack {
@@ -209,10 +250,21 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-panel);
   background: var(--panel);
+  /* Panels now sit on a tinted canvas rather than on white, so a single
+     hairline of contact shadow is enough to lift them off it. */
+  box-shadow: var(--shadow-hairline);
   transition:
     border-color var(--motion-base) var(--ease-standard),
     background-color var(--motion-base) var(--ease-standard),
     box-shadow var(--motion-base) var(--ease-standard);
+}
+
+.panel.ts-lift {
+  transition:
+    transform var(--motion-interaction) var(--ease-emphasized),
+    border-color var(--motion-base) var(--ease-standard),
+    background-color var(--motion-base) var(--ease-standard),
+    box-shadow var(--motion-interaction) var(--ease-standard);
 }
 .panel-header {
   display: flex;
@@ -226,7 +278,7 @@
 .panel-header h2 {
   margin: 0;
   font-size: 16px;
-  font-weight: 670;
+  font-weight: 600;
   letter-spacing: -0.02em;
 }
 .panel-header p:not(.section-kicker) {
@@ -243,15 +295,17 @@
   color: var(--muted);
   font: 600 var(--text-md) var(--font-mono);
 }
+/* A dashed border over a notice reads as a placeholder in a tool that is
+   otherwise drawn with real edges. */
 .demo-notice {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 11px 14px;
-  border: 1px dashed var(--line-strong);
-  border-radius: var(--radius-panel);
-  background: var(--surface-subtle);
+  padding: 10px 0;
+  border-top: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+  background: transparent;
 }
 .demo-notice > div {
   display: flex;
