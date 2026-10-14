@@ -953,6 +953,12 @@
   font-size: var(--text-sm);
   line-height: 1.5;
 }
+.run-submit__disabled-note {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  text-align: center;
+}
 .back-link {
   margin-top: 14px;
 }
@@ -2030,5 +2036,225 @@ details > summary:hover {
 @media (max-width: 760px) {
   .policy-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* -------------------------------------------------------------------------
+   Configuration page hierarchy
+   -------------------------------------------------------------------------
+   The configuration route is an operational screen. Keep the form and the
+   run action visually dominant, and let contract/debug material recede until
+   it is opened. These rules intentionally use the existing tokens so the
+   light, dark and custom themes stay in the same visual system.
+   ------------------------------------------------------------------------- */
+.experiment-layout {
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 28px;
+  max-width: 1260px;
+}
+
+.experiment-main {
+  gap: 16px;
+}
+
+.experiment-main > .panel,
+.experiment-main > .service-warning {
+  box-shadow: none;
+}
+
+.form-section {
+  padding-bottom: 0;
+  border-radius: 8px;
+}
+
+.form-section-title {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.form-section-title > span {
+  min-width: 28px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: var(--accent);
+  background: var(--surface-muted);
+  font-size: 12px;
+}
+
+.form-section-title h2 {
+  font-size: 16px;
+  letter-spacing: -0.01em;
+}
+
+.form-section-title p {
+  margin-top: 2px;
+  font-size: var(--text-sm);
+}
+
+.form-grid {
+  gap: 14px 16px;
+  padding: 20px 24px 24px;
+}
+
+.field {
+  gap: 5px;
+  font-size: var(--text-sm);
+}
+
+.field-help {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.experiment-input-toolbar {
+  margin: 0;
+  padding: 16px 24px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.segmented-control {
+  margin: 0;
+  border-color: var(--line-strong);
+  background: var(--surface-muted);
+}
+
+.segmented-control button {
+  padding: 7px 11px;
+  font-size: var(--text-sm);
+}
+
+.control-sections {
+  gap: 0;
+  padding: 0 24px 24px;
+}
+
+.control-sections > section {
+  padding: 20px 0;
+}
+
+.control-sections section > header {
+  margin-bottom: 12px;
+  padding: 0;
+}
+
+.control-sections header strong {
+  font-size: var(--text-sm);
+}
+
+.control-sections header small {
+  font-size: 12px;
+}
+
+.control-sections .form-grid {
+  padding: 0;
+}
+
+.structured-area {
+  gap: 12px;
+  margin-top: 4px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-inset);
+}
+
+.structured-area__header {
+  margin: 0;
+}
+
+.structured-area__header small {
+  max-width: 48ch;
+}
+
+.capability-disclosure,
+.design-space-disclosure {
+  border-radius: 8px;
+}
+
+.capability-disclosure > summary,
+.design-space-disclosure > summary {
+  padding-top: 17px;
+  padding-bottom: 17px;
+}
+
+.capability-disclosure-state,
+.design-space-disclosure-state {
+  gap: 5px;
+}
+
+.capability-disclosure-state span,
+.capability-disclosure-state small,
+.design-space-disclosure-state strong,
+.design-space-disclosure-state small {
+  padding: 3px 6px;
+  font-size: 12px;
+}
+
+.run-submit-card {
+  top: 84px;
+  padding: 22px;
+  border: 1px solid var(--line-strong);
+  border-top: 3px solid var(--accent);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow-raised);
+}
+
+.run-submit-card h2 {
+  margin-bottom: 14px;
+  font-size: 18px;
+}
+
+.run-submit-card dl {
+  margin-bottom: 16px;
+}
+
+.run-submit-card dl > div {
+  padding: 9px 0;
+}
+
+.run-submit-card dd {
+  max-width: 175px;
+}
+
+.run-submit {
+  min-height: 46px;
+  font-size: 15px;
+}
+
+.run-scope-note {
+  padding: 9px 10px;
+  font-size: 12px;
+}
+
+.service-warning {
+  padding: 12px 14px;
+  border-radius: 7px;
+}
+
+@media (max-width: 1200px) {
+  .experiment-layout {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .run-submit-card {
+    position: static;
+    order: 0;
+  }
+}
+
+@media (max-width: 880px) {
+  .experiment-layout {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .run-submit-card {
+    position: static;
+    order: 0;
   }
 }

@@ -14,6 +14,30 @@
  * KV 准入水位, 未设置（省略字段）) are intentionally NOT repeated here.
  */
 export const structuredInputEnglishCatalog: Readonly<Record<string, string>> = {
+  /* Configuration page hierarchy and concise labels. */
+  工作负载: "Workload",
+  运行策略: "Runtime policy",
+  互联参数: "Fabric parameters",
+  "用于历史记录和结果回溯。": "Used to identify the run in history and trace results.",
+  以运行后的验证报告为准: "The post-run validation report is authoritative.",
+  真实网络观测仅作为证据: "Real network observations are evidence only.",
+  "先选输入方式，再调整需要的参数。": "Choose an input method, then adjust the parameters you need.",
+  "需要配置请求、设备或拓扑时，打开完整输入。":
+    "Open full input when you need to configure requests, devices or topology.",
+  "完整输入已启用。上方参数会同步到对应的输入文档。":
+    "Full input is enabled. Changes above are mirrored into the corresponding input documents.",
+  "可选。需要自定义 S6 候选时再展开。": "Optional. Expand when you need custom S6 candidates.",
+  "留空使用内置候选。": "Leave blank to use the built-in candidates.",
+  "必要时查看执行门槛与版本信息。": "Open when you need execution gates or version information.",
+  可执行: "Runnable",
+  兼容模式: "Compatibility mode",
+  契约错误: "Contract error",
+  "JSON 输入": "JSON input",
+  不合并: "Not combined",
+  外部清单: "External manifest",
+  "内置 S6": "Built-in S6",
+  等待本地服务: "Waiting for local service",
+  连接本地服务后可运行: "Connect the local service to run",
   /* Quick-control tab: entry point, channel note, empty-document hint. */
   "用表单配置全部输入 →": "Configure all inputs with forms →",
   "导入拓扑 JSON": "Import topology JSON",
@@ -35,7 +59,14 @@ export const structuredInputEnglishCatalog: Readonly<Record<string, string>> = {
     "The device inventory now has {count} cards. Adding cards without changing requests would change nothing; choose how to handle the request table:",
   "① 把每条请求的参与设备改成新集合": "① Rewrite each request's participants to the new set",
   "② 清空参与设备，保留并行卡数": "② Clear participants and keep the parallel degree",
+  "① 同步 TP 与参与设备到新集合": "① Synchronize TP and participants to the new set",
+  "② 保留原 TP，按新集合选择参与设备": "② Keep the existing TP and select participants from the new set",
+  "③ 清空参与设备，保留并行卡数": "③ Clear participants and keep the parallel degree",
   稍后再说: "Decide later",
+  "已把 {count} 条请求的 TP 与参与设备同步到 {devices}。请继续核对 domains 和 links。":
+    "Synchronized TP and participants for {count} requests to {devices}. Continue checking domains and links.",
+  "已按原 TP 为 {count} 条请求选择参与设备。请确认每条请求的 TP/participants 与拓扑一致。":
+    "Selected participants for {count} requests using the existing TP. Confirm each request's TP/participants match the topology.",
   "已把 {count} 条请求的参与设备改成 {devices}。并行卡数不会跟着变，请自行核对。":
     "Rewrote the participants of {count} requests to {devices}. The parallel degree did not follow, so verify it yourself.",
   "已清空 {count} 条请求的参与设备；其中 {missing} 条没填并行卡数，需要补上。":

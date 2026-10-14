@@ -19,6 +19,8 @@ import {
   reconcileExperimentForm,
   resolveExperimentErrorPointer,
   resetExperimentControls,
+  readExperimentInputDraft,
+  saveExperimentInputDraft,
   runExperiment,
   fetchTracePackageCatalog,
   inspectTracePackage,
@@ -53,6 +55,36 @@ const topologyJson = ref("");
 const designSpaceJson = ref("");
 /** Off by default: the quick-control tab keeps its overrides path until asked. */
 const structuredInput = ref(false);
+const pairingPending = ref(false);
+let inputDraftRestored = false;
+watch(
+  () => state.bridge.manifest?.schema_set_revision,
+  (revision) => {
+    if (!revision || inputDraftRestored) return;
+    inputDraftRestored = true;
+    // Never overwrite input already typed while the manifest was loading.
+    if (runtimeJson.value || topologyJson.value || mode.value !== "controls" || structuredInput.value) return;
+    const saved = readExperimentInputDraft(revision);
+    if (!saved) return;
+    mode.value = saved.mode;
+    structuredInput.value = saved.structuredInput;
+    runtimeJson.value = saved.runtimeJson;
+    topologyJson.value = saved.topologyJson;
+  },
+  { immediate: true },
+);
+watch(
+  [mode, structuredInput, runtimeJson, topologyJson, () => state.bridge.manifest?.schema_set_revision],
+  ([currentMode, currentStructured, currentRuntime, currentTopology, revision]) => {
+    if (revision && (currentMode === "controls" || currentMode === "json"))
+      saveExperimentInputDraft(revision, {
+        mode: currentMode,
+        structuredInput: currentStructured,
+        runtimeJson: currentRuntime,
+        topologyJson: currentTopology,
+      });
+  },
+);
 const tracePackageCatalog = ref(null);
 const tracePackageCatalogStatus = ref("idle");
 const tracePackageError = ref("");
@@ -61,6 +93,7 @@ const selectedTracePackageId = ref("");
 const inspectingTracePackage = ref(false);
 const fieldPath = ref("");
 const submissionContractError = ref("");
+const intakeRejection = ref(null);
 const pendingSubmission = state.experimentSubmission;
 const backendRevision = computed(
   () =>
@@ -116,6 +149,15 @@ const displayFieldPath = computed(() => {
   const path = fieldPath.value || requestPreview.value.error?.fieldPath || "";
   return path ? resolveExperimentErrorPointer(surface.value, path)?.controlPointer || "" : "";
 });
+// Keep the exact nested Pointer for the editors. The coarse control pointer
+// above is only for panels without per-request controls.
+const inputFieldPath = computed(() => {
+  const path = fieldPath.value || requestPreview.value.error?.fieldPath || "";
+  return path && resolveExperimentErrorPointer(surface.value, path) ? path : "";
+});
+const inputErrorMessage = computed(() =>
+  fieldPath.value ? runStatus.value : requestPreview.value.error?.message || "",
+);
 const canRun = computed(
   () =>
     state.bridge.available &&
@@ -123,6 +165,7 @@ const canRun = computed(
     !submissionContractError.value &&
     requestPreview.value.request !== null &&
     (mode.value !== "trace_package" || selectedTracePackage.value?.submission_available === true) &&
+    !pairingPending.value &&
     !submitting.value,
 );
 
@@ -362,6 +405,7 @@ async function submit() {
   submitting.value = true;
   fieldPath.value = "";
   submissionContractError.value = "";
+  intakeRejection.value = null;
   runStatus.value = t("正在校验输入");
   let terminalStatus = "";
   try {
@@ -416,6 +460,17 @@ async function submit() {
     setView("overview");
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") return;
+    if (
+      error instanceof BridgeApiError &&
+      error.status === 422 &&
+      error.code === "trace_package_inspect_nonzero_exit"
+    ) {
+      intakeRejection.value = {
+        code: error.code,
+        fieldPath: error.fieldPath || "/trace_package_id",
+        message: error.message,
+      };
+    }
     if (terminalStatus === "failed") clearPendingSubmission();
     const errorFieldPath =
       error instanceof BridgeApiError || error instanceof ExperimentRequestError ? error.fieldPath || "" : "";
@@ -427,7 +482,9 @@ async function submit() {
       fieldPath.value = errorTarget?.fieldPath || "";
     }
     const fieldPathLabel = errorFieldPath ? `（${errorFieldPath}）` : "";
-    runStatus.value = t("运行失败：{message}{fieldPath}", { message: error.message, fieldPath: fieldPathLabel });
+    runStatus.value = intakeRejection.value
+      ? t("输入在 intake 阶段被拒绝，尚未创建 run")
+      : t("运行失败：{message}{fieldPath}", { message: error.message, fieldPath: fieldPathLabel });
     notify(runStatus.value, "danger");
   } finally {
     if (waitController === controller) {
@@ -481,13 +538,25 @@ async function loadBundle(event) {
           <p>{{ t(state.bridge.title) }}。{{ t("仍可编辑输入，版本同步后即可提交。") }}</p>
         </div>
       </div>
-      <div v-if="surface.contractError || submissionContractError" class="service-warning">
+      <div v-if="state.bridge.available && (surface.contractError || submissionContractError)" class="service-warning">
         <AlertCircle :size="19" />
         <div>
           <strong>{{ t("契约错误，提交已关闭") }}</strong>
           <p>
             <code>{{ surface.contractError || submissionContractError }}</code>
           </p>
+        </div>
+      </div>
+      <div v-if="intakeRejection" class="service-warning" role="alert">
+        <AlertCircle :size="19" />
+        <div>
+          <strong>{{ t("输入在 intake 阶段被拒绝，尚未创建 run") }}</strong>
+          <p>
+            <code>{{ intakeRejection.code }}</code>
+            · {{ t("字段路径") }} <code>{{ intakeRejection.fieldPath }}</code>
+          </p>
+          <p>{{ intakeRejection.message }}</p>
+          <p>{{ t("请修正 Trace package 后重试；本次没有运行状态或归因工件可读取。") }}</p>
         </div>
       </div>
 
@@ -502,11 +571,13 @@ async function loadBundle(event) {
         v-model:runtime-json="runtimeJson"
         v-model:topology-json="topologyJson"
         v-model:structured-input="structuredInput"
+        v-model:pairing-pending="pairingPending"
         data-help-anchor="experiment-inputs"
         :form="form"
         :surface="surface"
         :control-groups="surface.controlGroups"
-        :field-path="displayFieldPath"
+        :field-path="inputFieldPath"
+        :error-message="inputErrorMessage"
         @reset-controls="resetControls"
         @load-template="loadTemplate"
         @load-bundle="loadBundle"
@@ -553,6 +624,7 @@ async function loadBundle(event) {
       :request-preview="requestPreview"
       :surface="surface"
       :trace-package="selectedTracePackage"
+      :bridge-available="state.bridge.available"
       @submit="submit"
       @back="setView('overview')"
     />

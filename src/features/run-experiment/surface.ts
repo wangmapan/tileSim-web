@@ -28,9 +28,9 @@ const fieldLabels: Record<string, string> = {
 };
 
 const groupPresentation = {
-  S0: { title: "Workload controls", detail: "通信负载输入" },
-  S1: { title: "Runtime policy", detail: "调度、批处理与 KV 准入" },
-  S6: { title: "Fabric parameters", detail: "Scale-up 与 Scale-out" },
+  S0: { title: "工作负载", detail: "通信负载输入" },
+  S1: { title: "运行策略", detail: "调度、批处理与 KV 准入" },
+  S6: { title: "互联参数", detail: "Scale-up 与 Scale-out" },
 } as const;
 
 function compatibilityField(

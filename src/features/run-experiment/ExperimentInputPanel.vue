@@ -5,14 +5,24 @@ import { useI18n } from "../../i18n";
 import DeviceInventoryForm from "./DeviceInventoryForm.vue";
 import DomainInventoryForm from "./DomainInventoryForm.vue";
 import RequestTableForm from "./RequestTableForm.vue";
+import RuntimeEngineForm from "./RuntimeEngineForm.vue";
 import RuntimePolicyForm from "./RuntimePolicyForm.vue";
 import TopologyGraphEditor from "./TopologyGraphEditor.vue";
-import { clearParticipants, patchJsonDocument, rewriteParticipants, writeControlPointer } from "./structured-input";
+import {
+  clearParticipants,
+  parseJsonDocument,
+  patchJsonDocument,
+  rewriteParticipantsForExistingTp,
+  rewriteRequestParallelism,
+  writeControlPointer,
+} from "./structured-input";
+import { engineModeOf } from "./runtime-engine";
 
 const form = defineModel("form", { type: Object, required: true });
 const mode = defineModel("mode", { type: String, required: true });
 const runtimeJson = defineModel("runtimeJson", { type: String, required: true });
 const topologyJson = defineModel("topologyJson", { type: String, required: true });
+const pairingPending = defineModel("pairingPending", { type: Boolean, default: false });
 /**
  * Off until the user turns the structured editors on from the quick-control tab.
  * While it is off this panel keeps emitting `overrides` exactly as it did
@@ -25,6 +35,7 @@ const props = defineProps({
   surface: { type: Object, required: true },
   controlGroups: { type: Array, required: true },
   fieldPath: { type: String, default: "" },
+  errorMessage: { type: String, default: "" },
   compact: { type: Boolean, default: false },
 });
 defineEmits([
@@ -41,6 +52,47 @@ const pairingPrompt = ref(null);
 const structuredNotice = ref("");
 const structuredNoticeTone = ref("info");
 const controlFields = computed(() => (props.controlGroups || []).flatMap((group) => group.fields));
+const engineMode = computed(() => {
+  const parsed = parseJsonDocument(runtimeJson.value, "Runtime trace");
+  return parsed.ok ? engineModeOf(parsed.value) : "generic";
+});
+
+function deviceIdsFromTopology(text) {
+  const parsed = parseJsonDocument(text, "Fabric topology");
+  if (!parsed.ok) return null;
+  const topology = parsed.value.topology;
+  if (!topology || typeof topology !== "object" || Array.isArray(topology)) return null;
+  const devices = topology.devices;
+  if (!Array.isArray(devices)) return null;
+  return devices
+    .map((device) => (device && typeof device === "object" && !Array.isArray(device) ? device.device_id : null))
+    .filter((id) => typeof id === "string" && id.length > 0);
+}
+
+/**
+ * Assistant plans can resize topology/devices without going through the
+ * DeviceInventoryForm's native input event. Observe that same document change
+ * so the coupled TP/participants decision is still required and visible.
+ */
+let previousDeviceIds = null;
+
+function setPairingPrompt(ids) {
+  pairingPrompt.value = ids.length ? { ids } : null;
+  pairingPending.value = Boolean(pairingPrompt.value);
+}
+
+watch(
+  () => topologyJson.value,
+  (next) => {
+    const current = deviceIdsFromTopology(next);
+    const previous = previousDeviceIds;
+    previousDeviceIds = current;
+    if (!structuredInput.value || !current || !previous || current.length === previous.length) return;
+    if (!runtimeJson.value.trim()) return;
+    setPairingPrompt(current);
+  },
+  { immediate: true },
+);
 
 /**
  * R3: shrinking or growing the device inventory changes nothing on its own —
@@ -51,12 +103,16 @@ const controlFields = computed(() => (props.controlGroups || []).flatMap((group)
  */
 function onDeviceCountChange(payload) {
   if (!payload.ids.length) return;
+  // DeviceInventoryForm emits this event for ordinary field edits too (for
+  // example a device rename). Only a count change alters the TP/participants
+  // coupling; a same-sized identity update already rewrites its references.
+  if (previousDeviceIds && payload.ids.length === previousDeviceIds.length) return;
   if (!runtimeJson.value.trim()) {
     structuredNoticeTone.value = "warning";
     structuredNotice.value = t("设备清单已变化，但 runtime trace 还是空的：加载模板后再决定请求表里的参与设备怎么办。");
     return;
   }
-  pairingPrompt.value = { ids: payload.ids };
+  setPairingPrompt(payload.ids);
 }
 
 function onBlockNotice(payload) {
@@ -67,16 +123,28 @@ function onBlockNotice(payload) {
 function applyPairing(kind) {
   const ids = pairingPrompt.value?.ids || [];
   const outcome = { count: 0, missing: 0 };
+  let applied = false;
   try {
-    if (kind === "participants") {
+    if (kind === "parallelism") {
       runtimeJson.value = patchJsonDocument(runtimeJson.value, "Runtime trace", (draft) => {
-        outcome.count = rewriteParticipants(draft, ids);
+        outcome.count = rewriteRequestParallelism(draft, ids);
       });
       structuredNoticeTone.value = "info";
-      structuredNotice.value = t("已把 {count} 条请求的参与设备改成 {devices}。并行卡数不会跟着变，请自行核对。", {
+      structuredNotice.value = t("已把 {count} 条请求的 TP 与参与设备同步到 {devices}。请继续核对 domains 和 links。", {
         count: outcome.count,
         devices: ids.join("、"),
       });
+    } else if (kind === "participants") {
+      runtimeJson.value = patchJsonDocument(runtimeJson.value, "Runtime trace", (draft) => {
+        outcome.count = rewriteParticipantsForExistingTp(draft, ids);
+      });
+      structuredNoticeTone.value = "info";
+      structuredNotice.value = t(
+        "已按原 TP 为 {count} 条请求选择参与设备。请确认每条请求的 TP/participants 与拓扑一致。",
+        {
+          count: outcome.count,
+        },
+      );
     } else {
       runtimeJson.value = patchJsonDocument(runtimeJson.value, "Runtime trace", (draft) => {
         const result = clearParticipants(draft);
@@ -89,11 +157,15 @@ function applyPairing(kind) {
         missing: outcome.missing,
       });
     }
+    applied = true;
   } catch (error) {
     structuredNoticeTone.value = "warning";
     structuredNotice.value = error instanceof Error ? error.message : String(error);
   }
-  pairingPrompt.value = null;
+  // A failed coupling edit must keep the run blocked. Clearing the prompt here
+  // would make the page look settled while the old TP/participants relation
+  // still cannot satisfy the resized topology.
+  if (applied) setPairingPrompt([]);
 }
 
 /**
@@ -138,7 +210,7 @@ watch(
 );
 
 watch(mode, (next) => {
-  if (next !== "controls") pairingPrompt.value = null;
+  if (next !== "controls") setPairingPrompt([]);
 });
 </script>
 
@@ -148,7 +220,7 @@ watch(mode, (next) => {
       <span>02</span>
       <div>
         <h2>{{ t("输入方式") }}</h2>
-        <p v-if="!props.compact">{{ t("快捷控制适合对比实验；JSON 适合精确复现。") }}</p>
+        <p v-if="!props.compact">{{ t("先选输入方式，再调整需要的参数。") }}</p>
       </div>
     </header>
     <div class="experiment-input-toolbar">
@@ -214,7 +286,10 @@ watch(mode, (next) => {
             <select
               v-if="field.kind === 'select'"
               v-model="form.parameterValues[field.fieldId]"
-              :disabled="!field.available"
+              :disabled="
+                !field.available ||
+                (structuredInput && engineMode !== 'generic' && field.fieldId === 's1.runtime.batch_scheduler')
+              "
               :aria-invalid="fieldPath === field.requestJsonPointer"
             >
               <option v-if="!field.explicitDefaultAvailable" :value="undefined">{{ t("未设置（省略字段）") }}</option>
@@ -224,7 +299,10 @@ watch(mode, (next) => {
               v-else
               v-model.number="form.parameterValues[field.fieldId]"
               type="number"
-              :disabled="!field.available"
+              :disabled="
+                !field.available ||
+                (structuredInput && engineMode !== 'generic' && field.fieldId === 's1.runtime.batch_scheduler')
+              "
               :min="field.minimum"
               :max="field.maximum"
               :step="field.step"
@@ -254,7 +332,7 @@ watch(mode, (next) => {
           <div>
             <strong>{{ t("每个请求 / 显卡数量 / 拓扑连线") }}</strong>
             <small>{{
-              t("旋钮只有 {count} 个参数，装不下请求表和设备清单；这三样只能走 custom_inputs，启用后本次提交改用它。", {
+              t("需要配置请求、设备或拓扑时，打开完整输入。", {
                 count: controlFields.length,
               })
             }}</small>
@@ -274,11 +352,7 @@ watch(mode, (next) => {
         </header>
 
         <p v-if="structuredInput" class="structured-note structured-note--info" role="status">
-          {{
-            t(
-              "本次提交方式：结构化输入（custom_inputs）。上方旋钮改的参数会同步写入 policy，Fabric 参数写入 module_bindings。",
-            )
-          }}
+          {{ t("完整输入已启用。上方参数会同步到对应的输入文档。") }}
         </p>
         <p
           v-if="structuredNotice"
@@ -297,20 +371,24 @@ watch(mode, (next) => {
             }}
           </p>
           <div class="structured-actions">
+            <button type="button" class="button button--secondary" @click="applyPairing('parallelism')">
+              {{ t("① 同步 TP 与参与设备到新集合") }}
+            </button>
             <button type="button" class="button button--secondary" @click="applyPairing('participants')">
-              {{ t("① 把每条请求的参与设备改成新集合") }}
+              {{ t("② 保留原 TP，按新集合选择参与设备") }}
             </button>
             <button type="button" class="button button--secondary" @click="applyPairing('clear')">
-              {{ t("② 清空参与设备，保留并行卡数") }}
+              {{ t("③ 清空参与设备，保留并行卡数") }}
             </button>
-            <button type="button" class="text-button" @click="pairingPrompt = null">{{ t("稍后再说") }}</button>
+            <button type="button" class="text-button" @click="setPairingPrompt([])">{{ t("稍后再说") }}</button>
           </div>
         </div>
 
         <div v-if="structuredInput" class="structured-stack">
           <template v-if="runtimeJson.trim()">
+            <RuntimeEngineForm v-model="runtimeJson" :field-path="fieldPath" />
             <RuntimePolicyForm v-model="runtimeJson" :field-path="fieldPath" />
-            <RequestTableForm v-model="runtimeJson" :field-path="fieldPath" />
+            <RequestTableForm v-model="runtimeJson" :field-path="fieldPath" :error-message="errorMessage" />
           </template>
           <p v-else class="structured-note structured-note--warning" role="alert">
             {{ t("runtime trace 还是空的。请先点「用表单配置全部输入」载入场景模板，或到「JSON 输入」页签粘贴内容。") }}
@@ -351,9 +429,19 @@ watch(mode, (next) => {
           ><textarea
             v-model="runtimeJson"
             spellcheck="false"
-            :aria-invalid="fieldPath === '/custom_inputs/runtime_trace'"
+            :aria-invalid="
+              fieldPath === '/custom_inputs/runtime_trace' || fieldPath.startsWith('/custom_inputs/runtime_trace/')
+            "
+            :aria-describedby="fieldPath.startsWith('/custom_inputs/runtime_trace') ? 'runtime-json-error' : undefined"
             :placeholder="t('加载模板或粘贴 S1 runtime trace')"
           ></textarea>
+          <small
+            v-if="fieldPath.startsWith('/custom_inputs/runtime_trace')"
+            id="runtime-json-error"
+            class="field-error"
+            role="alert"
+            ><code>{{ fieldPath }}</code> · {{ errorMessage }}</small
+          >
         </label>
         <div class="topology-input-column">
           <!--

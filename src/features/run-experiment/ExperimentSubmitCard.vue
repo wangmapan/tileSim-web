@@ -1,8 +1,9 @@
 <script setup>
-import { CheckCircle2, ChevronRight, LoaderCircle, Play } from "@lucide/vue";
+import { ChevronRight, LoaderCircle, Play } from "@lucide/vue";
+import { computed } from "vue";
 import { useI18n } from "../../i18n";
 
-defineProps({
+const props = defineProps({
   mode: { type: String, required: true },
   form: { type: Object, required: true },
   designSpaceJson: { type: String, required: true },
@@ -12,9 +13,30 @@ defineProps({
   requestPreview: { type: Object, required: true },
   surface: { type: Object, required: true },
   tracePackage: { type: Object, default: null },
+  bridgeAvailable: { type: Boolean, default: true },
 });
 defineEmits(["submit", "back"]);
 const { t } = useI18n();
+const contractLabel = computed(() => {
+  if (!props.bridgeAvailable) return t("等待本地服务");
+  const value = String(props.surface.contractStatus || "");
+  return (
+    {
+      supported: t("可执行"),
+      legacy_compatibility: t("兼容模式"),
+      contract_error: t("契约错误"),
+    }[value] || value
+  );
+});
+const inputLabel = computed(() => {
+  if (props.mode === "controls") return t("受控参数");
+  if (props.mode === "json") return t("JSON 输入");
+  return props.tracePackage?.package_id || "—";
+});
+const designSpaceLabel = computed(() => {
+  if (props.mode === "trace_package") return t("不合并");
+  return props.designSpaceJson.trim() ? t("外部清单") : t("内置 S6");
+});
 </script>
 
 <template>
@@ -26,13 +48,9 @@ const { t } = useI18n();
         <dd>{{ mode === "trace_package" ? `${tracePackage?.entry_boundary || "—"} → S6` : "S1 → S6" }}</dd>
       </div>
       <div>
-        <dt>{{ t("宿主") }}</dt>
-        <dd>S7 hosted</dd>
-      </div>
-      <div>
         <dt>{{ t("输入") }}</dt>
         <dd>
-          {{ mode === "controls" ? t("受控参数") : mode === "json" ? "JSON pair" : tracePackage?.package_id || "—" }}
+          {{ inputLabel }}
         </dd>
       </div>
       <div>
@@ -46,12 +64,12 @@ const { t } = useI18n();
       <div>
         <dt>{{ t("设计空间") }}</dt>
         <dd>
-          {{ mode === "trace_package" ? "NOT COMBINED" : designSpaceJson.trim() ? "EXTERNAL MANIFEST" : "BUILT-IN S6" }}
+          {{ designSpaceLabel }}
         </dd>
       </div>
       <div>
         <dt>{{ t("编排契约") }}</dt>
-        <dd>{{ surface.contractStatus }}</dd>
+        <dd>{{ contractLabel }}</dd>
       </div>
     </dl>
     <details class="experiment-request-preview">
@@ -69,15 +87,14 @@ const { t } = useI18n();
         {{ requestPreview.error?.message || t("请求不可提交。") }}
       </p>
     </details>
-    <div class="run-scope-note">
-      <CheckCircle2 :size="16" />
-      <p>{{ t("产物只写入") }} <code>tileSim-web/runs</code>{{ t("，不会修改核心仓库。") }}</p>
-    </div>
     <button class="button button--primary button--wide run-submit" :disabled="!canRun" @click="$emit('submit')">
       <LoaderCircle v-if="submitting" class="spin" :size="17" /><Play v-else :size="17" />{{
         submitting ? t("正在运行") : t("运行 TileSim 模拟")
       }}
     </button>
+    <p v-if="!canRun && !runStatus && !bridgeAvailable" class="run-submit__disabled-note">
+      {{ t("连接本地服务后可运行") }}
+    </p>
     <p v-if="runStatus" class="run-progress">{{ runStatus }}</p>
     <button class="text-button back-link" @click="$emit('back')">
       {{ submitting ? t("返回当前报告（任务继续在后台运行）") : t("返回当前报告") }}<ChevronRight :size="14" />

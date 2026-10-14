@@ -35,7 +35,7 @@ function statusClass(value) {
       <span>{{ t("能力") }}</span>
       <div>
         <h2>{{ t("执行依赖与边界") }}</h2>
-        <p v-if="!props.compact">{{ t("按需查看后端能力、正式契约和部署身份；不可用能力不会静默降级。") }}</p>
+        <p v-if="!props.compact">{{ t("必要时查看执行门槛与版本信息。") }}</p>
       </div>
       <div class="capability-disclosure-state">
         <span :class="surface.contractStatus === 'supported' ? 'available' : 'partial'">{{
