@@ -60,7 +60,7 @@ describe("F8 experiment schema adapter", () => {
     });
 
     expect(surface.contractStatus).toBe("supported");
-    expect(surface.controlGroups.flatMap((group) => group.fields)).toHaveLength(8);
+    expect(surface.controlGroups.flatMap((group) => group.fields)).toHaveLength(13);
     expect(
       surface.coverage
         .filter((item) => ["S2", "S3", "S4", "S5"].includes(item.subsystem))

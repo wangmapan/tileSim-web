@@ -29,6 +29,7 @@ export const guideRegistry = Object.freeze({
   validation: validationGuide,
   design_space: designSpaceGuide,
   history: historyGuide,
+  raw_evidence: rawEvidenceGuide,
   evidence_agent: evidenceAgentGuide,
   evidence_lab: evidenceLabGuide,
   lightweight: lightweightGuide,
@@ -36,7 +37,6 @@ export const guideRegistry = Object.freeze({
   lightweight_run: lightweightRunGuide,
   lightweight_results: lightweightResultsGuide,
   unsupported_schema: unsupportedSchemaGuide,
-  raw_evidence: rawEvidenceGuide,
 }) satisfies Readonly<Record<GuideId, GuideDefinition>>;
 
 export const viewGuides = Object.freeze({
@@ -49,6 +49,7 @@ export const viewGuides = Object.freeze({
   validation: validationGuide,
   design_space: designSpaceGuide,
   history: historyGuide,
+  raw_evidence: rawEvidenceGuide,
   evidence_agent: evidenceAgentGuide,
   evidence_lab: evidenceLabGuide,
   lightweight: lightweightGuide,

@@ -42,18 +42,27 @@ const recentLabel = computed(() => {
 <template>
   <main class="workbench-entry" aria-labelledby="workbench-entry-title">
     <div class="workbench-entry__inner">
+      <div class="workbench-entry__bar">
+        <span class="workbench-entry__wordmark" aria-hidden="true">T</span>
+        <span class="workbench-entry__product">
+          <strong>TileSim</strong>
+          <small>{{ t("TileSim 仿真实验台") }}</small>
+        </span>
+      </div>
+
       <header class="workbench-entry__header">
-        <p class="workbench-entry__eyebrow">{{ t("TileSim 仿真实验台") }}</p>
         <h1 id="workbench-entry-title">{{ t("选择适合你的工作台") }}</h1>
         <p class="workbench-entry__lede">
           {{ t("两种工作台共享同一套仿真事实和公开能力，但使用不同的信息组织方式。之后可以随时切换。") }}
         </p>
-        <p v-if="recentLabel" class="workbench-entry__recent" role="status" aria-live="polite">{{ recentLabel }}</p>
+        <p v-if="recentLabel" class="workbench-entry__recent" role="status" aria-live="polite">
+          <span class="workbench-entry__recent-dot" aria-hidden="true"></span>{{ recentLabel }}
+        </p>
       </header>
 
-      <section class="workbench-entry__choices" :aria-label="t('工作台选择')">
-        <article class="workbench-choice-card">
-          <div class="workbench-choice-card__icon" aria-hidden="true"><Compass :size="24" /></div>
+      <section class="workbench-entry__choices ts-stagger" :aria-label="t('工作台选择')">
+        <article class="workbench-choice-card ts-lift">
+          <div class="workbench-choice-card__icon" aria-hidden="true"><Compass :size="19" /></div>
           <div class="workbench-choice-card__content">
             <div>
               <p class="workbench-choice-card__kicker">{{ t("适合刚开始接触 TileSim 的用户") }}</p>
@@ -75,12 +84,12 @@ const recentLabel = computed(() => {
             :to="{ name: 'lightweight', query: carriedQuery }"
             @click="choose('lightweight')"
           >
-            {{ t("进入轻量版") }} <ArrowRight :size="17" aria-hidden="true" />
+            {{ t("进入轻量版") }} <ArrowRight :size="16" aria-hidden="true" />
           </RouterLink>
         </article>
 
-        <article class="workbench-choice-card">
-          <div class="workbench-choice-card__icon" aria-hidden="true"><SlidersHorizontal :size="24" /></div>
+        <article class="workbench-choice-card ts-lift">
+          <div class="workbench-choice-card__icon" aria-hidden="true"><SlidersHorizontal :size="19" /></div>
           <div class="workbench-choice-card__content">
             <div>
               <p class="workbench-choice-card__kicker">{{ t("适合需要完整参数与证据链的用户") }}</p>
@@ -102,7 +111,7 @@ const recentLabel = computed(() => {
             :to="{ name: 'overview', query: carriedQuery }"
             @click="choose('professional')"
           >
-            {{ t("进入专业版") }} <ArrowRight :size="17" aria-hidden="true" />
+            {{ t("进入专业版") }} <ArrowRight :size="16" aria-hidden="true" />
           </RouterLink>
         </article>
       </section>
@@ -115,88 +124,128 @@ const recentLabel = computed(() => {
 </template>
 
 <style scoped>
+/* A product surface, not a landing page: one left-aligned intro block over a
+   real comparison, sized so the two cards read as a choice rather than as two
+   identical marketing tiles. */
 .workbench-entry {
   min-height: 100dvh;
-  padding: clamp(28px, 7vw, 84px) clamp(20px, 5vw, 72px);
+  padding: 0 0 clamp(32px, 6vw, 72px);
   color: var(--ink);
   background: var(--surface);
 }
 
 .workbench-entry__inner {
-  width: min(1080px, 100%);
+  width: min(1120px, 100%);
   margin: 0 auto;
+  padding: 0 clamp(20px, 5vw, 56px);
+}
+
+.workbench-entry__bar {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  height: 64px;
+  margin-bottom: clamp(26px, 5vw, 56px);
+  border-bottom: 1px solid var(--line);
+}
+
+.workbench-entry__wordmark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: #fff;
+  background: var(--accent);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.workbench-entry__product {
+  display: grid;
+  gap: 1px;
+  line-height: 1.25;
+}
+
+.workbench-entry__product strong {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.workbench-entry__product small {
+  color: var(--muted);
+  font-size: var(--text-xs);
 }
 
 .workbench-entry__header {
-  max-width: 760px;
-  margin: 0 auto clamp(28px, 5vw, 52px);
-  text-align: center;
-}
-
-.workbench-entry__eyebrow,
-.workbench-choice-card__kicker {
-  margin: 0;
-  color: var(--accent);
-  font-size: var(--text-sm);
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  max-width: 640px;
+  margin: 0 0 clamp(22px, 4vw, 36px);
 }
 
 .workbench-entry h1 {
-  margin: 10px 0 12px;
-  font-size: clamp(30px, 5vw, 48px);
-  line-height: 1.1;
-  letter-spacing: -0.025em;
+  margin: 0 0 10px;
+  font-size: clamp(23px, 3.2vw, 30px);
+  font-weight: 600;
+  line-height: 1.28;
+  letter-spacing: -0.022em;
+  text-wrap: balance;
 }
 
 .workbench-entry__lede {
-  max-width: 680px;
-  margin: 0 auto;
+  max-width: 56ch;
+  margin: 0;
   color: var(--muted);
-  font-size: clamp(16px, 2vw, 19px);
-  line-height: 1.6;
+  font-size: var(--text-md);
+  line-height: 1.65;
 }
 
 .workbench-entry__recent {
-  display: inline-block;
-  margin: 16px 0 0;
-  padding: 6px 10px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 14px 0 0;
   color: var(--muted);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
+}
+
+.workbench-entry__recent-dot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--accent);
 }
 
 .workbench-entry__choices {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: stretch;
-  gap: 18px;
+  gap: 20px;
 }
 
 .workbench-choice-card {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr);
   grid-template-rows: 1fr auto;
-  gap: 18px 16px;
+  gap: 16px 14px;
   min-width: 0;
-  min-height: 330px;
-  padding: clamp(20px, 3vw, 30px);
-  border: 1px solid var(--line-strong);
+  padding: 24px;
+  border: 1px solid var(--line);
   border-radius: var(--radius-panel);
   background: var(--panel);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-hairline);
 }
 
 .workbench-choice-card__icon {
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
-  border: 1px solid var(--line-strong);
-  border-radius: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-control);
   color: var(--accent);
-  background: var(--surface-subtle);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
 .workbench-choice-card__content {
@@ -204,55 +253,64 @@ const recentLabel = computed(() => {
 }
 
 .workbench-choice-card h2 {
-  margin: 8px 0 0;
-  font-size: clamp(24px, 3vw, 32px);
-  line-height: 1.15;
+  margin: 4px 0 0;
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.012em;
+}
+
+.workbench-choice-card__kicker {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 400;
 }
 
 .workbench-choice-card__details {
   display: grid;
   gap: 14px;
-  margin: 24px 0 0;
+  margin: 20px 0 0;
 }
 
 .workbench-choice-card__details div {
   display: grid;
-  gap: 4px;
+  gap: 3px;
 }
 
 .workbench-choice-card__details dt {
   color: var(--muted);
   font-size: var(--text-xs);
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-weight: 500;
 }
 
 .workbench-choice-card__details dd {
   margin: 0;
-  line-height: 1.55;
+  font-size: var(--text-md);
+  line-height: 1.6;
 }
 
+/* Sits under the copy instead of spanning the card, so the two columns keep a
+   text-like rhythm rather than two identical full-width bars. */
 .workbench-choice-card__action {
-  grid-column: 1 / -1;
-  justify-content: center;
-  width: 100%;
-  min-height: 48px;
+  grid-column: 2;
+  justify-self: start;
+  min-height: 38px;
+  padding: 8px 15px;
+  border-radius: var(--radius-control);
   text-decoration: none;
 }
 
-.workbench-choice-card__action:focus-visible,
-.workbench-choice-card:focus-within {
-  outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent);
-  outline-offset: 3px;
+.workbench-choice-card__action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .workbench-entry__footnote {
-  margin: 22px auto 0;
+  margin: 22px 0 0;
   color: var(--muted);
-  font-size: var(--text-sm);
-  line-height: 1.5;
-  text-align: center;
+  font-size: var(--text-xs);
+  line-height: 1.6;
 }
 
 @media (max-width: 760px) {
@@ -260,8 +318,8 @@ const recentLabel = computed(() => {
     grid-template-columns: 1fr;
   }
 
-  .workbench-choice-card {
-    min-height: 0;
+  .workbench-entry__product small {
+    display: none;
   }
 }
 

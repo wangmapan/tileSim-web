@@ -265,8 +265,108 @@ def _post_json_to_endpoint(config: ProviderConfig, endpoint: str, payload: dict)
         raise ProviderUnavailableError("The configured Provider transport failed.") from error
 
 
+def _parse_catalogue_json_bytes(body: bytes) -> dict:
+    """Parse a catalogue a service publishes beside its inference endpoint.
+
+    A catalogue is third-party metadata rather than contract-bound provider output, so the strict
+    no-float / no-duplicate-key rules of :func:`_parse_json_bytes` do not apply: a reader of a
+    catalogue extracts only the string identities it needs and never lets a number from it become a
+    TileSim value.  The fixed response-size bound still holds.
+    """
+
+    if len(body) > 1_000_000:
+        raise ProviderStructuredOutputError("Provider catalogue exceeded the fixed response-size limit.")
+    try:
+        value = json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ProviderStructuredOutputError("Provider catalogue was not one UTF-8 JSON object.") from error
+    if not isinstance(value, dict):
+        raise ProviderStructuredOutputError("Provider catalogue was not one JSON object.")
+    return value
+
+
+def get_json(config: ProviderConfig, endpoint: str) -> dict:
+    """GET one JSON document from a provider endpoint.
+
+    The read-only counterpart of :func:`_post_json_to_endpoint`: it sends the same credential and
+    refuses a redirect for the same reason, but it carries no body because it asks a catalogue
+    question rather than making an inference request.
+    """
+
+    request = Request(
+        endpoint,
+        method="GET",
+        headers={
+            "Accept": "application/json",
+            "Authorization": f"Bearer {config.api_key}",
+            "User-Agent": "TileSim-F9C-Bridge/1",
+        },
+    )
+    opener = build_opener(_NoRedirect())
+    try:
+        with opener.open(request, timeout=config.timeout_ms / 1_000.0) as response:
+            if response.status < 200 or response.status >= 300:
+                raise ProviderUnavailableError("The configured Provider rejected the request.")
+            if response.headers.get_content_type() != "application/json":
+                raise ProviderStructuredOutputError("Provider output did not use application/json.")
+            return _parse_catalogue_json_bytes(response.read(1_000_001))
+    except (TimeoutError, socket.timeout) as error:
+        raise ProviderTimeoutError("The configured Provider timed out.") from error
+    except ProviderError:
+        raise
+    except HTTPError as error:
+        raise ProviderUnavailableError("The configured Provider rejected the request.") from error
+    except URLError as error:
+        if isinstance(error.reason, (TimeoutError, socket.timeout)):
+            raise ProviderTimeoutError("The configured Provider timed out.") from error
+        raise ProviderUnavailableError("The configured Provider could not be reached.") from error
+    except OSError as error:
+        raise ProviderUnavailableError("The configured Provider transport failed.") from error
+
+
 def post_json(config: ProviderConfig, payload: dict) -> dict:
     return _post_json_to_endpoint(config, config.endpoint, payload)
+
+
+def open_json_stream(config: ProviderConfig, payload: dict):
+    """POST one JSON payload that asks for a streamed reply and return the raw response.
+
+    The caller owns the returned response object and must close it.  Redirects are refused for the
+    same reason as the non-streaming transport, and no part of the reply is buffered here: a caller
+    that only wants the visible answer deltas reads the socket incrementally through this handle.
+    """
+
+    body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    request = Request(
+        config.endpoint,
+        data=body,
+        method="POST",
+        headers={
+            "Accept": "text/event-stream",
+            "Authorization": f"Bearer {config.api_key}",
+            "Content-Type": "application/json; charset=utf-8",
+            "User-Agent": "TileSim-F9C-Bridge/1",
+        },
+    )
+    opener = build_opener(_NoRedirect())
+    try:
+        response = opener.open(request, timeout=config.timeout_ms / 1_000.0)
+    except (TimeoutError, socket.timeout) as error:
+        raise ProviderTimeoutError("The configured Provider timed out.") from error
+    except ProviderError:
+        raise
+    except HTTPError as error:
+        raise ProviderUnavailableError("The configured Provider rejected the request.") from error
+    except URLError as error:
+        if isinstance(error.reason, (TimeoutError, socket.timeout)):
+            raise ProviderTimeoutError("The configured Provider timed out.") from error
+        raise ProviderUnavailableError("The configured Provider could not be reached.") from error
+    except OSError as error:
+        raise ProviderUnavailableError("The configured Provider transport failed.") from error
+    if response.status < 200 or response.status >= 300:
+        response.close()
+        raise ProviderUnavailableError("The configured Provider rejected the request.")
+    return response
 
 
 def _newapi_chat_completions_endpoint(endpoint: str) -> str:

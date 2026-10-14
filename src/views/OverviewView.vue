@@ -24,6 +24,8 @@ const { t } = useI18n();
 const networkSummary = computed(() => state.bundle.metrics?.system_summary);
 const previewDomains = computed(() => networkSummary.value?.fabric_domain_utilization?.slice(0, 6) || []);
 const runVerdict = computed(() => buildRunVerdict(state.bundle));
+const selectedRun = computed(() => state.history.runs.find((run) => run.run_id === state.runId));
+const failedRun = computed(() => (selectedRun.value?.status === "failed" ? selectedRun.value : null));
 
 /**
  * C0-7: the availability of a value is one of five distinct states, never
@@ -81,6 +83,14 @@ const primarySubsystemName = computed(() => {
 
 <template>
   <div class="view-stack overview-view">
+    <section v-if="failedRun" class="history-notice history-notice--error" role="alert">
+      <strong>{{ t("运行失败") }} · {{ failedRun.failure_code || t("错误码未提供") }}</strong>
+      <p>{{ failedRun.error || failedRun.stderr_summary || t("执行服务未提供错误详情。") }}</p>
+      <small>CLI exit_code: {{ failedRun.exit_code ?? t("未知") }} · {{ failedRun.finished_at }}</small>
+      <button class="button button--secondary" @click="setView('experiment')">
+        {{ t("返回实验配置并重试") }}
+      </button>
+    </section>
     <section v-if="state.isDemo" class="demo-notice">
       <div>
         <Braces :size="18" /><span
@@ -95,7 +105,7 @@ const primarySubsystemName = computed(() => {
       <div class="analysis-stage__primary">
         <div class="analysis-stage__heading">
           <h2>{{ t("运行摘要") }}</h2>
-          <StatusPill :value="dashboardView.overview.status.value || 'unknown'" />
+          <StatusPill :value="failedRun ? 'failed' : dashboardView.overview.status.value || 'unknown'" />
         </div>
         <div class="hero-measure">
           <span>{{ t("本次模拟总时长") }}</span>
@@ -259,8 +269,7 @@ const primarySubsystemName = computed(() => {
     -->
     <section v-if="runVerdict" class="panel run-verdict" data-help-anchor="overview-verdict">
       <header>
-        <p class="section-kicker">{{ t("后端结论") }}</p>
-        <h2>{{ t("cause 与 next_action") }}</h2>
+        <h2>{{ t("后端结论") }}</h2>
         <p>{{ t("这两个字段由后端原样给出，前端不改写、不摘编、不降级为提示文案。") }}</p>
       </header>
       <dl>
@@ -293,15 +302,17 @@ const primarySubsystemName = computed(() => {
 .run-verdict {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
+  gap: 14px;
+  padding: 18px 20px 8px;
   min-width: 0;
 }
 .run-verdict header h2 {
-  margin: 4px 0 0;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
 }
 .run-verdict header p {
-  margin: 4px 0 0;
+  margin: 5px 0 0;
   max-width: 72ch;
   color: var(--muted);
   font-size: var(--text-xs);
@@ -309,17 +320,22 @@ const primarySubsystemName = computed(() => {
 .run-verdict dl {
   display: flex;
   flex-direction: column;
-  gap: 8px;
   margin: 0;
 }
 .run-verdict dl > div {
   display: grid;
-  grid-template-columns: minmax(120px, 180px) minmax(0, 1fr);
-  gap: 4px 12px;
+  grid-template-columns: minmax(112px, 140px) minmax(0, 1fr);
+  gap: 8px 16px;
+  align-items: start;
   min-width: 0;
+  padding: 11px 0;
+  border-top: 1px solid var(--line);
+}
+.run-verdict dt {
+  color: var(--muted);
 }
 .run-verdict dt code {
-  font: 600 var(--text-xs) var(--font-mono);
+  font: 600 var(--text-xs)/1.6 var(--font-mono);
 }
 .run-verdict dd {
   display: flex;
@@ -328,6 +344,7 @@ const primarySubsystemName = computed(() => {
   gap: 8px;
   margin: 0;
   min-width: 0;
+  line-height: 1.55;
 }
 .run-verdict__text {
   overflow-wrap: anywhere;

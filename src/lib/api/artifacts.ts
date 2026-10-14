@@ -45,6 +45,7 @@ interface ArtifactContract {
   schemaIdentities?: string[];
   requiresRunBinding?: boolean;
   runBindingExemptSchemaIdentities?: string[];
+  descriptorArtifactId?: string;
 }
 
 const artifactContracts: Record<string, ArtifactContract> = {
@@ -67,6 +68,7 @@ const artifactContracts: Record<string, ArtifactContract> = {
     reportKind: "metrics",
     schemaIdentities: ["tilesim.metrics_report.v1"],
     requiresRunBinding: true,
+    descriptorArtifactId: "metrics_report",
   },
   validation: {
     fileName: "validation.json",
@@ -79,6 +81,7 @@ const artifactContracts: Record<string, ArtifactContract> = {
     reportKind: "tail",
     schemaIdentities: ["tilesim.tail_cause_chain_report.v1"],
     requiresRunBinding: true,
+    descriptorArtifactId: "tail_cause_chain_report",
   },
   "design-space": {
     fileName: "design-space.json",
@@ -86,6 +89,7 @@ const artifactContracts: Record<string, ArtifactContract> = {
     schemaIdentities: ["design_space.report.v1alpha1", "tilesim.design_space_report.v1"],
     requiresRunBinding: true,
     runBindingExemptSchemaIdentities: ["design_space.report.v1alpha1"],
+    descriptorArtifactId: "design_space_report",
   },
   "execution-envelope": {
     fileName: "execution-envelope.json",
@@ -98,6 +102,42 @@ const artifactContracts: Record<string, ArtifactContract> = {
     reportKind: "run_bound_des_evidence",
     schemaIdentities: ["tilesim.s7_run_bound_des_evidence.v1"],
     requiresRunBinding: true,
+    descriptorArtifactId: "run_bound_des_evidence",
+  },
+  "runtime-events": {
+    fileName: "runtime-events.json",
+    reportKind: null,
+    schemaIdentities: ["tilesim.s1_runtime_event_trace.v1"],
+    requiresRunBinding: true,
+    descriptorArtifactId: "runtime_event_trace",
+  },
+  "runtime-summary": {
+    fileName: "runtime-summary.json",
+    reportKind: null,
+    schemaIdentities: ["tilesim.s1_runtime_event_summary.v1"],
+    requiresRunBinding: true,
+    descriptorArtifactId: "runtime_event_summary",
+  },
+  "runtime-requests": {
+    fileName: "runtime-requests.json",
+    reportKind: null,
+    schemaIdentities: ["tilesim.s1_runtime_request_summaries.v1"],
+    requiresRunBinding: true,
+    descriptorArtifactId: "runtime_request_summaries",
+  },
+  "runtime-analysis": {
+    fileName: "runtime-analysis.json",
+    reportKind: null,
+    schemaIdentities: ["tilesim.s1_runtime_analysis.v1"],
+    requiresRunBinding: true,
+    descriptorArtifactId: "runtime_analysis",
+  },
+  "request-attribution": {
+    fileName: "request-attribution.json",
+    reportKind: null,
+    schemaIdentities: ["tilesim.request_attribution.v1"],
+    requiresRunBinding: true,
+    descriptorArtifactId: "request_attribution",
   },
 };
 
@@ -120,6 +160,7 @@ function validateArtifactEntries(manifest: ArtifactManifestResponse) {
       entry.file_name !== contract.fileName ||
       entry.report_kind !== contract.reportKind ||
       entry.media_type !== "application/json" ||
+      (entry.content_status !== undefined && !["ready", "expected_absence"].includes(entry.content_status)) ||
       !/^[0-9a-f]{64}$/.test(entry.sha256) ||
       !["supported", "legacy_compatibility", "not_applicable"].includes(entry.contract_status)
     ) {
@@ -131,12 +172,27 @@ function validateArtifactEntries(manifest: ArtifactManifestResponse) {
       failIdentity("artifact_byte_count_invalid", "运行工件清单中的字节数不是无损非负整数。");
     }
     if (
+      entry.content_status === "expected_absence" &&
+      (!contract.descriptorArtifactId ||
+        entry.schema_identity !== "tilesim.wind_tunnel_artifact_descriptor.v1" ||
+        entry.contract_status !== "supported")
+    ) {
+      failIdentity("artifact_descriptor_mismatch", "期望缺席描述符的身份或契约状态无效。");
+    }
+    if (
+      entry.content_status !== "expected_absence" &&
       entry.contract_status === "supported" &&
       contract.schemaIdentities &&
       !contract.schemaIdentities.includes(entry.schema_identity)
     ) {
       failIdentity("artifact_schema_identity_mismatch", "运行工件清单中的 schema identity 与固定契约不一致。");
     }
+  }
+  for (const rejected of manifest.rejected_artifacts) {
+    if (!artifactContracts[rejected.artifact_id] || ids.has(rejected.artifact_id)) {
+      failIdentity("ambiguous_artifact_identity", "运行工件清单包含未知或重复的 artifact ID。");
+    }
+    ids.add(rejected.artifact_id);
   }
 }
 
@@ -200,6 +256,32 @@ export async function getVerifiedArtifact(runId: string, entry: ArtifactManifest
     );
   }
   const contract = artifactContracts[entry.artifact_id];
+  if (entry.content_status === "expected_absence") {
+    if (
+      !contract?.descriptorArtifactId ||
+      !isRecord(value) ||
+      Object.keys(value).sort().join() !==
+        ["schema_version", "run_id", "artifact_id", "state", "evidence_requirement", "absence_reason", "detail"]
+          .sort()
+          .join() ||
+      value.schema_version !== "tilesim.wind_tunnel_artifact_descriptor.v1" ||
+      value.run_id !== runId ||
+      value.artifact_id !== contract.descriptorArtifactId ||
+      value.state !== "expected_absence" ||
+      value.absence_reason !== "not_expected_for_boundary" ||
+      typeof value.evidence_requirement !== "string" ||
+      !value.evidence_requirement ||
+      typeof value.detail !== "string" ||
+      !value.detail
+    ) {
+      throw new BridgeApiError(t("期望缺席描述符内容与工件身份不一致。"), {
+        status: 0,
+        code: "artifact_descriptor_mismatch",
+        retryable: false,
+      });
+    }
+    return value;
+  }
   if (
     contract?.requiresRunBinding &&
     !contract.runBindingExemptSchemaIdentities?.includes(entry.schema_identity) &&
@@ -231,7 +313,12 @@ export async function getVerifiedReports(runId: string, manifest: ArtifactManife
   const reports: Record<string, unknown> = {};
   await Promise.all(
     manifest.artifacts
-      .filter((entry) => entry.report_kind && entry.contract_status !== "not_applicable")
+      .filter(
+        (entry) =>
+          entry.report_kind &&
+          entry.contract_status !== "not_applicable" &&
+          entry.content_status !== "expected_absence",
+      )
       .map(async (entry) => {
         reports[entry.report_kind as string] = await getVerifiedArtifact(runId, entry);
       }),

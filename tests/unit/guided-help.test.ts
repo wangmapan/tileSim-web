@@ -34,7 +34,7 @@ function copyFor(guide: GuideDefinition) {
 describe("guided help catalog", () => {
   it("covers routed and embedded modules with three to five semantic steps", () => {
     expect(Object.keys(viewGuides)).toEqual([...routedGuideIds]);
-    expect(Object.keys(guideRegistry)).toEqual([...routedGuideIds, "unsupported_schema", "raw_evidence"]);
+    expect(Object.keys(guideRegistry)).toEqual([...routedGuideIds, "unsupported_schema"]);
     for (const guide of allGuides) {
       expect(guide.takeaway.trim()).not.toBe("");
       expect(guide.steps.length).toBeGreaterThanOrEqual(3);

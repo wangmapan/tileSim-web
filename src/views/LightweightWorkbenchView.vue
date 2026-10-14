@@ -90,8 +90,8 @@ const statusLabel = (status: string | undefined) =>
       >
     </header>
 
-    <section v-if="!hasExperiment" class="panel lightweight-empty" aria-live="polite">
-      <div class="lightweight-empty__icon" aria-hidden="true"><SlidersHorizontal :size="24" /></div>
+    <section v-if="!hasExperiment" class="panel lightweight-empty ts-rise" aria-live="polite">
+      <div class="lightweight-empty__icon" aria-hidden="true"><SlidersHorizontal :size="22" /></div>
       <div>
         <h2>{{ t("还没有实验，创建第一个实验") }}</h2>
       </div>
@@ -100,8 +100,23 @@ const statusLabel = (status: string | undefined) =>
       /></RouterLink>
     </section>
 
-    <section v-else class="lightweight-grid" data-help-anchor="lightweight-start-recent">
-      <article class="panel lightweight-card">
+    <ol v-if="!hasExperiment" class="lightweight-home__steps ts-stagger" aria-label="实验流程">
+      <li>
+        <span class="lightweight-home__step-index">01</span>
+        <span><strong>配置实验</strong><small>选择场景与运行参数</small></span>
+      </li>
+      <li>
+        <span class="lightweight-home__step-index">02</span>
+        <span><strong>运行并观察</strong><small>跟踪阶段进度与执行状态</small></span>
+      </li>
+      <li>
+        <span class="lightweight-home__step-index">03</span>
+        <span><strong>分析结果</strong><small>整理重点并核对证据边界</small></span>
+      </li>
+    </ol>
+
+    <section v-else class="lightweight-grid ts-stagger" data-help-anchor="lightweight-start-recent">
+      <article class="panel lightweight-card ts-lift">
         <header>
           <p class="section-kicker">{{ t("当前实验 / 最近运行") }}</p>
           <h2>{{ runName }}</h2>
@@ -124,7 +139,7 @@ const statusLabel = (status: string | undefined) =>
         </dl>
         <RouterLink class="text-link" :to="runRoute">{{ t("查看真实运行状态") }} <ArrowRight :size="15" /></RouterLink>
       </article>
-      <article class="panel lightweight-card" data-help-anchor="lightweight-start-results">
+      <article class="panel lightweight-card ts-lift" data-help-anchor="lightweight-start-results">
         <p class="section-kicker">{{ t("结果摘要") }}</p>
         <template v-if="lightweight.reports.bundle || runStatus === 'completed'"
           ><h2>{{ t("结果可查看") }}</h2>
@@ -135,8 +150,8 @@ const statusLabel = (status: string | undefined) =>
       </article>
     </section>
 
-    <section class="lightweight-home__secondary">
-      <RouterLink class="panel lightweight-assist" :to="professionalRoute"
+    <section class="lightweight-home__secondary ts-rise">
+      <RouterLink class="panel lightweight-assist ts-lift" :to="professionalRoute"
         ><SlidersHorizontal :size="20" /><span
           ><strong>{{ t("进入专业版") }}</strong></span
         ><ArrowRight :size="16"
@@ -148,45 +163,110 @@ const statusLabel = (status: string | undefined) =>
 <style scoped>
 .lightweight-home {
   display: grid;
-  gap: 28px;
+  gap: 22px;
   max-width: 1080px;
 }
 .lightweight-home__hero {
   display: flex;
-  align-items: end;
+  align-items: center;
   justify-content: space-between;
   gap: 24px;
-  padding-bottom: 18px;
+  padding-bottom: 20px;
   border-bottom: 1px solid var(--line);
+  position: relative;
 }
+.lightweight-home__hero::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--accent),
+    color-mix(in srgb, var(--accent) 12%, transparent) 56%,
+    transparent
+  );
+  transform-origin: left;
+  animation: lightweight-rule-in 700ms var(--ease-emphasized) backwards;
+}
+/* The heading is a page title, not a hero: at 46px it read as a landing page
+   banner and pushed the actual work below the fold. */
 .lightweight-home h1 {
-  margin: 6px 0 10px;
-  font-size: clamp(30px, 5vw, 46px);
-  line-height: 1.1;
+  margin: 4px 0 0;
+  font-size: clamp(22px, 2.4vw, 26px);
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
 }
 .lightweight-home__cta {
-  min-height: 48px;
+  min-height: 40px;
   white-space: nowrap;
 }
 .lightweight-empty {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 18px;
-  padding: 24px 26px;
-  border-left: 3px solid var(--accent);
+  padding: 26px;
+  border-color: color-mix(in srgb, var(--accent) 22%, var(--line));
+  background: color-mix(in srgb, var(--accent-soft) 52%, var(--panel));
+  box-shadow: var(--shadow);
 }
 .lightweight-empty h2 {
   margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.012em;
 }
 .lightweight-empty__icon {
   display: grid;
   place-items: center;
-  width: 50px;
-  height: 50px;
-  border: 1px solid var(--line-strong);
-  border-radius: 12px;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-control);
   color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  animation: lightweight-icon-in 500ms var(--ease-emphasized) 100ms backwards;
+}
+.lightweight-home__steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin: -4px 0 0;
+  padding: 0;
+  list-style: none;
+  border-block: 1px solid var(--line);
+}
+.lightweight-home__steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  min-width: 0;
+  padding: 16px 18px;
+}
+.lightweight-home__steps li + li {
+  border-left: 1px solid var(--line);
+}
+.lightweight-home__steps li > span:last-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.lightweight-home__step-index {
+  color: var(--accent);
+  font: 650 var(--text-xs) var(--font-mono);
+  letter-spacing: 0.04em;
+}
+.lightweight-home__steps strong {
+  font-size: var(--text-sm);
+  font-weight: 650;
+}
+.lightweight-home__steps small {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.45;
 }
 .lightweight-grid {
   display: grid;
@@ -195,11 +275,13 @@ const statusLabel = (status: string | undefined) =>
 }
 .lightweight-card {
   display: grid;
+  align-content: start;
   gap: 16px;
   padding: 22px;
 }
 .lightweight-card h2 {
   margin: 5px 0 0;
+  overflow-wrap: anywhere;
 }
 .lightweight-card p {
   color: var(--muted);
@@ -222,7 +304,7 @@ const statusLabel = (status: string | undefined) =>
 }
 .lightweight-card dd {
   margin: 0;
-  font-weight: 650;
+  font-weight: 600;
 }
 .status-dot {
   display: inline-block;
@@ -233,7 +315,7 @@ const statusLabel = (status: string | undefined) =>
   background: var(--muted);
 }
 .status-dot[data-status="completed"] {
-  background: var(--success);
+  background: var(--positive);
 }
 .status-dot[data-status="failed"] {
   background: var(--danger);
@@ -241,14 +323,19 @@ const statusLabel = (status: string | undefined) =>
 .status-dot[data-status="running"],
 .status-dot[data-status="preparing"] {
   background: var(--warning);
+  animation: lightweight-status-pulse 1.8s var(--ease-standard) infinite;
 }
 .text-link {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  width: fit-content;
   color: var(--accent);
-  font-weight: 700;
+  font-weight: 600;
   text-decoration: none;
+}
+.text-link:hover {
+  color: var(--accent-hover);
 }
 .lightweight-home__secondary {
   display: grid;
@@ -273,6 +360,35 @@ const statusLabel = (status: string | undefined) =>
 .lightweight-assist small {
   color: var(--muted);
 }
+@keyframes lightweight-rule-in {
+  from {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+@keyframes lightweight-icon-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px) scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes lightweight-status-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--warning) 0%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--warning) 18%, transparent);
+  }
+}
 @media (max-width: 760px) {
   .lightweight-home__hero {
     align-items: stretch;
@@ -283,8 +399,23 @@ const statusLabel = (status: string | undefined) =>
   .lightweight-home__secondary {
     grid-template-columns: 1fr;
   }
+  .lightweight-home__steps {
+    grid-template-columns: 1fr;
+  }
+  .lightweight-home__steps li + li {
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
   .lightweight-empty {
     justify-items: start;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lightweight-home__hero::after,
+  .lightweight-empty__icon,
+  .status-dot[data-status="running"],
+  .status-dot[data-status="preparing"] {
+    animation: none;
   }
 }
 </style>

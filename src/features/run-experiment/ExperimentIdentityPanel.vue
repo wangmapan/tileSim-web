@@ -15,7 +15,7 @@ const { t } = useI18n();
       <span>01</span>
       <div>
         <h2>{{ t("实验身份") }}</h2>
-        <p v-if="!props.compact">{{ t("给这次运行一个易于在历史记录中识别的名称。") }}</p>
+        <p v-if="!props.compact">{{ t("用于历史记录和结果回溯。") }}</p>
       </div>
     </header>
     <div class="form-grid form-grid--identity">
@@ -37,6 +37,9 @@ const { t } = useI18n();
             {{ scenario.label }}
           </option>
         </select>
+        <small v-if="form.scenario_id === 'dense_des_package'" class="field-help">{{
+          t("此拓扑仅用于经验证的 Trace package；逐请求归因还需要 dense DES、设备和网络证据。")
+        }}</small>
       </label>
       <label class="field">
         <span>{{ t("请求 fidelity") }}</span>
@@ -45,7 +48,7 @@ const { t } = useI18n();
             {{ fidelity }}
           </option>
         </select>
-        <small v-if="!props.compact" class="field-help">{{ t("实际解析结果以验证报告为准") }}</small>
+        <small v-if="!props.compact" class="field-help">{{ t("以运行后的验证报告为准") }}</small>
       </label>
       <label class="field">
         <span>{{ t("GPU 参与方式") }}</span>
@@ -54,9 +57,7 @@ const { t } = useI18n();
             {{ gpuMode }}
           </option>
         </select>
-        <small v-if="!props.compact" class="field-help">{{
-          t("数值输出不会驱动仿真语义；真实网络观测只进入 S8 证据通道")
-        }}</small>
+        <small v-if="!props.compact" class="field-help">{{ t("真实网络观测仅作为证据") }}</small>
       </label>
     </div>
   </article>

@@ -180,6 +180,26 @@ def friendly_failure_detail(output: str) -> str:
     return "\n".join(lines[-18:]) or "脚本没有返回可用的错误详情。"
 
 
+def last_json_object(output: str) -> dict[str, Any] | None:
+    """Return the last JSON object a helper script printed, or None.
+
+    PowerShell can prefix warnings and progress lines to stdout, so parsing walks
+    the output backwards and stops at the first line that decodes to an object.
+    """
+
+    for line in reversed(output.splitlines()):
+        candidate = line.strip().lstrip("\ufeff")
+        if not candidate.startswith("{"):
+            continue
+        try:
+            value = json.loads(candidate)
+        except ValueError:
+            continue
+        if isinstance(value, dict):
+            return value
+    return None
+
+
 class TileSimLauncher(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
@@ -201,12 +221,15 @@ class TileSimLauncher(tk.Tk):
         self.operation_text = tk.StringVar(value="准备就绪")
 
         self.base_url_text = tk.StringVar()
-        self.model_text = tk.StringVar(value="gpt-5.6-sol")
+        self.model_text = tk.StringVar()
         self.api_key_text = tk.StringVar()
         self.timeout_text = tk.StringVar(value="30000")
         self.backend_root_text = tk.StringVar(value=str(DEFAULT_BACKEND_ROOT))
         self.wsl_distro_text = tk.StringVar(value=DEFAULT_WSL_DISTRO)
         self.saved_key_present = False
+        self.available_models: list[str] = []
+        self.models_fetched_at = 0.0
+        self.model_fetch_inflight = False
 
         self._configure_styles()
         self._build_ui()
@@ -278,9 +301,24 @@ class TileSimLauncher(tk.Tk):
         self.base_url_entry = self._form_row(
             model_card, 2, "Base URL *", self.base_url_text, "例如 https://api.example.com/v1"
         )
-        self.model_entry = self._form_row(
-            model_card, 3, "模型名 *", self.model_text, "必须与服务返回的 model 完全一致"
+        tk.Label(model_card, text="模型名 *", fg=MUTED, bg=CARD).grid(
+            row=3, column=0, sticky="w", padx=(18, 10), pady=6
         )
+        self.model_box = ttk.Combobox(
+            model_card,
+            textvariable=self.model_text,
+            values=(),
+            state="normal",
+            width=34,
+            style="TileSim.TCombobox",
+            postcommand=self._on_model_dropdown,
+        )
+        self.model_box.grid(row=3, column=1, columnspan=2, sticky="ew", pady=6, ipady=1)
+        self.model_list_button = self._button(
+            model_card, "获取模型列表", self.fetch_model_list, primary=False
+        )
+        self.model_list_button.grid(row=3, column=3, sticky="w", padx=(10, 18), pady=6, ipady=1)
+        model_card.columnconfigure(1, weight=1)
         self.api_key_entry = self._form_row(
             model_card,
             4,
@@ -474,13 +512,22 @@ class TileSimLauncher(tk.Tk):
             padx=16,
         )
 
+    def _sync_model_choices(self) -> None:
+        self.model_box.configure(values=tuple(self.available_models))
+
     def _load_model_form(self) -> None:
         settings = load_public_model_settings()
         self.saved_key_present = bool(settings.get("protected_key_present"))
         if settings.get("base_url"):
             self.base_url_text.set(str(settings["base_url"]))
         if settings.get("model"):
-            self.model_text.set(str(settings["model"]))
+            saved_model = str(settings["model"])
+            self.model_text.set(saved_model)
+            # Keep the saved identity selectable even when a refresh did not list it:
+            # the operator must be able to keep a configuration that already works.
+            if saved_model not in self.available_models:
+                self.available_models = [*self.available_models, saved_model]
+            self._sync_model_choices()
         if settings.get("timeout_ms") in {"30000", "60000", "120000"}:
             self.timeout_text.set(str(settings["timeout_ms"]))
         self.api_key_text.set("")
@@ -499,6 +546,8 @@ class TileSimLauncher(tk.Tk):
                     latest_progress = str(event[1])
                 elif kind == "refresh":
                     self._finish_refresh(event[1], event[2])
+                elif kind == "models":
+                    self._finish_model_list(event[1], event[2], bool(event[3]))
                 elif kind == "success":
                     self._finish_operation_success(str(event[1]), bool(event[2]), bool(event[3]))
                 elif kind == "failure":
@@ -580,7 +629,8 @@ class TileSimLauncher(tk.Tk):
             self.refresh_button,
             self.browse_button,
             self.base_url_entry,
-            self.model_entry,
+            self.model_box,
+            self.model_list_button,
             self.api_key_entry,
             self.backend_entry,
             self.wsl_entry,
@@ -679,6 +729,86 @@ class TileSimLauncher(tk.Tk):
 
         threading.Thread(target=worker, daemon=True, name="tilesim-operation").start()
 
+    def _on_model_dropdown(self) -> None:
+        # Opening the list is the moment the operator is about to choose, so refresh it
+        # from the service - at most once a minute, never while an operation owns the
+        # window, and never twice at once.
+        if self.operation_active or self.model_fetch_inflight:
+            return
+        if not self.available_models or time.monotonic() - self.models_fetched_at >= 60:
+            self.fetch_model_list(quiet=True)
+
+    def fetch_model_list(self, quiet: bool = False) -> None:
+        """Ask the configured service which model identities it exposes."""
+        if self.operation_active or self.model_fetch_inflight:
+            return
+        base_url = self.base_url_text.get().strip()
+        api_key = self.api_key_text.get().strip()
+        if not base_url:
+            if not quiet:
+                messagebox.showerror("模型列表", "请先填写 Base URL。")
+            return
+        if not api_key and not self.saved_key_present:
+            if not quiet:
+                messagebox.showerror("模型列表", "请先填写 API Key，或保存一次设置后再获取。")
+            return
+        arguments = [
+            "-Action",
+            "ListModels",
+            "-ConfigPath",
+            str(MODEL_CONFIG_PATH),
+            "-BaseUrl",
+            base_url,
+        ]
+        stdin_text: str | None = None
+        if api_key:
+            arguments += ["-ApiKeyFromStdin"]
+            stdin_text = api_key
+        else:
+            arguments += ["-KeepExistingKey"]
+        self.model_fetch_inflight = True
+        if quiet:
+            # A silent refresh must not disable the window the operator is clicking in.
+            self.operation_text.set("正在读取服务提供的模型列表…")
+        else:
+            self._set_operation(True, "正在读取服务提供的模型列表…")
+
+        def worker() -> None:
+            try:
+                _code, output = self._run_powershell(
+                    CONFIGURE_MODEL_SCRIPT, *arguments, stdin_text=stdin_text
+                )
+                self.events.put(("models", last_json_object(output), output, quiet))
+            except (OSError, subprocess.SubprocessError) as error:
+                self.events.put(("models", None, f"无法启动后台脚本：{error}", quiet))
+
+        threading.Thread(target=worker, daemon=True, name="tilesim-models").start()
+
+    def _finish_model_list(
+        self, payload: dict[str, Any] | None, raw_output: str, quiet: bool
+    ) -> None:
+        self.model_fetch_inflight = False
+        if not quiet:
+            self._set_operation(False, "准备就绪")
+        models: list[str] = []
+        if isinstance(payload, dict) and payload.get("ok") is True:
+            models = [str(item) for item in (payload.get("models") or []) if str(item).strip()]
+        if not models:
+            detail = str(payload.get("error") or "") if isinstance(payload, dict) else ""
+            detail = detail or friendly_failure_detail(raw_output)
+            if quiet:
+                self.model_status_text.set("未能读取模型列表，可点“获取模型列表”查看原因")
+                return
+            self.operation_text.set("未能读取模型列表")
+            messagebox.showwarning("模型列表", f"没能从服务读到可用模型：\n\n{detail}")
+            return
+        self.available_models = models
+        self.models_fetched_at = time.monotonic()
+        self._sync_model_choices()
+        if self.model_text.get().strip() not in models:
+            self.model_text.set(models[0])
+        self.operation_text.set(f"已读取 {len(models)} 个可用模型，可在“模型名”中直接选择。")
+
     def save_model_settings(self) -> None:
         base_url = self.base_url_text.get().strip()
         model = self.model_text.get().strip()
@@ -690,6 +820,16 @@ class TileSimLauncher(tk.Tk):
         if not api_key and not self.saved_key_present:
             messagebox.showerror("模型设置", "首次配置必须填写 API Key。")
             return
+        if self.available_models and model not in self.available_models:
+            confirmed = messagebox.askyesno(
+                "模型名",
+                f"“{model}”不在刚才读取到的 {len(self.available_models)} 个模型里。\n\n"
+                "服务会拒绝不认识的名字，助手将无法回答。仍要保存吗？",
+                icon="warning",
+                default="no",
+            )
+            if not confirmed:
+                return
         arguments = (
             "-Action",
             "Set",

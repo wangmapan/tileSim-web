@@ -74,7 +74,7 @@ test("Phase 1 Agent copilot drafts only the eight-field subset without writing a
   await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
   const panel = page.locator("#tilesim-agent-copilot");
   await expect(panel).toBeVisible();
-  await panel.getByRole("textbox", { name: "描述你想理解或调整的内容" }).fill("说明当前页面能做什么");
+  await panel.getByRole("textbox", { name: "描述要理解或调整的内容" }).fill("说明当前页面能做什么");
   await panel.getByRole("button", { name: "提交", exact: true }).click();
   await expect(panel).toContainText("这里可以核对当前实验参数");
   expect(capabilityRequests).toBe(0);
@@ -99,9 +99,11 @@ test("Phase 1 Agent copilot drafts only the eight-field subset without writing a
   await expect(panel).toHaveAttribute("data-state", "open");
   await page.setViewportSize({ width: 1440, height: 900 });
 
-  await panel.getByRole("radio", { name: "提出草案修改" }).check();
+  // The input asks for the sentence alone: there is no mode to pick first, so a
+  // request the frozen eight-field compiler understands simply goes to it.
+  await expect(panel.getByRole("radio")).toHaveCount(0);
   await panel
-    .getByRole("textbox", { name: "描述你想理解或调整的内容" })
+    .getByRole("textbox", { name: "描述要理解或调整的内容" })
     .fill("把最大 batch 调整为 8，把横向扩展网络带宽改为 100 Gbps per-link");
   await panel.getByRole("button", { name: "提交", exact: true }).click();
 
@@ -129,15 +131,13 @@ test("Phase 1 Agent copilot drafts only the eight-field subset without writing a
   await expect(batchInput).toHaveValue("6");
   expect(new URL(page.url()).searchParams.get("run")).toBe(originalUrl.searchParams.get("run"));
 
-  await panel.getByRole("radio", { name: "提出草案修改" }).check();
-  await panel.getByRole("textbox", { name: "描述你想理解或调整的内容" }).fill("把带宽改为 100");
+  await panel.getByRole("textbox", { name: "描述要理解或调整的内容" }).fill("把带宽改为 100");
   await panel.getByRole("button", { name: "提交", exact: true }).click();
   await expect(panel).toContainText("需要补充的信息");
 
-  await panel.getByRole("radio", { name: "提出草案修改" }).check();
-  await panel.getByRole("textbox", { name: "描述你想理解或调整的内容" }).fill("把 TP 改成 8");
+  await panel.getByRole("textbox", { name: "描述要理解或调整的内容" }).fill("把 TP 改成 8");
   await panel.getByRole("button", { name: "提交", exact: true }).click();
-  await expect(panel).toContainText("当前能力不支持");
+  await expect(panel).toContainText("页面可编辑字段不局限于八字段草案");
 
   await panel.getByRole("button", { name: "关闭", exact: true }).click();
   await expect(panel).toHaveAttribute("data-state", "closed");
@@ -169,15 +169,82 @@ test("Phase 1 Agent copilot drafts only the eight-field subset without writing a
   const accessibility = await new AxeBuilder({ page }).analyze();
   expect(accessibility.violations.filter((item) => ["serious", "critical"].includes(item.impact))).toEqual([]);
 
-  const composer = panel.getByRole("textbox", { name: "描述你想理解或调整的内容" });
+  const composer = panel.getByRole("textbox", { name: "描述要理解或调整的内容" });
   await composer.fill("保留这段尚未提交的中文输入");
   await panel.getByRole("button", { name: "关闭", exact: true }).click();
   await expect(page.getByRole("button", { name: "打开 TileSim 助手", exact: true })).toBeFocused();
   await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
   await expect(composer).toHaveValue("保留这段尚未提交的中文输入");
 
-  expect(capabilityRequests).toBe(3);
+  // The extended TP request no longer asks the frozen eight-field capability
+  // snapshot to declare a page-editable structured field unsupported.
+  expect(capabilityRequests).toBe(2);
   expect(prohibitedRequests).toEqual([]);
+  expect(failures).toEqual([]);
+});
+
+test("Agent routes a named full-surface configuration request to a reviewable model plan", async ({ page }) => {
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  const failures = await openFixture(page, fixture, "experiment");
+  const modelRequests = [];
+  const runWrites = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/runs" && request.method() === "POST") runWrites.push(request.url());
+  });
+  await page.route("**/api/agent/assistant-model", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        protocol: "tilesim.assistant_model.v1",
+        configured: true,
+        provider: { model_id: "fixture-model" },
+      }),
+    }),
+  );
+  await page.route("**/api/agent/scenario-chat", (route) => {
+    modelRequests.push(route.request().postDataJSON());
+    const plan = {
+      schema_version: "tilesim.bridge.assistant_model_plan.v1",
+      protocol: "tilesim.assistant_model.v1",
+      applied: false,
+      executed: false,
+      answer_state: "settings",
+      title: "仅调整运行参数",
+      rationale: "保留设备和拓扑，调整四个现有旋钮。",
+      settings: [
+        { key: "max_batch_size", value: "64", why: "扩大批次。" },
+        { key: "max_active_requests", value: "512", why: "增加活动请求上限。" },
+        { key: "kv_capacity_tokens", value: "262144", why: "提高逻辑 KV 准入容量。" },
+        { key: "batch_scheduler", value: "fabric_backpressure_aware", why: "感知互联背压。" },
+      ],
+      dropped: [],
+    };
+    return route.fulfill({
+      status: 200,
+      contentType: "text/event-stream",
+      body: `event: prose\ndata: ${JSON.stringify({ schema_version: "tilesim.bridge.assistant_model_chat.v1", text: "仅调整当前四项。" })}\n\nevent: plan\ndata: ${JSON.stringify(plan)}\n\nevent: done\ndata: {}\n\n`,
+    });
+  });
+
+  await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
+  const panel = page.locator("#tilesim-agent-copilot");
+  const instruction =
+    "只调整当前页面已有且可编辑的运行参数：batch size、最大活动请求数、KV 容量和调度策略。不要修改设备数量、TP degree、topology/links 或 topology/domains。请生成完整且可直接应用的方案。";
+  await panel.getByRole("textbox", { name: "描述要理解或调整的内容" }).fill(instruction);
+  await panel.getByRole("button", { name: "提交", exact: true }).click();
+  await expect(panel.getByText("仅调整运行参数", { exact: true })).toBeVisible();
+  await expect(panel.locator('[data-block-type="parameter_edits"] .agent-block__diff-list li')).toHaveCount(4);
+  await expect(panel.getByRole("button", { name: "应用到面板" })).toBeVisible();
+  expect(modelRequests).toHaveLength(1);
+  expect(modelRequests[0].messages.at(-1).content).toBe(instruction);
+  expect(runWrites).toEqual([]);
+
+  await panel.getByRole("button", { name: "应用到面板" }).click();
+  await expect(panel).toContainText("已写入 4 项参数，没有创建运行。");
+  await expect(page.locator('.field[data-field-id="s1.runtime.max_batch_size"] input')).toHaveValue("64");
+  await expect(page.locator('.field[data-field-id="s1.runtime.max_active_requests"] input')).toHaveValue("512");
+  expect(runWrites).toEqual([]);
   expect(failures).toEqual([]);
 });
 
@@ -200,8 +267,7 @@ test("Phase 1 Agent copilot fails closed when the formal field binding drifts", 
   });
   await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
   const panel = page.locator("#tilesim-agent-copilot");
-  await panel.getByRole("radio", { name: "提出草案修改" }).check();
-  await panel.getByRole("textbox", { name: "描述你想理解或调整的内容" }).fill("把消息大小倍率改为 2");
+  await panel.getByRole("textbox", { name: "描述要理解或调整的内容" }).fill("把消息大小倍率改为 2");
   await panel.getByRole("button", { name: "提交", exact: true }).click();
   await expect(panel.getByRole("alert")).toContainText("当前结果无法继续处理");
   await expect(panel.locator('[data-block-type="draft_summary"]')).toHaveCount(0);
@@ -458,9 +524,24 @@ test("overview keeps a usable first-viewport comparison and keyboard route round
   const fixture = fixtureCase("synthetic-s1-s6-complete");
   addWeek8Contracts(fixture, "req-0");
   const failures = await openFixture(page, fixture, "overview");
+  const firstDomainRow = page.locator(".overview-domain-list tr").first();
+  // Readiness: `openFixture` only waits for `domcontentloaded`, and the overview keeps mounting
+  // sections for a few frames after that, so a single `boundingBox()` sample can land while the
+  // list is detached mid re-render. Sample the geometry through a retrying read instead. The
+  // measured thresholds below are unchanged.
+  await expect(firstDomainRow).toBeVisible();
   for (const width of [1440, 1100, 1920]) {
     await page.setViewportSize({ width, height: 900 });
-    const bounds = await page.locator(".overview-domain-list tr").first().boundingBox();
+    let bounds = null;
+    await expect
+      .poll(
+        async () => {
+          bounds = await firstDomainRow.boundingBox();
+          return bounds;
+        },
+        { message: `first domain row geometry at ${width}px viewport` },
+      )
+      .not.toBeNull();
     expect(bounds.y + bounds.height).toBeLessThanOrEqual(900);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   }
@@ -936,6 +1017,10 @@ function artifactFor(fixture, artifact) {
     "execution-envelope": fixture.reports.execution_envelope,
     "design-space": fixture.reports.design_space,
     "week8-run-evidence": fixture.reports.run_bound_des_evidence,
+    "runtime-events": fixture.runtimeEvidence?.events,
+    "runtime-summary": fixture.runtimeEvidence?.summary,
+    "runtime-requests": fixture.runtimeEvidence?.requests,
+    "runtime-analysis": fixture.runtimeEvidence?.analysis,
   }[artifact];
 }
 
@@ -950,6 +1035,10 @@ function artifactManifestEntries(fixture) {
     ["execution-envelope", "execution_envelope"],
     ["design-space", "design_space"],
     ["week8-run-evidence", "run_bound_des_evidence"],
+    ["runtime-events", null],
+    ["runtime-summary", null],
+    ["runtime-requests", null],
+    ["runtime-analysis", null],
   ];
   return definitions.flatMap(([artifactId, reportKind]) => {
     const value = artifactFor(fixture, artifactId);
@@ -974,6 +1063,10 @@ function artifactManifestEntries(fixture) {
           "tilesim.tail_cause_chain_report.v1",
           "tilesim.s7_execution_envelope.v1",
           "tilesim.s7_run_bound_des_evidence.v1",
+          "tilesim.s1_runtime_event_trace.v1",
+          "tilesim.s1_runtime_event_summary.v1",
+          "tilesim.s1_runtime_request_summaries.v1",
+          "tilesim.s1_runtime_analysis.v1",
         ].includes(value.contract_version || value.schema_version || "")
           ? "supported"
           : "legacy_compatibility",
@@ -1321,6 +1414,46 @@ function addFormalF7Contracts(fixture) {
   );
 }
 
+/**
+ * Stands in for `GET /api/templates/<scenario_id>`, which returns the shipped
+ * example trace and topology (`bridge/server.py:638-653`). The structured input
+ * editors start from this document, so it has to be contract-valid on its own.
+ */
+const fixtureTemplate = {
+  runtime_trace: {
+    trace_name: "fixture-template-trace",
+    policy: { batch_scheduler: "fifo", max_batch_size: 4 },
+    requests: [
+      {
+        request_id: "req_decode_0",
+        arrival_time_ps: 0,
+        phase: "prefill",
+        tp_degree: 2,
+        participants: ["gpu0", "gpu1"],
+      },
+    ],
+  },
+  topology: {
+    topology: {
+      devices: [
+        { device_id: "gpu0", device_type: "GPU" },
+        { device_id: "gpu1", device_type: "GPU" },
+      ],
+      module_bindings: [
+        { module_name: "su-module", module_kind: "scale_up", override_params: { bandwidth_gbps: 900 } },
+      ],
+      domains: [
+        {
+          domain_id: "su0",
+          domain_type: "scale_up",
+          member_devices: ["gpu0", "gpu1"],
+          module_binding: "su-module",
+        },
+      ],
+    },
+  },
+};
+
 async function installFixtureApi(
   page,
   fixture,
@@ -1447,6 +1580,8 @@ async function installFixtureApi(
       payload = f8Capabilities;
     } else if (path === "/api/experiment-schema") {
       payload = createF8ExperimentDescriptor();
+    } else if (path.startsWith("/api/templates/")) {
+      payload = { ...fixtureTemplate, scenario_id: path.slice("/api/templates/".length) };
     } else if (path === "/api/trace-packages") {
       payload = tracePackageCatalog;
     } else if (path === "/api/trace-packages/synthetic-package/inspect" && route.request().method() === "POST") {
@@ -1637,6 +1772,79 @@ async function expectNoUnexpectedTextOverflow(page) {
   expect(offenders).toEqual([]);
 }
 
+test("runtime evidence fixture stays lazy, paged, run-bound, and deep-linkable", async ({ page }) => {
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  const events = Array.from({ length: 27 }, (_, index) => ({
+    kind: "arrival",
+    request_id: `fixture-request-${index}`,
+    batch_id: "",
+    batch_request_ids: [],
+    event_time_ps: index,
+    logical_step: index,
+    kv_tokens: 1,
+    active_requests: 1,
+  }));
+  fixture.runtimeEvidence = {
+    events: {
+      schema_version: "tilesim.s1_runtime_event_trace.v1",
+      run_id: runId,
+      trace_name: "fixture-runtime",
+      events,
+    },
+    summary: {
+      schema_version: "tilesim.s1_runtime_event_summary.v1",
+      run_id: runId,
+      has_events: true,
+      total_events: 27,
+      first_event_time_ps: 0,
+      last_event_time_ps: 26,
+      peak_active_requests: 1,
+      monotonic_time_order: true,
+      contiguous_logical_steps: true,
+    },
+    requests: { schema_version: "tilesim.s1_runtime_request_summaries.v1", run_id: runId, requests: [] },
+    analysis: {
+      schema_version: "tilesim.s1_runtime_analysis.v1",
+      run_id: runId,
+      trace_name: "fixture-runtime",
+      summary: {
+        has_events: true,
+        total_events: 27,
+        first_event_time_ps: 0,
+        last_event_time_ps: 26,
+        peak_active_requests: 1,
+        monotonic_time_order: true,
+        contiguous_logical_steps: true,
+      },
+      requests: [],
+      events,
+    },
+  };
+  let evidenceReads = 0;
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.endsWith("/files/runtime-events")) evidenceReads += 1;
+  });
+  const failures = await openFixture(page, fixture, "execution");
+  const panel = page.getByRole("region", { name: "后端运行期证据" });
+  await expect(panel.getByText("tilesim.s1_runtime_event_trace.v1")).toBeVisible();
+  expect(evidenceReads).toBe(0);
+  await panel.getByRole("button", { name: "按需读取" }).click();
+  await expect(panel.locator("tbody tr")).toHaveCount(25);
+  expect(evidenceReads).toBe(1);
+  await panel.getByRole("button", { name: "下一页" }).click();
+  await expect(panel.locator("tbody tr")).toHaveCount(2);
+  await panel.getByRole("combobox", { name: "工件" }).selectOption("runtime-requests");
+  await panel.getByRole("button", { name: "按需读取" }).click();
+  await expect(panel).toContainText("逐请求集合为空（后端已提供空数组）");
+  await panel.getByRole("combobox", { name: "工件" }).selectOption("runtime-events");
+  await panel.getByRole("link", { name: "查看原始证据" }).first().click();
+  await expect(page).toHaveURL(/evidence_artifact=runtime-events/);
+  await expect(page.getByText("Worker 已索引", { exact: false })).toBeVisible();
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(page.getByText("Worker 已索引", { exact: false })).toBeVisible();
+  expect(failures).toEqual([]);
+});
+
 test("synthetic evidence view is stable, accessible, and field-complete", async ({ page }, testInfo) => {
   const fixture = fixtureCase("synthetic-s1-s6-complete");
   const browserFailures = await openFixture(page, fixture);
@@ -1662,7 +1870,8 @@ test("synthetic evidence view is stable, accessible, and field-complete", async 
     await page.evaluate(() => document.documentElement.clientWidth),
   );
 
-  await page.locator(".json-artifact-panel").evaluate((element) => (element.open = true));
+  await page.getByRole("button", { name: "原始证据", exact: true }).click();
+  await expect(page.locator(".json-artifact-panel")).toHaveAttribute("open", "");
   await page.locator(".json-artifact-panel select").selectOption("metrics");
   await expect(page.locator(".json-artifact-meta")).toContainText("Worker 已索引");
   await page.locator(".json-artifact-panel select").evaluate((select) => {
@@ -1683,6 +1892,7 @@ test("synthetic evidence view is stable, accessible, and field-complete", async 
   await page.keyboard.press("Tab");
   expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe("BODY");
   expect(browserFailures).toEqual([]);
+  await page.getByRole("button", { name: "执行过程", exact: true }).click();
   await page.evaluate(() => window.scrollTo(0, 0));
   await expect(page).toHaveScreenshot(`synthetic-evidence-${testInfo.project.name}.png`, { fullPage: true });
 });
@@ -1793,7 +2003,7 @@ test("F6B request evidence stays run-bound across peer resources and S7-S9 pages
   await expect(page).toHaveScreenshot(`request-evidence-${testInfo.project.name}.png`, { fullPage: true });
 
   await panel.getByRole("link", { name: "执行过程" }).click();
-  await expect(page).toHaveURL(/\/execution\?/);
+  await expect(page).toHaveURL(/\/raw-evidence\?/);
   expect(new URL(page.url()).searchParams.get("run")).toBe(runId);
   expect(new URL(page.url()).searchParams.get("evidence_request")).toBe(longRequestId);
   await expect(page.locator(".run-bound-evidence-panel")).toHaveCount(0);
@@ -2147,7 +2357,10 @@ test("hash-bound evidence links locate JSON Pointers and survive reload", async 
   await expectNoUnexpectedTextOverflow(page);
   await evidenceLink.click();
 
-  await expect(page).toHaveURL(/\/execution\?run=run-fixture-f1&evidence_artifact=metrics/);
+  await expect(page).toHaveURL(/\/raw-evidence\?run=run-fixture-f1&evidence_artifact=metrics/);
+  await expect(page.getByRole("heading", { name: "原始证据", exact: true, level: 1 })).toBeVisible();
+  await expect(page.getByRole("button", { name: "原始证据", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(page.locator(".execution-view")).toHaveCount(0);
   await expect(page.locator(".json-artifact-panel")).toHaveAttribute("open", "");
   await expect(page.locator(".artifact-evidence-target")).toContainText("/summary/throughput_requests_per_second");
   await expect(page.locator(".artifact-virtual-line--active")).toContainText("throughput_requests_per_second");
@@ -2182,8 +2395,42 @@ test("hash-bound evidence links locate JSON Pointers and survive reload", async 
       "b".repeat(64) +
       "&evidence_pointer=%2Fsummary%2Fthroughput_requests_per_second",
   );
+  await expect(page).toHaveURL(/\/raw-evidence\?run=run-fixture-f1&evidence_artifact=metrics/);
   await expect(page.locator(".json-artifact-empty--error")).toContainText("SHA-256");
+  await expect(page.locator(".artifact-virtual-viewer")).toHaveCount(0);
   expect(browserFailures).toEqual([]);
+});
+
+test("raw evidence is a standalone workspace tool, while execution remains focused", async ({ page }) => {
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  const browserFailures = await openFixture(page, fixture, "execution");
+  await expect(page.locator(".evidence-identity strong")).toHaveText(fixture.id);
+  await expect(page.locator(".json-artifact-panel")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "AI 解释", exact: true })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "原始证据", exact: true }).click();
+  await expect(page).toHaveURL(/\/raw-evidence\?run=run-fixture-f1$/);
+  await expect(page.locator(".json-artifact-panel")).toHaveAttribute("open", "");
+  await expect(page.locator(".artifact-virtual-viewer")).toBeVisible();
+  await expectNoUnexpectedTextOverflow(page);
+  await page.setViewportSize({ width: 1100, height: 900 });
+  await page.getByRole("button", { name: "切换到深色模式" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-appearance", "dark");
+  await expectNoUnexpectedTextOverflow(page);
+  expect(browserFailures).toEqual([]);
+});
+
+test("demo metrics remains inspectable after lossless integer normalization", async ({ page }) => {
+  await page.goto("/raw-evidence", { waitUntil: "domcontentloaded" });
+  const panel = page.locator(".json-artifact-panel");
+  await expect(panel).toHaveAttribute("open", "");
+  await panel.locator("select").selectOption("metrics");
+  await expect(panel.locator(".artifact-virtual-viewer")).toBeVisible();
+  await expect(panel.locator(".json-artifact-meta")).toContainText("Worker 已索引");
+  await expect(panel.locator(".json-artifact-empty--error")).toHaveCount(0);
+  await expect(panel.getByRole("button", { name: "复制完整 JSON" })).toBeEnabled();
+  await panel.getByRole("searchbox", { name: "搜索字段或值" }).fill("record_count");
+  await expect(panel.locator(".artifact-virtual-line--active")).toContainText('"record_count": 49');
 });
 
 test("analysis charts keep complete tables and bind selected points to the current run artifact identity", async ({
@@ -2261,6 +2508,7 @@ test("a missing evidence Pointer remains visible as a persistent error", async (
     `/execution?run=${runId}&evidence_artifact=metrics&evidence_sha=${metrics.sha256}&evidence_pointer=%2Fnot-present`,
   );
 
+  await expect(page).toHaveURL(/\/raw-evidence\?/);
   await expect(page.locator(".json-artifact-alert")).toContainText("/not-present");
   await expect(page.locator(".artifact-virtual-viewer")).toBeVisible();
 });
@@ -2468,7 +2716,7 @@ test("F8 experiment builder binds schema options, request preview, and exact err
   await expect(page.locator(".experiment-schema-panel")).toContainText("实验编排契约");
   await expect(page.locator(".experiment-schema-panel")).toContainText("supported");
   await expect(page.locator(".experiment-schema-panel")).toContainText("S3=not_exposed");
-  await expect(page.locator("[data-field-path]")).toHaveCount(8);
+  await expect(page.locator("[data-field-path]")).toHaveCount(13);
   await expect(page.locator(".schema-control-group .field-help code")).toHaveCount(0);
 
   const latency = page.locator('[data-field-path="/overrides/fabric/scale_out_latency_us"] input');
@@ -2490,6 +2738,161 @@ test("F8 experiment builder binds schema options, request preview, and exact err
   await page.getByRole("button", { name: "JSON 输入" }).click();
   await expect(page.locator(".request-preview-error code")).toHaveText("/custom_inputs/runtime_trace");
   await expect(page.locator("button.run-submit")).toBeDisabled();
+
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations.filter((item) => ["serious", "critical"].includes(item.impact))).toEqual([]);
+  await expectNoUnexpectedTextOverflow(page);
+  expect(browserFailures).toEqual([]);
+});
+
+test("quick-control tab hosts the structured editors and swaps the submission channel", async ({ page }) => {
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  const browserFailures = await openFixture(page, fixture, "experiment");
+
+  // Quick control is the tab that owns the structured editors; the JSON tab
+  // keeps the shape it has always had (two textareas, runtime first).
+  await expect(page.locator("[data-field-path]")).toHaveCount(13);
+  await expect(page.locator(".structured-entry-button")).toHaveCount(1);
+  await expect(page.locator(".structured-stack")).toHaveCount(0);
+
+  await page.locator(".experiment-request-preview summary").click();
+  const previewRequest = async () =>
+    JSON.parse((await page.locator(".experiment-request-preview pre").textContent()) || "{}");
+  const overridesRequest = await previewRequest();
+  expect(overridesRequest.scenario_id).toBe("s1_des_example");
+  expect(overridesRequest.custom_inputs).toBeUndefined();
+
+  await page.getByRole("button", { name: "JSON 输入" }).click();
+  await expect(page.locator(".json-grid textarea")).toHaveCount(2);
+  await expect(page.locator(".structured-stack")).toHaveCount(0);
+  await expect(page.locator(".structured-entry-button")).toHaveCount(0);
+
+  // Knobs alone keep the overrides channel; the editors are what move it.
+  await page.getByRole("button", { name: "快捷控制" }).click();
+  await page.locator(".structured-entry-button").click();
+  await expect(page.locator(".structured-stack")).toHaveCount(1);
+  await expect(page.locator(".json-grid")).toHaveCount(0);
+  await expect(page.locator(".device-inventory")).toBeVisible();
+  await expect(page.locator(".structured-area .structured-note--info")).toContainText("custom_inputs");
+
+  // The run-policy block carries only the keys the knobs cannot reach, so the
+  // same parameters are never painted twice on one screen.
+  await expect(page.locator(".structured-block--policy")).toContainText("进阶运行策略");
+  await expect(page.locator("[data-input-path='/custom_inputs/runtime_trace/policy/max_batch_size']")).toHaveCount(0);
+  const omittedDelay = page.locator("[data-input-path='/custom_inputs/runtime_trace/policy/pd_handoff_delay_ps']");
+  await expect(omittedDelay).toContainText("后端默认 0 ps（未写入）");
+  await expect(omittedDelay.locator("input")).toHaveAttribute("placeholder", "0");
+
+  const structuredRequest = await previewRequest();
+  expect(structuredRequest.overrides).toBeUndefined();
+  expect(structuredRequest.custom_inputs.runtime_trace.policy).toBeDefined();
+  expect(structuredRequest.custom_inputs.runtime_trace.policy.pd_handoff_delay_ps).toBeUndefined();
+  expect(structuredRequest.custom_inputs.runtime_trace.requests).toHaveLength(1);
+  expect(structuredRequest.custom_inputs.topology.topology.devices).toHaveLength(2);
+
+  // The domain list is the panel's only route to domains[]. A new domain lands in
+  // the submitted document with an empty member list, ticking a card writes it
+  // straight into member_devices, and deleting the domain takes its links away.
+  await expect(page.locator(".domain-inventory-row")).toHaveCount(1);
+  await page.locator(".domain-inventory .structured-block__header .button").click();
+  await expect(page.locator(".domain-inventory-row")).toHaveCount(2);
+  await expect(page.locator(".experiment-request-preview pre")).toContainText("su1");
+  const withDomain = await previewRequest();
+  expect(withDomain.custom_inputs.topology.topology.domains).toHaveLength(2);
+  expect(withDomain.custom_inputs.topology.topology.domains[1]).toMatchObject({
+    domain_id: "su1",
+    domain_type: "scale_up",
+    member_devices: [],
+    module_binding: "su-module",
+  });
+
+  await page.locator(".domain-inventory-row").nth(1).locator(".domain-member-option input").first().check();
+  await expect(page.locator(".experiment-request-preview pre")).toContainText('"gpu0"');
+  const withMember = await previewRequest();
+  expect(withMember.custom_inputs.topology.topology.domains[1].member_devices).toEqual(["gpu0"]);
+
+  await page.locator(".domain-inventory-row").nth(1).locator(".icon-button").click();
+  await expect(page.locator(".domain-inventory-row")).toHaveCount(1);
+  const afterDomainDelete = await previewRequest();
+  expect(afterDomainDelete.custom_inputs.topology.topology.domains).toHaveLength(1);
+
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations.filter((item) => ["serious", "critical"].includes(item.impact))).toEqual([]);
+  await expectNoUnexpectedTextOverflow(page);
+
+  // Turning the editors off puts the quick-control tab back on overrides.
+  await page.getByRole("button", { name: "停用，回到只用旋钮" }).click();
+  await expect(page.locator(".structured-stack")).toHaveCount(0);
+  const restoredRequest = await previewRequest();
+  expect(restoredRequest.custom_inputs).toBeUndefined();
+
+  expect(browserFailures).toEqual([]);
+});
+
+test("quick-control tab connects, edits and deletes topology links without a JSON box", async ({ page }) => {
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  const browserFailures = await openFixture(page, fixture, "experiment");
+
+  // The editors start from the shipped template: two cards, one scale-up domain.
+  await page.locator(".structured-entry-button").click();
+  const editor = page.locator(".structured-stack .topology-editor");
+  await expect(editor).toBeVisible();
+  await expect(editor.locator(".topology-device")).toHaveCount(2);
+  await expect(editor.locator(".topology-domain-node")).toHaveCount(1);
+  // Mouse-only tab: no raw JSON box exists anywhere in it.
+  await expect(page.locator(".structured-stack textarea")).toHaveCount(0);
+  await expect(editor.locator(".topology-editor__json")).toHaveCount(0);
+
+  await page.locator(".experiment-request-preview summary").click();
+  const previewRequest = async () =>
+    JSON.parse((await page.locator(".experiment-request-preview pre").textContent()) || "{}");
+
+  const nodeBy = (id) => editor.locator(".topology-device").filter({ hasText: id });
+  /** Geometry reads are retried: a re-render can detach a node mid-read. */
+  const centerOf = async (locator) => {
+    await locator.scrollIntoViewIfNeeded();
+    let box = null;
+    await expect.poll(async () => (box = await locator.boundingBox())).not.toBeNull();
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  };
+
+  // Layout stays local: moving a node must not change the submitted document.
+  const beforeDrag = JSON.stringify(await previewRequest());
+  const dragged = nodeBy("gpu0");
+  const start = await centerOf(dragged);
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(start.x + 80, start.y + 30, { steps: 5 });
+  await page.mouse.up();
+  expect(JSON.stringify(await previewRequest())).toBe(beforeDrag);
+
+  // Drag-connect gpu0 -> gpu1 inside the domain the template ships.
+  await editor.getByRole("button", { name: "连接设备", exact: true }).click();
+  await editor.getByRole("combobox", { name: "选择连接 domain" }).selectOption("su0");
+  const source = await centerOf(nodeBy("gpu0"));
+  const target = await centerOf(nodeBy("gpu1"));
+  await page.mouse.move(source.x, source.y);
+  await page.mouse.down();
+  await page.mouse.move(target.x, target.y, { steps: 8 });
+  await page.mouse.up();
+  await expect(editor.locator(".topology-link")).toHaveCount(1);
+  let request = await previewRequest();
+  expect(request.custom_inputs.topology.topology.links).toEqual([
+    { src_device: "gpu0", dst_device: "gpu1", domain_id: "su0" },
+  ]);
+
+  // The link properties write the override keys into the same document.
+  const bandwidth = editor.locator('.topology-link-panel input[type="number"]').first();
+  await bandwidth.fill("400");
+  await expect(page.locator(".experiment-request-preview pre")).toContainText("bandwidth_gbps");
+  request = await previewRequest();
+  expect(request.custom_inputs.topology.topology.links[0]).toMatchObject({ bandwidth_gbps: 400 });
+
+  // Deleting the link takes it out of the submission again.
+  await editor.getByRole("button", { name: "删除连接", exact: true }).click();
+  await expect(editor.locator(".topology-link")).toHaveCount(0);
+  request = await previewRequest();
+  expect(request.custom_inputs.topology.topology.links).toEqual([]);
 
   const results = await new AxeBuilder({ page }).analyze();
   expect(results.violations.filter((item) => ["serious", "critical"].includes(item.impact))).toEqual([]);
@@ -2785,7 +3188,7 @@ test("help documentation is keyboard-complete, bilingual, accessible, and reduce
   await page.keyboard.press("Enter");
   const panel = page.locator("dialog.help-documentation");
   await expect(panel).toBeVisible();
-  await expect(panel.locator("[data-guide-id]")).toHaveCount(13);
+  await expect(panel.locator("[data-guide-id]")).toHaveCount(12);
   await expect(panel.getByRole("button", { name: "关闭帮助" })).toBeFocused();
   expect(await page.evaluate(() => window.__guidedHelpScrollBehaviors)).toEqual([]);
   await expect(page.locator("[data-help-active]")).toHaveCount(0);
@@ -2802,7 +3205,6 @@ test("help documentation is keyboard-complete, bilingual, accessible, and reduce
     "attribution",
     "design_space",
     "validation",
-    "evidence_agent",
     "evidence_lab",
     "raw_evidence",
     "unsupported_schema",
@@ -2852,7 +3254,7 @@ test("raw and unsupported evidence guides remain available at fail-closed bounda
   await page.getByRole("button", { name: "原始证据帮助", exact: true }).click();
   await expect(panel.getByRole("heading", { name: "原始证据", exact: true })).toBeVisible();
   await expect(panel).toContainText("uint64");
-  await expect(panel.locator("[data-guide-id]")).toHaveCount(13);
+  await expect(panel.locator("[data-guide-id]")).toHaveCount(12);
   await expect(page.locator("[data-help-active]")).toHaveCount(0);
   await expectNoUnexpectedTextOverflow(page);
   expect(browserFailures).toEqual([]);

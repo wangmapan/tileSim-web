@@ -12,6 +12,7 @@ import AgentTypedBlockList from "./AgentTypedBlockList.vue";
 import type {
   AgentCopilotPanelState,
   AgentCopilotSubmitPayload,
+  AgentSessionSummary,
   AgentTypedBlock,
 } from "../../entities/agent-orchestration";
 
@@ -25,6 +26,26 @@ const props = withDefaults(
     initialWidth?: number;
     minimumWidth?: number;
     maximumWidth?: number;
+    /** Whether the current page can accept parameter edits (prototype). */
+    allowParameterEdit?: boolean;
+    /** True while a streamed assistant answer is still arriving. */
+    busy?: boolean;
+    /** Whether this Bridge publishes an assistant model channel at all. */
+    modelChannel?: boolean;
+    /** The model identities the channel publishes; empty means the list could not be read. */
+    modelCatalogue?: readonly string[];
+    /** The identity the next answer will use. */
+    modelSelected?: string;
+    /** True while the catalogue is being read or a switch is being applied. */
+    modelPending?: boolean;
+    /** Locally persisted conversations available to this assistant panel. */
+    sessions?: readonly AgentSessionSummary[];
+    /** The conversation whose messages and blocks are currently displayed. */
+    activeSessionId?: string;
+    /** True when this browser rejected the local persistence write. */
+    persistenceError?: boolean;
+    /** Human-readable local retention policy for the visible session cache. */
+    retentionNotice?: string;
   }>(),
   {
     currentTask: "当前页面助手",
@@ -32,6 +53,16 @@ const props = withDefaults(
     initialWidth: 420,
     minimumWidth: 340,
     maximumWidth: 760,
+    allowParameterEdit: false,
+    busy: false,
+    modelChannel: false,
+    modelCatalogue: () => [],
+    modelSelected: "",
+    modelPending: false,
+    sessions: () => [],
+    activeSessionId: "",
+    persistenceError: false,
+    retentionNotice: "",
   },
 );
 
@@ -39,11 +70,29 @@ const emit = defineEmits<{
   "update:modelValue": [state: AgentCopilotPanelState];
   submit: [payload: AgentCopilotSubmitPayload];
   answer: [payload: { question_id: string; option_id: string; serialized_value: string }];
+  /** The user pressed "应用到面板" on a parameter-edits block. */
+  apply: [blockId: string];
+  /** The user stopped a streamed answer. */
+  cancel: [];
   resize: [width: number];
+  /** The user picked one of the published model identities. */
+  "select-model": [model: string];
+  /** The user asked for the model catalogue to be read again. */
+  "refresh-models": [];
+  "new-session": [];
+  "select-session": [sessionId: string];
+  "delete-session": [sessionId: string];
+  "clear-all-sessions": [];
+  start: [task: "configure" | "analyze" | "learn"];
 }>();
+
+/** The one id the model label points at; the panel is a single instance in this app. */
+const modelSelectId = "tilesim-agent-model-select";
+const sessionSelectId = "tilesim-agent-session-select";
 
 const composer = ref<InstanceType<typeof AgentComposer> | null>(null);
 const panel = ref<HTMLElement | null>(null);
+const timeline = ref<HTMLElement | null>(null);
 const width = ref(props.initialWidth);
 const attachedContext = ref<PageContextEnvelope | null>(null);
 let dragStartX = 0;
@@ -88,6 +137,37 @@ const statusText = computed(() =>
   attachmentStatus.value.state === "stale" && props.blocks.length ? "现有内容使用旧上下文" : props.statusLabel,
 );
 
+/**
+ * The identities the select offers.
+ *
+ * The identity actually in force is always kept in the list even when the service no longer publishes
+ * it: a control that silently showed a different model than the one answering would be a lie about the
+ * thing the user is looking at. A catalogue that could not be read is offered as nothing at all -
+ * showing the current identity as the only, unselectable option would hide the way to try again.
+ */
+const modelOptions = computed(() => {
+  const published = props.modelCatalogue;
+  if (!published.length) return published;
+  const selected = props.modelSelected;
+  if (!selected || published.includes(selected)) return published;
+  return [selected, ...published];
+});
+
+/** What the panel says when it has no list to offer: a reason, and what is still answering. */
+const modelUnavailableText = computed(() =>
+  props.modelSelected ? `模型列表暂时读不到，仍在用 ${props.modelSelected}` : "模型列表暂时读不到",
+);
+
+function onModelChange(event: Event): void {
+  const target = event.target;
+  if (target instanceof HTMLSelectElement && target.value) emit("select-model", target.value);
+}
+
+function onSessionChange(event: Event): void {
+  const target = event.target;
+  if (target instanceof HTMLSelectElement && target.value) emit("select-session", target.value);
+}
+
 watch(
   contentSignature,
   (next, previous) => {
@@ -96,6 +176,26 @@ watch(
     }
   },
   { immediate: true },
+);
+
+/**
+ * Keeps a growing answer in view without fighting the user.
+ *
+ * The follow is decided from the position *before* the new content was laid out, so a reader who
+ * scrolled up to re-read an earlier turn is left where they are, while a reader at the bottom watches
+ * the answer being written.
+ */
+watch(
+  () => props.blocks,
+  () => {
+    const element = timeline.value;
+    if (!element) return;
+    const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
+    if (distanceFromBottom > 120) return;
+    void nextTick(() => {
+      element.scrollTop = element.scrollHeight;
+    });
+  },
 );
 
 watch(
@@ -165,11 +265,10 @@ function onEscape(event: KeyboardEvent): void {
   event.stopPropagation();
 }
 
-function submit(payload: { instruction: string; purpose: "explain" | "draft" }): void {
+function submit(payload: { instruction: string }): void {
   attachedContext.value = props.context ? clonePageContextEnvelope(props.context) : null;
   emit("submit", {
     instruction: payload.instruction,
-    purpose: payload.purpose,
     context_revision: props.context?.context_revision ?? null,
   });
 }
@@ -227,7 +326,7 @@ onBeforeUnmount(() => {
 
     <header v-show="modelValue !== 'collapsed'" class="agent-copilot-shell__header">
       <div>
-        <span>TileSim 助手</span>
+        <span>小拓 · TileSim 助手</span>
         <strong>{{ currentTask }}</strong>
       </div>
       <div class="agent-copilot-shell__header-actions">
@@ -243,16 +342,69 @@ onBeforeUnmount(() => {
       </div>
     </header>
 
+    <div
+      v-if="sessions.length"
+      v-show="modelValue !== 'collapsed'"
+      class="agent-copilot-shell__sessions"
+      data-agent-sessions
+    >
+      <label :for="sessionSelectId">会话</label>
+      <select :id="sessionSelectId" :value="activeSessionId" title="切换已保存的助手会话" @change="onSessionChange">
+        <option v-for="session in sessions" :key="session.id" :value="session.id">
+          {{ session.title }}{{ session.message_count ? ` · ${session.message_count} 条消息` : "" }}
+        </option>
+      </select>
+      <button type="button" aria-label="新建会话" title="新建会话" @click="emit('new-session')">新建</button>
+      <button
+        type="button"
+        aria-label="删除当前会话"
+        title="删除当前会话"
+        @click="emit('delete-session', activeSessionId)"
+      >
+        删除
+      </button>
+      <button type="button" aria-label="清理全部本地会话" title="清理全部本地会话" @click="emit('clear-all-sessions')">
+        清理全部
+      </button>
+      <p v-if="retentionNotice" class="agent-copilot-shell__retention">{{ retentionNotice }}</p>
+    </div>
+
+    <div v-if="modelChannel && modelValue !== 'collapsed'" class="agent-copilot-shell__model" data-agent-model-bar>
+      <label :for="modelSelectId">模型</label>
+      <template v-if="modelOptions.length">
+        <select
+          :id="modelSelectId"
+          :value="modelSelected"
+          :disabled="modelPending"
+          title="选择本次会话使用的模型；切换只在后端本次运行期间有效，要长期生效请在启动器里保存"
+          @change="onModelChange"
+        >
+          <option v-for="model in modelOptions" :key="model" :value="model">{{ model }}</option>
+        </select>
+        <span>{{ modelPending ? "正在切换…" : "本次运行有效" }}</span>
+      </template>
+      <template v-else>
+        <span>{{ modelPending ? "正在读取模型列表…" : modelUnavailableText }}</span>
+        <button type="button" :disabled="modelPending" @click="emit('refresh-models')">重试</button>
+      </template>
+    </div>
+
     <AgentContextBar v-show="modelValue !== 'collapsed'" :context="context" :attachment-status="attachmentStatus" />
 
     <div
       v-show="modelValue !== 'collapsed'"
+      ref="timeline"
       class="agent-copilot-shell__timeline"
       role="log"
-      aria-live="polite"
-      aria-relevant="additions text"
+      aria-live="off"
+      aria-label="助手对话记录"
     >
-      <AgentTypedBlockList :blocks="blocks" @answer="emit('answer', $event)" />
+      <AgentTypedBlockList
+        :blocks="blocks"
+        @answer="emit('answer', $event)"
+        @apply="emit('apply', $event)"
+        @start="emit('start', $event)"
+      />
     </div>
 
     <AgentComposer
@@ -260,14 +412,19 @@ onBeforeUnmount(() => {
       ref="composer"
       :disabled="composerDisabled"
       :disabled-reason="composerDisabledReason"
-      :allow-draft="canDraft"
+      :busy="busy"
       @submit="submit"
+      @cancel="emit('cancel')"
     />
 
-    <footer v-show="modelValue !== 'collapsed'" class="agent-copilot-shell__footer" role="status" aria-live="polite">
+    <div v-show="modelValue !== 'collapsed'" class="agent-copilot-shell__footer" aria-live="polite" aria-atomic="true">
       <span>{{ statusText }}</span>
-      <span>{{ canDraft ? "仅生成草案 · 不会开始运行" : "仅解释当前页面 · 不会修改实验或开始运行" }}</span>
-    </footer>
+      <span v-if="persistenceError" class="agent-copilot-shell__persistence-warning">
+        本机存储不可用，本次对话只保留到页面关闭
+      </span>
+      <span v-if="allowParameterEdit">描述场景或接着追问 · 仅在确认后写入，不会创建运行</span>
+      <span v-else>{{ canDraft ? "仅生成草案 · 不会开始运行" : "仅解释当前页面 · 不会修改实验或开始运行" }}</span>
+    </div>
   </aside>
 </template>
 
@@ -280,12 +437,13 @@ onBeforeUnmount(() => {
   max-width: calc(100vw - 48px);
   height: 100dvh;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto auto;
   border-left: 1px solid var(--line-strong);
   color: var(--ink);
   background: var(--panel);
   box-shadow: -8px 0 24px rgb(20 33 44 / 8%);
   overflow: hidden;
+  animation: agent-panel-in 260ms var(--ease-emphasized) backwards;
 }
 
 .agent-copilot-shell--expanded {
@@ -332,6 +490,7 @@ onBeforeUnmount(() => {
   padding: 9px 10px 9px 14px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .agent-copilot-shell__header > div:first-child {
@@ -340,8 +499,20 @@ onBeforeUnmount(() => {
 }
 
 .agent-copilot-shell__header > div:first-child span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--muted);
   font-size: var(--text-micro);
+}
+
+.agent-copilot-shell__header > div:first-child span::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 13%, transparent);
 }
 
 .agent-copilot-shell__header > div:first-child strong {
@@ -377,14 +548,145 @@ onBeforeUnmount(() => {
   background: var(--surface-muted);
 }
 
+.agent-copilot-shell__header-actions button,
+.agent-copilot-shell__rail button {
+  transition:
+    color var(--motion-interaction) var(--ease-standard),
+    background-color var(--motion-interaction) var(--ease-standard),
+    border-color var(--motion-interaction) var(--ease-standard),
+    transform var(--motion-interaction) var(--ease-emphasized);
+}
+
+.agent-copilot-shell__header-actions button:hover,
+.agent-copilot-shell__rail button:hover {
+  transform: translateY(-1px);
+}
+
+.agent-copilot-shell__model {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  background: var(--surface-subtle);
+  font-size: var(--text-micro);
+}
+
+.agent-copilot-shell__sessions {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  background: var(--panel);
+  font-size: var(--text-micro);
+}
+
+.agent-copilot-shell__sessions label {
+  flex: 0 0 auto;
+}
+
+.agent-copilot-shell__sessions select {
+  min-width: 0;
+  flex: 1 1 auto;
+  padding: 4px 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  color: var(--ink);
+  background: var(--panel);
+  font: inherit;
+  text-overflow: ellipsis;
+}
+
+.agent-copilot-shell__sessions button {
+  flex: 0 0 auto;
+  min-height: 27px;
+  padding: 3px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  color: var(--ink-soft);
+  background: var(--panel);
+  cursor: pointer;
+  font: inherit;
+}
+
+.agent-copilot-shell__sessions button:hover {
+  border-color: var(--accent);
+  color: var(--ink);
+  background: var(--surface-muted);
+}
+
+.agent-copilot-shell__model label {
+  flex: 0 0 auto;
+}
+
+.agent-copilot-shell__model select {
+  min-width: 0;
+  flex: 1 1 auto;
+  max-width: 100%;
+  padding: 3px 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  color: var(--ink);
+  background: var(--panel);
+  font: inherit;
+}
+
+.agent-copilot-shell__model select:disabled {
+  color: var(--muted);
+}
+
+.agent-copilot-shell__model span {
+  flex: 0 0 auto;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.agent-copilot-shell__retention {
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.agent-copilot-shell__model button {
+  flex: 0 0 auto;
+  min-height: 26px;
+  padding: 2px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  color: var(--ink);
+  background: var(--panel);
+  cursor: pointer;
+  font: inherit;
+}
+
+.agent-copilot-shell__model button:disabled {
+  cursor: default;
+  color: var(--muted);
+}
+
 .agent-copilot-shell__timeline {
   min-width: 0;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  background: var(--panel);
+  background: color-mix(in srgb, var(--surface-subtle) 88%, var(--canvas));
+  scrollbar-color: var(--line-strong) transparent;
 }
 
+/* Grid items otherwise retain their min-content width. Long evidence paths and
+   model responses must wrap inside the bounded panel instead of widening its
+   fixed host by a few pixels. */
+.agent-copilot-shell__timeline > :deep(*) {
+  min-width: 0;
+  max-width: 100%;
+}
 .agent-copilot-shell__footer {
   min-width: 0;
   display: flex;
@@ -398,8 +700,21 @@ onBeforeUnmount(() => {
   font-size: var(--text-micro);
 }
 
+@keyframes agent-panel-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 .agent-copilot-shell__footer span {
   overflow-wrap: anywhere;
+}
+
+.agent-copilot-shell__persistence-warning {
+  color: var(--warning);
 }
 
 .agent-copilot-shell__rail {

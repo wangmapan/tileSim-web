@@ -12,6 +12,7 @@
   --accent: #3376a3;
   --accent-hover: #285f87;
   --accent-soft: #edf7fd;
+  --accent-ink: var(--accent-hover);
   --blue: #3376a3;
   --warning: #a2601d;
   --warning-soft: #f6ead7;
@@ -22,16 +23,41 @@
   --positive: #267154;
   --positive-soft: #dfeee6;
   --positive-ink: #1c6548;
+  /* The lightweight workbench reads a `success` family that was never declared.
+     Three of those reads carry no fallback, so those chips rendered with no
+     background at all instead of a green one. Aliased here rather than at each
+     call site so the dark theme picks them up through its own `--positive`. */
+  --success: var(--positive);
+  --success-soft: var(--positive-soft);
+  --success-ink: var(--positive-ink);
   --neutral-ink: #54625d;
-  --shadow: 0 12px 34px rgba(52, 103, 138, 0.055);
-  --shadow-raised: 0 16px 38px rgba(42, 91, 124, 0.11);
-  --shadow-overlay: 0 22px 58px rgba(25, 57, 79, 0.17);
+  /* Depth reads as three ordered tiers: resting surface, raised card, floating
+     overlay. A wide soft blur over a short negative spread keeps the edge tight
+     so panels still look engineered rather than glowing. */
+  --shadow: 0 1px 2px rgba(16, 30, 42, 0.05), 0 10px 26px -14px rgba(16, 30, 42, 0.16);
+  --shadow-raised: 0 1px 3px rgba(16, 30, 42, 0.07), 0 20px 44px -18px rgba(16, 30, 42, 0.22);
+  --shadow-overlay: 0 2px 6px rgba(16, 30, 42, 0.08), 0 34px 68px -22px rgba(16, 30, 42, 0.3);
+  --shadow-hairline: 0 1px 2px rgba(16, 30, 42, 0.04);
+  /* `fast` and `base` must stay at 0ms. They drive transitions on surfaces the
+     end-to-end suite toggles and then measures in the very next statement —
+     `.app-sidebar`'s background on an appearance switch, `.panel`'s border and
+     fill — so a non-zero duration there makes axe sample a mid-transition
+     blend and report colour-contrast violations that do not exist once the
+     transition settles. Motion lives in `--motion-slow` and in the entrance
+     timings below, which run on mount only and are flattened again under
+     `prefers-reduced-motion: reduce`. */
   --motion-fast: 0ms;
   --motion-base: 0ms;
+  --motion-interaction: 150ms;
   --motion-slow: 280ms;
+  --motion-enter: 420ms;
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --lift: -1px;
+  --ring: 0 0 0 3px color-mix(in srgb, var(--accent) 26%, transparent);
   --header-bg: rgba(251, 253, 255, 0.95);
+  --surface: var(--canvas);
   --surface-subtle: #fbfdff;
   --surface-muted: #f1f7fc;
   --surface-inset: #f7fafc;
@@ -49,9 +75,11 @@
   --nav-card: #132d3e;
   --nav-card-border: #31566e;
   --nav-active-mark: #8ac8ea;
-  --hero-surface: linear-gradient(135deg, #264f6c, #397fa8);
-  --hero-surface-strong: linear-gradient(155deg, #326e94, #1e455f);
-  --hero-border: #4b7e9d;
+  /* Flat tonal banners. The old two-stop diagonal gradient read as marketing
+     chrome on top of an evidence tool, so the hero surfaces are now solid. */
+  --hero-surface: #24465e;
+  --hero-surface-strong: #1c3749;
+  --hero-border: #3d6684;
   --hero-text: #f0f8fd;
   --hero-text-soft: #c9ddea;
   --hero-accent: #91c7e7;
@@ -59,9 +87,11 @@
   --editor-border: #36576d;
   --editor-text: #e3f0f8;
   --sidebar-width: 208px;
-  --radius-control: 4px;
-  --radius-panel: 6px;
-  --radius-overlay: 8px;
+  --radius-inset: 4px;
+  --radius-control: 6px;
+  --radius-panel: 10px;
+  --radius-overlay: 14px;
+  --radius-pill: 999px;
   --chart-series-1: #3376a3;
   --chart-series-2: #357868;
   --chart-series-3: #a8732a;
@@ -89,14 +119,21 @@
 }
 
 :root[data-theme] {
+  /* Kept at white rather than tinted. A `#f4f5f7` canvas did stop cards from
+     reading as one flat sheet, but it also dropped accent-coloured text sitting
+     directly on the canvas to a 4.54:1 contrast ratio — legal, yet with no
+     margin left for the accessibility gate to hold. The flatness is solved
+     additively instead: panels carry a hairline contact shadow and the nested
+     editors use `--surface-inset` wells, neither of which touches a
+     foreground/background pair. */
   --canvas: #ffffff;
   --panel: #ffffff;
-  --panel-strong: #f5f5f5;
+  --panel-strong: #f7f8f9;
   --ink: #242628;
   --ink-soft: #484c50;
   --muted: #666c72;
-  --line: #e8e9eb;
-  --line-strong: #cfd2d6;
+  --line: #e4e6e9;
+  --line-strong: #ccd0d5;
   --surface-subtle: #fafafa;
   --surface-muted: #f5f5f5;
   --surface-inset: #f7f7f8;
@@ -106,7 +143,9 @@
   --nav-soft: #e9eaec;
   --nav-text: #25292d;
   --nav-text-soft: #4b5157;
-  --nav-muted: #697078;
+  /* Keep small navigation captions above the WCAG AA contrast threshold on
+     the light neutral navigation surface (#f7f7f8). */
+  --nav-muted: #62686f;
   --nav-border: #d9dce0;
   --nav-brand-bg: transparent;
   --nav-glyph: var(--accent);
@@ -115,10 +154,12 @@
   --nav-hover: #eeeff1;
   --nav-card: transparent;
   --nav-card-border: #e3e5e8;
-  --shadow: none;
-  --shadow-raised: 0 4px 12px rgb(0 0 0 / 6%);
-  --hero-surface: var(--panel-strong);
-  --hero-surface-strong: var(--panel-strong);
+  --shadow: 0 1px 2px rgba(20, 26, 33, 0.04), 0 8px 22px -14px rgba(20, 26, 33, 0.14);
+  --shadow-raised: 0 1px 3px rgba(20, 26, 33, 0.06), 0 16px 36px -16px rgba(20, 26, 33, 0.2);
+  --shadow-overlay: 0 2px 6px rgba(20, 26, 33, 0.07), 0 28px 60px -20px rgba(20, 26, 33, 0.26);
+  --shadow-hairline: 0 1px 2px rgba(20, 26, 33, 0.035);
+  --hero-surface: var(--panel);
+  --hero-surface-strong: var(--panel);
   --hero-border: var(--line);
   --hero-text: var(--ink);
   --hero-text-soft: var(--muted);
@@ -404,6 +445,7 @@ summary:focus-visible {
 .nav-group {
   display: grid;
   gap: 4px;
+  animation: nav-group-in var(--motion-enter) var(--ease-emphasized) backwards;
 }
 .nav-group:nth-child(2) {
   animation-delay: 55ms;
@@ -435,7 +477,6 @@ summary:focus-visible {
   transition:
     color var(--motion-fast) var(--ease-standard),
     background-color var(--motion-fast) var(--ease-standard),
-    box-shadow var(--motion-fast) var(--ease-standard),
     transform var(--motion-fast) var(--ease-emphasized);
 }
 .nav-link strong {
@@ -449,7 +490,7 @@ summary:focus-visible {
 .nav-link.active {
   color: var(--nav-text);
   background: var(--nav-soft);
-  box-shadow: none;
+  box-shadow: inset 2px 0 0 var(--nav-active-mark);
 }
 .nav-link.active strong {
   font-weight: 600;
@@ -536,11 +577,17 @@ summary:focus-visible {
     background-color var(--motion-base) var(--ease-standard);
 }
 .page-heading p,
+/**
+ * A kicker is a label, not a heading. It used to be accent-coloured, bold and
+ * letter-spaced — the exact pattern generated landing pages put above every
+ * section, and the reason the workbench read as a mock-up. It is quiet
+ * metadata now, and the tracking is gone because it does nothing for Chinese
+ * text except pull the characters apart.
+ */
 .section-kicker {
   margin: 0 0 5px;
-  color: var(--accent);
+  color: var(--muted);
   font: 600 var(--text-xs)/1.4 var(--font-sans);
-  letter-spacing: 0.04em;
 }
 .page-heading {
   display: flex;
@@ -727,7 +774,8 @@ html[data-theme="custom"] .app-header {
     border-color var(--motion-fast) var(--ease-standard),
     background-color var(--motion-fast) var(--ease-standard),
     box-shadow var(--motion-fast) var(--ease-standard),
-    transform var(--motion-fast) var(--ease-emphasized);
+    transform var(--motion-interaction) var(--ease-emphasized),
+    box-shadow var(--motion-interaction) var(--ease-standard);
 }
 .button input,
 .inline-file input {
@@ -787,7 +835,8 @@ html[data-theme="custom"] .app-header {
     color var(--motion-fast) var(--ease-standard),
     border-color var(--motion-fast) var(--ease-standard),
     background-color var(--motion-fast) var(--ease-standard),
-    transform var(--motion-fast) var(--ease-emphasized);
+    transform var(--motion-interaction) var(--ease-emphasized),
+    box-shadow var(--motion-interaction) var(--ease-standard);
 }
 .icon-button:hover {
   color: var(--ink);
@@ -811,16 +860,19 @@ html[data-theme="custom"] .app-header {
   font-weight: 650;
   transition:
     color var(--motion-fast) var(--ease-standard),
-    transform var(--motion-fast) var(--ease-emphasized);
+    transform var(--motion-interaction) var(--ease-emphasized);
 }
 .text-button:hover {
   color: var(--accent-hover);
   transform: translateX(1px);
 }
 .workspace {
-  width: min(1560px, 100%);
+  /* Anchor professional tools to the navigation edge on wide monitors.
+     Centering a narrow canvas left hundreds of pixels of dead space between
+     the sidebar and the first field, while the header still spanned the screen. */
+  width: min(1760px, 100%);
   min-width: 0;
-  margin: 0 auto;
+  margin: 0 auto 0 0;
   padding: 0 32px 56px;
 }
 .workspace > :first-child:not(.evidence-strip) {
@@ -851,4 +903,177 @@ html[data-theme="custom"] .app-header {
   border-radius: 3px;
   outline: 2px solid color-mix(in srgb, var(--accent) 28%, transparent);
   outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+   Motion vocabulary
+   ---------------------------------------------------------------------------
+   A shared set of gestures so an individual page never has to invent its own.
+   Two rules keep this safe to apply globally:
+
+   1. Route-level content only ever animates `opacity`. A `transform` on an
+      ancestor turns it into the containing block for any `position: fixed`
+      descendant, and the experiment page keeps fixed toolbars inside the routed
+      view — animating those with movement would visibly dislodge them.
+   2. Movement is opt-in through the `ts-*` utilities below, applied deliberately
+      to leaves and lists rather than blanket-selectored onto every element.
+
+   The reduced-motion block at the end flattens the entire vocabulary to instant
+   for users who ask for that, which is also what keeps the desktop end-to-end
+   suite (configured with `reducedMotion: "reduce"`) deterministic.
+   --------------------------------------------------------------------------- */
+
+@keyframes ts-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes ts-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ts-slip {
+  from {
+    opacity: 0;
+    transform: translate3d(12px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ts-drop {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -6px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ts-sweep {
+  from {
+    background-position: -160% 0;
+  }
+  to {
+    background-position: 260% 0;
+  }
+}
+
+/* Route content stays fully opaque for accessibility tooling and for users who
+   navigate quickly between evidence views. Individual pages opt into the
+   motion utilities below where a transient opacity change cannot hide text. */
+.ts-rise {
+  animation: ts-rise var(--motion-enter) var(--ease-emphasized) backwards;
+}
+.ts-slip {
+  animation: ts-slip var(--motion-enter) var(--ease-emphasized) backwards;
+}
+.ts-drop {
+  animation: ts-drop var(--motion-base) var(--ease-emphasized) backwards;
+}
+/* Children arrive in reading order. The ladder stops at eight so a long table
+   never leaves its last row waiting on a delay the user can perceive. */
+.ts-stagger > * {
+  animation: ts-rise var(--motion-enter) var(--ease-emphasized) backwards;
+}
+.ts-stagger > *:nth-child(2) {
+  animation-delay: 40ms;
+}
+.ts-stagger > *:nth-child(3) {
+  animation-delay: 80ms;
+}
+.ts-stagger > *:nth-child(4) {
+  animation-delay: 120ms;
+}
+.ts-stagger > *:nth-child(5) {
+  animation-delay: 160ms;
+}
+.ts-stagger > *:nth-child(6) {
+  animation-delay: 200ms;
+}
+.ts-stagger > *:nth-child(n + 7) {
+  animation-delay: 240ms;
+}
+
+/* Interactive surfaces acknowledge the pointer on the way in and settle on the
+   way down, instead of switching state with no intermediate frame. */
+.button:not(:disabled):hover,
+.icon-button:hover {
+  box-shadow: var(--shadow-hairline);
+}
+.button:not(:disabled):hover {
+  transform: translateY(var(--lift));
+}
+.button:not(:disabled):active,
+.icon-button:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+.button:not(:disabled):active {
+  transform: translateY(0) scale(0.99);
+}
+.ts-lift {
+  transition:
+    transform var(--motion-interaction) var(--ease-emphasized),
+    border-color var(--motion-fast) var(--ease-standard),
+    box-shadow var(--motion-base) var(--ease-standard),
+    background-color var(--motion-fast) var(--ease-standard);
+}
+.ts-lift:hover {
+  transform: translateY(var(--lift));
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow);
+}
+.ts-lift:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-hairline);
+}
+
+/* Loading placeholders breathe instead of sitting as dead grey blocks. */
+.ts-skeleton {
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--panel) 70%, transparent) 45%,
+    transparent 90%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: ts-sweep 1600ms var(--ease-standard) infinite;
+}
+
+::selection {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 0ms;
+    --motion-base: 0ms;
+    --motion-interaction: 0ms;
+    --motion-slow: 0ms;
+    --motion-enter: 0ms;
+    --lift: 0;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

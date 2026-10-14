@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from "vue";
+import { computed, onUnmounted, reactive, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import {
   BridgeApiError,
@@ -7,15 +7,24 @@ import {
   ExperimentIdentityPanel,
   ExperimentInputPanel,
   ExperimentRequestError,
+  applyParameterEdits,
   buildExperimentAgentContextPublication,
   buildExperimentRequestPreview,
   buildExperimentSurface,
   createExperimentForm,
+  enterStructuredInput,
   reconcileExperimentForm,
   runExperiment,
   type ExperimentFormState,
   type ExperimentAgentContextPublisher,
 } from "../features/run-experiment";
+import type {
+  AgentCommandRegistry,
+  AgentParameterApplyResult,
+  AgentParameterEdit,
+  AgentParameterReceipt,
+} from "../entities/agent-command";
+import { UNPUBLISHED_CONTEXT_REVISION, createPageContextRevisionKeeper } from "../entities/agent-context";
 import { useDashboard } from "../store/dashboard";
 import { useLightweightStore } from "../stores/lightweight";
 import { useI18n } from "../i18n";
@@ -26,14 +35,21 @@ const lightweight = useLightweightStore();
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
-const props = defineProps<{ agentContextPublisher?: ExperimentAgentContextPublisher }>();
+const props = defineProps<{
+  agentContextPublisher?: ExperimentAgentContextPublisher;
+  /** Downward channel for assistant parameter edits; owned by App.vue. */
+  agentCommandRegistry?: AgentCommandRegistry;
+}>();
 const mode = ref<"controls" | "json" | "trace_package">(lightweight.draft.mode);
 const runtimeJson = ref("");
 const topologyJson = ref("");
 const designSpaceJson = ref("");
+/** Off by default: the quick-control tab keeps its overrides path until asked. */
+const structuredInput = ref(false);
 const submitting = ref(false);
 const errorMessage = ref("");
-let agentContextSequence = 0;
+/** Holds this page's context revision steady while its published content is unchanged. */
+const agentContextRevision = createPageContextRevisionKeeper();
 const query = computed(() => preserveWorkbenchQuery(route.query));
 const backendRevision = computed(
   () =>
@@ -105,17 +121,22 @@ watch(
 );
 watch([form, mode], () => lightweight.setDraft(form, mode.value), { deep: true });
 
+const AGENT_COMMAND_PROVIDER_ID = "lightweight-prepare";
+
 function publishAgentContext(): void {
   if (!props.agentContextPublisher) return;
-  agentContextSequence += 1;
+  // Declaring the live page belongs here rather than in the registration below:
+  // this function also runs when a kept-alive page comes back into view, which
+  // is the moment the handler and the catalogue have to agree again.
+  props.agentCommandRegistry?.activate(AGENT_COMMAND_PROVIDER_ID);
   const rawQueryRunId = Array.isArray(route.query.run) ? route.query.run[0] : route.query.run;
   const queryRunId = typeof rawQueryRunId === "string" && /^run-[\w-]+$/.test(rawQueryRunId) ? rawQueryRunId : null;
-  props.agentContextPublisher(
+  const build = (contextRevision: string) =>
     buildExperimentAgentContextPublication({
       form,
       surface: surface.value,
       mode: mode.value,
-      contextRevision: `context:lightweight_prepare:${queryRunId || "no-run"}:${state.bridge.manifest?.schema_set_revision || "schema-unavailable"}:${backendRevision.value}:${agentContextSequence}`,
+      contextRevision,
       runId: queryRunId,
       pageAvailable: Boolean(
         state.bridge.connected && state.bridge.manifest && state.bridge.available && !state.bridge.checking,
@@ -123,8 +144,21 @@ function publishAgentContext(): void {
       pageId: "lightweight-prepare",
       routeName: "lightweight_prepare",
       displayLabel: "轻量实验配置",
-    }),
+      runtimeJson: runtimeJson.value,
+      topologyJson: topologyJson.value,
+    });
+  // The watcher below fires whenever one of its inputs is touched, which is not
+  // the same as this page having changed. The keeper keeps the revision steady
+  // across those firings, so a plan read moments earlier is not refused — but it
+  // is still this function's job to *declare* the context every time: the shell
+  // also publishes a generic projection under the same provider id, and that
+  // projection carries no parameter surface, so this page must always put its
+  // own context back.
+  const { revision } = agentContextRevision(
+    `context:lightweight_prepare:${queryRunId || "no-run"}:${state.bridge.manifest?.schema_set_revision || "schema-unavailable"}:${backendRevision.value}`,
+    build(UNPUBLISHED_CONTEXT_REVISION),
   );
+  props.agentContextPublisher(build(revision));
 }
 
 watch(
@@ -132,6 +166,8 @@ watch(
     form,
     surface,
     mode,
+    runtimeJson,
+    topologyJson,
     () => route.query.run,
     () => state.bridge.manifest?.schema_set_revision,
     backendRevision,
@@ -142,6 +178,67 @@ watch(
   publishAgentContext,
   { deep: true, immediate: true },
 );
+
+/**
+ * Writes the assistant's resolved edits into this page's own state.
+ *
+ * Knobs and the four top-level fields go into the reactive form; everything
+ * else is patched into the two `custom_inputs` documents, which is why an edit
+ * that lands there also has to open the structured channel — the scalar
+ * `overrides` channel never carries requests, devices or topology.
+ */
+function applyAgentParameterEdits(edits: readonly AgentParameterEdit[]): AgentParameterApplyResult {
+  const outcome = applyParameterEdits({
+    items: edits,
+    runtimeJson: runtimeJson.value,
+    topologyJson: topologyJson.value,
+  });
+  const receipts: AgentParameterReceipt[] = [];
+  outcome.applied.forEach((item) => {
+    if (item.target === "control" && item.fieldId) {
+      form.parameterValues[item.fieldId] = item.value;
+    } else if (item.target === "form") {
+      if (item.path === "run_name") form.run_name = String(item.value);
+      else if (item.path === "scenario_id") form.scenario_id = String(item.value);
+      else if (item.path === "fidelity_policy") form.fidelity_policy = String(item.value);
+      else if (item.path === "gpu_participation_mode") form.gpu_participation_mode = String(item.value);
+    }
+    receipts.push({
+      path: item.path,
+      label: item.label,
+      previous: item.previous,
+      next: item.next,
+      status: "applied",
+      reason: "",
+    });
+  });
+  outcome.rejected.forEach((item) => {
+    receipts.push({
+      path: item.raw,
+      label: item.raw,
+      previous: null,
+      next: "",
+      status: "rejected",
+      reason: item.reason,
+    });
+  });
+  runtimeJson.value = outcome.runtimeJson;
+  topologyJson.value = outcome.topologyJson;
+  const channelMoved = outcome.requiresStructuredInput && !structuredInput.value;
+  if (channelMoved) structuredInput.value = true;
+  const applied = receipts.filter((item) => item.status === "applied").length;
+  return {
+    receipts,
+    channelMoved,
+    note: applied ? `已写入 ${applied} 项参数，没有创建运行。` : "没有参数被写入，请检查被拒的原因。",
+  };
+}
+
+const unregisterAgentCommands = props.agentCommandRegistry?.register(
+  AGENT_COMMAND_PROVIDER_ID,
+  applyAgentParameterEdits,
+);
+onUnmounted(() => unregisterAgentCommands?.());
 
 const preview = computed(() =>
   buildExperimentRequestPreview({
@@ -180,6 +277,34 @@ async function loadTemplate() {
     const message = error instanceof Error ? error.message : String(error);
     notify(t("加载模板失败：{message}", { message }), "danger");
   }
+}
+
+/**
+ * R2: hand the quick-control values over to the structured editors that open
+ * underneath them. A failed template load aborts the hand-off, so the tab is
+ * never left claiming a channel it has no document for.
+ */
+async function useStructuredInput() {
+  const result = await enterStructuredInput({
+    runtimeJson: runtimeJson.value,
+    topologyJson: topologyJson.value,
+    fields: surface.value.controlGroups.flatMap((group) => group.fields),
+    parameterValues: form.parameterValues,
+    loadTemplate: () => runExperiment.getTemplate(form.scenario_id),
+  });
+  if (!result.ok) {
+    notify(t("加载模板失败：{message}", { message: result.message }), "danger");
+    return;
+  }
+  runtimeJson.value = result.runtimeJson;
+  topologyJson.value = result.topologyJson;
+  structuredInput.value = true;
+  result.notes.forEach((note) => notify(note.message, note.impedes ? "warning" : "positive"));
+}
+
+function disableStructuredInput() {
+  structuredInput.value = false;
+  notify(t("已停用结构化编辑，本次提交改回 overrides。"), "neutral");
 }
 
 async function loadBundle(event: Event) {
@@ -310,12 +435,15 @@ async function submit() {
         v-model:mode="mode"
         v-model:runtime-json="runtimeJson"
         v-model:topology-json="topologyJson"
+        v-model:structured-input="structuredInput"
         :surface="surface"
         :control-groups="surface.controlGroups"
         compact
         @load-template="loadTemplate"
         @load-bundle="loadBundle"
         @load-json-file="inputEvent"
+        @use-structured-input="useStructuredInput"
+        @disable-structured-input="disableStructuredInput"
       />
       <ExperimentCapabilityPanel
         :capabilities="state.capabilities"

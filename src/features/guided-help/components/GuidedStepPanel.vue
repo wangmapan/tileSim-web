@@ -31,8 +31,8 @@ type HelpGroup = { readonly title: string; readonly ids: readonly GuideId[] };
 const professionalGroups: readonly HelpGroup[] = [
   { title: "实验与输入", ids: ["overview", "experiment", "history"] },
   { title: "结果分析", ids: ["execution", "metrics", "fabric", "attribution", "design_space"] },
-  { title: "证据与校准", ids: ["validation", "evidence_agent", "evidence_lab"] },
-  { title: "参考资料", ids: ["raw_evidence", "unsupported_schema"] },
+  { title: "证据与校准", ids: ["validation", "raw_evidence", "evidence_lab"] },
+  { title: "参考资料", ids: ["unsupported_schema"] },
 ];
 const lightweightGroups: readonly HelpGroup[] = [{ title: "轻量工作台", ids: lightweightGuideIds }];
 const groups = computed(() => (props.scope === "lightweight" ? lightweightGroups : professionalGroups));

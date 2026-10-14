@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import assistantAvatar from "../../assets/atuo-avatar.svg";
+import userAvatar from "../../assets/user-avatar.svg";
 import type {
   AgentTypedBlock,
   DeterministicValidationIssue,
@@ -9,15 +11,20 @@ defineProps<{ blocks: readonly AgentTypedBlock[] }>();
 
 const emit = defineEmits<{
   answer: [payload: { question_id: string; option_id: string; serialized_value: string }];
+  apply: [blockId: string];
+  start: [task: "configure" | "analyze" | "learn"];
 }>();
 
 const knownBlockTypes = new Set([
+  "user_message",
+  "assistant_message",
   "explanation",
   "capability_result",
   "draft_summary",
   "validation_result",
   "clarification",
   "unsupported",
+  "parameter_edits",
   "formal_error",
 ]);
 
@@ -53,6 +60,39 @@ function issueTone(issue: DeterministicValidationIssue): string {
 function capabilityHeading(blockType: "capability_result" | "unsupported"): string {
   return blockType === "unsupported" ? "当前能力不支持" : "能力检查结果";
 }
+
+/**
+ * The per-value reasons of one plan, in the order the values are shown.
+ *
+ * Only a model proposal carries them, and only for the values that survived
+ * planning, so a reason is never shown next to a value the panel did not offer.
+ */
+function reasonRows(block: {
+  edits: readonly { path: string; label: string }[];
+  reasons?: Readonly<Record<string, string>>;
+}): { path: string; label: string; reason: string }[] {
+  const reasons = block.reasons;
+  if (!reasons) return [];
+  return block.edits
+    .filter((edit) => Boolean(reasons[edit.path]))
+    .map((edit) => ({ path: edit.path, label: edit.label, reason: reasons[edit.path] }));
+}
+
+function hasAppliedReceipt(block: { receipts?: readonly { status: string }[] | null }): boolean {
+  return Boolean(block.receipts?.some((receipt) => receipt.status === "applied"));
+}
+
+const blockTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+function formatBlockTime(value: string | undefined): string {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : blockTimeFormatter.format(date);
+}
 </script>
 
 <template>
@@ -64,10 +104,56 @@ function capabilityHeading(blockType: "capability_result" | "unsupported"): stri
       :data-block-type="block.block_type"
       :role="block.block_type === 'formal_error' || !isKnownBlock(block) ? 'alert' : undefined"
     >
-      <template v-if="block.block_type === 'explanation'">
+      <div
+        v-if="block.block_type !== 'user_message' && block.block_type !== 'assistant_message'"
+        class="agent-block__assistant-mark"
+        aria-hidden="true"
+      >
+        <img :src="assistantAvatar" alt="" width="28" height="28" />
+      </div>
+      <div
+        v-if="
+          block.block_type !== 'user_message' &&
+          block.block_type !== 'assistant_message' &&
+          formatBlockTime(block.created_at)
+        "
+        class="agent-block__meta agent-block__meta--assistant"
+        aria-label="小拓回复时间"
+      >
+        <span class="agent-block__meta-name">小拓</span>
+        <time class="agent-block__time" :datetime="block.created_at">{{ formatBlockTime(block.created_at) }}</time>
+      </div>
+      <template v-if="block.block_type === 'user_message'">
+        <div class="agent-block__speaker">
+          <img :src="userAvatar" alt="" aria-hidden="true" width="28" height="28" />
+          <p class="agent-block__eyebrow">用户</p>
+          <time v-if="formatBlockTime(block.created_at)" class="agent-block__time" :datetime="block.created_at">
+            {{ formatBlockTime(block.created_at) }}
+          </time>
+        </div>
+        <p class="agent-block__body agent-block__utterance">{{ block.text }}</p>
+      </template>
+
+      <template v-else-if="block.block_type === 'assistant_message'">
+        <div class="agent-block__speaker">
+          <img :src="assistantAvatar" alt="" aria-hidden="true" width="28" height="28" />
+          <p class="agent-block__eyebrow">{{ block.model_id ? `小拓 · ${block.model_id}` : "小拓" }}</p>
+          <time v-if="formatBlockTime(block.created_at)" class="agent-block__time" :datetime="block.created_at">
+            {{ formatBlockTime(block.created_at) }}
+          </time>
+        </div>
+        <p v-if="block.text" class="agent-block__body agent-block__answer">{{ block.text }}</p>
+        <p v-else-if="block.streaming" class="agent-block__body agent-block__answer agent-block__answer--waiting">
+          正在想…
+        </p>
+        <p v-if="block.streaming" class="agent-block__streaming" role="status" aria-live="off">正在写回答…</p>
+        <p v-else-if="block.error" class="agent-block__body agent-block__answer-note">{{ block.error }}</p>
+      </template>
+
+      <template v-else-if="block.block_type === 'explanation'">
         <p class="agent-block__eyebrow">理解结果</p>
         <h3>{{ block.title }}</h3>
-        <p class="agent-block__body">{{ block.body }}</p>
+        <p class="agent-block__body agent-block__body--guidance">{{ block.body }}</p>
       </template>
 
       <template v-else-if="block.block_type === 'capability_result' || block.block_type === 'unsupported'">
@@ -218,6 +304,121 @@ function capabilityHeading(blockType: "capability_result" | "unsupported"): stri
         </ol>
       </template>
 
+      <template v-else-if="block.block_type === 'parameter_edits'">
+        <p class="agent-block__eyebrow">{{ block.title ? "推荐方案" : "参数改动" }}</p>
+        <h3>
+          {{
+            block.title ||
+            (block.receipts
+              ? hasAppliedReceipt(block)
+                ? "已写入面板"
+                : "面板拒绝了方案"
+              : `待写入 ${block.edits.length} 项`)
+          }}
+        </h3>
+        <p v-if="block.rationale" class="agent-block__body">{{ block.rationale }}</p>
+        <p v-if="block.incomplete?.length" class="agent-block__draft-notice" role="alert">
+          方案不完整，已禁止应用。请补齐以下参数后重新生成；当前面板没有写入任何改动。
+        </p>
+        <section v-if="block.incomplete?.length" class="agent-block__section agent-block__section--warning">
+          <h4>待修正的参数</h4>
+          <ul>
+            <li v-for="(item, index) in block.incomplete" :key="`incomplete:${index}`">{{ item }}</li>
+          </ul>
+        </section>
+        <p
+          v-if="
+            !block.receipts &&
+            block.edits.length &&
+            !block.incomplete?.length &&
+            !block.rejected.length &&
+            !block.unknown.length
+          "
+          class="agent-block__draft-notice"
+        >
+          还没写进面板；确认无误后按下按钮才会写入。写入不会创建运行。
+        </p>
+        <template v-else-if="block.receipts">
+          <p class="agent-block__draft-notice">
+            {{ hasAppliedReceipt(block) ? "已写入面板；没有创建运行。" : "没有写入面板；没有创建运行。" }}
+          </p>
+          <p v-if="block.channelMoved" class="agent-block__draft-notice">
+            已同时把提交改走「自定义输入」通道：这些参数只在自定义输入里生效。
+          </p>
+        </template>
+        <ul v-if="block.edits.length" class="agent-block__diff-list">
+          <li v-for="item in block.edits" :key="item.path">
+            <span>
+              {{ item.label }}
+              <br />
+              <small>{{ item.path }}</small>
+            </span>
+            <strong>
+              <template v-if="item.previous !== null">{{ item.previous }} → </template>
+              {{ item.next }}
+            </strong>
+          </li>
+        </ul>
+        <section v-if="reasonRows(block).length" class="agent-block__section">
+          <h4>为什么这么设</h4>
+          <ul>
+            <li v-for="item in reasonRows(block)" :key="`reason:${item.path}`">
+              <strong>{{ item.label }}</strong>
+              <span>{{ item.reason }}</span>
+            </li>
+          </ul>
+        </section>
+        <section
+          v-if="block.rejected.length && !block.incomplete?.length"
+          class="agent-block__section agent-block__section--warning"
+        >
+          <h4>没有写（校验未通过）</h4>
+          <ul>
+            <li v-for="item in block.rejected" :key="`rejected:${item.raw}`">
+              <strong>{{ item.raw }}</strong>
+              <span>{{ item.reason }}</span>
+            </li>
+          </ul>
+        </section>
+        <section
+          v-if="block.unknown.length && !block.incomplete?.length"
+          class="agent-block__section agent-block__section--warning"
+        >
+          <h4>没有看懂</h4>
+          <ul>
+            <li v-for="item in block.unknown" :key="`unknown:${item.raw}`">
+              <strong>{{ item.raw }}</strong>
+              <span>{{ item.reason }}</span>
+            </li>
+          </ul>
+        </section>
+        <div
+          v-if="
+            !block.receipts &&
+            block.edits.length &&
+            !block.incomplete?.length &&
+            !block.rejected.length &&
+            !block.unknown.length
+          "
+          class="agent-block__options"
+        >
+          <button type="button" @click="emit('apply', block.block_id)">应用到面板</button>
+        </div>
+        <p v-if="block.receipts && block.note" class="agent-block__body">{{ block.note }}</p>
+        <section
+          v-if="block.receipts && block.receipts.some((item) => item.status === 'rejected')"
+          class="agent-block__section"
+        >
+          <h4>面板拒绝了这几项</h4>
+          <ul>
+            <li v-for="item in block.receipts.filter((entry) => entry.status === 'rejected')" :key="`r:${item.path}`">
+              <strong>{{ item.label }}</strong>
+              <span>{{ item.reason }}</span>
+            </li>
+          </ul>
+        </section>
+      </template>
+
       <template v-else-if="block.block_type === 'formal_error'">
         <p class="agent-block__eyebrow">限制</p>
         <h3>当前结果无法继续处理</h3>
@@ -242,26 +443,46 @@ function capabilityHeading(blockType: "capability_result" | "unsupported"): stri
   </div>
 
   <div v-else class="agent-block-empty" role="status">
-    <strong>从当前页面开始</strong>
-    <p>你可以询问页面含义、检查当前能力，或为正式八参数子集提出草案修改。</p>
+    <div class="agent-block__speaker">
+      <img :src="assistantAvatar" alt="" aria-hidden="true" width="28" height="28" />
+      <strong>小拓</strong>
+    </div>
+    <p>你好，需要小拓帮忙做些什么？可以配置实验、分析实验结果，或先学习怎么看报告。</p>
+    <div class="agent-block-empty__choices" aria-label="选择助手任务">
+      <button type="button" @click="emit('start', 'configure')">配置实验</button>
+      <button type="button" @click="emit('start', 'analyze')">分析实验结果</button>
+      <button type="button" @click="emit('start', 'learn')">学习怎么看结果</button>
+    </div>
+    <small>分析只读取当前运行的报告；参数仅在确认后写入，不会自动创建运行。</small>
   </div>
 </template>
 
 <style scoped>
 .agent-block-list {
   display: grid;
+  gap: 14px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 16px 14px 22px;
 }
 
 .agent-block {
   min-width: 0;
-  padding: 16px 14px;
-  border-bottom: 1px solid var(--line);
+  padding: 0 0 2px;
   color: var(--ink);
 }
 
-.agent-block[data-block-type="formal_error"],
-.agent-block:not([data-block-type="explanation"]):last-child {
+.agent-block:not([data-block-type="user_message"]):not([data-block-type="assistant_message"]) {
+  position: relative;
+  padding: 12px;
+  padding-left: 48px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
   background: color-mix(in srgb, var(--surface-subtle) 86%, var(--panel));
+}
+
+.agent-block[data-block-type="formal_error"] {
+  border-color: color-mix(in srgb, var(--danger) 42%, var(--line));
 }
 
 .agent-block__eyebrow {
@@ -270,6 +491,105 @@ function capabilityHeading(blockType: "capability_result" | "unsupported"): stri
   font-size: var(--text-micro);
   font-weight: 700;
   letter-spacing: 0.04em;
+}
+
+.agent-block__speaker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 4px;
+}
+
+.agent-block__speaker img {
+  flex: none;
+  width: 28px;
+  height: 28px;
+}
+
+.agent-block__speaker .agent-block__eyebrow {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.agent-block__time {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.agent-block__speaker .agent-block__time {
+  margin-left: auto;
+}
+
+.agent-block__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 92%;
+  margin: 0 0 7px;
+  color: var(--muted);
+  font-size: var(--text-micro);
+}
+
+.agent-block__assistant-mark {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 28px;
+  height: 28px;
+}
+
+.agent-block__assistant-mark img {
+  display: block;
+  width: 28px;
+  height: 28px;
+}
+
+.agent-block__meta-name {
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+
+.agent-block-empty__choices {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0 10px;
+}
+
+.agent-block-empty__choices button {
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  color: var(--ink);
+  background: var(--panel);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    transform var(--motion-interaction) var(--ease-emphasized),
+    border-color var(--motion-fast) var(--ease-standard),
+    background-color var(--motion-fast) var(--ease-standard),
+    box-shadow var(--motion-interaction) var(--ease-standard);
+}
+
+.agent-block-empty__choices button:hover,
+.agent-block-empty__choices button:focus-visible {
+  border-color: var(--accent);
+  background: var(--surface-muted);
+}
+.agent-block-empty__choices button:hover {
+  transform: translateX(3px);
+  box-shadow: var(--shadow-hairline);
+}
+
+.agent-block-empty > small {
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 .agent-block h3,
@@ -293,6 +613,75 @@ function capabilityHeading(blockType: "capability_result" | "unsupported"): stri
 .agent-block__next {
   margin: 7px 0 0;
   color: var(--ink-soft);
+}
+
+.agent-block__body--guidance {
+  white-space: pre-wrap;
+}
+
+/* Keep the conversation asymmetric: the user's turn ends at the right edge while the assistant
+   stays anchored to the left. This makes speaker changes legible without adding another card. */
+.agent-block[data-block-type="user_message"] {
+  display: flex;
+  align-items: flex-end;
+  flex-direction: column;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.agent-block[data-block-type="user_message"] .agent-block__speaker {
+  width: min(86%, 44rem);
+  flex-direction: row-reverse;
+  justify-content: flex-start;
+  margin: 0 0 4px;
+}
+
+.agent-block[data-block-type="user_message"] .agent-block__time {
+  color: color-mix(in srgb, var(--on-accent, #10201f) 86%, var(--accent));
+}
+
+.agent-block__utterance {
+  max-width: min(86%, 44rem);
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--line-strong));
+  border-radius: 13px 13px 3px 13px;
+  color: var(--on-accent, #10201f);
+  background: var(--accent);
+  font-weight: 600;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  box-shadow: var(--shadow-hairline);
+}
+
+.agent-block[data-block-type="assistant_message"] .agent-block__speaker {
+  width: min(92%, 44rem);
+}
+
+.agent-block[data-block-type="assistant_message"] .agent-block__answer,
+.agent-block[data-block-type="assistant_message"] .agent-block__answer-note,
+.agent-block[data-block-type="assistant_message"] .agent-block__streaming {
+  max-width: min(92%, 44rem);
+  margin-left: 36px;
+}
+
+.agent-block__answer {
+  white-space: pre-wrap;
+}
+
+.agent-block__answer--waiting {
+  color: var(--muted);
+}
+
+.agent-block__answer-note {
+  color: var(--warning-ink);
+}
+
+.agent-block__streaming {
+  margin: 8px 0 0;
+  color: var(--accent);
+  font-size: var(--text-micro);
 }
 
 .agent-block__draft-notice {
@@ -505,7 +894,7 @@ function capabilityHeading(blockType: "capability_result" | "unsupported"): stri
 }
 
 .agent-block-empty p {
-  max-width: 36ch;
+  max-width: 46ch;
   margin: 0;
 }
 </style>

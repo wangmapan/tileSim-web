@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import threading
 import uuid
 from collections.abc import Callable
@@ -38,7 +39,9 @@ def load_reports(run: dict, artifact_definitions: dict) -> dict:
             continue
         try:
             if path.is_file():
-                reports[kind] = inspect_artifact(run["run_id"], path, definition)["value"]
+                inspected = inspect_artifact(run["run_id"], path, definition)
+                if inspected["content_status"] == "ready":
+                    reports[kind] = inspected["value"]
         except ArtifactContractError:
             # An optional artifact that is malformed, unsupported, or run-mismatched is excluded.
             continue
@@ -507,6 +510,161 @@ def _validate_metrics_topology_refs(value: dict, run_id: str, path: Path) -> Non
             _contract_error("Metrics/topology Fabric-domain subject mismatch.", f"{pointer}/topology_domain_ref")
 
 
+def _validate_runtime_evidence(value: dict, schema_identity: str) -> None:
+    """Validate the fields the runtime evidence views and references consume."""
+    def nonnegative_integer(item: object, pointer: str) -> None:
+        if type(item) is not int or item < 0 or item > 18_446_744_073_709_551_615:
+            _contract_error("Runtime evidence requires a uint64 integer.", pointer)
+
+    if schema_identity in {"tilesim.s1_runtime_event_trace.v1", "tilesim.s1_runtime_analysis.v1"}:
+        if not isinstance(value.get("trace_name"), str):
+            _contract_error("Runtime trace_name is required.", "/trace_name")
+        events = value.get("events")
+        if not isinstance(events, list):
+            _contract_error("Runtime events must be an array.", "/events")
+        for index, event in enumerate(events):
+            pointer = f"/events/{index}"
+            if not isinstance(event, dict) or any(not isinstance(event.get(field), str) for field in ("kind", "request_id", "batch_id")):
+                _contract_error("Runtime event identity is invalid.", pointer)
+            if not isinstance(event.get("batch_request_ids"), list) or any(not isinstance(member, str) for member in event["batch_request_ids"]):
+                _contract_error("Runtime batch request identities are invalid.", pointer + "/batch_request_ids")
+            if len(event["batch_request_ids"]) != len(set(event["batch_request_ids"])):
+                _contract_error("Runtime batch request identities must be unique.", pointer + "/batch_request_ids")
+            for field in ("event_time_ps", "logical_step", "kv_tokens", "active_requests"):
+                nonnegative_integer(event.get(field), pointer + "/" + field)
+    if schema_identity in {"tilesim.s1_runtime_event_summary.v1", "tilesim.s1_runtime_analysis.v1"}:
+        summary = value.get("summary") if schema_identity.endswith("analysis.v1") else value
+        if not isinstance(summary, dict):
+            _contract_error("Runtime summary is required.", "/summary")
+        for field in ("has_events", "monotonic_time_order", "contiguous_logical_steps"):
+            if type(summary.get(field)) is not bool:
+                _contract_error("Runtime summary flag is invalid.", ("/summary" if summary is not value else "") + "/" + field)
+        for field in ("total_events", "first_event_time_ps", "last_event_time_ps", "peak_active_requests"):
+            nonnegative_integer(summary.get(field), ("/summary" if summary is not value else "") + "/" + field)
+    if schema_identity in {"tilesim.s1_runtime_request_summaries.v1", "tilesim.s1_runtime_analysis.v1"}:
+        requests = value.get("requests")
+        if not isinstance(requests, list):
+            _contract_error("Runtime requests must be an array.", "/requests")
+        seen = set()
+        for index, request in enumerate(requests):
+            pointer = f"/requests/{index}"
+            request_id = request.get("request_id") if isinstance(request, dict) else None
+            if not isinstance(request_id, str) or not request_id or request_id in seen:
+                _contract_error("Runtime request identity is missing or duplicated.", pointer + "/request_id")
+            seen.add(request_id)
+            for field in ("arrival_time_ps", "admit_time_ps", "first_batch_issue_time_ps", "first_token_time_ps", "completion_time_ps", "final_kv_tokens"):
+                nonnegative_integer(request.get(field), pointer + "/" + field)
+
+
+_ATTRIBUTION_TARGETS = {
+    "metrics/request_metrics": ("request", "request_id"),
+    "evidence/des_events": ("des_event", "event_id"),
+    "evidence/resource_operations": ("resource_operation", "operation_id"),
+    "evidence/network_demands": ("network_demand", "demand_id"),
+    "evidence/fabric/timeline": ("fabric_phase", "phase_id"),
+}
+
+
+def _validate_request_attribution(value: dict, run_id: str, path: Path) -> None:
+    """Check backend identities and self-contained references before publication."""
+    schema = "tilesim.request_attribution.v1"
+    embedded = value.get("metrics")
+    evidence = value.get("evidence")
+    requests = value.get("requests")
+    if not isinstance(embedded, dict) or embedded.get("run_id") != run_id or embedded.get("schema_version") != "tilesim.metrics_report.v1":
+        _contract_error("Embedded request metrics are not bound to this run.", "/metrics/run_id")
+    if not isinstance(evidence, dict) or evidence.get("run_id") != run_id or not evidence.get("des_committed_event_digest"):
+        _contract_error("Dense DES evidence is missing or belongs to another run.", "/evidence/run_id")
+    if not isinstance(requests, list) or not requests:
+        _contract_error("Ready attribution requires nonempty request reports.", "/requests")
+    metric_rows = embedded.get("request_metrics")
+    if not isinstance(metric_rows, list) or not metric_rows:
+        _contract_error("Attribution requires request metric identities.", "/metrics/request_metrics")
+    metric_ids = [row.get("request_id") if isinstance(row, dict) else None for row in metric_rows]
+    if any(not isinstance(id, str) or not id for id in metric_ids) or len(set(metric_ids)) != len(metric_ids):
+        _contract_error("Request metric identities must be nonempty and unique.", "/metrics/request_metrics")
+    try:
+        external = json.loads((path.parent / "metrics.json").read_bytes())
+        external_ids = [row["request_id"] for row in external["request_metrics"]]
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as error:
+        raise ArtifactContractError("contract_violation", "Metrics identity target is unavailable.", json_pointer="/metrics/request_metrics") from error
+    if external.get("run_id") != run_id or external.get("schema_version") != embedded["schema_version"] or external_ids != metric_ids:
+        _contract_error("Attribution request identities disagree with the run metrics artifact.", "/metrics/request_metrics")
+    for prefix, (_, id_key) in _ATTRIBUTION_TARGETS.items():
+        if prefix.startswith("metrics/"):
+            continue
+        try:
+            rows = resolve_json_pointer(value, "/" + prefix)
+        except KeyError:
+            _contract_error("Attribution evidence collection is absent.", "/" + prefix)
+        if not isinstance(rows, list) or not rows:
+            _contract_error("Dense attribution requires actual resource and network evidence.", "/" + prefix)
+        ids = [row.get(id_key) if isinstance(row, dict) else None for row in rows]
+        if any(not isinstance(id, str) or not id for id in ids) or len(set(ids)) != len(ids):
+            _contract_error("Attribution evidence IDs must be nonempty and unique.", "/" + prefix)
+
+    def check_refs(owner: dict, pointer: str, request_id: str, *, interval: bool = False) -> None:
+        subjects = owner.get("subject_refs")
+        refs = owner.get("evidence_refs")
+        if (not interval and not isinstance(subjects, list)) or not isinstance(refs, list) or not refs:
+            _contract_error("Attribution requires subject and evidence references.", pointer)
+        subject_pairs = {
+            (subject.get("kind"), subject.get("id"))
+            for subject in (subjects or []) if isinstance(subject, dict)
+        }
+        if not interval and ("request", request_id) not in subject_pairs:
+            _contract_error("Attribution subject does not identify its request.", pointer + "/subject_refs")
+        for index, ref in enumerate(refs):
+            ref_path = f"{pointer}/evidence_refs/{index}"
+            if not isinstance(ref, dict) or ref.get("run_id") != run_id or ref.get("artifact_id") != "request_attribution" or ref.get("schema_identity") != schema or ref.get("availability") != "available":
+                _contract_error("Attribution evidence identity does not match this artifact.", ref_path)
+            target_pointer = ref.get("json_pointer")
+            match = re.fullmatch(r"/((?:metrics/request_metrics|evidence/des_events|evidence/resource_operations|evidence/network_demands|evidence/fabric/timeline))/([0-9]+)", target_pointer) if isinstance(target_pointer, str) else None
+            if not match:
+                _contract_error("Attribution evidence pointer is not an allowed target.", ref_path + "/json_pointer")
+            target_kind, id_key = _ATTRIBUTION_TARGETS[match.group(1)]
+            try:
+                target = resolve_json_pointer(value, target_pointer)
+            except KeyError as error:
+                raise ArtifactContractError("contract_violation", "Attribution evidence pointer is dangling.", json_pointer=ref_path + "/json_pointer") from error
+            subject = ref.get("subject")
+            target_id = target.get(id_key) if isinstance(target, dict) else None
+            if not isinstance(subject, dict) or subject.get("kind") != target_kind or subject.get("id") != target_id or (not interval and (target_kind, target_id) not in subject_pairs):
+                _contract_error("Attribution evidence target and subject disagree.", ref_path + "/subject")
+            if target_kind == "request" and target_id != request_id:
+                _contract_error("Attribution metric reference belongs to another request.", ref_path + "/subject")
+
+    report_ids = set()
+    seen_requests = set()
+    for index, report in enumerate(requests):
+        pointer = f"/requests/{index}"
+        if not isinstance(report, dict) or report.get("run_id") != run_id or report.get("schema_version") != "tilesim.tail_cause_chain_report.v1":
+            _contract_error("Request report identity is invalid.", pointer)
+        entity = report.get("explained_entity")
+        request_id = entity.get("id") if isinstance(entity, dict) and entity.get("kind") == "request" else None
+        report_id = report.get("report_id")
+        if not isinstance(request_id, str) or request_id not in metric_ids or request_id in seen_requests or not isinstance(report_id, str) or not report_id.startswith(run_id + "::request_critical_path::") or report_id in report_ids:
+            _contract_error("Request attribution identity is absent, duplicated, or not in metrics.", pointer + "/explained_entity")
+        seen_requests.add(request_id)
+        report_ids.add(report_id)
+        for field in ("cause_chain", "attribution_ranking"):
+            rows = report.get(field)
+            if not isinstance(rows, list) or not rows:
+                _contract_error("Request attribution has no cause chain or ranking.", pointer + "/" + field)
+            for row_index, row in enumerate(rows):
+                if not isinstance(row, dict):
+                    _contract_error("Attribution row must be an object.", f"{pointer}/{field}/{row_index}")
+                row_path = f"{pointer}/{field}/{row_index}"
+                check_refs(row, row_path, request_id)
+                if field == "cause_chain":
+                    for part_index, part in enumerate(row.get("network_intervals", [])):
+                        if not isinstance(part, dict):
+                            _contract_error("Network interval must be an object.", row_path + "/network_intervals")
+                        check_refs(part, f"{row_path}/network_intervals/{part_index}", request_id, interval=True)
+    if seen_requests != set(metric_ids):
+        _contract_error("Attribution and metrics request sets differ.", "/requests")
+
+
 def inspect_artifact(run_id: str, path: Path, definition: dict) -> dict:
     try:
         body = path.read_bytes()
@@ -515,6 +673,21 @@ def inspect_artifact(run_id: str, path: Path, definition: dict) -> dict:
         raise ArtifactContractError("invalid_json", "Artifact is not valid JSON.") from error
     if not isinstance(value, dict):
         raise ArtifactContractError("invalid_json", "Artifact root must be a JSON object.")
+
+    descriptor_id = definition.get("descriptor_artifact_id")
+    if descriptor_id and value.get("state") == "expected_absence":
+        if value.get("run_id") != run_id:
+            raise ArtifactContractError("run_binding_mismatch", "Descriptor run binding does not match.", schema_identity=json_schema_identity(value), json_pointer="/run_id")
+        if value.get("schema_version") != "tilesim.wind_tunnel_artifact_descriptor.v1":
+            raise ArtifactContractError("unsupported_schema", "Descriptor schema identity is unsupported.", schema_identity=json_schema_identity(value), json_pointer="/schema_version")
+        if (
+            set(value) != {"schema_version", "run_id", "artifact_id", "state", "evidence_requirement", "absence_reason", "detail"}
+            or value.get("artifact_id") != descriptor_id
+            or value.get("absence_reason") != "not_expected_for_boundary"
+            or any(not isinstance(value.get(key), str) or not value[key] for key in ("evidence_requirement", "detail"))
+        ):
+            _contract_error("Expected-absence descriptor is invalid.", "/artifact_id")
+        return {"body": body, "value": value, "schema_identity": "tilesim.wind_tunnel_artifact_descriptor.v1", "contract_status": "supported", "content_status": "expected_absence"}
 
     schema_identity = json_schema_identity(value)
     supported_identities = definition.get("schema_identities", [])
@@ -569,11 +742,19 @@ def inspect_artifact(run_id: str, path: Path, definition: dict) -> dict:
             _validate_design_space_contract(value, run_id)
         elif schema_identity == "tilesim.metrics_report.v1":
             _validate_metrics_topology_refs(value, run_id, path)
+        elif schema_identity in {
+            "tilesim.s1_runtime_event_trace.v1", "tilesim.s1_runtime_event_summary.v1",
+            "tilesim.s1_runtime_request_summaries.v1", "tilesim.s1_runtime_analysis.v1",
+        }:
+            _validate_runtime_evidence(value, schema_identity)
+        elif schema_identity == "tilesim.request_attribution.v1":
+            _validate_request_attribution(value, run_id, path)
     return {
         "body": body,
         "value": value,
         "schema_identity": schema_identity,
         "contract_status": contract_status,
+        "content_status": "ready",
     }
 
 
@@ -608,6 +789,7 @@ def _artifact_entries(run_id: str, run_dir: Path, artifact_definitions: dict) ->
                 "sha256": hashlib.sha256(body).hexdigest(),
                 "schema_identity": inspected["schema_identity"],
                 "contract_status": inspected["contract_status"],
+                "content_status": inspected["content_status"],
             }
         )
     return artifacts, rejected_artifacts

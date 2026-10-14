@@ -58,7 +58,6 @@ onMounted(() => void load());
   <div class="view-stack week7-view">
     <section class="week7-hero">
       <div>
-        <p class="section-kicker">CALIBRATION · LINEAGE · TOOLS</p>
         <h2>{{ t("校准、证据血缘与确定性编排") }}</h2>
         <p>
           {{
@@ -104,7 +103,6 @@ onMounted(() => void load());
         <summary class="panel-header week7-section-header">
           <div class="week7-heading-icon"><DatabaseZap :size="19" /></div>
           <div>
-            <p class="section-kicker">S8 · CALIBRATION</p>
             <h2>{{ t("离线校准工作流") }}</h2>
             <p>{{ t("模型选择与 held-out fixture 评估相互隔离；资产 ID 和哈希保持可审计。") }}</p>
           </div>
@@ -193,7 +191,6 @@ onMounted(() => void load());
         <summary class="panel-header week7-section-header">
           <div class="week7-heading-icon"><DatabaseZap :size="19" /></div>
           <div>
-            <p class="section-kicker">S9 · REPORT FIELD EVIDENCE MAP</p>
             <h2>{{ t("报告字段证据血缘") }}</h2>
             <p>{{ t("逐字段说明来源对象、计算规则、验证门禁和允许声明；这是一张关系表，不是性能数值图。") }}</p>
           </div>
@@ -233,7 +230,6 @@ onMounted(() => void load());
         <summary class="panel-header week7-section-header">
           <div class="week7-heading-icon"><Bot :size="19" /></div>
           <div>
-            <p class="section-kicker">DETERMINISTIC AGENT ORCHESTRATION</p>
             <h2>{{ t("固定工具调用编排") }}</h2>
             <p>{{ t("这是可复现的五步结构化编排，不是生成具体原因或优化建议的自然语言 Agent。") }}</p>
           </div>

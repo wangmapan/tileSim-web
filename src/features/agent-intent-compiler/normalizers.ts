@@ -231,6 +231,7 @@ function enumAliases(value: string): readonly string[] {
   if (value === "decode_priority") return ["decode_priority", "decode priority", "解码优先"];
   if (value === "fabric_backpressure_aware")
     return ["fabric_backpressure_aware", "fabric backpressure aware", "backpressure aware", "网络反压感知", "反压感知"];
+  if (value === "starvation_aware") return ["starvation_aware", "starvation aware", "饿死感知", "饥饿感知"];
   return [value, value.replaceAll("_", " ")];
 }
 

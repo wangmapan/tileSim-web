@@ -269,7 +269,13 @@ describe("App shell wiring for clarification answers", () => {
 
     expect(callback).toContain("resolveClarificationAnswer({");
     expect(callback).toContain("questions: clarification");
-    expect(callback).toContain("agentBlocks.value = intentOutputToTypedBlocks(outcome.output)");
+    // The recomputed blocks replace the sidebar's list, exactly as they did
+    // before the panel became a conversation; what changed is that the answer is
+    // now recorded through the same turn helper every other reply uses, so the
+    // option the user answered stays in the transcript above its result.
+    expect(callback).toContain(
+      'appendAgentAnswerBlocks(openAgentTurn("（按选项补充）"), intentOutputToTypedBlocks(outcome.output))',
+    );
     expect(callback).toContain("agentLastInstruction.value = outcome.instruction");
     expect(callback).toContain("formalErrorBlock(outcome.code");
     // The stub this work package replaces must not come back.

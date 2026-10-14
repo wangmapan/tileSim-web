@@ -23,6 +23,11 @@ const artifactAliases: Record<string, string> = {
   "input-runtime-trace": "input-runtime-trace",
   "input-topology": "input-topology",
   "week8-run-evidence": "week8-run-evidence",
+  "runtime-events": "runtime-events",
+  "runtime-summary": "runtime-summary",
+  "runtime-requests": "runtime-requests",
+  "runtime-analysis": "runtime-analysis",
+  "request-attribution": "request-attribution",
 };
 
 const sha256Pattern = /^[a-f0-9]{64}$/i;
@@ -50,7 +55,7 @@ export function parseArtifactPointerSource(sourcePath: string): ArtifactPointerS
 
 export function artifactEvidenceRoute(target: ArtifactEvidenceTarget): RouteLocationRaw {
   return {
-    name: "execution",
+    name: "raw_evidence",
     query: {
       run: target.runId,
       evidence_artifact: target.artifactId,

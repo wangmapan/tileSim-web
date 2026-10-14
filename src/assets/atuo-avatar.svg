@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">小拓头像</title>
+  <desc id="desc">一枚带有连接端点、眼睛和微笑的深青色方形小助手</desc>
+  <circle cx="64" cy="64" r="60" fill="#eaf3f5"/>
+  <g fill="#397f75">
+    <rect x="58" y="15" width="12" height="19" rx="5"/>
+    <rect x="58" y="94" width="12" height="19" rx="5"/>
+    <rect x="15" y="58" width="19" height="12" rx="5"/>
+    <rect x="94" y="58" width="19" height="12" rx="5"/>
+  </g>
+  <rect x="27" y="27" width="74" height="74" rx="21" fill="#263d49"/>
+  <circle cx="50" cy="58" r="5" fill="#f7fbfc"/>
+  <circle cx="78" cy="58" r="5" fill="#f7fbfc"/>
+  <path d="M50 76c8 9 20 9 28 0" fill="none" stroke="#72c7b7" stroke-linecap="round" stroke-width="6"/>
+</svg>

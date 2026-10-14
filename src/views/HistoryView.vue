@@ -205,7 +205,6 @@ async function submitRename() {
     <article v-if="state.history.selected.length" class="panel compare-shell" data-help-anchor="history-results">
       <header class="panel-header panel-header--row">
         <div>
-          <p class="section-kicker">RUN COMPARISON</p>
           <h2>{{ t("两次运行对比") }}</h2>
           <p>{{ t("先选择基线 A，再选择变体 B。") }}</p>
         </div>

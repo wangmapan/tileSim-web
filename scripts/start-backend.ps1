@@ -34,6 +34,17 @@ $required = @("source_revision", "tilesim_root_wsl", "tilesim_cli_wsl", "manifes
 foreach ($name in $required) {
     if (-not $manifest.$name) { throw "Deployment manifest is missing '$name'." }
 }
+if ($manifest.tilesim_cli_digest) {
+    if ($manifest.tilesim_cli_digest -notmatch '^[0-9a-f]{64}$') {
+        throw "Deployment manifest contains an invalid TileSimCLI digest."
+    }
+    $cliHashOutput = @(& wsl.exe -d $WslDistro --exec sha256sum -- $manifest.tilesim_cli_wsl)
+    if ($LASTEXITCODE -ne 0) { throw "Could not verify the deployed TileSimCLI digest." }
+    $cliHash = $cliHashOutput | Where-Object { $_ -match '^([0-9a-f]{64})\s' } | ForEach-Object { $matches[1] } | Select-Object -Last 1
+    if (-not $cliHash -or $cliHash.Trim() -ne $manifest.tilesim_cli_digest) {
+        throw "Deployed TileSimCLI digest does not match the deployment manifest."
+    }
+}
 
 if ($manifest.web_release_root_windows) {
     $releaseOutput = & $node (Join-Path $PSScriptRoot "release-snapshot.mjs") verify `
@@ -93,27 +104,33 @@ $arguments = @(
     "TILESIM_TRACE_PACKAGE_ROOT=$tracePackageRootWsl",
     "python3", $bridgeScriptWsl
 )
-$evidenceAgentEnvironmentNames = @(
+$modelChannelEnvironmentNames = @(
     "TILESIM_EVIDENCE_AGENT_PROVIDER",
     "TILESIM_EVIDENCE_AGENT_ENDPOINT",
     "TILESIM_EVIDENCE_AGENT_API_KEY",
     "TILESIM_EVIDENCE_AGENT_MODEL",
     "TILESIM_EVIDENCE_AGENT_MODEL_REVISION",
     "TILESIM_EVIDENCE_AGENT_TIMEOUT_MS",
-    "TILESIM_EVIDENCE_AGENT_PROBE_CACHE_SECONDS"
+    "TILESIM_EVIDENCE_AGENT_PROBE_CACHE_SECONDS",
+    # The right-side panel assistant channel. These are forwarded the same way - through WSLENV, never on
+    # the command line - so the credential never appears in a process argument list.
+    "TILESIM_ASSISTANT_BASE_URL",
+    "TILESIM_ASSISTANT_API_KEY",
+    "TILESIM_ASSISTANT_MODEL",
+    "TILESIM_ASSISTANT_TIMEOUT_MS"
 )
-$forwardedEvidenceAgentEnvironmentNames = @(
-    $evidenceAgentEnvironmentNames | Where-Object {
+$forwardedModelChannelEnvironmentNames = @(
+    $modelChannelEnvironmentNames | Where-Object {
         -not [string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable($_, "Process"))
     }
 )
 $previousWslEnvironment = [Environment]::GetEnvironmentVariable("WSLENV", "Process")
 try {
-    if ($forwardedEvidenceAgentEnvironmentNames.Count -gt 0) {
+    if ($forwardedModelChannelEnvironmentNames.Count -gt 0) {
         $existingWslEnvironmentNames = @(
             $previousWslEnvironment -split ":" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
         )
-        $env:WSLENV = (@($existingWslEnvironmentNames + $forwardedEvidenceAgentEnvironmentNames) |
+        $env:WSLENV = (@($existingWslEnvironmentNames + $forwardedModelChannelEnvironmentNames) |
             Select-Object -Unique) -join ":"
     }
     $launcher = Start-Process -FilePath "wsl.exe" -ArgumentList $arguments -WindowStyle Hidden -PassThru

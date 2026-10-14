@@ -100,19 +100,39 @@ def worktree_state_digest(root: Path) -> str:
         path = root / os.fsdecode(raw_path)
         digest.update(len(raw_path).to_bytes(8, "big"))
         digest.update(raw_path)
-        try:
-            if path.is_symlink():
+        if path.is_symlink():
+            try:
                 payload = os.fsencode(os.readlink(path))
-                kind = b"symlink\0"
-            else:
-                payload = path.read_bytes()
-                kind = b"file\0"
+            except OSError:
+                return "unknown"
+            digest.update(b"symlink\0")
+            digest.update(len(payload).to_bytes(8, "big"))
+            digest.update(payload)
+            continue
+        try:
+            source = path.open("rb")
         except OSError:
-            payload = b""
-            kind = b"missing\0"
-        digest.update(kind)
-        digest.update(len(payload).to_bytes(8, "big"))
-        digest.update(payload)
+            digest.update(b"missing\0")
+            digest.update((0).to_bytes(8, "big"))
+            continue
+        with source:
+            try:
+                before = os.fstat(source.fileno())
+                digest.update(b"file\0")
+                digest.update(before.st_size.to_bytes(8, "big"))
+                bytes_read = 0
+                while chunk := source.read(1024 * 1024):
+                    digest.update(chunk)
+                    bytes_read += len(chunk)
+                after = os.fstat(source.fileno())
+            except OSError:
+                return "unknown"
+            if (
+                bytes_read != before.st_size
+                or after.st_size != before.st_size
+                or after.st_mtime_ns != before.st_mtime_ns
+            ):
+                return "unknown"
     return digest.hexdigest()
 
 

@@ -33,7 +33,7 @@ const manifestSummary = computed(() => {
       <span>03</span>
       <div>
         <h2>{{ t("S6 设计空间候选") }}</h2>
-        <p>{{ t("默认使用内置候选；仅在需要自定义 S6 manifest 时展开。") }}</p>
+        <p>{{ t("可选。需要自定义 S6 候选时再展开。") }}</p>
       </div>
       <div class="design-space-disclosure-state">
         <strong>{{ manifestSummary.mode === "built_in" ? t("内置合成候选集") : t("自定义候选 manifest") }}</strong>
@@ -63,7 +63,7 @@ const manifestSummary = computed(() => {
         <div>
           <strong>{{ manifestSummary.mode === "built_in" ? t("内置合成候选集") : t("自定义候选 manifest") }}</strong>
           <small v-if="manifestSummary.mode === 'built_in'">
-            {{ t("留空时由后端执行内置的 3 个 S6 候选。") }}
+            {{ t("留空使用内置候选。") }}
           </small>
           <small v-else-if="manifestSummary.error">{{
             t("JSON 尚不可解析：{message}", { message: manifestSummary.error })
@@ -80,23 +80,7 @@ const manifestSummary = computed(() => {
           {{ manifestSummary.transferCount.toLocaleString() }} / 100,000 transfers
         </span>
       </div>
-      <p class="field-help">
-        {{
-          t(
-            "仅支持 S6 bandwidth、latency、oversubscription、request/message 和 release interval；S1/S3/S4/S5 变量保持 unresolved_not_executed。",
-          )
-        }}
-      </p>
-      <p class="field-help">
-        {{
-          t(
-            "v1 保留历史兼容语义；v2 要求 source_mode=synthetic_trace、calibration_level=uncalibrated、allowed_claim_scope=exploratory。",
-          )
-        }}
-      </p>
-      <p class="field-help">
-        {{ t("前端预算提示用于尽早发现问题；字段、范围、去重和最终执行预算仍由 Bridge 与 TileSimCLI 失败关闭校验。") }}
-      </p>
+      <p class="field-help">{{ t("仅支持 S6 参数；最终范围与执行预算由 Bridge 校验。") }}</p>
     </div>
   </details>
 </template>

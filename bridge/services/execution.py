@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import subprocess
 import tempfile
 import threading
@@ -16,10 +17,32 @@ from pathlib import Path
 from services.run_intake import RUN_INTAKE_ISSUE_FIELDS
 
 
-ProcessRunner = Callable[..., subprocess.CompletedProcess[str]]
+ProcessRunner = Callable[..., subprocess.CompletedProcess[bytes | str]]
 
 TOPOLOGY_SCHEMA_IDENTITY = "tilesim.s6_topology_input.v1"
 TRACE_SOURCE_MODES = {"real_trace", "synthetic_trace", "compatibility_harness_trace"}
+ATTRIBUTION_DUPLICATE_CODE = "REQUEST_ATTRIBUTION_REQUEST_ID_DUPLICATED"
+
+
+def validated_cli_failure(report: object, *, attribution_requested: bool) -> dict[str, str]:
+    """Preserve structured CLI errors, accepting the attribution code only with its pointer."""
+    if not isinstance(report, dict):
+        return {}
+    fields = ("error_code", "field_path", "cause", "next_action")
+    if any(not isinstance(report.get(field, ""), str) for field in fields):
+        return {}
+    code = report.get("error_code", "")
+    if code == ATTRIBUTION_DUPLICATE_CODE:
+        if (
+            not attribution_requested
+            or report.get("report_kind") != "wind_tunnel_run_result"
+            or report.get("status") != "failed"
+            or not re.fullmatch(r"/requests/[0-9]+/request_id", report.get("field_path", ""))
+            or not re.search(r"/requests/[0-9]+/request_id", report.get("cause", ""))
+            or not report.get("next_action")
+        ):
+            return {}
+    return {"cli_" + field: report.get(field, "") for field in fields}
 
 
 def bind_topology_contract(topology: dict, run_id: str, *, default_source_mode: str) -> dict:
@@ -123,6 +146,8 @@ def materialize_trace_package_inputs(
     manifest_path: Path,
     manifest_sha256: str,
     source_mode: str,
+    entry_boundary: str,
+    entry_trace_kind: str,
 ) -> dict:
     """Materialize only the allow-listed topology; the CLI owns Trace-package intake."""
     topology = json.loads(scenario["topology"].read_text(encoding="utf-8"))
@@ -132,11 +157,45 @@ def materialize_trace_package_inputs(
         json.dumps(topology, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    # Classification uses the CLI-inspected boundary and the hash-bound entry, never
+    # the package ID. The CLI independently revalidates the package at execution.
+    runtime_entry = (entry_boundary, entry_trace_kind) in {
+        ("S0", "s0_workload"), ("S1", "s1_runtime")
+    }
+    dense_request_evidence = False
+    if runtime_entry:
+        try:
+            package = json.loads(manifest_path.read_bytes())
+            entry_info = package["entry_trace"]
+            entry_path = (manifest_path.parent / entry_info["path"]).resolve(strict=True)
+            entry_path.relative_to(manifest_path.parent.resolve(strict=True))
+            entry_body = entry_path.read_bytes()
+            if hashlib.sha256(entry_body).hexdigest() == entry_info["sha256"].removeprefix("sha256:"):
+                entry = json.loads(entry_body)
+                profile = entry.get("dense_execution", {})
+                policy = entry.get("runtime_config", entry.get("policy", {}))
+                dense_request_evidence = (
+                    isinstance(profile, dict)
+                    and profile.get("schema_version") == "tilesim.dense_execution.v1"
+                    and isinstance(policy, dict)
+                    and type(policy.get("default_tp_degree")) is int
+                    and policy["default_tp_degree"] >= 2
+                    and isinstance(policy.get("default_participants"), list)
+                    and len(policy["default_participants"]) >= 2
+                    and bool(topology.get("topology", {}).get("domains"))
+                    and bool(topology.get("topology", {}).get("links"))
+                )
+        except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+            # A changed or invalid package is rejected by trace_package_manifest_matches
+            # or the CLI, not promoted to attribution eligibility.
+            pass
     return {
         **scenario,
         "topology": topology_path,
         "trace_package": manifest_path,
         "trace_package_manifest_sha256": manifest_sha256,
+        "runtime_evidence_applicable": runtime_entry,
+        "request_attribution_applicable": dense_request_evidence,
     }
 
 
@@ -215,7 +274,18 @@ def execute_run(
         "--execution-envelope-out",
         str(report_paths["execution_envelope"]),
     ])
-    if fidelity_policy == "des":
+    # The validated package's actual entry boundary, not its ID, determines whether
+    # runtime evidence is expected. Resource-only boundaries remain unrequested.
+    if (scenario.get("trace_package") is None and scenario.get("from") == "S1") or scenario.get("runtime_evidence_applicable"):
+        command.extend([
+            "--runtime-events-out", str(report_paths["runtime_events"]),
+            "--runtime-summary-out", str(report_paths["runtime_summary"]),
+            "--runtime-requests-out", str(report_paths["runtime_requests"]),
+            "--runtime-analysis-out", str(report_paths["runtime_analysis"]),
+        ])
+    if fidelity_policy == "des" and scenario.get("request_attribution_applicable"):
+        command.extend(["--request-attribution-out", str(report_paths["request_attribution"])])
+    if fidelity_policy == "des" and (scenario.get("trace_package") is None or scenario.get("runtime_evidence_applicable")):
         command.extend(
             [
                 "--run-bound-des-evidence-out",
@@ -246,22 +316,37 @@ def execute_run(
             pass
         return
 
+    exit_code: int | None = None
+    stdout = ""
+    stderr = ""
     try:
         completed = process_runner(
             command,
             cwd=tilesim_root,
-            text=True,
+            # Decode in this thread: subprocess's text reader thread can fail
+            # on the Windows code page and return stdout=None without raising.
+            text=False,
             capture_output=True,
-            timeout=180,
+            # Large legitimate event streams can take more than three minutes to
+            # serialize with all report artifacts; retain a finite five-minute bound.
+            timeout=300,
             check=False,
         )
-        if completed.returncode == 0 and completed.stdout.strip():
+        exit_code = completed.returncode
+        if completed.stderr is not None:
+            stderr = completed.stderr.decode("utf-8") if isinstance(completed.stderr, bytes) else completed.stderr
+        if completed.stdout is None or completed.stderr is None:
+            raise ValueError("TileSimCLI stdout or stderr was unavailable.")
+        stdout = completed.stdout.decode("utf-8") if isinstance(completed.stdout, bytes) else completed.stdout
+        primary_report = None
+        if stdout.strip():
             try:
-                primary_report = json.loads(completed.stdout)
-                report_paths["run"].write_text(
-                    json.dumps(primary_report, ensure_ascii=False, indent=2),
-                    encoding="utf-8",
-                )
+                primary_report = json.loads(stdout)
+                if completed.returncode == 0:
+                    report_paths["run"].write_text(
+                        json.dumps(primary_report, ensure_ascii=False, indent=2),
+                        encoding="utf-8",
+                    )
             except json.JSONDecodeError:
                 # Artifact reports remain valid if a future CLI emits non-JSON stdout.
                 pass
@@ -269,10 +354,15 @@ def execute_run(
         with runs_lock:
             run = runs[run_id]
             run["finished_at"] = now()
-            run["exit_code"] = completed.returncode
-            run["stdout"] = completed.stdout[-4000:]
-            run["stderr"] = completed.stderr[-4000:]
+            run["exit_code"] = exit_code
+            run["stdout"] = stdout[-4000:]
+            run["stderr"] = stderr[-4000:]
+            run["stderr_summary"] = stderr[-4000:]
             run["report_paths"] = report_paths
+            run.update(validated_cli_failure(
+                primary_report,
+                attribution_requested="--request-attribution-out" in command,
+            ))
             if trace_package_changed:
                 run["status"] = "failed"
                 run["error"] = "Trace-package manifest changed during execution."
@@ -285,7 +375,9 @@ def execute_run(
                 run["failure_code"] = "cli_missing_primary_artifact"
             else:
                 run["status"] = "failed"
-                run["error"] = "TileSimCLI returned a non-zero exit code."
+                cause = primary_report.get("cause", "") if isinstance(primary_report, dict) else ""
+                summary = cause if isinstance(cause, str) and cause else stderr.strip()
+                run["error"] = ("TileSimCLI returned a non-zero exit code. " + summary)[-4000:]
                 run["failure_code"] = "cli_nonzero_exit"
             metadata_updates = {
                 "status": run["status"],
@@ -293,17 +385,28 @@ def execute_run(
                 "exit_code": run["exit_code"],
                 "error": run.get("error", ""),
                 "failure_code": run.get("failure_code", ""),
+                "stderr_summary": run["stderr_summary"],
+                "cli_error_code": run.get("cli_error_code", ""),
+                "cli_field_path": run.get("cli_field_path", ""),
+                "cli_cause": run.get("cli_cause", ""),
+                "cli_next_action": run.get("cli_next_action", ""),
             }
         update_run_metadata(run_dir, **metadata_updates)
-    except (OSError, subprocess.TimeoutExpired) as error:
+    except Exception as error:
         with runs_lock:
             run = runs[run_id]
             run["status"] = "failed"
             run["finished_at"] = now()
-            run["error"] = str(error)
+            run["exit_code"] = exit_code
+            run["stderr_summary"] = stderr[-4000:]
+            run["error"] = str(error) or type(error).__name__
             run["failure_code"] = (
                 "cli_timeout"
                 if isinstance(error, subprocess.TimeoutExpired)
+                else "cli_output_decode_error"
+                if isinstance(error, UnicodeDecodeError)
+                else "cli_output_unavailable"
+                if isinstance(error, ValueError) and "unavailable" in str(error)
                 else "cli_execution_error"
             )
             failed_at = run["finished_at"]
@@ -316,6 +419,12 @@ def execute_run(
                 finished_at=failed_at,
                 error=failure,
                 failure_code=failure_code,
+                exit_code=exit_code,
+                stderr_summary=run["stderr_summary"],
+                cli_error_code=run.get("cli_error_code", ""),
+                cli_field_path=run.get("cli_field_path", ""),
+                cli_cause=run.get("cli_cause", ""),
+                cli_next_action=run.get("cli_next_action", ""),
             )
         except OSError:
             pass

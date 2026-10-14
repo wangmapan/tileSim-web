@@ -622,12 +622,15 @@
 .scope-callout,
 .service-warning,
 .run-scope-note {
+  position: relative;
   display: flex;
   gap: 10px;
-  padding: 13px 15px;
-  border-radius: 8px;
+  padding: 10px 12px;
+  border: 0;
+  border-left: 2px solid var(--accent);
+  border-radius: 0;
   color: var(--ink-soft);
-  background: var(--surface-muted);
+  background: transparent;
 }
 .scope-callout p,
 .service-warning p,

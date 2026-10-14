@@ -10,7 +10,7 @@ const schema31 = {
   additionalProperties: false,
   required: ["scenario_id"],
   properties: {
-    scenario_id: { enum: ["s1_des_example"] },
+    scenario_id: { enum: ["s1_des_example", "dense_des_package"] },
     fidelity_policy: { enum: ["default", "des"], default: "des" },
     gpu_participation_mode: { const: "gpu_free", default: "gpu_free" },
     run_name: { type: ["string", "null"], maxLength: 80 },
@@ -22,6 +22,10 @@ const schema31 = {
     trace_package_id: { type: "string", pattern: "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$" },
   },
   allOf: [
+    {
+      if: { properties: { scenario_id: { const: "dense_des_package" } }, required: ["scenario_id"] },
+      then: { required: ["trace_package_id"], properties: { fidelity_policy: { const: "des" } } },
+    },
     { not: { properties: { overrides: {}, custom_inputs: {} }, required: ["overrides", "custom_inputs"] } },
     { not: { properties: { trace_package_id: {}, overrides: {} }, required: ["trace_package_id", "overrides"] } },
     {
@@ -47,9 +51,14 @@ const schema32 = {
       type: "object",
       additionalProperties: false,
       properties: {
-        batch_scheduler: { enum: ["fifo", "decode_priority", "fabric_backpressure_aware"] },
+        batch_scheduler: { enum: ["fifo", "decode_priority", "fabric_backpressure_aware", "starvation_aware"] },
         max_batch_size: { type: "integer", minimum: 1, maximum: 64 },
         kv_capacity_tokens: { type: "integer", minimum: 256, maximum: 1000000 },
+        max_active_requests: { type: "integer", minimum: 1, maximum: 1024 },
+        initial_kv_tokens: { type: "integer", minimum: 0, maximum: 1000000 },
+        kv_admission_watermark: { type: "number", minimum: 0.05, maximum: 1 },
+        long_context_threshold_tokens: { type: "integer", minimum: 1, maximum: 1000000 },
+        decode_penalty_per_threshold: { type: "number", minimum: 0, maximum: 1 },
       },
     },
     workload: {
@@ -182,7 +191,7 @@ const schema40 = {
   },
 };
 import func1 from "ajv/dist/runtime/ucs2length";
-const func4 = Object.prototype.hasOwnProperty;
+const func5 = Object.prototype.hasOwnProperty;
 const schema33 = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://tilesim.local/contracts/custom-run-inputs.schema.json",
@@ -206,22 +215,32 @@ const schema34 = {
   required: ["policy", "requests"],
   properties: {
     trace_name: { type: "string", minLength: 1, maxLength: 256 },
+    engine_type: { enum: ["legacy_generic", "vllm", "sglang", "tensorrt_llm"] },
+    engine_semantic_version: {
+      enum: ["legacy_generic.v1", "vllm.0.6.semantic.v1", "sglang.0.4.semantic.v1", "tensorrt_llm.0.12.semantic.v1"],
+    },
+    requested_features: {
+      type: "array",
+      uniqueItems: true,
+      maxItems: 3,
+      items: {
+        enum: [
+          "continuous_batching",
+          "prefix_aware_scheduling",
+          "inflight_batching",
+          "paged_kv_cache",
+          "capacity_aware_scheduling",
+        ],
+      },
+    },
     trace_provenance: {
       type: "object",
       additionalProperties: false,
       required: ["source_mode", "calibration_level", "allowed_claim_scope"],
       properties: {
         source_mode: { const: "synthetic_trace" },
-        calibration_level: { enum: ["uncalibrated", "partially_calibrated"] },
-        allowed_claim_scope: {
-          enum: [
-            "exploratory",
-            "exploratory_s6_only",
-            "synthetic_consistency",
-            "synthetic_consistency_only",
-            "workflow_consistency_only",
-          ],
-        },
+        calibration_level: { const: "uncalibrated" },
+        allowed_claim_scope: { const: "exploratory" },
         source_id: { type: "string", maxLength: 512 },
         generation_path: { type: "string", maxLength: 512 },
         capture_or_generation_time: { type: "string", maxLength: 160 },
@@ -234,17 +253,17 @@ const schema34 = {
       type: "object",
       additionalProperties: false,
       properties: {
-        kv_capacity_tokens: { type: "integer", minimum: 0, maximum: 9007199254740991 },
+        kv_capacity_tokens: { type: "integer", minimum: 1, maximum: 9007199254740991 },
         initial_kv_tokens: { type: "integer", minimum: 0, maximum: 9007199254740991 },
-        max_active_requests: { type: "integer", minimum: 0, maximum: 1024 },
-        max_batch_size: { type: "integer", minimum: 0, maximum: 1024 },
-        batch_scheduler: { enum: ["fifo", "decode_priority", "fabric_backpressure_aware"] },
+        max_active_requests: { type: "integer", minimum: 1, maximum: 1024 },
+        max_batch_size: { type: "integer", minimum: 1, maximum: 1024 },
+        batch_scheduler: { enum: ["fifo", "decode_priority", "fabric_backpressure_aware", "starvation_aware"] },
         prefill_starvation_threshold_ps: { type: "integer", minimum: 0, maximum: 9007199254740991 },
         pd_handoff_delay_ps: { type: "integer", minimum: 0, maximum: 9007199254740991 },
         pd_handoff_queue_service_ps: { type: "integer", minimum: 0, maximum: 9007199254740991 },
         kv_page_size_tokens: { type: "integer", minimum: 0, maximum: 9007199254740991 },
         kv_fragmentation_overhead: { type: "number", minimum: 0 },
-        kv_admission_watermark: { type: "number", minimum: 0, maximum: 1 },
+        kv_admission_watermark: { type: "number", exclusiveMinimum: 0, maximum: 1 },
         fabric_backpressure_active: { type: "boolean" },
         fabric_backpressure_delay_us: { type: "number", minimum: 0 },
         fabric_backpressure_throttle_threshold_us: { type: "number", minimum: 0 },
@@ -265,7 +284,7 @@ const schema34 = {
           request_id: { type: "string", minLength: 1, maxLength: 256 },
           model_id: { type: "string", maxLength: 256 },
           arrival_time_ps: { type: "integer", minimum: 0, maximum: 9007199254740991 },
-          phase: { enum: ["prefill", "decode"] },
+          phase: { enum: ["prefill", "decode", "request"] },
           prompt_tokens: { type: "integer", minimum: 0, maximum: 9007199254740991 },
           decode_tokens: { type: "integer", minimum: 0, maximum: 9007199254740991 },
           kv_tokens: { type: "integer", minimum: 0, maximum: 9007199254740991 },
@@ -278,10 +297,75 @@ const schema34 = {
           disaggregation_group_id: { type: "string", maxLength: 256 },
           kv_handoff_id: { type: "string", maxLength: 256 },
         },
+        if: { properties: { phase: { const: "request" } }, required: ["phase"] },
+        then: {
+          required: ["prompt_tokens", "decode_tokens", "kv_tokens", "tp_degree", "participants"],
+          properties: { prompt_tokens: { minimum: 1 }, kv_tokens: { minimum: 1 }, participants: { minItems: 1 } },
+        },
       },
     },
   },
+  allOf: [
+    {
+      if: { properties: { engine_type: { const: "vllm" } }, required: ["engine_type"] },
+      then: {
+        required: ["engine_semantic_version", "requested_features"],
+        properties: {
+          engine_semantic_version: { const: "vllm.0.6.semantic.v1" },
+          requested_features: { items: { const: "continuous_batching" } },
+        },
+      },
+    },
+    {
+      if: { properties: { engine_type: { const: "sglang" } }, required: ["engine_type"] },
+      then: {
+        required: ["engine_semantic_version", "requested_features"],
+        properties: {
+          engine_semantic_version: { const: "sglang.0.4.semantic.v1" },
+          requested_features: { items: { enum: ["continuous_batching", "prefix_aware_scheduling"] } },
+        },
+      },
+    },
+    {
+      if: { properties: { engine_type: { const: "tensorrt_llm" } }, required: ["engine_type"] },
+      then: {
+        required: ["engine_semantic_version", "requested_features"],
+        properties: {
+          engine_semantic_version: { const: "tensorrt_llm.0.12.semantic.v1" },
+          requested_features: { items: { enum: ["inflight_batching", "paged_kv_cache", "capacity_aware_scheduling"] } },
+        },
+      },
+    },
+    {
+      if: {
+        anyOf: [
+          { properties: { engine_type: { const: "legacy_generic" } }, required: ["engine_type"] },
+          { not: { required: ["engine_type"] } },
+        ],
+      },
+      then: {
+        properties: {
+          engine_semantic_version: { const: "legacy_generic.v1" },
+          requested_features: { maxItems: 0 },
+          requests: { items: { properties: { phase: { enum: ["prefill", "decode"] } } } },
+        },
+      },
+      else: { required: ["engine_semantic_version", "requested_features"] },
+    },
+    { if: { required: ["engine_semantic_version"] }, then: { required: ["engine_type"] } },
+    { if: { required: ["requested_features"] }, then: { required: ["engine_type"] } },
+    {
+      if: {
+        properties: { requests: { contains: { properties: { phase: { const: "request" } }, required: ["phase"] } } },
+      },
+      then: {
+        required: ["engine_type"],
+        properties: { requests: { items: { required: ["phase"], properties: { phase: { const: "request" } } } } },
+      },
+    },
+  ],
 };
+import func0 from "ajv/dist/runtime/equal";
 const schema35 = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://tilesim.local/contracts/topology-request-input.schema.json",
@@ -405,6 +489,7 @@ const schema35 = {
             type: "object",
             additionalProperties: false,
             required: ["request_id"],
+            not: { required: ["message_size_bytes", "message_size_mb"] },
             properties: {
               request_id: { type: "string", minLength: 1, maxLength: 256 },
               batch_id: { type: "string", maxLength: 256 },
@@ -2435,15 +2520,15 @@ function validate22(
             const len5 = data46.length;
             for (let i5 = 0; i5 < len5; i5++) {
               let data47 = data46[i5];
+              const _errs105 = errors;
+              const _errs106 = errors;
               if (data47 && typeof data47 == "object" && !Array.isArray(data47)) {
-                if (data47.request_id === undefined) {
-                  const err113 = {
-                    instancePath: instancePath + "/workload/requests/" + i5,
-                    schemaPath: "#/properties/workload/properties/requests/items/required",
-                    keyword: "required",
-                    params: { missingProperty: "request_id" },
-                    message: "must have required property '" + "request_id" + "'",
-                  };
+                let missing0;
+                if (
+                  (data47.message_size_bytes === undefined && (missing0 = "message_size_bytes")) ||
+                  (data47.message_size_mb === undefined && (missing0 = "message_size_mb"))
+                ) {
+                  const err113 = {};
                   if (vErrors === null) {
                     vErrors = [err113];
                   } else {
@@ -2451,9 +2536,51 @@ function validate22(
                   }
                   errors++;
                 }
+              }
+              var valid27 = _errs106 === errors;
+              if (valid27) {
+                const err114 = {
+                  instancePath: instancePath + "/workload/requests/" + i5,
+                  schemaPath: "#/properties/workload/properties/requests/items/not",
+                  keyword: "not",
+                  params: {},
+                  message: "must NOT be valid",
+                };
+                if (vErrors === null) {
+                  vErrors = [err114];
+                } else {
+                  vErrors.push(err114);
+                }
+                errors++;
+              } else {
+                errors = _errs105;
+                if (vErrors !== null) {
+                  if (_errs105) {
+                    vErrors.length = _errs105;
+                  } else {
+                    vErrors = null;
+                  }
+                }
+              }
+              if (data47 && typeof data47 == "object" && !Array.isArray(data47)) {
+                if (data47.request_id === undefined) {
+                  const err115 = {
+                    instancePath: instancePath + "/workload/requests/" + i5,
+                    schemaPath: "#/properties/workload/properties/requests/items/required",
+                    keyword: "required",
+                    params: { missingProperty: "request_id" },
+                    message: "must have required property '" + "request_id" + "'",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err115];
+                  } else {
+                    vErrors.push(err115);
+                  }
+                  errors++;
+                }
                 for (const key12 in data47) {
-                  if (!func4.call(schema35.properties.workload.properties.requests.items.properties, key12)) {
-                    const err114 = {
+                  if (!func5.call(schema35.properties.workload.properties.requests.items.properties, key12)) {
+                    const err116 = {
                       instancePath: instancePath + "/workload/requests/" + i5,
                       schemaPath: "#/properties/workload/properties/requests/items/additionalProperties",
                       keyword: "additionalProperties",
@@ -2461,9 +2588,9 @@ function validate22(
                       message: "must NOT have additional properties",
                     };
                     if (vErrors === null) {
-                      vErrors = [err114];
+                      vErrors = [err116];
                     } else {
-                      vErrors.push(err114);
+                      vErrors.push(err116);
                     }
                     errors++;
                   }
@@ -2472,7 +2599,7 @@ function validate22(
                   let data48 = data47.request_id;
                   if (typeof data48 === "string") {
                     if (func1(data48) > 256) {
-                      const err115 = {
+                      const err117 = {
                         instancePath: instancePath + "/workload/requests/" + i5 + "/request_id",
                         schemaPath: "#/properties/workload/properties/requests/items/properties/request_id/maxLength",
                         keyword: "maxLength",
@@ -2480,53 +2607,19 @@ function validate22(
                         message: "must NOT have more than 256 characters",
                       };
                       if (vErrors === null) {
-                        vErrors = [err115];
+                        vErrors = [err117];
                       } else {
-                        vErrors.push(err115);
+                        vErrors.push(err117);
                       }
                       errors++;
                     }
                     if (func1(data48) < 1) {
-                      const err116 = {
+                      const err118 = {
                         instancePath: instancePath + "/workload/requests/" + i5 + "/request_id",
                         schemaPath: "#/properties/workload/properties/requests/items/properties/request_id/minLength",
                         keyword: "minLength",
                         params: { limit: 1 },
                         message: "must NOT have fewer than 1 characters",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err116];
-                      } else {
-                        vErrors.push(err116);
-                      }
-                      errors++;
-                    }
-                  } else {
-                    const err117 = {
-                      instancePath: instancePath + "/workload/requests/" + i5 + "/request_id",
-                      schemaPath: "#/properties/workload/properties/requests/items/properties/request_id/type",
-                      keyword: "type",
-                      params: { type: "string" },
-                      message: "must be string",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err117];
-                    } else {
-                      vErrors.push(err117);
-                    }
-                    errors++;
-                  }
-                }
-                if (data47.batch_id !== undefined) {
-                  let data49 = data47.batch_id;
-                  if (typeof data49 === "string") {
-                    if (func1(data49) > 256) {
-                      const err118 = {
-                        instancePath: instancePath + "/workload/requests/" + i5 + "/batch_id",
-                        schemaPath: "#/properties/workload/properties/requests/items/properties/batch_id/maxLength",
-                        keyword: "maxLength",
-                        params: { limit: 256 },
-                        message: "must NOT have more than 256 characters",
                       };
                       if (vErrors === null) {
                         vErrors = [err118];
@@ -2537,8 +2630,8 @@ function validate22(
                     }
                   } else {
                     const err119 = {
-                      instancePath: instancePath + "/workload/requests/" + i5 + "/batch_id",
-                      schemaPath: "#/properties/workload/properties/requests/items/properties/batch_id/type",
+                      instancePath: instancePath + "/workload/requests/" + i5 + "/request_id",
+                      schemaPath: "#/properties/workload/properties/requests/items/properties/request_id/type",
                       keyword: "type",
                       params: { type: "string" },
                       message: "must be string",
@@ -2551,10 +2644,44 @@ function validate22(
                     errors++;
                   }
                 }
+                if (data47.batch_id !== undefined) {
+                  let data49 = data47.batch_id;
+                  if (typeof data49 === "string") {
+                    if (func1(data49) > 256) {
+                      const err120 = {
+                        instancePath: instancePath + "/workload/requests/" + i5 + "/batch_id",
+                        schemaPath: "#/properties/workload/properties/requests/items/properties/batch_id/maxLength",
+                        keyword: "maxLength",
+                        params: { limit: 256 },
+                        message: "must NOT have more than 256 characters",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err120];
+                      } else {
+                        vErrors.push(err120);
+                      }
+                      errors++;
+                    }
+                  } else {
+                    const err121 = {
+                      instancePath: instancePath + "/workload/requests/" + i5 + "/batch_id",
+                      schemaPath: "#/properties/workload/properties/requests/items/properties/batch_id/type",
+                      keyword: "type",
+                      params: { type: "string" },
+                      message: "must be string",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err121];
+                    } else {
+                      vErrors.push(err121);
+                    }
+                    errors++;
+                  }
+                }
                 if (data47.phase !== undefined) {
                   let data50 = data47.phase;
                   if (!(data50 === "prefill" || data50 === "decode")) {
-                    const err120 = {
+                    const err122 = {
                       instancePath: instancePath + "/workload/requests/" + i5 + "/phase",
                       schemaPath: "#/properties/workload/properties/requests/items/properties/phase/enum",
                       keyword: "enum",
@@ -2564,9 +2691,9 @@ function validate22(
                       message: "must be equal to one of the allowed values",
                     };
                     if (vErrors === null) {
-                      vErrors = [err120];
+                      vErrors = [err122];
                     } else {
-                      vErrors.push(err120);
+                      vErrors.push(err122);
                     }
                     errors++;
                   }
@@ -2575,7 +2702,7 @@ function validate22(
                   let data51 = data47.collective_type;
                   if (typeof data51 === "string") {
                     if (func1(data51) > 160) {
-                      const err121 = {
+                      const err123 = {
                         instancePath: instancePath + "/workload/requests/" + i5 + "/collective_type",
                         schemaPath:
                           "#/properties/workload/properties/requests/items/properties/collective_type/maxLength",
@@ -2584,14 +2711,14 @@ function validate22(
                         message: "must NOT have more than 160 characters",
                       };
                       if (vErrors === null) {
-                        vErrors = [err121];
+                        vErrors = [err123];
                       } else {
-                        vErrors.push(err121);
+                        vErrors.push(err123);
                       }
                       errors++;
                     }
                   } else {
-                    const err122 = {
+                    const err124 = {
                       instancePath: instancePath + "/workload/requests/" + i5 + "/collective_type",
                       schemaPath: "#/properties/workload/properties/requests/items/properties/collective_type/type",
                       keyword: "type",
@@ -2599,9 +2726,9 @@ function validate22(
                       message: "must be string",
                     };
                     if (vErrors === null) {
-                      vErrors = [err122];
+                      vErrors = [err124];
                     } else {
-                      vErrors.push(err122);
+                      vErrors.push(err124);
                     }
                     errors++;
                   }
@@ -2609,7 +2736,7 @@ function validate22(
                 if (data47.message_size_bytes !== undefined) {
                   let data52 = data47.message_size_bytes;
                   if (!(typeof data52 == "number" && !(data52 % 1) && !isNaN(data52))) {
-                    const err123 = {
+                    const err125 = {
                       instancePath: instancePath + "/workload/requests/" + i5 + "/message_size_bytes",
                       schemaPath: "#/properties/workload/properties/requests/items/properties/message_size_bytes/type",
                       keyword: "type",
@@ -2617,15 +2744,15 @@ function validate22(
                       message: "must be integer",
                     };
                     if (vErrors === null) {
-                      vErrors = [err123];
+                      vErrors = [err125];
                     } else {
-                      vErrors.push(err123);
+                      vErrors.push(err125);
                     }
                     errors++;
                   }
                   if (typeof data52 == "number") {
                     if (data52 > 9007199254740991 || isNaN(data52)) {
-                      const err124 = {
+                      const err126 = {
                         instancePath: instancePath + "/workload/requests/" + i5 + "/message_size_bytes",
                         schemaPath:
                           "#/properties/workload/properties/requests/items/properties/message_size_bytes/maximum",
@@ -2634,14 +2761,14 @@ function validate22(
                         message: "must be <= 9007199254740991",
                       };
                       if (vErrors === null) {
-                        vErrors = [err124];
+                        vErrors = [err126];
                       } else {
-                        vErrors.push(err124);
+                        vErrors.push(err126);
                       }
                       errors++;
                     }
                     if (data52 < 0 || isNaN(data52)) {
-                      const err125 = {
+                      const err127 = {
                         instancePath: instancePath + "/workload/requests/" + i5 + "/message_size_bytes",
                         schemaPath:
                           "#/properties/workload/properties/requests/items/properties/message_size_bytes/minimum",
@@ -2650,9 +2777,9 @@ function validate22(
                         message: "must be >= 0",
                       };
                       if (vErrors === null) {
-                        vErrors = [err125];
+                        vErrors = [err127];
                       } else {
-                        vErrors.push(err125);
+                        vErrors.push(err127);
                       }
                       errors++;
                     }
@@ -2662,7 +2789,7 @@ function validate22(
                   let data53 = data47.message_size_mb;
                   if (typeof data53 == "number") {
                     if (data53 < 0 || isNaN(data53)) {
-                      const err126 = {
+                      const err128 = {
                         instancePath: instancePath + "/workload/requests/" + i5 + "/message_size_mb",
                         schemaPath:
                           "#/properties/workload/properties/requests/items/properties/message_size_mb/minimum",
@@ -2671,14 +2798,14 @@ function validate22(
                         message: "must be >= 0",
                       };
                       if (vErrors === null) {
-                        vErrors = [err126];
+                        vErrors = [err128];
                       } else {
-                        vErrors.push(err126);
+                        vErrors.push(err128);
                       }
                       errors++;
                     }
                   } else {
-                    const err127 = {
+                    const err129 = {
                       instancePath: instancePath + "/workload/requests/" + i5 + "/message_size_mb",
                       schemaPath: "#/properties/workload/properties/requests/items/properties/message_size_mb/type",
                       keyword: "type",
@@ -2686,9 +2813,9 @@ function validate22(
                       message: "must be number",
                     };
                     if (vErrors === null) {
-                      vErrors = [err127];
+                      vErrors = [err129];
                     } else {
-                      vErrors.push(err127);
+                      vErrors.push(err129);
                     }
                     errors++;
                   }
@@ -2696,7 +2823,7 @@ function validate22(
                 if (data47.tp_degree !== undefined) {
                   let data54 = data47.tp_degree;
                   if (!(typeof data54 == "number" && !(data54 % 1) && !isNaN(data54))) {
-                    const err128 = {
+                    const err130 = {
                       instancePath: instancePath + "/workload/requests/" + i5 + "/tp_degree",
                       schemaPath: "#/properties/workload/properties/requests/items/properties/tp_degree/type",
                       keyword: "type",
@@ -2704,15 +2831,15 @@ function validate22(
                       message: "must be integer",
                     };
                     if (vErrors === null) {
-                      vErrors = [err128];
+                      vErrors = [err130];
                     } else {
-                      vErrors.push(err128);
+                      vErrors.push(err130);
                     }
                     errors++;
                   }
                   if (typeof data54 == "number") {
                     if (data54 > 1024 || isNaN(data54)) {
-                      const err129 = {
+                      const err131 = {
                         instancePath: instancePath + "/workload/requests/" + i5 + "/tp_degree",
                         schemaPath: "#/properties/workload/properties/requests/items/properties/tp_degree/maximum",
                         keyword: "maximum",
@@ -2720,14 +2847,14 @@ function validate22(
                         message: "must be <= 1024",
                       };
                       if (vErrors === null) {
-                        vErrors = [err129];
+                        vErrors = [err131];
                       } else {
-                        vErrors.push(err129);
+                        vErrors.push(err131);
                       }
                       errors++;
                     }
                     if (data54 < 1 || isNaN(data54)) {
-                      const err130 = {
+                      const err132 = {
                         instancePath: instancePath + "/workload/requests/" + i5 + "/tp_degree",
                         schemaPath: "#/properties/workload/properties/requests/items/properties/tp_degree/minimum",
                         keyword: "minimum",
@@ -2735,9 +2862,9 @@ function validate22(
                         message: "must be >= 1",
                       };
                       if (vErrors === null) {
-                        vErrors = [err130];
+                        vErrors = [err132];
                       } else {
-                        vErrors.push(err130);
+                        vErrors.push(err132);
                       }
                       errors++;
                     }
@@ -2747,7 +2874,7 @@ function validate22(
                   let data55 = data47.participants;
                   if (Array.isArray(data55)) {
                     if (data55.length > 1024) {
-                      const err131 = {
+                      const err133 = {
                         instancePath: instancePath + "/workload/requests/" + i5 + "/participants",
                         schemaPath: "#/properties/workload/properties/requests/items/properties/participants/maxItems",
                         keyword: "maxItems",
@@ -2755,9 +2882,9 @@ function validate22(
                         message: "must NOT have more than 1024 items",
                       };
                       if (vErrors === null) {
-                        vErrors = [err131];
+                        vErrors = [err133];
                       } else {
-                        vErrors.push(err131);
+                        vErrors.push(err133);
                       }
                       errors++;
                     }
@@ -2766,7 +2893,7 @@ function validate22(
                       let data56 = data55[i6];
                       if (typeof data56 === "string") {
                         if (func1(data56) < 1) {
-                          const err132 = {
+                          const err134 = {
                             instancePath: instancePath + "/workload/requests/" + i5 + "/participants/" + i6,
                             schemaPath:
                               "#/properties/workload/properties/requests/items/properties/participants/items/minLength",
@@ -2775,14 +2902,14 @@ function validate22(
                             message: "must NOT have fewer than 1 characters",
                           };
                           if (vErrors === null) {
-                            vErrors = [err132];
+                            vErrors = [err134];
                           } else {
-                            vErrors.push(err132);
+                            vErrors.push(err134);
                           }
                           errors++;
                         }
                       } else {
-                        const err133 = {
+                        const err135 = {
                           instancePath: instancePath + "/workload/requests/" + i5 + "/participants/" + i6,
                           schemaPath:
                             "#/properties/workload/properties/requests/items/properties/participants/items/type",
@@ -2791,15 +2918,15 @@ function validate22(
                           message: "must be string",
                         };
                         if (vErrors === null) {
-                          vErrors = [err133];
+                          vErrors = [err135];
                         } else {
-                          vErrors.push(err133);
+                          vErrors.push(err135);
                         }
                         errors++;
                       }
                     }
                   } else {
-                    const err134 = {
+                    const err136 = {
                       instancePath: instancePath + "/workload/requests/" + i5 + "/participants",
                       schemaPath: "#/properties/workload/properties/requests/items/properties/participants/type",
                       keyword: "type",
@@ -2807,9 +2934,9 @@ function validate22(
                       message: "must be array",
                     };
                     if (vErrors === null) {
-                      vErrors = [err134];
+                      vErrors = [err136];
                     } else {
-                      vErrors.push(err134);
+                      vErrors.push(err136);
                     }
                     errors++;
                   }
@@ -2817,7 +2944,7 @@ function validate22(
                 if (data47.release_time_ps !== undefined) {
                   let data57 = data47.release_time_ps;
                   if (!(typeof data57 == "number" && !(data57 % 1) && !isNaN(data57))) {
-                    const err135 = {
+                    const err137 = {
                       instancePath: instancePath + "/workload/requests/" + i5 + "/release_time_ps",
                       schemaPath: "#/properties/workload/properties/requests/items/properties/release_time_ps/type",
                       keyword: "type",
@@ -2825,15 +2952,15 @@ function validate22(
                       message: "must be integer",
                     };
                     if (vErrors === null) {
-                      vErrors = [err135];
+                      vErrors = [err137];
                     } else {
-                      vErrors.push(err135);
+                      vErrors.push(err137);
                     }
                     errors++;
                   }
                   if (typeof data57 == "number") {
                     if (data57 > 9007199254740991 || isNaN(data57)) {
-                      const err136 = {
+                      const err138 = {
                         instancePath: instancePath + "/workload/requests/" + i5 + "/release_time_ps",
                         schemaPath:
                           "#/properties/workload/properties/requests/items/properties/release_time_ps/maximum",
@@ -2842,14 +2969,14 @@ function validate22(
                         message: "must be <= 9007199254740991",
                       };
                       if (vErrors === null) {
-                        vErrors = [err136];
+                        vErrors = [err138];
                       } else {
-                        vErrors.push(err136);
+                        vErrors.push(err138);
                       }
                       errors++;
                     }
                     if (data57 < 0 || isNaN(data57)) {
-                      const err137 = {
+                      const err139 = {
                         instancePath: instancePath + "/workload/requests/" + i5 + "/release_time_ps",
                         schemaPath:
                           "#/properties/workload/properties/requests/items/properties/release_time_ps/minimum",
@@ -2858,9 +2985,9 @@ function validate22(
                         message: "must be >= 0",
                       };
                       if (vErrors === null) {
-                        vErrors = [err137];
+                        vErrors = [err139];
                       } else {
-                        vErrors.push(err137);
+                        vErrors.push(err139);
                       }
                       errors++;
                     }
@@ -2869,7 +2996,7 @@ function validate22(
                 if (data47.memory_latency_ps !== undefined) {
                   let data58 = data47.memory_latency_ps;
                   if (!(typeof data58 == "number" && !(data58 % 1) && !isNaN(data58))) {
-                    const err138 = {
+                    const err140 = {
                       instancePath: instancePath + "/workload/requests/" + i5 + "/memory_latency_ps",
                       schemaPath: "#/properties/workload/properties/requests/items/properties/memory_latency_ps/type",
                       keyword: "type",
@@ -2877,15 +3004,15 @@ function validate22(
                       message: "must be integer",
                     };
                     if (vErrors === null) {
-                      vErrors = [err138];
+                      vErrors = [err140];
                     } else {
-                      vErrors.push(err138);
+                      vErrors.push(err140);
                     }
                     errors++;
                   }
                   if (typeof data58 == "number") {
                     if (data58 > 9007199254740991 || isNaN(data58)) {
-                      const err139 = {
+                      const err141 = {
                         instancePath: instancePath + "/workload/requests/" + i5 + "/memory_latency_ps",
                         schemaPath:
                           "#/properties/workload/properties/requests/items/properties/memory_latency_ps/maximum",
@@ -2894,14 +3021,14 @@ function validate22(
                         message: "must be <= 9007199254740991",
                       };
                       if (vErrors === null) {
-                        vErrors = [err139];
+                        vErrors = [err141];
                       } else {
-                        vErrors.push(err139);
+                        vErrors.push(err141);
                       }
                       errors++;
                     }
                     if (data58 < 0 || isNaN(data58)) {
-                      const err140 = {
+                      const err142 = {
                         instancePath: instancePath + "/workload/requests/" + i5 + "/memory_latency_ps",
                         schemaPath:
                           "#/properties/workload/properties/requests/items/properties/memory_latency_ps/minimum",
@@ -2910,9 +3037,9 @@ function validate22(
                         message: "must be >= 0",
                       };
                       if (vErrors === null) {
-                        vErrors = [err140];
+                        vErrors = [err142];
                       } else {
-                        vErrors.push(err140);
+                        vErrors.push(err142);
                       }
                       errors++;
                     }
@@ -2921,7 +3048,7 @@ function validate22(
                 if (data47.device_latency_ps !== undefined) {
                   let data59 = data47.device_latency_ps;
                   if (!(typeof data59 == "number" && !(data59 % 1) && !isNaN(data59))) {
-                    const err141 = {
+                    const err143 = {
                       instancePath: instancePath + "/workload/requests/" + i5 + "/device_latency_ps",
                       schemaPath: "#/properties/workload/properties/requests/items/properties/device_latency_ps/type",
                       keyword: "type",
@@ -2929,15 +3056,15 @@ function validate22(
                       message: "must be integer",
                     };
                     if (vErrors === null) {
-                      vErrors = [err141];
+                      vErrors = [err143];
                     } else {
-                      vErrors.push(err141);
+                      vErrors.push(err143);
                     }
                     errors++;
                   }
                   if (typeof data59 == "number") {
                     if (data59 > 9007199254740991 || isNaN(data59)) {
-                      const err142 = {
+                      const err144 = {
                         instancePath: instancePath + "/workload/requests/" + i5 + "/device_latency_ps",
                         schemaPath:
                           "#/properties/workload/properties/requests/items/properties/device_latency_ps/maximum",
@@ -2946,14 +3073,14 @@ function validate22(
                         message: "must be <= 9007199254740991",
                       };
                       if (vErrors === null) {
-                        vErrors = [err142];
+                        vErrors = [err144];
                       } else {
-                        vErrors.push(err142);
+                        vErrors.push(err144);
                       }
                       errors++;
                     }
                     if (data59 < 0 || isNaN(data59)) {
-                      const err143 = {
+                      const err145 = {
                         instancePath: instancePath + "/workload/requests/" + i5 + "/device_latency_ps",
                         schemaPath:
                           "#/properties/workload/properties/requests/items/properties/device_latency_ps/minimum",
@@ -2962,16 +3089,16 @@ function validate22(
                         message: "must be >= 0",
                       };
                       if (vErrors === null) {
-                        vErrors = [err143];
+                        vErrors = [err145];
                       } else {
-                        vErrors.push(err143);
+                        vErrors.push(err145);
                       }
                       errors++;
                     }
                   }
                 }
               } else {
-                const err144 = {
+                const err146 = {
                   instancePath: instancePath + "/workload/requests/" + i5,
                   schemaPath: "#/properties/workload/properties/requests/items/type",
                   keyword: "type",
@@ -2979,15 +3106,15 @@ function validate22(
                   message: "must be object",
                 };
                 if (vErrors === null) {
-                  vErrors = [err144];
+                  vErrors = [err146];
                 } else {
-                  vErrors.push(err144);
+                  vErrors.push(err146);
                 }
                 errors++;
               }
             }
           } else {
-            const err145 = {
+            const err147 = {
               instancePath: instancePath + "/workload/requests",
               schemaPath: "#/properties/workload/properties/requests/type",
               keyword: "type",
@@ -2995,15 +3122,15 @@ function validate22(
               message: "must be array",
             };
             if (vErrors === null) {
-              vErrors = [err145];
+              vErrors = [err147];
             } else {
-              vErrors.push(err145);
+              vErrors.push(err147);
             }
             errors++;
           }
         }
       } else {
-        const err146 = {
+        const err148 = {
           instancePath: instancePath + "/workload",
           schemaPath: "#/properties/workload/type",
           keyword: "type",
@@ -3011,15 +3138,15 @@ function validate22(
           message: "must be object",
         };
         if (vErrors === null) {
-          vErrors = [err146];
+          vErrors = [err148];
         } else {
-          vErrors.push(err146);
+          vErrors.push(err148);
         }
         errors++;
       }
     }
   } else {
-    const err147 = {
+    const err149 = {
       instancePath,
       schemaPath: "#/type",
       keyword: "type",
@@ -3027,9 +3154,9 @@ function validate22(
       message: "must be object",
     };
     if (vErrors === null) {
-      vErrors = [err147];
+      vErrors = [err149];
     } else {
-      vErrors.push(err147);
+      vErrors.push(err149);
     }
     errors++;
   }
@@ -3100,45 +3227,52 @@ function validate21(
     }
     if (data.runtime_trace !== undefined) {
       let data0 = data.runtime_trace;
+      const _errs6 = errors;
+      let valid3 = true;
+      const _errs7 = errors;
       if (data0 && typeof data0 == "object" && !Array.isArray(data0)) {
-        if (data0.policy === undefined) {
-          const err3 = {
-            instancePath: instancePath + "/runtime_trace",
-            schemaPath: "runtime-trace-input.schema.json/required",
-            keyword: "required",
-            params: { missingProperty: "policy" },
-            message: "must have required property '" + "policy" + "'",
-          };
+        let missing0;
+        if (data0.engine_type === undefined && (missing0 = "engine_type")) {
+          const err3 = {};
           if (vErrors === null) {
             vErrors = [err3];
           } else {
             vErrors.push(err3);
           }
           errors++;
-        }
-        if (data0.requests === undefined) {
-          const err4 = {
-            instancePath: instancePath + "/runtime_trace",
-            schemaPath: "runtime-trace-input.schema.json/required",
-            keyword: "required",
-            params: { missingProperty: "requests" },
-            message: "must have required property '" + "requests" + "'",
-          };
-          if (vErrors === null) {
-            vErrors = [err4];
-          } else {
-            vErrors.push(err4);
+        } else {
+          if (data0.engine_type !== undefined) {
+            if ("vllm" !== data0.engine_type) {
+              const err4 = {};
+              if (vErrors === null) {
+                vErrors = [err4];
+              } else {
+                vErrors.push(err4);
+              }
+              errors++;
+            }
           }
-          errors++;
         }
-        for (const key1 in data0) {
-          if (!(key1 === "trace_name" || key1 === "trace_provenance" || key1 === "policy" || key1 === "requests")) {
+      }
+      var _valid0 = _errs7 === errors;
+      errors = _errs6;
+      if (vErrors !== null) {
+        if (_errs6) {
+          vErrors.length = _errs6;
+        } else {
+          vErrors = null;
+        }
+      }
+      if (_valid0) {
+        const _errs9 = errors;
+        if (data0 && typeof data0 == "object" && !Array.isArray(data0)) {
+          if (data0.engine_semantic_version === undefined) {
             const err5 = {
               instancePath: instancePath + "/runtime_trace",
-              schemaPath: "runtime-trace-input.schema.json/additionalProperties",
-              keyword: "additionalProperties",
-              params: { additionalProperty: key1 },
-              message: "must NOT have additional properties",
+              schemaPath: "runtime-trace-input.schema.json/allOf/0/then/required",
+              keyword: "required",
+              params: { missingProperty: "engine_semantic_version" },
+              message: "must have required property '" + "engine_semantic_version" + "'",
             };
             if (vErrors === null) {
               vErrors = [err5];
@@ -3147,32 +3281,29 @@ function validate21(
             }
             errors++;
           }
-        }
-        if (data0.trace_name !== undefined) {
-          let data1 = data0.trace_name;
-          if (typeof data1 === "string") {
-            if (func1(data1) > 256) {
-              const err6 = {
-                instancePath: instancePath + "/runtime_trace/trace_name",
-                schemaPath: "runtime-trace-input.schema.json/properties/trace_name/maxLength",
-                keyword: "maxLength",
-                params: { limit: 256 },
-                message: "must NOT have more than 256 characters",
-              };
-              if (vErrors === null) {
-                vErrors = [err6];
-              } else {
-                vErrors.push(err6);
-              }
-              errors++;
+          if (data0.requested_features === undefined) {
+            const err6 = {
+              instancePath: instancePath + "/runtime_trace",
+              schemaPath: "runtime-trace-input.schema.json/allOf/0/then/required",
+              keyword: "required",
+              params: { missingProperty: "requested_features" },
+              message: "must have required property '" + "requested_features" + "'",
+            };
+            if (vErrors === null) {
+              vErrors = [err6];
+            } else {
+              vErrors.push(err6);
             }
-            if (func1(data1) < 1) {
+            errors++;
+          }
+          if (data0.engine_semantic_version !== undefined) {
+            if ("vllm.0.6.semantic.v1" !== data0.engine_semantic_version) {
               const err7 = {
-                instancePath: instancePath + "/runtime_trace/trace_name",
-                schemaPath: "runtime-trace-input.schema.json/properties/trace_name/minLength",
-                keyword: "minLength",
-                params: { limit: 1 },
-                message: "must NOT have fewer than 1 characters",
+                instancePath: instancePath + "/runtime_trace/engine_semantic_version",
+                schemaPath: "runtime-trace-input.schema.json/allOf/0/then/properties/engine_semantic_version/const",
+                keyword: "const",
+                params: { allowedValue: "vllm.0.6.semantic.v1" },
+                message: "must be equal to constant",
               };
               if (vErrors === null) {
                 vErrors = [err7];
@@ -3181,63 +3312,73 @@ function validate21(
               }
               errors++;
             }
-          } else {
-            const err8 = {
-              instancePath: instancePath + "/runtime_trace/trace_name",
-              schemaPath: "runtime-trace-input.schema.json/properties/trace_name/type",
-              keyword: "type",
-              params: { type: "string" },
-              message: "must be string",
-            };
-            if (vErrors === null) {
-              vErrors = [err8];
-            } else {
-              vErrors.push(err8);
+          }
+          if (data0.requested_features !== undefined) {
+            let data3 = data0.requested_features;
+            if (Array.isArray(data3)) {
+              const len0 = data3.length;
+              for (let i0 = 0; i0 < len0; i0++) {
+                if ("continuous_batching" !== data3[i0]) {
+                  const err8 = {
+                    instancePath: instancePath + "/runtime_trace/requested_features/" + i0,
+                    schemaPath:
+                      "runtime-trace-input.schema.json/allOf/0/then/properties/requested_features/items/const",
+                    keyword: "const",
+                    params: { allowedValue: "continuous_batching" },
+                    message: "must be equal to constant",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err8];
+                  } else {
+                    vErrors.push(err8);
+                  }
+                  errors++;
+                }
+              }
             }
-            errors++;
           }
         }
-        if (data0.trace_provenance !== undefined) {
-          let data2 = data0.trace_provenance;
-          if (data2 && typeof data2 == "object" && !Array.isArray(data2)) {
-            if (data2.source_mode === undefined) {
-              const err9 = {
-                instancePath: instancePath + "/runtime_trace/trace_provenance",
-                schemaPath: "runtime-trace-input.schema.json/properties/trace_provenance/required",
-                keyword: "required",
-                params: { missingProperty: "source_mode" },
-                message: "must have required property '" + "source_mode" + "'",
-              };
-              if (vErrors === null) {
-                vErrors = [err9];
-              } else {
-                vErrors.push(err9);
-              }
-              errors++;
-            }
-            if (data2.calibration_level === undefined) {
-              const err10 = {
-                instancePath: instancePath + "/runtime_trace/trace_provenance",
-                schemaPath: "runtime-trace-input.schema.json/properties/trace_provenance/required",
-                keyword: "required",
-                params: { missingProperty: "calibration_level" },
-                message: "must have required property '" + "calibration_level" + "'",
-              };
-              if (vErrors === null) {
-                vErrors = [err10];
-              } else {
-                vErrors.push(err10);
-              }
-              errors++;
-            }
-            if (data2.allowed_claim_scope === undefined) {
-              const err11 = {
-                instancePath: instancePath + "/runtime_trace/trace_provenance",
-                schemaPath: "runtime-trace-input.schema.json/properties/trace_provenance/required",
-                keyword: "required",
-                params: { missingProperty: "allowed_claim_scope" },
-                message: "must have required property '" + "allowed_claim_scope" + "'",
-              };
+        var _valid0 = _errs9 === errors;
+        valid3 = _valid0;
+        if (valid3) {
+          var props0 = {};
+          props0.engine_semantic_version = true;
+          props0.requested_features = true;
+          props0.engine_type = true;
+        }
+      }
+      if (!valid3) {
+        const err9 = {
+          instancePath: instancePath + "/runtime_trace",
+          schemaPath: "runtime-trace-input.schema.json/allOf/0/if",
+          keyword: "if",
+          params: { failingKeyword: "then" },
+          message: 'must match "then" schema',
+        };
+        if (vErrors === null) {
+          vErrors = [err9];
+        } else {
+          vErrors.push(err9);
+        }
+        errors++;
+      }
+      const _errs14 = errors;
+      let valid8 = true;
+      const _errs15 = errors;
+      if (data0 && typeof data0 == "object" && !Array.isArray(data0)) {
+        let missing1;
+        if (data0.engine_type === undefined && (missing1 = "engine_type")) {
+          const err10 = {};
+          if (vErrors === null) {
+            vErrors = [err10];
+          } else {
+            vErrors.push(err10);
+          }
+          errors++;
+        } else {
+          if (data0.engine_type !== undefined) {
+            if ("sglang" !== data0.engine_type) {
+              const err11 = {};
               if (vErrors === null) {
                 vErrors = [err11];
               } else {
@@ -3245,203 +3386,228 @@ function validate21(
               }
               errors++;
             }
-            for (const key2 in data2) {
-              if (!func4.call(schema34.properties.trace_provenance.properties, key2)) {
-                const err12 = {
-                  instancePath: instancePath + "/runtime_trace/trace_provenance",
-                  schemaPath: "runtime-trace-input.schema.json/properties/trace_provenance/additionalProperties",
-                  keyword: "additionalProperties",
-                  params: { additionalProperty: key2 },
-                  message: "must NOT have additional properties",
-                };
-                if (vErrors === null) {
-                  vErrors = [err12];
-                } else {
-                  vErrors.push(err12);
-                }
-                errors++;
-              }
+          }
+        }
+      }
+      var _valid1 = _errs15 === errors;
+      errors = _errs14;
+      if (vErrors !== null) {
+        if (_errs14) {
+          vErrors.length = _errs14;
+        } else {
+          vErrors = null;
+        }
+      }
+      if (_valid1) {
+        const _errs17 = errors;
+        if (data0 && typeof data0 == "object" && !Array.isArray(data0)) {
+          if (data0.engine_semantic_version === undefined) {
+            const err12 = {
+              instancePath: instancePath + "/runtime_trace",
+              schemaPath: "runtime-trace-input.schema.json/allOf/1/then/required",
+              keyword: "required",
+              params: { missingProperty: "engine_semantic_version" },
+              message: "must have required property '" + "engine_semantic_version" + "'",
+            };
+            if (vErrors === null) {
+              vErrors = [err12];
+            } else {
+              vErrors.push(err12);
             }
-            if (data2.source_mode !== undefined) {
-              if ("synthetic_trace" !== data2.source_mode) {
-                const err13 = {
-                  instancePath: instancePath + "/runtime_trace/trace_provenance/source_mode",
-                  schemaPath:
-                    "runtime-trace-input.schema.json/properties/trace_provenance/properties/source_mode/const",
-                  keyword: "const",
-                  params: { allowedValue: "synthetic_trace" },
-                  message: "must be equal to constant",
-                };
-                if (vErrors === null) {
-                  vErrors = [err13];
-                } else {
-                  vErrors.push(err13);
-                }
-                errors++;
-              }
+            errors++;
+          }
+          if (data0.requested_features === undefined) {
+            const err13 = {
+              instancePath: instancePath + "/runtime_trace",
+              schemaPath: "runtime-trace-input.schema.json/allOf/1/then/required",
+              keyword: "required",
+              params: { missingProperty: "requested_features" },
+              message: "must have required property '" + "requested_features" + "'",
+            };
+            if (vErrors === null) {
+              vErrors = [err13];
+            } else {
+              vErrors.push(err13);
             }
-            if (data2.calibration_level !== undefined) {
-              let data4 = data2.calibration_level;
-              if (!(data4 === "uncalibrated" || data4 === "partially_calibrated")) {
-                const err14 = {
-                  instancePath: instancePath + "/runtime_trace/trace_provenance/calibration_level",
-                  schemaPath:
-                    "runtime-trace-input.schema.json/properties/trace_provenance/properties/calibration_level/enum",
-                  keyword: "enum",
-                  params: { allowedValues: schema34.properties.trace_provenance.properties.calibration_level.enum },
-                  message: "must be equal to one of the allowed values",
-                };
-                if (vErrors === null) {
-                  vErrors = [err14];
-                } else {
-                  vErrors.push(err14);
-                }
-                errors++;
+            errors++;
+          }
+          if (data0.engine_semantic_version !== undefined) {
+            if ("sglang.0.4.semantic.v1" !== data0.engine_semantic_version) {
+              const err14 = {
+                instancePath: instancePath + "/runtime_trace/engine_semantic_version",
+                schemaPath: "runtime-trace-input.schema.json/allOf/1/then/properties/engine_semantic_version/const",
+                keyword: "const",
+                params: { allowedValue: "sglang.0.4.semantic.v1" },
+                message: "must be equal to constant",
+              };
+              if (vErrors === null) {
+                vErrors = [err14];
+              } else {
+                vErrors.push(err14);
               }
+              errors++;
             }
-            if (data2.allowed_claim_scope !== undefined) {
-              let data5 = data2.allowed_claim_scope;
-              if (!(
-                data5 === "exploratory" ||
-                data5 === "exploratory_s6_only" ||
-                data5 === "synthetic_consistency" ||
-                data5 === "synthetic_consistency_only" ||
-                data5 === "workflow_consistency_only"
-              )) {
-                const err15 = {
-                  instancePath: instancePath + "/runtime_trace/trace_provenance/allowed_claim_scope",
-                  schemaPath:
-                    "runtime-trace-input.schema.json/properties/trace_provenance/properties/allowed_claim_scope/enum",
-                  keyword: "enum",
-                  params: { allowedValues: schema34.properties.trace_provenance.properties.allowed_claim_scope.enum },
-                  message: "must be equal to one of the allowed values",
-                };
-                if (vErrors === null) {
-                  vErrors = [err15];
-                } else {
-                  vErrors.push(err15);
-                }
-                errors++;
-              }
-            }
-            if (data2.source_id !== undefined) {
-              let data6 = data2.source_id;
-              if (typeof data6 === "string") {
-                if (func1(data6) > 512) {
-                  const err16 = {
-                    instancePath: instancePath + "/runtime_trace/trace_provenance/source_id",
-                    schemaPath:
-                      "runtime-trace-input.schema.json/properties/trace_provenance/properties/source_id/maxLength",
-                    keyword: "maxLength",
-                    params: { limit: 512 },
-                    message: "must NOT have more than 512 characters",
+          }
+          if (data0.requested_features !== undefined) {
+            let data7 = data0.requested_features;
+            if (Array.isArray(data7)) {
+              const len1 = data7.length;
+              for (let i1 = 0; i1 < len1; i1++) {
+                let data8 = data7[i1];
+                if (!(data8 === "continuous_batching" || data8 === "prefix_aware_scheduling")) {
+                  const err15 = {
+                    instancePath: instancePath + "/runtime_trace/requested_features/" + i1,
+                    schemaPath: "runtime-trace-input.schema.json/allOf/1/then/properties/requested_features/items/enum",
+                    keyword: "enum",
+                    params: { allowedValues: schema34.allOf[1].then.properties.requested_features.items.enum },
+                    message: "must be equal to one of the allowed values",
                   };
                   if (vErrors === null) {
-                    vErrors = [err16];
+                    vErrors = [err15];
                   } else {
-                    vErrors.push(err16);
+                    vErrors.push(err15);
                   }
                   errors++;
                 }
-              } else {
-                const err17 = {
-                  instancePath: instancePath + "/runtime_trace/trace_provenance/source_id",
-                  schemaPath: "runtime-trace-input.schema.json/properties/trace_provenance/properties/source_id/type",
-                  keyword: "type",
-                  params: { type: "string" },
-                  message: "must be string",
-                };
-                if (vErrors === null) {
-                  vErrors = [err17];
-                } else {
-                  vErrors.push(err17);
-                }
-                errors++;
               }
             }
-            if (data2.generation_path !== undefined) {
-              let data7 = data2.generation_path;
-              if (typeof data7 === "string") {
-                if (func1(data7) > 512) {
-                  const err18 = {
-                    instancePath: instancePath + "/runtime_trace/trace_provenance/generation_path",
-                    schemaPath:
-                      "runtime-trace-input.schema.json/properties/trace_provenance/properties/generation_path/maxLength",
-                    keyword: "maxLength",
-                    params: { limit: 512 },
-                    message: "must NOT have more than 512 characters",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err18];
-                  } else {
-                    vErrors.push(err18);
-                  }
-                  errors++;
-                }
+          }
+        }
+        var _valid1 = _errs17 === errors;
+        valid8 = _valid1;
+        if (valid8) {
+          var props1 = {};
+          props1.engine_semantic_version = true;
+          props1.requested_features = true;
+          props1.engine_type = true;
+        }
+      }
+      if (!valid8) {
+        const err16 = {
+          instancePath: instancePath + "/runtime_trace",
+          schemaPath: "runtime-trace-input.schema.json/allOf/1/if",
+          keyword: "if",
+          params: { failingKeyword: "then" },
+          message: 'must match "then" schema',
+        };
+        if (vErrors === null) {
+          vErrors = [err16];
+        } else {
+          vErrors.push(err16);
+        }
+        errors++;
+      }
+      if (props0 !== true && props1 !== undefined) {
+        if (props1 === true) {
+          props0 = true;
+        } else {
+          props0 = props0 || {};
+          Object.assign(props0, props1);
+        }
+      }
+      const _errs22 = errors;
+      let valid13 = true;
+      const _errs23 = errors;
+      if (data0 && typeof data0 == "object" && !Array.isArray(data0)) {
+        let missing2;
+        if (data0.engine_type === undefined && (missing2 = "engine_type")) {
+          const err17 = {};
+          if (vErrors === null) {
+            vErrors = [err17];
+          } else {
+            vErrors.push(err17);
+          }
+          errors++;
+        } else {
+          if (data0.engine_type !== undefined) {
+            if ("tensorrt_llm" !== data0.engine_type) {
+              const err18 = {};
+              if (vErrors === null) {
+                vErrors = [err18];
               } else {
-                const err19 = {
-                  instancePath: instancePath + "/runtime_trace/trace_provenance/generation_path",
-                  schemaPath:
-                    "runtime-trace-input.schema.json/properties/trace_provenance/properties/generation_path/type",
-                  keyword: "type",
-                  params: { type: "string" },
-                  message: "must be string",
-                };
-                if (vErrors === null) {
-                  vErrors = [err19];
-                } else {
-                  vErrors.push(err19);
-                }
-                errors++;
+                vErrors.push(err18);
               }
+              errors++;
             }
-            if (data2.capture_or_generation_time !== undefined) {
-              let data8 = data2.capture_or_generation_time;
-              if (typeof data8 === "string") {
-                if (func1(data8) > 160) {
-                  const err20 = {
-                    instancePath: instancePath + "/runtime_trace/trace_provenance/capture_or_generation_time",
-                    schemaPath:
-                      "runtime-trace-input.schema.json/properties/trace_provenance/properties/capture_or_generation_time/maxLength",
-                    keyword: "maxLength",
-                    params: { limit: 160 },
-                    message: "must NOT have more than 160 characters",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err20];
-                  } else {
-                    vErrors.push(err20);
-                  }
-                  errors++;
-                }
+          }
+        }
+      }
+      var _valid2 = _errs23 === errors;
+      errors = _errs22;
+      if (vErrors !== null) {
+        if (_errs22) {
+          vErrors.length = _errs22;
+        } else {
+          vErrors = null;
+        }
+      }
+      if (_valid2) {
+        const _errs25 = errors;
+        if (data0 && typeof data0 == "object" && !Array.isArray(data0)) {
+          if (data0.engine_semantic_version === undefined) {
+            const err19 = {
+              instancePath: instancePath + "/runtime_trace",
+              schemaPath: "runtime-trace-input.schema.json/allOf/2/then/required",
+              keyword: "required",
+              params: { missingProperty: "engine_semantic_version" },
+              message: "must have required property '" + "engine_semantic_version" + "'",
+            };
+            if (vErrors === null) {
+              vErrors = [err19];
+            } else {
+              vErrors.push(err19);
+            }
+            errors++;
+          }
+          if (data0.requested_features === undefined) {
+            const err20 = {
+              instancePath: instancePath + "/runtime_trace",
+              schemaPath: "runtime-trace-input.schema.json/allOf/2/then/required",
+              keyword: "required",
+              params: { missingProperty: "requested_features" },
+              message: "must have required property '" + "requested_features" + "'",
+            };
+            if (vErrors === null) {
+              vErrors = [err20];
+            } else {
+              vErrors.push(err20);
+            }
+            errors++;
+          }
+          if (data0.engine_semantic_version !== undefined) {
+            if ("tensorrt_llm.0.12.semantic.v1" !== data0.engine_semantic_version) {
+              const err21 = {
+                instancePath: instancePath + "/runtime_trace/engine_semantic_version",
+                schemaPath: "runtime-trace-input.schema.json/allOf/2/then/properties/engine_semantic_version/const",
+                keyword: "const",
+                params: { allowedValue: "tensorrt_llm.0.12.semantic.v1" },
+                message: "must be equal to constant",
+              };
+              if (vErrors === null) {
+                vErrors = [err21];
               } else {
-                const err21 = {
-                  instancePath: instancePath + "/runtime_trace/trace_provenance/capture_or_generation_time",
-                  schemaPath:
-                    "runtime-trace-input.schema.json/properties/trace_provenance/properties/capture_or_generation_time/type",
-                  keyword: "type",
-                  params: { type: "string" },
-                  message: "must be string",
-                };
-                if (vErrors === null) {
-                  vErrors = [err21];
-                } else {
-                  vErrors.push(err21);
-                }
-                errors++;
+                vErrors.push(err21);
               }
+              errors++;
             }
-            if (data2.upstream_tooling !== undefined) {
-              let data9 = data2.upstream_tooling;
-              if (typeof data9 === "string") {
-                if (func1(data9) > 160) {
+          }
+          if (data0.requested_features !== undefined) {
+            let data11 = data0.requested_features;
+            if (Array.isArray(data11)) {
+              const len2 = data11.length;
+              for (let i2 = 0; i2 < len2; i2++) {
+                let data12 = data11[i2];
+                if (!(
+                  data12 === "inflight_batching" ||
+                  data12 === "paged_kv_cache" ||
+                  data12 === "capacity_aware_scheduling"
+                )) {
                   const err22 = {
-                    instancePath: instancePath + "/runtime_trace/trace_provenance/upstream_tooling",
-                    schemaPath:
-                      "runtime-trace-input.schema.json/properties/trace_provenance/properties/upstream_tooling/maxLength",
-                    keyword: "maxLength",
-                    params: { limit: 160 },
-                    message: "must NOT have more than 160 characters",
+                    instancePath: instancePath + "/runtime_trace/requested_features/" + i2,
+                    schemaPath: "runtime-trace-input.schema.json/allOf/2/then/properties/requested_features/items/enum",
+                    keyword: "enum",
+                    params: { allowedValues: schema34.allOf[2].then.properties.requested_features.items.enum },
+                    message: "must be equal to one of the allowed values",
                   };
                   if (vErrors === null) {
                     vErrors = [err22];
@@ -3450,732 +3616,876 @@ function validate21(
                   }
                   errors++;
                 }
+              }
+            }
+          }
+        }
+        var _valid2 = _errs25 === errors;
+        valid13 = _valid2;
+        if (valid13) {
+          var props2 = {};
+          props2.engine_semantic_version = true;
+          props2.requested_features = true;
+          props2.engine_type = true;
+        }
+      }
+      if (!valid13) {
+        const err23 = {
+          instancePath: instancePath + "/runtime_trace",
+          schemaPath: "runtime-trace-input.schema.json/allOf/2/if",
+          keyword: "if",
+          params: { failingKeyword: "then" },
+          message: 'must match "then" schema',
+        };
+        if (vErrors === null) {
+          vErrors = [err23];
+        } else {
+          vErrors.push(err23);
+        }
+        errors++;
+      }
+      if (props0 !== true && props2 !== undefined) {
+        if (props2 === true) {
+          props0 = true;
+        } else {
+          props0 = props0 || {};
+          Object.assign(props0, props2);
+        }
+      }
+      const _errs30 = errors;
+      let valid18 = true;
+      const _errs31 = errors;
+      const _errs32 = errors;
+      let valid19 = false;
+      const _errs33 = errors;
+      if (data0 && typeof data0 == "object" && !Array.isArray(data0)) {
+        let missing3;
+        if (data0.engine_type === undefined && (missing3 = "engine_type")) {
+          const err24 = {};
+          if (vErrors === null) {
+            vErrors = [err24];
+          } else {
+            vErrors.push(err24);
+          }
+          errors++;
+        } else {
+          if (data0.engine_type !== undefined) {
+            if ("legacy_generic" !== data0.engine_type) {
+              const err25 = {};
+              if (vErrors === null) {
+                vErrors = [err25];
               } else {
-                const err23 = {
-                  instancePath: instancePath + "/runtime_trace/trace_provenance/upstream_tooling",
-                  schemaPath:
-                    "runtime-trace-input.schema.json/properties/trace_provenance/properties/upstream_tooling/type",
-                  keyword: "type",
-                  params: { type: "string" },
-                  message: "must be string",
+                vErrors.push(err25);
+              }
+              errors++;
+            }
+          }
+        }
+      }
+      var _valid4 = _errs33 === errors;
+      valid19 = valid19 || _valid4;
+      if (_valid4) {
+        var props3 = {};
+        props3.engine_type = true;
+      }
+      const _errs35 = errors;
+      const _errs36 = errors;
+      const _errs37 = errors;
+      if (data0 && typeof data0 == "object" && !Array.isArray(data0)) {
+        let missing4;
+        if (data0.engine_type === undefined && (missing4 = "engine_type")) {
+          const err26 = {};
+          if (vErrors === null) {
+            vErrors = [err26];
+          } else {
+            vErrors.push(err26);
+          }
+          errors++;
+        }
+      }
+      var valid21 = _errs37 === errors;
+      if (valid21) {
+        const err27 = {};
+        if (vErrors === null) {
+          vErrors = [err27];
+        } else {
+          vErrors.push(err27);
+        }
+        errors++;
+      } else {
+        errors = _errs36;
+        if (vErrors !== null) {
+          if (_errs36) {
+            vErrors.length = _errs36;
+          } else {
+            vErrors = null;
+          }
+        }
+      }
+      var _valid4 = _errs35 === errors;
+      valid19 = valid19 || _valid4;
+      if (!valid19) {
+        const err28 = {};
+        if (vErrors === null) {
+          vErrors = [err28];
+        } else {
+          vErrors.push(err28);
+        }
+        errors++;
+      } else {
+        errors = _errs32;
+        if (vErrors !== null) {
+          if (_errs32) {
+            vErrors.length = _errs32;
+          } else {
+            vErrors = null;
+          }
+        }
+      }
+      var _valid3 = _errs31 === errors;
+      errors = _errs30;
+      if (vErrors !== null) {
+        if (_errs30) {
+          vErrors.length = _errs30;
+        } else {
+          vErrors = null;
+        }
+      }
+      let ifClause0;
+      if (_valid3) {
+        const _errs38 = errors;
+        if (data0 && typeof data0 == "object" && !Array.isArray(data0)) {
+          if (data0.engine_semantic_version !== undefined) {
+            if ("legacy_generic.v1" !== data0.engine_semantic_version) {
+              const err29 = {
+                instancePath: instancePath + "/runtime_trace/engine_semantic_version",
+                schemaPath: "runtime-trace-input.schema.json/allOf/3/then/properties/engine_semantic_version/const",
+                keyword: "const",
+                params: { allowedValue: "legacy_generic.v1" },
+                message: "must be equal to constant",
+              };
+              if (vErrors === null) {
+                vErrors = [err29];
+              } else {
+                vErrors.push(err29);
+              }
+              errors++;
+            }
+          }
+          if (data0.requested_features !== undefined) {
+            let data15 = data0.requested_features;
+            if (Array.isArray(data15)) {
+              if (data15.length > 0) {
+                const err30 = {
+                  instancePath: instancePath + "/runtime_trace/requested_features",
+                  schemaPath: "runtime-trace-input.schema.json/allOf/3/then/properties/requested_features/maxItems",
+                  keyword: "maxItems",
+                  params: { limit: 0 },
+                  message: "must NOT have more than 0 items",
                 };
                 if (vErrors === null) {
-                  vErrors = [err23];
+                  vErrors = [err30];
                 } else {
-                  vErrors.push(err23);
+                  vErrors.push(err30);
                 }
                 errors++;
               }
             }
-            if (data2.trace_kind !== undefined) {
-              let data10 = data2.trace_kind;
-              if (typeof data10 === "string") {
-                if (func1(data10) > 160) {
-                  const err24 = {
-                    instancePath: instancePath + "/runtime_trace/trace_provenance/trace_kind",
-                    schemaPath:
-                      "runtime-trace-input.schema.json/properties/trace_provenance/properties/trace_kind/maxLength",
-                    keyword: "maxLength",
-                    params: { limit: 160 },
-                    message: "must NOT have more than 160 characters",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err24];
-                  } else {
-                    vErrors.push(err24);
-                  }
-                  errors++;
-                }
-              } else {
-                const err25 = {
-                  instancePath: instancePath + "/runtime_trace/trace_provenance/trace_kind",
-                  schemaPath: "runtime-trace-input.schema.json/properties/trace_provenance/properties/trace_kind/type",
-                  keyword: "type",
-                  params: { type: "string" },
-                  message: "must be string",
-                };
-                if (vErrors === null) {
-                  vErrors = [err25];
-                } else {
-                  vErrors.push(err25);
-                }
-                errors++;
-              }
-            }
-            if (data2.notes !== undefined) {
-              let data11 = data2.notes;
-              if (Array.isArray(data11)) {
-                if (data11.length > 64) {
-                  const err26 = {
-                    instancePath: instancePath + "/runtime_trace/trace_provenance/notes",
-                    schemaPath: "runtime-trace-input.schema.json/properties/trace_provenance/properties/notes/maxItems",
-                    keyword: "maxItems",
-                    params: { limit: 64 },
-                    message: "must NOT have more than 64 items",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err26];
-                  } else {
-                    vErrors.push(err26);
-                  }
-                  errors++;
-                }
-                const len0 = data11.length;
-                for (let i0 = 0; i0 < len0; i0++) {
-                  let data12 = data11[i0];
-                  if (typeof data12 === "string") {
-                    if (func1(data12) > 512) {
-                      const err27 = {
-                        instancePath: instancePath + "/runtime_trace/trace_provenance/notes/" + i0,
+          }
+          if (data0.requests !== undefined) {
+            let data16 = data0.requests;
+            if (Array.isArray(data16)) {
+              const len3 = data16.length;
+              for (let i3 = 0; i3 < len3; i3++) {
+                let data17 = data16[i3];
+                if (data17 && typeof data17 == "object" && !Array.isArray(data17)) {
+                  if (data17.phase !== undefined) {
+                    let data18 = data17.phase;
+                    if (!(data18 === "prefill" || data18 === "decode")) {
+                      const err31 = {
+                        instancePath: instancePath + "/runtime_trace/requests/" + i3 + "/phase",
                         schemaPath:
-                          "runtime-trace-input.schema.json/properties/trace_provenance/properties/notes/items/maxLength",
-                        keyword: "maxLength",
-                        params: { limit: 512 },
-                        message: "must NOT have more than 512 characters",
+                          "runtime-trace-input.schema.json/allOf/3/then/properties/requests/items/properties/phase/enum",
+                        keyword: "enum",
+                        params: {
+                          allowedValues: schema34.allOf[3].then.properties.requests.items.properties.phase.enum,
+                        },
+                        message: "must be equal to one of the allowed values",
                       };
                       if (vErrors === null) {
-                        vErrors = [err27];
+                        vErrors = [err31];
                       } else {
-                        vErrors.push(err27);
+                        vErrors.push(err31);
                       }
                       errors++;
                     }
-                  } else {
-                    const err28 = {
-                      instancePath: instancePath + "/runtime_trace/trace_provenance/notes/" + i0,
-                      schemaPath:
-                        "runtime-trace-input.schema.json/properties/trace_provenance/properties/notes/items/type",
-                      keyword: "type",
-                      params: { type: "string" },
-                      message: "must be string",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err28];
-                    } else {
-                      vErrors.push(err28);
-                    }
-                    errors++;
                   }
                 }
-              } else {
-                const err29 = {
-                  instancePath: instancePath + "/runtime_trace/trace_provenance/notes",
-                  schemaPath: "runtime-trace-input.schema.json/properties/trace_provenance/properties/notes/type",
-                  keyword: "type",
-                  params: { type: "array" },
-                  message: "must be array",
-                };
-                if (vErrors === null) {
-                  vErrors = [err29];
-                } else {
-                  vErrors.push(err29);
-                }
-                errors++;
               }
             }
-          } else {
-            const err30 = {
-              instancePath: instancePath + "/runtime_trace/trace_provenance",
-              schemaPath: "runtime-trace-input.schema.json/properties/trace_provenance/type",
-              keyword: "type",
-              params: { type: "object" },
-              message: "must be object",
+          }
+        }
+        var _valid3 = _errs38 === errors;
+        valid18 = _valid3;
+        if (valid18) {
+          if (props3 !== true) {
+            props3 = props3 || {};
+            props3.engine_semantic_version = true;
+            props3.requested_features = true;
+            props3.requests = true;
+          }
+        }
+        ifClause0 = "then";
+      } else {
+        const _errs44 = errors;
+        if (data0 && typeof data0 == "object" && !Array.isArray(data0)) {
+          if (data0.engine_semantic_version === undefined) {
+            const err32 = {
+              instancePath: instancePath + "/runtime_trace",
+              schemaPath: "runtime-trace-input.schema.json/allOf/3/else/required",
+              keyword: "required",
+              params: { missingProperty: "engine_semantic_version" },
+              message: "must have required property '" + "engine_semantic_version" + "'",
             };
             if (vErrors === null) {
-              vErrors = [err30];
+              vErrors = [err32];
             } else {
-              vErrors.push(err30);
+              vErrors.push(err32);
+            }
+            errors++;
+          }
+          if (data0.requested_features === undefined) {
+            const err33 = {
+              instancePath: instancePath + "/runtime_trace",
+              schemaPath: "runtime-trace-input.schema.json/allOf/3/else/required",
+              keyword: "required",
+              params: { missingProperty: "requested_features" },
+              message: "must have required property '" + "requested_features" + "'",
+            };
+            if (vErrors === null) {
+              vErrors = [err33];
+            } else {
+              vErrors.push(err33);
             }
             errors++;
           }
         }
-        if (data0.policy !== undefined) {
-          let data13 = data0.policy;
-          if (data13 && typeof data13 == "object" && !Array.isArray(data13)) {
-            for (const key3 in data13) {
-              if (!func4.call(schema34.properties.policy.properties, key3)) {
-                const err31 = {
-                  instancePath: instancePath + "/runtime_trace/policy",
-                  schemaPath: "runtime-trace-input.schema.json/properties/policy/additionalProperties",
-                  keyword: "additionalProperties",
-                  params: { additionalProperty: key3 },
-                  message: "must NOT have additional properties",
-                };
-                if (vErrors === null) {
-                  vErrors = [err31];
+        var _valid3 = _errs44 === errors;
+        valid18 = _valid3;
+        ifClause0 = "else";
+      }
+      if (!valid18) {
+        const err34 = {
+          instancePath: instancePath + "/runtime_trace",
+          schemaPath: "runtime-trace-input.schema.json/allOf/3/if",
+          keyword: "if",
+          params: { failingKeyword: ifClause0 },
+          message: 'must match "' + ifClause0 + '" schema',
+        };
+        if (vErrors === null) {
+          vErrors = [err34];
+        } else {
+          vErrors.push(err34);
+        }
+        errors++;
+      }
+      if (props0 !== true && props3 !== undefined) {
+        if (props3 === true) {
+          props0 = true;
+        } else {
+          props0 = props0 || {};
+          Object.assign(props0, props3);
+        }
+      }
+      const _errs46 = errors;
+      let valid26 = true;
+      const _errs47 = errors;
+      if (data0 && typeof data0 == "object" && !Array.isArray(data0)) {
+        let missing5;
+        if (data0.engine_semantic_version === undefined && (missing5 = "engine_semantic_version")) {
+          const err35 = {};
+          if (vErrors === null) {
+            vErrors = [err35];
+          } else {
+            vErrors.push(err35);
+          }
+          errors++;
+        }
+      }
+      var _valid5 = _errs47 === errors;
+      errors = _errs46;
+      if (vErrors !== null) {
+        if (_errs46) {
+          vErrors.length = _errs46;
+        } else {
+          vErrors = null;
+        }
+      }
+      if (_valid5) {
+        const _errs48 = errors;
+        if (data0 && typeof data0 == "object" && !Array.isArray(data0)) {
+          if (data0.engine_type === undefined) {
+            const err36 = {
+              instancePath: instancePath + "/runtime_trace",
+              schemaPath: "runtime-trace-input.schema.json/allOf/4/then/required",
+              keyword: "required",
+              params: { missingProperty: "engine_type" },
+              message: "must have required property '" + "engine_type" + "'",
+            };
+            if (vErrors === null) {
+              vErrors = [err36];
+            } else {
+              vErrors.push(err36);
+            }
+            errors++;
+          }
+        }
+        var _valid5 = _errs48 === errors;
+        valid26 = _valid5;
+      }
+      if (!valid26) {
+        const err37 = {
+          instancePath: instancePath + "/runtime_trace",
+          schemaPath: "runtime-trace-input.schema.json/allOf/4/if",
+          keyword: "if",
+          params: { failingKeyword: "then" },
+          message: 'must match "then" schema',
+        };
+        if (vErrors === null) {
+          vErrors = [err37];
+        } else {
+          vErrors.push(err37);
+        }
+        errors++;
+      }
+      const _errs50 = errors;
+      let valid27 = true;
+      const _errs51 = errors;
+      if (data0 && typeof data0 == "object" && !Array.isArray(data0)) {
+        let missing6;
+        if (data0.requested_features === undefined && (missing6 = "requested_features")) {
+          const err38 = {};
+          if (vErrors === null) {
+            vErrors = [err38];
+          } else {
+            vErrors.push(err38);
+          }
+          errors++;
+        }
+      }
+      var _valid6 = _errs51 === errors;
+      errors = _errs50;
+      if (vErrors !== null) {
+        if (_errs50) {
+          vErrors.length = _errs50;
+        } else {
+          vErrors = null;
+        }
+      }
+      if (_valid6) {
+        const _errs52 = errors;
+        if (data0 && typeof data0 == "object" && !Array.isArray(data0)) {
+          if (data0.engine_type === undefined) {
+            const err39 = {
+              instancePath: instancePath + "/runtime_trace",
+              schemaPath: "runtime-trace-input.schema.json/allOf/5/then/required",
+              keyword: "required",
+              params: { missingProperty: "engine_type" },
+              message: "must have required property '" + "engine_type" + "'",
+            };
+            if (vErrors === null) {
+              vErrors = [err39];
+            } else {
+              vErrors.push(err39);
+            }
+            errors++;
+          }
+        }
+        var _valid6 = _errs52 === errors;
+        valid27 = _valid6;
+      }
+      if (!valid27) {
+        const err40 = {
+          instancePath: instancePath + "/runtime_trace",
+          schemaPath: "runtime-trace-input.schema.json/allOf/5/if",
+          keyword: "if",
+          params: { failingKeyword: "then" },
+          message: 'must match "then" schema',
+        };
+        if (vErrors === null) {
+          vErrors = [err40];
+        } else {
+          vErrors.push(err40);
+        }
+        errors++;
+      }
+      const _errs54 = errors;
+      let valid28 = true;
+      const _errs55 = errors;
+      if (data0 && typeof data0 == "object" && !Array.isArray(data0)) {
+        if (data0.requests !== undefined) {
+          let data19 = data0.requests;
+          if (Array.isArray(data19)) {
+            const _errs57 = errors;
+            const len4 = data19.length;
+            for (let i4 = 0; i4 < len4; i4++) {
+              let data20 = data19[i4];
+              const _errs58 = errors;
+              if (data20 && typeof data20 == "object" && !Array.isArray(data20)) {
+                let missing7;
+                if (data20.phase === undefined && (missing7 = "phase")) {
+                  const err41 = {};
+                  if (vErrors === null) {
+                    vErrors = [err41];
+                  } else {
+                    vErrors.push(err41);
+                  }
+                  errors++;
                 } else {
-                  vErrors.push(err31);
+                  if (data20.phase !== undefined) {
+                    if ("request" !== data20.phase) {
+                      const err42 = {};
+                      if (vErrors === null) {
+                        vErrors = [err42];
+                      } else {
+                        vErrors.push(err42);
+                      }
+                      errors++;
+                    }
+                  }
                 }
-                errors++;
+              }
+              var valid30 = _errs58 === errors;
+              if (valid30) {
+                break;
               }
             }
-            if (data13.kv_capacity_tokens !== undefined) {
-              let data14 = data13.kv_capacity_tokens;
-              if (!(typeof data14 == "number" && !(data14 % 1) && !isNaN(data14))) {
-                const err32 = {
-                  instancePath: instancePath + "/runtime_trace/policy/kv_capacity_tokens",
-                  schemaPath: "runtime-trace-input.schema.json/properties/policy/properties/kv_capacity_tokens/type",
-                  keyword: "type",
-                  params: { type: "integer" },
-                  message: "must be integer",
-                };
-                if (vErrors === null) {
-                  vErrors = [err32];
+            if (!valid30) {
+              const err43 = {};
+              if (vErrors === null) {
+                vErrors = [err43];
+              } else {
+                vErrors.push(err43);
+              }
+              errors++;
+            } else {
+              errors = _errs57;
+              if (vErrors !== null) {
+                if (_errs57) {
+                  vErrors.length = _errs57;
                 } else {
-                  vErrors.push(err32);
-                }
-                errors++;
-              }
-              if (typeof data14 == "number") {
-                if (data14 > 9007199254740991 || isNaN(data14)) {
-                  const err33 = {
-                    instancePath: instancePath + "/runtime_trace/policy/kv_capacity_tokens",
-                    schemaPath:
-                      "runtime-trace-input.schema.json/properties/policy/properties/kv_capacity_tokens/maximum",
-                    keyword: "maximum",
-                    params: { comparison: "<=", limit: 9007199254740991 },
-                    message: "must be <= 9007199254740991",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err33];
-                  } else {
-                    vErrors.push(err33);
-                  }
-                  errors++;
-                }
-                if (data14 < 0 || isNaN(data14)) {
-                  const err34 = {
-                    instancePath: instancePath + "/runtime_trace/policy/kv_capacity_tokens",
-                    schemaPath:
-                      "runtime-trace-input.schema.json/properties/policy/properties/kv_capacity_tokens/minimum",
-                    keyword: "minimum",
-                    params: { comparison: ">=", limit: 0 },
-                    message: "must be >= 0",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err34];
-                  } else {
-                    vErrors.push(err34);
-                  }
-                  errors++;
-                }
-              }
-            }
-            if (data13.initial_kv_tokens !== undefined) {
-              let data15 = data13.initial_kv_tokens;
-              if (!(typeof data15 == "number" && !(data15 % 1) && !isNaN(data15))) {
-                const err35 = {
-                  instancePath: instancePath + "/runtime_trace/policy/initial_kv_tokens",
-                  schemaPath: "runtime-trace-input.schema.json/properties/policy/properties/initial_kv_tokens/type",
-                  keyword: "type",
-                  params: { type: "integer" },
-                  message: "must be integer",
-                };
-                if (vErrors === null) {
-                  vErrors = [err35];
-                } else {
-                  vErrors.push(err35);
-                }
-                errors++;
-              }
-              if (typeof data15 == "number") {
-                if (data15 > 9007199254740991 || isNaN(data15)) {
-                  const err36 = {
-                    instancePath: instancePath + "/runtime_trace/policy/initial_kv_tokens",
-                    schemaPath:
-                      "runtime-trace-input.schema.json/properties/policy/properties/initial_kv_tokens/maximum",
-                    keyword: "maximum",
-                    params: { comparison: "<=", limit: 9007199254740991 },
-                    message: "must be <= 9007199254740991",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err36];
-                  } else {
-                    vErrors.push(err36);
-                  }
-                  errors++;
-                }
-                if (data15 < 0 || isNaN(data15)) {
-                  const err37 = {
-                    instancePath: instancePath + "/runtime_trace/policy/initial_kv_tokens",
-                    schemaPath:
-                      "runtime-trace-input.schema.json/properties/policy/properties/initial_kv_tokens/minimum",
-                    keyword: "minimum",
-                    params: { comparison: ">=", limit: 0 },
-                    message: "must be >= 0",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err37];
-                  } else {
-                    vErrors.push(err37);
-                  }
-                  errors++;
-                }
-              }
-            }
-            if (data13.max_active_requests !== undefined) {
-              let data16 = data13.max_active_requests;
-              if (!(typeof data16 == "number" && !(data16 % 1) && !isNaN(data16))) {
-                const err38 = {
-                  instancePath: instancePath + "/runtime_trace/policy/max_active_requests",
-                  schemaPath: "runtime-trace-input.schema.json/properties/policy/properties/max_active_requests/type",
-                  keyword: "type",
-                  params: { type: "integer" },
-                  message: "must be integer",
-                };
-                if (vErrors === null) {
-                  vErrors = [err38];
-                } else {
-                  vErrors.push(err38);
-                }
-                errors++;
-              }
-              if (typeof data16 == "number") {
-                if (data16 > 1024 || isNaN(data16)) {
-                  const err39 = {
-                    instancePath: instancePath + "/runtime_trace/policy/max_active_requests",
-                    schemaPath:
-                      "runtime-trace-input.schema.json/properties/policy/properties/max_active_requests/maximum",
-                    keyword: "maximum",
-                    params: { comparison: "<=", limit: 1024 },
-                    message: "must be <= 1024",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err39];
-                  } else {
-                    vErrors.push(err39);
-                  }
-                  errors++;
-                }
-                if (data16 < 0 || isNaN(data16)) {
-                  const err40 = {
-                    instancePath: instancePath + "/runtime_trace/policy/max_active_requests",
-                    schemaPath:
-                      "runtime-trace-input.schema.json/properties/policy/properties/max_active_requests/minimum",
-                    keyword: "minimum",
-                    params: { comparison: ">=", limit: 0 },
-                    message: "must be >= 0",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err40];
-                  } else {
-                    vErrors.push(err40);
-                  }
-                  errors++;
-                }
-              }
-            }
-            if (data13.max_batch_size !== undefined) {
-              let data17 = data13.max_batch_size;
-              if (!(typeof data17 == "number" && !(data17 % 1) && !isNaN(data17))) {
-                const err41 = {
-                  instancePath: instancePath + "/runtime_trace/policy/max_batch_size",
-                  schemaPath: "runtime-trace-input.schema.json/properties/policy/properties/max_batch_size/type",
-                  keyword: "type",
-                  params: { type: "integer" },
-                  message: "must be integer",
-                };
-                if (vErrors === null) {
-                  vErrors = [err41];
-                } else {
-                  vErrors.push(err41);
-                }
-                errors++;
-              }
-              if (typeof data17 == "number") {
-                if (data17 > 1024 || isNaN(data17)) {
-                  const err42 = {
-                    instancePath: instancePath + "/runtime_trace/policy/max_batch_size",
-                    schemaPath: "runtime-trace-input.schema.json/properties/policy/properties/max_batch_size/maximum",
-                    keyword: "maximum",
-                    params: { comparison: "<=", limit: 1024 },
-                    message: "must be <= 1024",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err42];
-                  } else {
-                    vErrors.push(err42);
-                  }
-                  errors++;
-                }
-                if (data17 < 0 || isNaN(data17)) {
-                  const err43 = {
-                    instancePath: instancePath + "/runtime_trace/policy/max_batch_size",
-                    schemaPath: "runtime-trace-input.schema.json/properties/policy/properties/max_batch_size/minimum",
-                    keyword: "minimum",
-                    params: { comparison: ">=", limit: 0 },
-                    message: "must be >= 0",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err43];
-                  } else {
-                    vErrors.push(err43);
-                  }
-                  errors++;
+                  vErrors = null;
                 }
               }
             }
-            if (data13.batch_scheduler !== undefined) {
-              let data18 = data13.batch_scheduler;
-              if (!(data18 === "fifo" || data18 === "decode_priority" || data18 === "fabric_backpressure_aware")) {
-                const err44 = {
-                  instancePath: instancePath + "/runtime_trace/policy/batch_scheduler",
-                  schemaPath: "runtime-trace-input.schema.json/properties/policy/properties/batch_scheduler/enum",
+          }
+        }
+      }
+      var _valid7 = _errs55 === errors;
+      errors = _errs54;
+      if (vErrors !== null) {
+        if (_errs54) {
+          vErrors.length = _errs54;
+        } else {
+          vErrors = null;
+        }
+      }
+      if (_valid7) {
+        const _errs60 = errors;
+        if (data0 && typeof data0 == "object" && !Array.isArray(data0)) {
+          if (data0.engine_type === undefined) {
+            const err44 = {
+              instancePath: instancePath + "/runtime_trace",
+              schemaPath: "runtime-trace-input.schema.json/allOf/6/then/required",
+              keyword: "required",
+              params: { missingProperty: "engine_type" },
+              message: "must have required property '" + "engine_type" + "'",
+            };
+            if (vErrors === null) {
+              vErrors = [err44];
+            } else {
+              vErrors.push(err44);
+            }
+            errors++;
+          }
+          if (data0.requests !== undefined) {
+            let data22 = data0.requests;
+            if (Array.isArray(data22)) {
+              const len5 = data22.length;
+              for (let i5 = 0; i5 < len5; i5++) {
+                let data23 = data22[i5];
+                if (data23 && typeof data23 == "object" && !Array.isArray(data23)) {
+                  if (data23.phase === undefined) {
+                    const err45 = {
+                      instancePath: instancePath + "/runtime_trace/requests/" + i5,
+                      schemaPath: "runtime-trace-input.schema.json/allOf/6/then/properties/requests/items/required",
+                      keyword: "required",
+                      params: { missingProperty: "phase" },
+                      message: "must have required property '" + "phase" + "'",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err45];
+                    } else {
+                      vErrors.push(err45);
+                    }
+                    errors++;
+                  }
+                  if (data23.phase !== undefined) {
+                    if ("request" !== data23.phase) {
+                      const err46 = {
+                        instancePath: instancePath + "/runtime_trace/requests/" + i5 + "/phase",
+                        schemaPath:
+                          "runtime-trace-input.schema.json/allOf/6/then/properties/requests/items/properties/phase/const",
+                        keyword: "const",
+                        params: { allowedValue: "request" },
+                        message: "must be equal to constant",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err46];
+                      } else {
+                        vErrors.push(err46);
+                      }
+                      errors++;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        var _valid7 = _errs60 === errors;
+        valid28 = _valid7;
+        if (valid28) {
+          var props4 = {};
+          props4.requests = true;
+        }
+      }
+      if (!valid28) {
+        const err47 = {
+          instancePath: instancePath + "/runtime_trace",
+          schemaPath: "runtime-trace-input.schema.json/allOf/6/if",
+          keyword: "if",
+          params: { failingKeyword: "then" },
+          message: 'must match "then" schema',
+        };
+        if (vErrors === null) {
+          vErrors = [err47];
+        } else {
+          vErrors.push(err47);
+        }
+        errors++;
+      }
+      if (props0 !== true && props4 !== undefined) {
+        if (props4 === true) {
+          props0 = true;
+        } else {
+          props0 = props0 || {};
+          Object.assign(props0, props4);
+        }
+      }
+      if (data0 && typeof data0 == "object" && !Array.isArray(data0)) {
+        if (data0.policy === undefined) {
+          const err48 = {
+            instancePath: instancePath + "/runtime_trace",
+            schemaPath: "runtime-trace-input.schema.json/required",
+            keyword: "required",
+            params: { missingProperty: "policy" },
+            message: "must have required property '" + "policy" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err48];
+          } else {
+            vErrors.push(err48);
+          }
+          errors++;
+        }
+        if (data0.requests === undefined) {
+          const err49 = {
+            instancePath: instancePath + "/runtime_trace",
+            schemaPath: "runtime-trace-input.schema.json/required",
+            keyword: "required",
+            params: { missingProperty: "requests" },
+            message: "must have required property '" + "requests" + "'",
+          };
+          if (vErrors === null) {
+            vErrors = [err49];
+          } else {
+            vErrors.push(err49);
+          }
+          errors++;
+        }
+        for (const key1 in data0) {
+          if (!(
+            key1 === "trace_name" ||
+            key1 === "engine_type" ||
+            key1 === "engine_semantic_version" ||
+            key1 === "requested_features" ||
+            key1 === "trace_provenance" ||
+            key1 === "policy" ||
+            key1 === "requests"
+          )) {
+            const err50 = {
+              instancePath: instancePath + "/runtime_trace",
+              schemaPath: "runtime-trace-input.schema.json/additionalProperties",
+              keyword: "additionalProperties",
+              params: { additionalProperty: key1 },
+              message: "must NOT have additional properties",
+            };
+            if (vErrors === null) {
+              vErrors = [err50];
+            } else {
+              vErrors.push(err50);
+            }
+            errors++;
+          }
+        }
+        if (data0.trace_name !== undefined) {
+          let data25 = data0.trace_name;
+          if (typeof data25 === "string") {
+            if (func1(data25) > 256) {
+              const err51 = {
+                instancePath: instancePath + "/runtime_trace/trace_name",
+                schemaPath: "runtime-trace-input.schema.json/properties/trace_name/maxLength",
+                keyword: "maxLength",
+                params: { limit: 256 },
+                message: "must NOT have more than 256 characters",
+              };
+              if (vErrors === null) {
+                vErrors = [err51];
+              } else {
+                vErrors.push(err51);
+              }
+              errors++;
+            }
+            if (func1(data25) < 1) {
+              const err52 = {
+                instancePath: instancePath + "/runtime_trace/trace_name",
+                schemaPath: "runtime-trace-input.schema.json/properties/trace_name/minLength",
+                keyword: "minLength",
+                params: { limit: 1 },
+                message: "must NOT have fewer than 1 characters",
+              };
+              if (vErrors === null) {
+                vErrors = [err52];
+              } else {
+                vErrors.push(err52);
+              }
+              errors++;
+            }
+          } else {
+            const err53 = {
+              instancePath: instancePath + "/runtime_trace/trace_name",
+              schemaPath: "runtime-trace-input.schema.json/properties/trace_name/type",
+              keyword: "type",
+              params: { type: "string" },
+              message: "must be string",
+            };
+            if (vErrors === null) {
+              vErrors = [err53];
+            } else {
+              vErrors.push(err53);
+            }
+            errors++;
+          }
+        }
+        if (data0.engine_type !== undefined) {
+          let data26 = data0.engine_type;
+          if (!(data26 === "legacy_generic" || data26 === "vllm" || data26 === "sglang" || data26 === "tensorrt_llm")) {
+            const err54 = {
+              instancePath: instancePath + "/runtime_trace/engine_type",
+              schemaPath: "runtime-trace-input.schema.json/properties/engine_type/enum",
+              keyword: "enum",
+              params: { allowedValues: schema34.properties.engine_type.enum },
+              message: "must be equal to one of the allowed values",
+            };
+            if (vErrors === null) {
+              vErrors = [err54];
+            } else {
+              vErrors.push(err54);
+            }
+            errors++;
+          }
+        }
+        if (data0.engine_semantic_version !== undefined) {
+          let data27 = data0.engine_semantic_version;
+          if (!(
+            data27 === "legacy_generic.v1" ||
+            data27 === "vllm.0.6.semantic.v1" ||
+            data27 === "sglang.0.4.semantic.v1" ||
+            data27 === "tensorrt_llm.0.12.semantic.v1"
+          )) {
+            const err55 = {
+              instancePath: instancePath + "/runtime_trace/engine_semantic_version",
+              schemaPath: "runtime-trace-input.schema.json/properties/engine_semantic_version/enum",
+              keyword: "enum",
+              params: { allowedValues: schema34.properties.engine_semantic_version.enum },
+              message: "must be equal to one of the allowed values",
+            };
+            if (vErrors === null) {
+              vErrors = [err55];
+            } else {
+              vErrors.push(err55);
+            }
+            errors++;
+          }
+        }
+        if (data0.requested_features !== undefined) {
+          let data28 = data0.requested_features;
+          if (Array.isArray(data28)) {
+            if (data28.length > 3) {
+              const err56 = {
+                instancePath: instancePath + "/runtime_trace/requested_features",
+                schemaPath: "runtime-trace-input.schema.json/properties/requested_features/maxItems",
+                keyword: "maxItems",
+                params: { limit: 3 },
+                message: "must NOT have more than 3 items",
+              };
+              if (vErrors === null) {
+                vErrors = [err56];
+              } else {
+                vErrors.push(err56);
+              }
+              errors++;
+            }
+            const len6 = data28.length;
+            for (let i6 = 0; i6 < len6; i6++) {
+              let data29 = data28[i6];
+              if (!(
+                data29 === "continuous_batching" ||
+                data29 === "prefix_aware_scheduling" ||
+                data29 === "inflight_batching" ||
+                data29 === "paged_kv_cache" ||
+                data29 === "capacity_aware_scheduling"
+              )) {
+                const err57 = {
+                  instancePath: instancePath + "/runtime_trace/requested_features/" + i6,
+                  schemaPath: "runtime-trace-input.schema.json/properties/requested_features/items/enum",
                   keyword: "enum",
-                  params: { allowedValues: schema34.properties.policy.properties.batch_scheduler.enum },
+                  params: { allowedValues: schema34.properties.requested_features.items.enum },
                   message: "must be equal to one of the allowed values",
                 };
                 if (vErrors === null) {
-                  vErrors = [err44];
+                  vErrors = [err57];
                 } else {
-                  vErrors.push(err44);
+                  vErrors.push(err57);
                 }
                 errors++;
               }
             }
-            if (data13.prefill_starvation_threshold_ps !== undefined) {
-              let data19 = data13.prefill_starvation_threshold_ps;
-              if (!(typeof data19 == "number" && !(data19 % 1) && !isNaN(data19))) {
-                const err45 = {
-                  instancePath: instancePath + "/runtime_trace/policy/prefill_starvation_threshold_ps",
-                  schemaPath:
-                    "runtime-trace-input.schema.json/properties/policy/properties/prefill_starvation_threshold_ps/type",
-                  keyword: "type",
-                  params: { type: "integer" },
-                  message: "must be integer",
-                };
-                if (vErrors === null) {
-                  vErrors = [err45];
-                } else {
-                  vErrors.push(err45);
-                }
-                errors++;
-              }
-              if (typeof data19 == "number") {
-                if (data19 > 9007199254740991 || isNaN(data19)) {
-                  const err46 = {
-                    instancePath: instancePath + "/runtime_trace/policy/prefill_starvation_threshold_ps",
-                    schemaPath:
-                      "runtime-trace-input.schema.json/properties/policy/properties/prefill_starvation_threshold_ps/maximum",
-                    keyword: "maximum",
-                    params: { comparison: "<=", limit: 9007199254740991 },
-                    message: "must be <= 9007199254740991",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err46];
-                  } else {
-                    vErrors.push(err46);
+            let i7 = data28.length;
+            let j0;
+            if (i7 > 1) {
+              outer0: for (; i7--;) {
+                for (j0 = i7; j0--;) {
+                  if (func0(data28[i7], data28[j0])) {
+                    const err58 = {
+                      instancePath: instancePath + "/runtime_trace/requested_features",
+                      schemaPath: "runtime-trace-input.schema.json/properties/requested_features/uniqueItems",
+                      keyword: "uniqueItems",
+                      params: { i: i7, j: j0 },
+                      message: "must NOT have duplicate items (items ## " + j0 + " and " + i7 + " are identical)",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err58];
+                    } else {
+                      vErrors.push(err58);
+                    }
+                    errors++;
+                    break outer0;
                   }
-                  errors++;
-                }
-                if (data19 < 0 || isNaN(data19)) {
-                  const err47 = {
-                    instancePath: instancePath + "/runtime_trace/policy/prefill_starvation_threshold_ps",
-                    schemaPath:
-                      "runtime-trace-input.schema.json/properties/policy/properties/prefill_starvation_threshold_ps/minimum",
-                    keyword: "minimum",
-                    params: { comparison: ">=", limit: 0 },
-                    message: "must be >= 0",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err47];
-                  } else {
-                    vErrors.push(err47);
-                  }
-                  errors++;
                 }
               }
             }
-            if (data13.pd_handoff_delay_ps !== undefined) {
-              let data20 = data13.pd_handoff_delay_ps;
-              if (!(typeof data20 == "number" && !(data20 % 1) && !isNaN(data20))) {
-                const err48 = {
-                  instancePath: instancePath + "/runtime_trace/policy/pd_handoff_delay_ps",
-                  schemaPath: "runtime-trace-input.schema.json/properties/policy/properties/pd_handoff_delay_ps/type",
-                  keyword: "type",
-                  params: { type: "integer" },
-                  message: "must be integer",
-                };
-                if (vErrors === null) {
-                  vErrors = [err48];
-                } else {
-                  vErrors.push(err48);
-                }
-                errors++;
-              }
-              if (typeof data20 == "number") {
-                if (data20 > 9007199254740991 || isNaN(data20)) {
-                  const err49 = {
-                    instancePath: instancePath + "/runtime_trace/policy/pd_handoff_delay_ps",
-                    schemaPath:
-                      "runtime-trace-input.schema.json/properties/policy/properties/pd_handoff_delay_ps/maximum",
-                    keyword: "maximum",
-                    params: { comparison: "<=", limit: 9007199254740991 },
-                    message: "must be <= 9007199254740991",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err49];
-                  } else {
-                    vErrors.push(err49);
-                  }
-                  errors++;
-                }
-                if (data20 < 0 || isNaN(data20)) {
-                  const err50 = {
-                    instancePath: instancePath + "/runtime_trace/policy/pd_handoff_delay_ps",
-                    schemaPath:
-                      "runtime-trace-input.schema.json/properties/policy/properties/pd_handoff_delay_ps/minimum",
-                    keyword: "minimum",
-                    params: { comparison: ">=", limit: 0 },
-                    message: "must be >= 0",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err50];
-                  } else {
-                    vErrors.push(err50);
-                  }
-                  errors++;
-                }
-              }
+          } else {
+            const err59 = {
+              instancePath: instancePath + "/runtime_trace/requested_features",
+              schemaPath: "runtime-trace-input.schema.json/properties/requested_features/type",
+              keyword: "type",
+              params: { type: "array" },
+              message: "must be array",
+            };
+            if (vErrors === null) {
+              vErrors = [err59];
+            } else {
+              vErrors.push(err59);
             }
-            if (data13.pd_handoff_queue_service_ps !== undefined) {
-              let data21 = data13.pd_handoff_queue_service_ps;
-              if (!(typeof data21 == "number" && !(data21 % 1) && !isNaN(data21))) {
-                const err51 = {
-                  instancePath: instancePath + "/runtime_trace/policy/pd_handoff_queue_service_ps",
-                  schemaPath:
-                    "runtime-trace-input.schema.json/properties/policy/properties/pd_handoff_queue_service_ps/type",
-                  keyword: "type",
-                  params: { type: "integer" },
-                  message: "must be integer",
-                };
-                if (vErrors === null) {
-                  vErrors = [err51];
-                } else {
-                  vErrors.push(err51);
-                }
-                errors++;
-              }
-              if (typeof data21 == "number") {
-                if (data21 > 9007199254740991 || isNaN(data21)) {
-                  const err52 = {
-                    instancePath: instancePath + "/runtime_trace/policy/pd_handoff_queue_service_ps",
-                    schemaPath:
-                      "runtime-trace-input.schema.json/properties/policy/properties/pd_handoff_queue_service_ps/maximum",
-                    keyword: "maximum",
-                    params: { comparison: "<=", limit: 9007199254740991 },
-                    message: "must be <= 9007199254740991",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err52];
-                  } else {
-                    vErrors.push(err52);
-                  }
-                  errors++;
-                }
-                if (data21 < 0 || isNaN(data21)) {
-                  const err53 = {
-                    instancePath: instancePath + "/runtime_trace/policy/pd_handoff_queue_service_ps",
-                    schemaPath:
-                      "runtime-trace-input.schema.json/properties/policy/properties/pd_handoff_queue_service_ps/minimum",
-                    keyword: "minimum",
-                    params: { comparison: ">=", limit: 0 },
-                    message: "must be >= 0",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err53];
-                  } else {
-                    vErrors.push(err53);
-                  }
-                  errors++;
-                }
-              }
-            }
-            if (data13.kv_page_size_tokens !== undefined) {
-              let data22 = data13.kv_page_size_tokens;
-              if (!(typeof data22 == "number" && !(data22 % 1) && !isNaN(data22))) {
-                const err54 = {
-                  instancePath: instancePath + "/runtime_trace/policy/kv_page_size_tokens",
-                  schemaPath: "runtime-trace-input.schema.json/properties/policy/properties/kv_page_size_tokens/type",
-                  keyword: "type",
-                  params: { type: "integer" },
-                  message: "must be integer",
-                };
-                if (vErrors === null) {
-                  vErrors = [err54];
-                } else {
-                  vErrors.push(err54);
-                }
-                errors++;
-              }
-              if (typeof data22 == "number") {
-                if (data22 > 9007199254740991 || isNaN(data22)) {
-                  const err55 = {
-                    instancePath: instancePath + "/runtime_trace/policy/kv_page_size_tokens",
-                    schemaPath:
-                      "runtime-trace-input.schema.json/properties/policy/properties/kv_page_size_tokens/maximum",
-                    keyword: "maximum",
-                    params: { comparison: "<=", limit: 9007199254740991 },
-                    message: "must be <= 9007199254740991",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err55];
-                  } else {
-                    vErrors.push(err55);
-                  }
-                  errors++;
-                }
-                if (data22 < 0 || isNaN(data22)) {
-                  const err56 = {
-                    instancePath: instancePath + "/runtime_trace/policy/kv_page_size_tokens",
-                    schemaPath:
-                      "runtime-trace-input.schema.json/properties/policy/properties/kv_page_size_tokens/minimum",
-                    keyword: "minimum",
-                    params: { comparison: ">=", limit: 0 },
-                    message: "must be >= 0",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err56];
-                  } else {
-                    vErrors.push(err56);
-                  }
-                  errors++;
-                }
-              }
-            }
-            if (data13.kv_fragmentation_overhead !== undefined) {
-              let data23 = data13.kv_fragmentation_overhead;
-              if (typeof data23 == "number") {
-                if (data23 < 0 || isNaN(data23)) {
-                  const err57 = {
-                    instancePath: instancePath + "/runtime_trace/policy/kv_fragmentation_overhead",
-                    schemaPath:
-                      "runtime-trace-input.schema.json/properties/policy/properties/kv_fragmentation_overhead/minimum",
-                    keyword: "minimum",
-                    params: { comparison: ">=", limit: 0 },
-                    message: "must be >= 0",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err57];
-                  } else {
-                    vErrors.push(err57);
-                  }
-                  errors++;
-                }
+            errors++;
+          }
+        }
+        if (data0.trace_provenance !== undefined) {
+          let data30 = data0.trace_provenance;
+          if (data30 && typeof data30 == "object" && !Array.isArray(data30)) {
+            if (data30.source_mode === undefined) {
+              const err60 = {
+                instancePath: instancePath + "/runtime_trace/trace_provenance",
+                schemaPath: "runtime-trace-input.schema.json/properties/trace_provenance/required",
+                keyword: "required",
+                params: { missingProperty: "source_mode" },
+                message: "must have required property '" + "source_mode" + "'",
+              };
+              if (vErrors === null) {
+                vErrors = [err60];
               } else {
-                const err58 = {
-                  instancePath: instancePath + "/runtime_trace/policy/kv_fragmentation_overhead",
-                  schemaPath:
-                    "runtime-trace-input.schema.json/properties/policy/properties/kv_fragmentation_overhead/type",
-                  keyword: "type",
-                  params: { type: "number" },
-                  message: "must be number",
-                };
-                if (vErrors === null) {
-                  vErrors = [err58];
-                } else {
-                  vErrors.push(err58);
-                }
-                errors++;
+                vErrors.push(err60);
               }
+              errors++;
             }
-            if (data13.kv_admission_watermark !== undefined) {
-              let data24 = data13.kv_admission_watermark;
-              if (typeof data24 == "number") {
-                if (data24 > 1 || isNaN(data24)) {
-                  const err59 = {
-                    instancePath: instancePath + "/runtime_trace/policy/kv_admission_watermark",
-                    schemaPath:
-                      "runtime-trace-input.schema.json/properties/policy/properties/kv_admission_watermark/maximum",
-                    keyword: "maximum",
-                    params: { comparison: "<=", limit: 1 },
-                    message: "must be <= 1",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err59];
-                  } else {
-                    vErrors.push(err59);
-                  }
-                  errors++;
-                }
-                if (data24 < 0 || isNaN(data24)) {
-                  const err60 = {
-                    instancePath: instancePath + "/runtime_trace/policy/kv_admission_watermark",
-                    schemaPath:
-                      "runtime-trace-input.schema.json/properties/policy/properties/kv_admission_watermark/minimum",
-                    keyword: "minimum",
-                    params: { comparison: ">=", limit: 0 },
-                    message: "must be >= 0",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err60];
-                  } else {
-                    vErrors.push(err60);
-                  }
-                  errors++;
-                }
+            if (data30.calibration_level === undefined) {
+              const err61 = {
+                instancePath: instancePath + "/runtime_trace/trace_provenance",
+                schemaPath: "runtime-trace-input.schema.json/properties/trace_provenance/required",
+                keyword: "required",
+                params: { missingProperty: "calibration_level" },
+                message: "must have required property '" + "calibration_level" + "'",
+              };
+              if (vErrors === null) {
+                vErrors = [err61];
               } else {
-                const err61 = {
-                  instancePath: instancePath + "/runtime_trace/policy/kv_admission_watermark",
-                  schemaPath:
-                    "runtime-trace-input.schema.json/properties/policy/properties/kv_admission_watermark/type",
-                  keyword: "type",
-                  params: { type: "number" },
-                  message: "must be number",
-                };
-                if (vErrors === null) {
-                  vErrors = [err61];
-                } else {
-                  vErrors.push(err61);
-                }
-                errors++;
+                vErrors.push(err61);
               }
+              errors++;
             }
-            if (data13.fabric_backpressure_active !== undefined) {
-              if (typeof data13.fabric_backpressure_active !== "boolean") {
-                const err62 = {
-                  instancePath: instancePath + "/runtime_trace/policy/fabric_backpressure_active",
-                  schemaPath:
-                    "runtime-trace-input.schema.json/properties/policy/properties/fabric_backpressure_active/type",
-                  keyword: "type",
-                  params: { type: "boolean" },
-                  message: "must be boolean",
-                };
-                if (vErrors === null) {
-                  vErrors = [err62];
-                } else {
-                  vErrors.push(err62);
-                }
-                errors++;
-              }
-            }
-            if (data13.fabric_backpressure_delay_us !== undefined) {
-              let data26 = data13.fabric_backpressure_delay_us;
-              if (typeof data26 == "number") {
-                if (data26 < 0 || isNaN(data26)) {
-                  const err63 = {
-                    instancePath: instancePath + "/runtime_trace/policy/fabric_backpressure_delay_us",
-                    schemaPath:
-                      "runtime-trace-input.schema.json/properties/policy/properties/fabric_backpressure_delay_us/minimum",
-                    keyword: "minimum",
-                    params: { comparison: ">=", limit: 0 },
-                    message: "must be >= 0",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err63];
-                  } else {
-                    vErrors.push(err63);
-                  }
-                  errors++;
-                }
+            if (data30.allowed_claim_scope === undefined) {
+              const err62 = {
+                instancePath: instancePath + "/runtime_trace/trace_provenance",
+                schemaPath: "runtime-trace-input.schema.json/properties/trace_provenance/required",
+                keyword: "required",
+                params: { missingProperty: "allowed_claim_scope" },
+                message: "must have required property '" + "allowed_claim_scope" + "'",
+              };
+              if (vErrors === null) {
+                vErrors = [err62];
               } else {
+                vErrors.push(err62);
+              }
+              errors++;
+            }
+            for (const key2 in data30) {
+              if (!func5.call(schema34.properties.trace_provenance.properties, key2)) {
+                const err63 = {
+                  instancePath: instancePath + "/runtime_trace/trace_provenance",
+                  schemaPath: "runtime-trace-input.schema.json/properties/trace_provenance/additionalProperties",
+                  keyword: "additionalProperties",
+                  params: { additionalProperty: key2 },
+                  message: "must NOT have additional properties",
+                };
+                if (vErrors === null) {
+                  vErrors = [err63];
+                } else {
+                  vErrors.push(err63);
+                }
+                errors++;
+              }
+            }
+            if (data30.source_mode !== undefined) {
+              if ("synthetic_trace" !== data30.source_mode) {
                 const err64 = {
-                  instancePath: instancePath + "/runtime_trace/policy/fabric_backpressure_delay_us",
+                  instancePath: instancePath + "/runtime_trace/trace_provenance/source_mode",
                   schemaPath:
-                    "runtime-trace-input.schema.json/properties/policy/properties/fabric_backpressure_delay_us/type",
-                  keyword: "type",
-                  params: { type: "number" },
-                  message: "must be number",
+                    "runtime-trace-input.schema.json/properties/trace_provenance/properties/source_mode/const",
+                  keyword: "const",
+                  params: { allowedValue: "synthetic_trace" },
+                  message: "must be equal to constant",
                 };
                 if (vErrors === null) {
                   vErrors = [err64];
@@ -4185,33 +4495,33 @@ function validate21(
                 errors++;
               }
             }
-            if (data13.fabric_backpressure_throttle_threshold_us !== undefined) {
-              let data27 = data13.fabric_backpressure_throttle_threshold_us;
-              if (typeof data27 == "number") {
-                if (data27 < 0 || isNaN(data27)) {
-                  const err65 = {
-                    instancePath: instancePath + "/runtime_trace/policy/fabric_backpressure_throttle_threshold_us",
-                    schemaPath:
-                      "runtime-trace-input.schema.json/properties/policy/properties/fabric_backpressure_throttle_threshold_us/minimum",
-                    keyword: "minimum",
-                    params: { comparison: ">=", limit: 0 },
-                    message: "must be >= 0",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err65];
-                  } else {
-                    vErrors.push(err65);
-                  }
-                  errors++;
-                }
-              } else {
-                const err66 = {
-                  instancePath: instancePath + "/runtime_trace/policy/fabric_backpressure_throttle_threshold_us",
+            if (data30.calibration_level !== undefined) {
+              if ("uncalibrated" !== data30.calibration_level) {
+                const err65 = {
+                  instancePath: instancePath + "/runtime_trace/trace_provenance/calibration_level",
                   schemaPath:
-                    "runtime-trace-input.schema.json/properties/policy/properties/fabric_backpressure_throttle_threshold_us/type",
-                  keyword: "type",
-                  params: { type: "number" },
-                  message: "must be number",
+                    "runtime-trace-input.schema.json/properties/trace_provenance/properties/calibration_level/const",
+                  keyword: "const",
+                  params: { allowedValue: "uncalibrated" },
+                  message: "must be equal to constant",
+                };
+                if (vErrors === null) {
+                  vErrors = [err65];
+                } else {
+                  vErrors.push(err65);
+                }
+                errors++;
+              }
+            }
+            if (data30.allowed_claim_scope !== undefined) {
+              if ("exploratory" !== data30.allowed_claim_scope) {
+                const err66 = {
+                  instancePath: instancePath + "/runtime_trace/trace_provenance/allowed_claim_scope",
+                  schemaPath:
+                    "runtime-trace-input.schema.json/properties/trace_provenance/properties/allowed_claim_scope/const",
+                  keyword: "const",
+                  params: { allowedValue: "exploratory" },
+                  message: "must be equal to constant",
                 };
                 if (vErrors === null) {
                   vErrors = [err66];
@@ -4221,49 +4531,52 @@ function validate21(
                 errors++;
               }
             }
-            if (data13.fabric_backpressure_prefill_batch_limit !== undefined) {
-              let data28 = data13.fabric_backpressure_prefill_batch_limit;
-              if (!(typeof data28 == "number" && !(data28 % 1) && !isNaN(data28))) {
-                const err67 = {
-                  instancePath: instancePath + "/runtime_trace/policy/fabric_backpressure_prefill_batch_limit",
-                  schemaPath:
-                    "runtime-trace-input.schema.json/properties/policy/properties/fabric_backpressure_prefill_batch_limit/type",
-                  keyword: "type",
-                  params: { type: "integer" },
-                  message: "must be integer",
-                };
-                if (vErrors === null) {
-                  vErrors = [err67];
-                } else {
-                  vErrors.push(err67);
-                }
-                errors++;
-              }
-              if (typeof data28 == "number") {
-                if (data28 > 1024 || isNaN(data28)) {
-                  const err68 = {
-                    instancePath: instancePath + "/runtime_trace/policy/fabric_backpressure_prefill_batch_limit",
+            if (data30.source_id !== undefined) {
+              let data34 = data30.source_id;
+              if (typeof data34 === "string") {
+                if (func1(data34) > 512) {
+                  const err67 = {
+                    instancePath: instancePath + "/runtime_trace/trace_provenance/source_id",
                     schemaPath:
-                      "runtime-trace-input.schema.json/properties/policy/properties/fabric_backpressure_prefill_batch_limit/maximum",
-                    keyword: "maximum",
-                    params: { comparison: "<=", limit: 1024 },
-                    message: "must be <= 1024",
+                      "runtime-trace-input.schema.json/properties/trace_provenance/properties/source_id/maxLength",
+                    keyword: "maxLength",
+                    params: { limit: 512 },
+                    message: "must NOT have more than 512 characters",
                   };
                   if (vErrors === null) {
-                    vErrors = [err68];
+                    vErrors = [err67];
                   } else {
-                    vErrors.push(err68);
+                    vErrors.push(err67);
                   }
                   errors++;
                 }
-                if (data28 < 0 || isNaN(data28)) {
+              } else {
+                const err68 = {
+                  instancePath: instancePath + "/runtime_trace/trace_provenance/source_id",
+                  schemaPath: "runtime-trace-input.schema.json/properties/trace_provenance/properties/source_id/type",
+                  keyword: "type",
+                  params: { type: "string" },
+                  message: "must be string",
+                };
+                if (vErrors === null) {
+                  vErrors = [err68];
+                } else {
+                  vErrors.push(err68);
+                }
+                errors++;
+              }
+            }
+            if (data30.generation_path !== undefined) {
+              let data35 = data30.generation_path;
+              if (typeof data35 === "string") {
+                if (func1(data35) > 512) {
                   const err69 = {
-                    instancePath: instancePath + "/runtime_trace/policy/fabric_backpressure_prefill_batch_limit",
+                    instancePath: instancePath + "/runtime_trace/trace_provenance/generation_path",
                     schemaPath:
-                      "runtime-trace-input.schema.json/properties/policy/properties/fabric_backpressure_prefill_batch_limit/minimum",
-                    keyword: "minimum",
-                    params: { comparison: ">=", limit: 0 },
-                    message: "must be >= 0",
+                      "runtime-trace-input.schema.json/properties/trace_provenance/properties/generation_path/maxLength",
+                    keyword: "maxLength",
+                    params: { limit: 512 },
+                    message: "must NOT have more than 512 characters",
                   };
                   if (vErrors === null) {
                     vErrors = [err69];
@@ -4272,18 +4585,14 @@ function validate21(
                   }
                   errors++;
                 }
-              }
-            }
-            if (data13.long_context_threshold_tokens !== undefined) {
-              let data29 = data13.long_context_threshold_tokens;
-              if (!(typeof data29 == "number" && !(data29 % 1) && !isNaN(data29))) {
+              } else {
                 const err70 = {
-                  instancePath: instancePath + "/runtime_trace/policy/long_context_threshold_tokens",
+                  instancePath: instancePath + "/runtime_trace/trace_provenance/generation_path",
                   schemaPath:
-                    "runtime-trace-input.schema.json/properties/policy/properties/long_context_threshold_tokens/type",
+                    "runtime-trace-input.schema.json/properties/trace_provenance/properties/generation_path/type",
                   keyword: "type",
-                  params: { type: "integer" },
-                  message: "must be integer",
+                  params: { type: "string" },
+                  message: "must be string",
                 };
                 if (vErrors === null) {
                   vErrors = [err70];
@@ -4292,15 +4601,18 @@ function validate21(
                 }
                 errors++;
               }
-              if (typeof data29 == "number") {
-                if (data29 > 9007199254740991 || isNaN(data29)) {
+            }
+            if (data30.capture_or_generation_time !== undefined) {
+              let data36 = data30.capture_or_generation_time;
+              if (typeof data36 === "string") {
+                if (func1(data36) > 160) {
                   const err71 = {
-                    instancePath: instancePath + "/runtime_trace/policy/long_context_threshold_tokens",
+                    instancePath: instancePath + "/runtime_trace/trace_provenance/capture_or_generation_time",
                     schemaPath:
-                      "runtime-trace-input.schema.json/properties/policy/properties/long_context_threshold_tokens/maximum",
-                    keyword: "maximum",
-                    params: { comparison: "<=", limit: 9007199254740991 },
-                    message: "must be <= 9007199254740991",
+                      "runtime-trace-input.schema.json/properties/trace_provenance/properties/capture_or_generation_time/maxLength",
+                    keyword: "maxLength",
+                    params: { limit: 160 },
+                    message: "must NOT have more than 160 characters",
                   };
                   if (vErrors === null) {
                     vErrors = [err71];
@@ -4309,35 +4621,34 @@ function validate21(
                   }
                   errors++;
                 }
-                if (data29 < 0 || isNaN(data29)) {
-                  const err72 = {
-                    instancePath: instancePath + "/runtime_trace/policy/long_context_threshold_tokens",
-                    schemaPath:
-                      "runtime-trace-input.schema.json/properties/policy/properties/long_context_threshold_tokens/minimum",
-                    keyword: "minimum",
-                    params: { comparison: ">=", limit: 0 },
-                    message: "must be >= 0",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err72];
-                  } else {
-                    vErrors.push(err72);
-                  }
-                  errors++;
+              } else {
+                const err72 = {
+                  instancePath: instancePath + "/runtime_trace/trace_provenance/capture_or_generation_time",
+                  schemaPath:
+                    "runtime-trace-input.schema.json/properties/trace_provenance/properties/capture_or_generation_time/type",
+                  keyword: "type",
+                  params: { type: "string" },
+                  message: "must be string",
+                };
+                if (vErrors === null) {
+                  vErrors = [err72];
+                } else {
+                  vErrors.push(err72);
                 }
+                errors++;
               }
             }
-            if (data13.decode_penalty_per_threshold !== undefined) {
-              let data30 = data13.decode_penalty_per_threshold;
-              if (typeof data30 == "number") {
-                if (data30 < 0 || isNaN(data30)) {
+            if (data30.upstream_tooling !== undefined) {
+              let data37 = data30.upstream_tooling;
+              if (typeof data37 === "string") {
+                if (func1(data37) > 160) {
                   const err73 = {
-                    instancePath: instancePath + "/runtime_trace/policy/decode_penalty_per_threshold",
+                    instancePath: instancePath + "/runtime_trace/trace_provenance/upstream_tooling",
                     schemaPath:
-                      "runtime-trace-input.schema.json/properties/policy/properties/decode_penalty_per_threshold/minimum",
-                    keyword: "minimum",
-                    params: { comparison: ">=", limit: 0 },
-                    message: "must be >= 0",
+                      "runtime-trace-input.schema.json/properties/trace_provenance/properties/upstream_tooling/maxLength",
+                    keyword: "maxLength",
+                    params: { limit: 160 },
+                    message: "must NOT have more than 160 characters",
                   };
                   if (vErrors === null) {
                     vErrors = [err73];
@@ -4348,12 +4659,12 @@ function validate21(
                 }
               } else {
                 const err74 = {
-                  instancePath: instancePath + "/runtime_trace/policy/decode_penalty_per_threshold",
+                  instancePath: instancePath + "/runtime_trace/trace_provenance/upstream_tooling",
                   schemaPath:
-                    "runtime-trace-input.schema.json/properties/policy/properties/decode_penalty_per_threshold/type",
+                    "runtime-trace-input.schema.json/properties/trace_provenance/properties/upstream_tooling/type",
                   keyword: "type",
-                  params: { type: "number" },
-                  message: "must be number",
+                  params: { type: "string" },
+                  message: "must be string",
                 };
                 if (vErrors === null) {
                   vErrors = [err74];
@@ -4363,82 +4674,87 @@ function validate21(
                 errors++;
               }
             }
-          } else {
-            const err75 = {
-              instancePath: instancePath + "/runtime_trace/policy",
-              schemaPath: "runtime-trace-input.schema.json/properties/policy/type",
-              keyword: "type",
-              params: { type: "object" },
-              message: "must be object",
-            };
-            if (vErrors === null) {
-              vErrors = [err75];
-            } else {
-              vErrors.push(err75);
-            }
-            errors++;
-          }
-        }
-        if (data0.requests !== undefined) {
-          let data31 = data0.requests;
-          if (Array.isArray(data31)) {
-            if (data31.length > 1024) {
-              const err76 = {
-                instancePath: instancePath + "/runtime_trace/requests",
-                schemaPath: "runtime-trace-input.schema.json/properties/requests/maxItems",
-                keyword: "maxItems",
-                params: { limit: 1024 },
-                message: "must NOT have more than 1024 items",
-              };
-              if (vErrors === null) {
-                vErrors = [err76];
-              } else {
-                vErrors.push(err76);
-              }
-              errors++;
-            }
-            if (data31.length < 1) {
-              const err77 = {
-                instancePath: instancePath + "/runtime_trace/requests",
-                schemaPath: "runtime-trace-input.schema.json/properties/requests/minItems",
-                keyword: "minItems",
-                params: { limit: 1 },
-                message: "must NOT have fewer than 1 items",
-              };
-              if (vErrors === null) {
-                vErrors = [err77];
-              } else {
-                vErrors.push(err77);
-              }
-              errors++;
-            }
-            const len1 = data31.length;
-            for (let i1 = 0; i1 < len1; i1++) {
-              let data32 = data31[i1];
-              if (data32 && typeof data32 == "object" && !Array.isArray(data32)) {
-                if (data32.request_id === undefined) {
-                  const err78 = {
-                    instancePath: instancePath + "/runtime_trace/requests/" + i1,
-                    schemaPath: "runtime-trace-input.schema.json/properties/requests/items/required",
-                    keyword: "required",
-                    params: { missingProperty: "request_id" },
-                    message: "must have required property '" + "request_id" + "'",
+            if (data30.trace_kind !== undefined) {
+              let data38 = data30.trace_kind;
+              if (typeof data38 === "string") {
+                if (func1(data38) > 160) {
+                  const err75 = {
+                    instancePath: instancePath + "/runtime_trace/trace_provenance/trace_kind",
+                    schemaPath:
+                      "runtime-trace-input.schema.json/properties/trace_provenance/properties/trace_kind/maxLength",
+                    keyword: "maxLength",
+                    params: { limit: 160 },
+                    message: "must NOT have more than 160 characters",
                   };
                   if (vErrors === null) {
-                    vErrors = [err78];
+                    vErrors = [err75];
                   } else {
-                    vErrors.push(err78);
+                    vErrors.push(err75);
                   }
                   errors++;
                 }
-                for (const key4 in data32) {
-                  if (!func4.call(schema34.properties.requests.items.properties, key4)) {
+              } else {
+                const err76 = {
+                  instancePath: instancePath + "/runtime_trace/trace_provenance/trace_kind",
+                  schemaPath: "runtime-trace-input.schema.json/properties/trace_provenance/properties/trace_kind/type",
+                  keyword: "type",
+                  params: { type: "string" },
+                  message: "must be string",
+                };
+                if (vErrors === null) {
+                  vErrors = [err76];
+                } else {
+                  vErrors.push(err76);
+                }
+                errors++;
+              }
+            }
+            if (data30.notes !== undefined) {
+              let data39 = data30.notes;
+              if (Array.isArray(data39)) {
+                if (data39.length > 64) {
+                  const err77 = {
+                    instancePath: instancePath + "/runtime_trace/trace_provenance/notes",
+                    schemaPath: "runtime-trace-input.schema.json/properties/trace_provenance/properties/notes/maxItems",
+                    keyword: "maxItems",
+                    params: { limit: 64 },
+                    message: "must NOT have more than 64 items",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err77];
+                  } else {
+                    vErrors.push(err77);
+                  }
+                  errors++;
+                }
+                const len7 = data39.length;
+                for (let i8 = 0; i8 < len7; i8++) {
+                  let data40 = data39[i8];
+                  if (typeof data40 === "string") {
+                    if (func1(data40) > 512) {
+                      const err78 = {
+                        instancePath: instancePath + "/runtime_trace/trace_provenance/notes/" + i8,
+                        schemaPath:
+                          "runtime-trace-input.schema.json/properties/trace_provenance/properties/notes/items/maxLength",
+                        keyword: "maxLength",
+                        params: { limit: 512 },
+                        message: "must NOT have more than 512 characters",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err78];
+                      } else {
+                        vErrors.push(err78);
+                      }
+                      errors++;
+                    }
+                  } else {
                     const err79 = {
-                      instancePath: instancePath + "/runtime_trace/requests/" + i1,
-                      schemaPath: "runtime-trace-input.schema.json/properties/requests/items/additionalProperties",
-                      keyword: "additionalProperties",
-                      params: { additionalProperty: key4 },
-                      message: "must NOT have additional properties",
+                      instancePath: instancePath + "/runtime_trace/trace_provenance/notes/" + i8,
+                      schemaPath:
+                        "runtime-trace-input.schema.json/properties/trace_provenance/properties/notes/items/type",
+                      keyword: "type",
+                      params: { type: "string" },
+                      message: "must be string",
                     };
                     if (vErrors === null) {
                       vErrors = [err79];
@@ -4448,670 +4764,666 @@ function validate21(
                     errors++;
                   }
                 }
-                if (data32.request_id !== undefined) {
-                  let data33 = data32.request_id;
-                  if (typeof data33 === "string") {
-                    if (func1(data33) > 256) {
-                      const err80 = {
-                        instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/request_id",
-                        schemaPath:
-                          "runtime-trace-input.schema.json/properties/requests/items/properties/request_id/maxLength",
-                        keyword: "maxLength",
-                        params: { limit: 256 },
-                        message: "must NOT have more than 256 characters",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err80];
-                      } else {
-                        vErrors.push(err80);
-                      }
-                      errors++;
-                    }
-                    if (func1(data33) < 1) {
-                      const err81 = {
-                        instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/request_id",
-                        schemaPath:
-                          "runtime-trace-input.schema.json/properties/requests/items/properties/request_id/minLength",
-                        keyword: "minLength",
-                        params: { limit: 1 },
-                        message: "must NOT have fewer than 1 characters",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err81];
-                      } else {
-                        vErrors.push(err81);
-                      }
-                      errors++;
-                    }
+              } else {
+                const err80 = {
+                  instancePath: instancePath + "/runtime_trace/trace_provenance/notes",
+                  schemaPath: "runtime-trace-input.schema.json/properties/trace_provenance/properties/notes/type",
+                  keyword: "type",
+                  params: { type: "array" },
+                  message: "must be array",
+                };
+                if (vErrors === null) {
+                  vErrors = [err80];
+                } else {
+                  vErrors.push(err80);
+                }
+                errors++;
+              }
+            }
+          } else {
+            const err81 = {
+              instancePath: instancePath + "/runtime_trace/trace_provenance",
+              schemaPath: "runtime-trace-input.schema.json/properties/trace_provenance/type",
+              keyword: "type",
+              params: { type: "object" },
+              message: "must be object",
+            };
+            if (vErrors === null) {
+              vErrors = [err81];
+            } else {
+              vErrors.push(err81);
+            }
+            errors++;
+          }
+        }
+        if (data0.policy !== undefined) {
+          let data41 = data0.policy;
+          if (data41 && typeof data41 == "object" && !Array.isArray(data41)) {
+            for (const key3 in data41) {
+              if (!func5.call(schema34.properties.policy.properties, key3)) {
+                const err82 = {
+                  instancePath: instancePath + "/runtime_trace/policy",
+                  schemaPath: "runtime-trace-input.schema.json/properties/policy/additionalProperties",
+                  keyword: "additionalProperties",
+                  params: { additionalProperty: key3 },
+                  message: "must NOT have additional properties",
+                };
+                if (vErrors === null) {
+                  vErrors = [err82];
+                } else {
+                  vErrors.push(err82);
+                }
+                errors++;
+              }
+            }
+            if (data41.kv_capacity_tokens !== undefined) {
+              let data42 = data41.kv_capacity_tokens;
+              if (!(typeof data42 == "number" && !(data42 % 1) && !isNaN(data42))) {
+                const err83 = {
+                  instancePath: instancePath + "/runtime_trace/policy/kv_capacity_tokens",
+                  schemaPath: "runtime-trace-input.schema.json/properties/policy/properties/kv_capacity_tokens/type",
+                  keyword: "type",
+                  params: { type: "integer" },
+                  message: "must be integer",
+                };
+                if (vErrors === null) {
+                  vErrors = [err83];
+                } else {
+                  vErrors.push(err83);
+                }
+                errors++;
+              }
+              if (typeof data42 == "number") {
+                if (data42 > 9007199254740991 || isNaN(data42)) {
+                  const err84 = {
+                    instancePath: instancePath + "/runtime_trace/policy/kv_capacity_tokens",
+                    schemaPath:
+                      "runtime-trace-input.schema.json/properties/policy/properties/kv_capacity_tokens/maximum",
+                    keyword: "maximum",
+                    params: { comparison: "<=", limit: 9007199254740991 },
+                    message: "must be <= 9007199254740991",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err84];
                   } else {
-                    const err82 = {
-                      instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/request_id",
-                      schemaPath:
-                        "runtime-trace-input.schema.json/properties/requests/items/properties/request_id/type",
-                      keyword: "type",
-                      params: { type: "string" },
-                      message: "must be string",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err82];
-                    } else {
-                      vErrors.push(err82);
-                    }
-                    errors++;
+                    vErrors.push(err84);
                   }
+                  errors++;
                 }
-                if (data32.model_id !== undefined) {
-                  let data34 = data32.model_id;
-                  if (typeof data34 === "string") {
-                    if (func1(data34) > 256) {
-                      const err83 = {
-                        instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/model_id",
-                        schemaPath:
-                          "runtime-trace-input.schema.json/properties/requests/items/properties/model_id/maxLength",
-                        keyword: "maxLength",
-                        params: { limit: 256 },
-                        message: "must NOT have more than 256 characters",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err83];
-                      } else {
-                        vErrors.push(err83);
-                      }
-                      errors++;
-                    }
+                if (data42 < 1 || isNaN(data42)) {
+                  const err85 = {
+                    instancePath: instancePath + "/runtime_trace/policy/kv_capacity_tokens",
+                    schemaPath:
+                      "runtime-trace-input.schema.json/properties/policy/properties/kv_capacity_tokens/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 1 },
+                    message: "must be >= 1",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err85];
                   } else {
-                    const err84 = {
-                      instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/model_id",
-                      schemaPath: "runtime-trace-input.schema.json/properties/requests/items/properties/model_id/type",
-                      keyword: "type",
-                      params: { type: "string" },
-                      message: "must be string",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err84];
-                    } else {
-                      vErrors.push(err84);
-                    }
-                    errors++;
+                    vErrors.push(err85);
                   }
+                  errors++;
                 }
-                if (data32.arrival_time_ps !== undefined) {
-                  let data35 = data32.arrival_time_ps;
-                  if (!(typeof data35 == "number" && !(data35 % 1) && !isNaN(data35))) {
-                    const err85 = {
-                      instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/arrival_time_ps",
-                      schemaPath:
-                        "runtime-trace-input.schema.json/properties/requests/items/properties/arrival_time_ps/type",
-                      keyword: "type",
-                      params: { type: "integer" },
-                      message: "must be integer",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err85];
-                    } else {
-                      vErrors.push(err85);
-                    }
-                    errors++;
-                  }
-                  if (typeof data35 == "number") {
-                    if (data35 > 9007199254740991 || isNaN(data35)) {
-                      const err86 = {
-                        instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/arrival_time_ps",
-                        schemaPath:
-                          "runtime-trace-input.schema.json/properties/requests/items/properties/arrival_time_ps/maximum",
-                        keyword: "maximum",
-                        params: { comparison: "<=", limit: 9007199254740991 },
-                        message: "must be <= 9007199254740991",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err86];
-                      } else {
-                        vErrors.push(err86);
-                      }
-                      errors++;
-                    }
-                    if (data35 < 0 || isNaN(data35)) {
-                      const err87 = {
-                        instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/arrival_time_ps",
-                        schemaPath:
-                          "runtime-trace-input.schema.json/properties/requests/items/properties/arrival_time_ps/minimum",
-                        keyword: "minimum",
-                        params: { comparison: ">=", limit: 0 },
-                        message: "must be >= 0",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err87];
-                      } else {
-                        vErrors.push(err87);
-                      }
-                      errors++;
-                    }
-                  }
+              }
+            }
+            if (data41.initial_kv_tokens !== undefined) {
+              let data43 = data41.initial_kv_tokens;
+              if (!(typeof data43 == "number" && !(data43 % 1) && !isNaN(data43))) {
+                const err86 = {
+                  instancePath: instancePath + "/runtime_trace/policy/initial_kv_tokens",
+                  schemaPath: "runtime-trace-input.schema.json/properties/policy/properties/initial_kv_tokens/type",
+                  keyword: "type",
+                  params: { type: "integer" },
+                  message: "must be integer",
+                };
+                if (vErrors === null) {
+                  vErrors = [err86];
+                } else {
+                  vErrors.push(err86);
                 }
-                if (data32.phase !== undefined) {
-                  let data36 = data32.phase;
-                  if (!(data36 === "prefill" || data36 === "decode")) {
-                    const err88 = {
-                      instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/phase",
-                      schemaPath: "runtime-trace-input.schema.json/properties/requests/items/properties/phase/enum",
-                      keyword: "enum",
-                      params: { allowedValues: schema34.properties.requests.items.properties.phase.enum },
-                      message: "must be equal to one of the allowed values",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err88];
-                    } else {
-                      vErrors.push(err88);
-                    }
-                    errors++;
-                  }
-                }
-                if (data32.prompt_tokens !== undefined) {
-                  let data37 = data32.prompt_tokens;
-                  if (!(typeof data37 == "number" && !(data37 % 1) && !isNaN(data37))) {
-                    const err89 = {
-                      instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/prompt_tokens",
-                      schemaPath:
-                        "runtime-trace-input.schema.json/properties/requests/items/properties/prompt_tokens/type",
-                      keyword: "type",
-                      params: { type: "integer" },
-                      message: "must be integer",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err89];
-                    } else {
-                      vErrors.push(err89);
-                    }
-                    errors++;
-                  }
-                  if (typeof data37 == "number") {
-                    if (data37 > 9007199254740991 || isNaN(data37)) {
-                      const err90 = {
-                        instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/prompt_tokens",
-                        schemaPath:
-                          "runtime-trace-input.schema.json/properties/requests/items/properties/prompt_tokens/maximum",
-                        keyword: "maximum",
-                        params: { comparison: "<=", limit: 9007199254740991 },
-                        message: "must be <= 9007199254740991",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err90];
-                      } else {
-                        vErrors.push(err90);
-                      }
-                      errors++;
-                    }
-                    if (data37 < 0 || isNaN(data37)) {
-                      const err91 = {
-                        instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/prompt_tokens",
-                        schemaPath:
-                          "runtime-trace-input.schema.json/properties/requests/items/properties/prompt_tokens/minimum",
-                        keyword: "minimum",
-                        params: { comparison: ">=", limit: 0 },
-                        message: "must be >= 0",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err91];
-                      } else {
-                        vErrors.push(err91);
-                      }
-                      errors++;
-                    }
-                  }
-                }
-                if (data32.decode_tokens !== undefined) {
-                  let data38 = data32.decode_tokens;
-                  if (!(typeof data38 == "number" && !(data38 % 1) && !isNaN(data38))) {
-                    const err92 = {
-                      instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/decode_tokens",
-                      schemaPath:
-                        "runtime-trace-input.schema.json/properties/requests/items/properties/decode_tokens/type",
-                      keyword: "type",
-                      params: { type: "integer" },
-                      message: "must be integer",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err92];
-                    } else {
-                      vErrors.push(err92);
-                    }
-                    errors++;
-                  }
-                  if (typeof data38 == "number") {
-                    if (data38 > 9007199254740991 || isNaN(data38)) {
-                      const err93 = {
-                        instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/decode_tokens",
-                        schemaPath:
-                          "runtime-trace-input.schema.json/properties/requests/items/properties/decode_tokens/maximum",
-                        keyword: "maximum",
-                        params: { comparison: "<=", limit: 9007199254740991 },
-                        message: "must be <= 9007199254740991",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err93];
-                      } else {
-                        vErrors.push(err93);
-                      }
-                      errors++;
-                    }
-                    if (data38 < 0 || isNaN(data38)) {
-                      const err94 = {
-                        instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/decode_tokens",
-                        schemaPath:
-                          "runtime-trace-input.schema.json/properties/requests/items/properties/decode_tokens/minimum",
-                        keyword: "minimum",
-                        params: { comparison: ">=", limit: 0 },
-                        message: "must be >= 0",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err94];
-                      } else {
-                        vErrors.push(err94);
-                      }
-                      errors++;
-                    }
-                  }
-                }
-                if (data32.kv_tokens !== undefined) {
-                  let data39 = data32.kv_tokens;
-                  if (!(typeof data39 == "number" && !(data39 % 1) && !isNaN(data39))) {
-                    const err95 = {
-                      instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/kv_tokens",
-                      schemaPath: "runtime-trace-input.schema.json/properties/requests/items/properties/kv_tokens/type",
-                      keyword: "type",
-                      params: { type: "integer" },
-                      message: "must be integer",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err95];
-                    } else {
-                      vErrors.push(err95);
-                    }
-                    errors++;
-                  }
-                  if (typeof data39 == "number") {
-                    if (data39 > 9007199254740991 || isNaN(data39)) {
-                      const err96 = {
-                        instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/kv_tokens",
-                        schemaPath:
-                          "runtime-trace-input.schema.json/properties/requests/items/properties/kv_tokens/maximum",
-                        keyword: "maximum",
-                        params: { comparison: "<=", limit: 9007199254740991 },
-                        message: "must be <= 9007199254740991",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err96];
-                      } else {
-                        vErrors.push(err96);
-                      }
-                      errors++;
-                    }
-                    if (data39 < 0 || isNaN(data39)) {
-                      const err97 = {
-                        instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/kv_tokens",
-                        schemaPath:
-                          "runtime-trace-input.schema.json/properties/requests/items/properties/kv_tokens/minimum",
-                        keyword: "minimum",
-                        params: { comparison: ">=", limit: 0 },
-                        message: "must be >= 0",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err97];
-                      } else {
-                        vErrors.push(err97);
-                      }
-                      errors++;
-                    }
-                  }
-                }
-                if (data32.priority_class !== undefined) {
-                  let data40 = data32.priority_class;
-                  if (!(typeof data40 == "number" && !(data40 % 1) && !isNaN(data40))) {
-                    const err98 = {
-                      instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/priority_class",
-                      schemaPath:
-                        "runtime-trace-input.schema.json/properties/requests/items/properties/priority_class/type",
-                      keyword: "type",
-                      params: { type: "integer" },
-                      message: "must be integer",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err98];
-                    } else {
-                      vErrors.push(err98);
-                    }
-                    errors++;
-                  }
-                }
-                if (data32.tp_degree !== undefined) {
-                  let data41 = data32.tp_degree;
-                  if (!(typeof data41 == "number" && !(data41 % 1) && !isNaN(data41))) {
-                    const err99 = {
-                      instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/tp_degree",
-                      schemaPath: "runtime-trace-input.schema.json/properties/requests/items/properties/tp_degree/type",
-                      keyword: "type",
-                      params: { type: "integer" },
-                      message: "must be integer",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err99];
-                    } else {
-                      vErrors.push(err99);
-                    }
-                    errors++;
-                  }
-                  if (typeof data41 == "number") {
-                    if (data41 > 1024 || isNaN(data41)) {
-                      const err100 = {
-                        instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/tp_degree",
-                        schemaPath:
-                          "runtime-trace-input.schema.json/properties/requests/items/properties/tp_degree/maximum",
-                        keyword: "maximum",
-                        params: { comparison: "<=", limit: 1024 },
-                        message: "must be <= 1024",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err100];
-                      } else {
-                        vErrors.push(err100);
-                      }
-                      errors++;
-                    }
-                    if (data41 < 1 || isNaN(data41)) {
-                      const err101 = {
-                        instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/tp_degree",
-                        schemaPath:
-                          "runtime-trace-input.schema.json/properties/requests/items/properties/tp_degree/minimum",
-                        keyword: "minimum",
-                        params: { comparison: ">=", limit: 1 },
-                        message: "must be >= 1",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err101];
-                      } else {
-                        vErrors.push(err101);
-                      }
-                      errors++;
-                    }
-                  }
-                }
-                if (data32.participants !== undefined) {
-                  let data42 = data32.participants;
-                  if (Array.isArray(data42)) {
-                    if (data42.length > 1024) {
-                      const err102 = {
-                        instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/participants",
-                        schemaPath:
-                          "runtime-trace-input.schema.json/properties/requests/items/properties/participants/maxItems",
-                        keyword: "maxItems",
-                        params: { limit: 1024 },
-                        message: "must NOT have more than 1024 items",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err102];
-                      } else {
-                        vErrors.push(err102);
-                      }
-                      errors++;
-                    }
-                    const len2 = data42.length;
-                    for (let i2 = 0; i2 < len2; i2++) {
-                      let data43 = data42[i2];
-                      if (typeof data43 === "string") {
-                        if (func1(data43) < 1) {
-                          const err103 = {
-                            instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/participants/" + i2,
-                            schemaPath:
-                              "runtime-trace-input.schema.json/properties/requests/items/properties/participants/items/minLength",
-                            keyword: "minLength",
-                            params: { limit: 1 },
-                            message: "must NOT have fewer than 1 characters",
-                          };
-                          if (vErrors === null) {
-                            vErrors = [err103];
-                          } else {
-                            vErrors.push(err103);
-                          }
-                          errors++;
-                        }
-                      } else {
-                        const err104 = {
-                          instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/participants/" + i2,
-                          schemaPath:
-                            "runtime-trace-input.schema.json/properties/requests/items/properties/participants/items/type",
-                          keyword: "type",
-                          params: { type: "string" },
-                          message: "must be string",
-                        };
-                        if (vErrors === null) {
-                          vErrors = [err104];
-                        } else {
-                          vErrors.push(err104);
-                        }
-                        errors++;
-                      }
-                    }
+                errors++;
+              }
+              if (typeof data43 == "number") {
+                if (data43 > 9007199254740991 || isNaN(data43)) {
+                  const err87 = {
+                    instancePath: instancePath + "/runtime_trace/policy/initial_kv_tokens",
+                    schemaPath:
+                      "runtime-trace-input.schema.json/properties/policy/properties/initial_kv_tokens/maximum",
+                    keyword: "maximum",
+                    params: { comparison: "<=", limit: 9007199254740991 },
+                    message: "must be <= 9007199254740991",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err87];
                   } else {
-                    const err105 = {
-                      instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/participants",
-                      schemaPath:
-                        "runtime-trace-input.schema.json/properties/requests/items/properties/participants/type",
-                      keyword: "type",
-                      params: { type: "array" },
-                      message: "must be array",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err105];
-                    } else {
-                      vErrors.push(err105);
-                    }
-                    errors++;
+                    vErrors.push(err87);
                   }
+                  errors++;
                 }
-                if (data32.collective_type !== undefined) {
-                  let data44 = data32.collective_type;
-                  if (typeof data44 === "string") {
-                    if (func1(data44) > 160) {
-                      const err106 = {
-                        instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/collective_type",
-                        schemaPath:
-                          "runtime-trace-input.schema.json/properties/requests/items/properties/collective_type/maxLength",
-                        keyword: "maxLength",
-                        params: { limit: 160 },
-                        message: "must NOT have more than 160 characters",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err106];
-                      } else {
-                        vErrors.push(err106);
-                      }
-                      errors++;
-                    }
+                if (data43 < 0 || isNaN(data43)) {
+                  const err88 = {
+                    instancePath: instancePath + "/runtime_trace/policy/initial_kv_tokens",
+                    schemaPath:
+                      "runtime-trace-input.schema.json/properties/policy/properties/initial_kv_tokens/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 0 },
+                    message: "must be >= 0",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err88];
                   } else {
-                    const err107 = {
-                      instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/collective_type",
-                      schemaPath:
-                        "runtime-trace-input.schema.json/properties/requests/items/properties/collective_type/type",
-                      keyword: "type",
-                      params: { type: "string" },
-                      message: "must be string",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err107];
-                    } else {
-                      vErrors.push(err107);
-                    }
-                    errors++;
+                    vErrors.push(err88);
                   }
+                  errors++;
                 }
-                if (data32.message_size_bytes !== undefined) {
-                  let data45 = data32.message_size_bytes;
-                  if (!(typeof data45 == "number" && !(data45 % 1) && !isNaN(data45))) {
-                    const err108 = {
-                      instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/message_size_bytes",
-                      schemaPath:
-                        "runtime-trace-input.schema.json/properties/requests/items/properties/message_size_bytes/type",
-                      keyword: "type",
-                      params: { type: "integer" },
-                      message: "must be integer",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err108];
-                    } else {
-                      vErrors.push(err108);
-                    }
-                    errors++;
-                  }
-                  if (typeof data45 == "number") {
-                    if (data45 > 9007199254740991 || isNaN(data45)) {
-                      const err109 = {
-                        instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/message_size_bytes",
-                        schemaPath:
-                          "runtime-trace-input.schema.json/properties/requests/items/properties/message_size_bytes/maximum",
-                        keyword: "maximum",
-                        params: { comparison: "<=", limit: 9007199254740991 },
-                        message: "must be <= 9007199254740991",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err109];
-                      } else {
-                        vErrors.push(err109);
-                      }
-                      errors++;
-                    }
-                    if (data45 < 0 || isNaN(data45)) {
-                      const err110 = {
-                        instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/message_size_bytes",
-                        schemaPath:
-                          "runtime-trace-input.schema.json/properties/requests/items/properties/message_size_bytes/minimum",
-                        keyword: "minimum",
-                        params: { comparison: ">=", limit: 0 },
-                        message: "must be >= 0",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err110];
-                      } else {
-                        vErrors.push(err110);
-                      }
-                      errors++;
-                    }
-                  }
+              }
+            }
+            if (data41.max_active_requests !== undefined) {
+              let data44 = data41.max_active_requests;
+              if (!(typeof data44 == "number" && !(data44 % 1) && !isNaN(data44))) {
+                const err89 = {
+                  instancePath: instancePath + "/runtime_trace/policy/max_active_requests",
+                  schemaPath: "runtime-trace-input.schema.json/properties/policy/properties/max_active_requests/type",
+                  keyword: "type",
+                  params: { type: "integer" },
+                  message: "must be integer",
+                };
+                if (vErrors === null) {
+                  vErrors = [err89];
+                } else {
+                  vErrors.push(err89);
                 }
-                if (data32.placement_group_id !== undefined) {
-                  let data46 = data32.placement_group_id;
-                  if (typeof data46 === "string") {
-                    if (func1(data46) > 256) {
-                      const err111 = {
-                        instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/placement_group_id",
-                        schemaPath:
-                          "runtime-trace-input.schema.json/properties/requests/items/properties/placement_group_id/maxLength",
-                        keyword: "maxLength",
-                        params: { limit: 256 },
-                        message: "must NOT have more than 256 characters",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err111];
-                      } else {
-                        vErrors.push(err111);
-                      }
-                      errors++;
-                    }
+                errors++;
+              }
+              if (typeof data44 == "number") {
+                if (data44 > 1024 || isNaN(data44)) {
+                  const err90 = {
+                    instancePath: instancePath + "/runtime_trace/policy/max_active_requests",
+                    schemaPath:
+                      "runtime-trace-input.schema.json/properties/policy/properties/max_active_requests/maximum",
+                    keyword: "maximum",
+                    params: { comparison: "<=", limit: 1024 },
+                    message: "must be <= 1024",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err90];
                   } else {
-                    const err112 = {
-                      instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/placement_group_id",
-                      schemaPath:
-                        "runtime-trace-input.schema.json/properties/requests/items/properties/placement_group_id/type",
-                      keyword: "type",
-                      params: { type: "string" },
-                      message: "must be string",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err112];
-                    } else {
-                      vErrors.push(err112);
-                    }
-                    errors++;
+                    vErrors.push(err90);
                   }
+                  errors++;
                 }
-                if (data32.disaggregation_group_id !== undefined) {
-                  let data47 = data32.disaggregation_group_id;
-                  if (typeof data47 === "string") {
-                    if (func1(data47) > 256) {
-                      const err113 = {
-                        instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/disaggregation_group_id",
-                        schemaPath:
-                          "runtime-trace-input.schema.json/properties/requests/items/properties/disaggregation_group_id/maxLength",
-                        keyword: "maxLength",
-                        params: { limit: 256 },
-                        message: "must NOT have more than 256 characters",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err113];
-                      } else {
-                        vErrors.push(err113);
-                      }
-                      errors++;
-                    }
+                if (data44 < 1 || isNaN(data44)) {
+                  const err91 = {
+                    instancePath: instancePath + "/runtime_trace/policy/max_active_requests",
+                    schemaPath:
+                      "runtime-trace-input.schema.json/properties/policy/properties/max_active_requests/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 1 },
+                    message: "must be >= 1",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err91];
                   } else {
-                    const err114 = {
-                      instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/disaggregation_group_id",
-                      schemaPath:
-                        "runtime-trace-input.schema.json/properties/requests/items/properties/disaggregation_group_id/type",
-                      keyword: "type",
-                      params: { type: "string" },
-                      message: "must be string",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err114];
-                    } else {
-                      vErrors.push(err114);
-                    }
-                    errors++;
+                    vErrors.push(err91);
                   }
+                  errors++;
                 }
-                if (data32.kv_handoff_id !== undefined) {
-                  let data48 = data32.kv_handoff_id;
-                  if (typeof data48 === "string") {
-                    if (func1(data48) > 256) {
-                      const err115 = {
-                        instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/kv_handoff_id",
-                        schemaPath:
-                          "runtime-trace-input.schema.json/properties/requests/items/properties/kv_handoff_id/maxLength",
-                        keyword: "maxLength",
-                        params: { limit: 256 },
-                        message: "must NOT have more than 256 characters",
-                      };
-                      if (vErrors === null) {
-                        vErrors = [err115];
-                      } else {
-                        vErrors.push(err115);
-                      }
-                      errors++;
-                    }
+              }
+            }
+            if (data41.max_batch_size !== undefined) {
+              let data45 = data41.max_batch_size;
+              if (!(typeof data45 == "number" && !(data45 % 1) && !isNaN(data45))) {
+                const err92 = {
+                  instancePath: instancePath + "/runtime_trace/policy/max_batch_size",
+                  schemaPath: "runtime-trace-input.schema.json/properties/policy/properties/max_batch_size/type",
+                  keyword: "type",
+                  params: { type: "integer" },
+                  message: "must be integer",
+                };
+                if (vErrors === null) {
+                  vErrors = [err92];
+                } else {
+                  vErrors.push(err92);
+                }
+                errors++;
+              }
+              if (typeof data45 == "number") {
+                if (data45 > 1024 || isNaN(data45)) {
+                  const err93 = {
+                    instancePath: instancePath + "/runtime_trace/policy/max_batch_size",
+                    schemaPath: "runtime-trace-input.schema.json/properties/policy/properties/max_batch_size/maximum",
+                    keyword: "maximum",
+                    params: { comparison: "<=", limit: 1024 },
+                    message: "must be <= 1024",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err93];
                   } else {
-                    const err116 = {
-                      instancePath: instancePath + "/runtime_trace/requests/" + i1 + "/kv_handoff_id",
-                      schemaPath:
-                        "runtime-trace-input.schema.json/properties/requests/items/properties/kv_handoff_id/type",
-                      keyword: "type",
-                      params: { type: "string" },
-                      message: "must be string",
-                    };
-                    if (vErrors === null) {
-                      vErrors = [err116];
-                    } else {
-                      vErrors.push(err116);
-                    }
-                    errors++;
+                    vErrors.push(err93);
                   }
+                  errors++;
+                }
+                if (data45 < 1 || isNaN(data45)) {
+                  const err94 = {
+                    instancePath: instancePath + "/runtime_trace/policy/max_batch_size",
+                    schemaPath: "runtime-trace-input.schema.json/properties/policy/properties/max_batch_size/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 1 },
+                    message: "must be >= 1",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err94];
+                  } else {
+                    vErrors.push(err94);
+                  }
+                  errors++;
+                }
+              }
+            }
+            if (data41.batch_scheduler !== undefined) {
+              let data46 = data41.batch_scheduler;
+              if (!(
+                data46 === "fifo" ||
+                data46 === "decode_priority" ||
+                data46 === "fabric_backpressure_aware" ||
+                data46 === "starvation_aware"
+              )) {
+                const err95 = {
+                  instancePath: instancePath + "/runtime_trace/policy/batch_scheduler",
+                  schemaPath: "runtime-trace-input.schema.json/properties/policy/properties/batch_scheduler/enum",
+                  keyword: "enum",
+                  params: { allowedValues: schema34.properties.policy.properties.batch_scheduler.enum },
+                  message: "must be equal to one of the allowed values",
+                };
+                if (vErrors === null) {
+                  vErrors = [err95];
+                } else {
+                  vErrors.push(err95);
+                }
+                errors++;
+              }
+            }
+            if (data41.prefill_starvation_threshold_ps !== undefined) {
+              let data47 = data41.prefill_starvation_threshold_ps;
+              if (!(typeof data47 == "number" && !(data47 % 1) && !isNaN(data47))) {
+                const err96 = {
+                  instancePath: instancePath + "/runtime_trace/policy/prefill_starvation_threshold_ps",
+                  schemaPath:
+                    "runtime-trace-input.schema.json/properties/policy/properties/prefill_starvation_threshold_ps/type",
+                  keyword: "type",
+                  params: { type: "integer" },
+                  message: "must be integer",
+                };
+                if (vErrors === null) {
+                  vErrors = [err96];
+                } else {
+                  vErrors.push(err96);
+                }
+                errors++;
+              }
+              if (typeof data47 == "number") {
+                if (data47 > 9007199254740991 || isNaN(data47)) {
+                  const err97 = {
+                    instancePath: instancePath + "/runtime_trace/policy/prefill_starvation_threshold_ps",
+                    schemaPath:
+                      "runtime-trace-input.schema.json/properties/policy/properties/prefill_starvation_threshold_ps/maximum",
+                    keyword: "maximum",
+                    params: { comparison: "<=", limit: 9007199254740991 },
+                    message: "must be <= 9007199254740991",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err97];
+                  } else {
+                    vErrors.push(err97);
+                  }
+                  errors++;
+                }
+                if (data47 < 0 || isNaN(data47)) {
+                  const err98 = {
+                    instancePath: instancePath + "/runtime_trace/policy/prefill_starvation_threshold_ps",
+                    schemaPath:
+                      "runtime-trace-input.schema.json/properties/policy/properties/prefill_starvation_threshold_ps/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 0 },
+                    message: "must be >= 0",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err98];
+                  } else {
+                    vErrors.push(err98);
+                  }
+                  errors++;
+                }
+              }
+            }
+            if (data41.pd_handoff_delay_ps !== undefined) {
+              let data48 = data41.pd_handoff_delay_ps;
+              if (!(typeof data48 == "number" && !(data48 % 1) && !isNaN(data48))) {
+                const err99 = {
+                  instancePath: instancePath + "/runtime_trace/policy/pd_handoff_delay_ps",
+                  schemaPath: "runtime-trace-input.schema.json/properties/policy/properties/pd_handoff_delay_ps/type",
+                  keyword: "type",
+                  params: { type: "integer" },
+                  message: "must be integer",
+                };
+                if (vErrors === null) {
+                  vErrors = [err99];
+                } else {
+                  vErrors.push(err99);
+                }
+                errors++;
+              }
+              if (typeof data48 == "number") {
+                if (data48 > 9007199254740991 || isNaN(data48)) {
+                  const err100 = {
+                    instancePath: instancePath + "/runtime_trace/policy/pd_handoff_delay_ps",
+                    schemaPath:
+                      "runtime-trace-input.schema.json/properties/policy/properties/pd_handoff_delay_ps/maximum",
+                    keyword: "maximum",
+                    params: { comparison: "<=", limit: 9007199254740991 },
+                    message: "must be <= 9007199254740991",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err100];
+                  } else {
+                    vErrors.push(err100);
+                  }
+                  errors++;
+                }
+                if (data48 < 0 || isNaN(data48)) {
+                  const err101 = {
+                    instancePath: instancePath + "/runtime_trace/policy/pd_handoff_delay_ps",
+                    schemaPath:
+                      "runtime-trace-input.schema.json/properties/policy/properties/pd_handoff_delay_ps/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 0 },
+                    message: "must be >= 0",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err101];
+                  } else {
+                    vErrors.push(err101);
+                  }
+                  errors++;
+                }
+              }
+            }
+            if (data41.pd_handoff_queue_service_ps !== undefined) {
+              let data49 = data41.pd_handoff_queue_service_ps;
+              if (!(typeof data49 == "number" && !(data49 % 1) && !isNaN(data49))) {
+                const err102 = {
+                  instancePath: instancePath + "/runtime_trace/policy/pd_handoff_queue_service_ps",
+                  schemaPath:
+                    "runtime-trace-input.schema.json/properties/policy/properties/pd_handoff_queue_service_ps/type",
+                  keyword: "type",
+                  params: { type: "integer" },
+                  message: "must be integer",
+                };
+                if (vErrors === null) {
+                  vErrors = [err102];
+                } else {
+                  vErrors.push(err102);
+                }
+                errors++;
+              }
+              if (typeof data49 == "number") {
+                if (data49 > 9007199254740991 || isNaN(data49)) {
+                  const err103 = {
+                    instancePath: instancePath + "/runtime_trace/policy/pd_handoff_queue_service_ps",
+                    schemaPath:
+                      "runtime-trace-input.schema.json/properties/policy/properties/pd_handoff_queue_service_ps/maximum",
+                    keyword: "maximum",
+                    params: { comparison: "<=", limit: 9007199254740991 },
+                    message: "must be <= 9007199254740991",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err103];
+                  } else {
+                    vErrors.push(err103);
+                  }
+                  errors++;
+                }
+                if (data49 < 0 || isNaN(data49)) {
+                  const err104 = {
+                    instancePath: instancePath + "/runtime_trace/policy/pd_handoff_queue_service_ps",
+                    schemaPath:
+                      "runtime-trace-input.schema.json/properties/policy/properties/pd_handoff_queue_service_ps/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 0 },
+                    message: "must be >= 0",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err104];
+                  } else {
+                    vErrors.push(err104);
+                  }
+                  errors++;
+                }
+              }
+            }
+            if (data41.kv_page_size_tokens !== undefined) {
+              let data50 = data41.kv_page_size_tokens;
+              if (!(typeof data50 == "number" && !(data50 % 1) && !isNaN(data50))) {
+                const err105 = {
+                  instancePath: instancePath + "/runtime_trace/policy/kv_page_size_tokens",
+                  schemaPath: "runtime-trace-input.schema.json/properties/policy/properties/kv_page_size_tokens/type",
+                  keyword: "type",
+                  params: { type: "integer" },
+                  message: "must be integer",
+                };
+                if (vErrors === null) {
+                  vErrors = [err105];
+                } else {
+                  vErrors.push(err105);
+                }
+                errors++;
+              }
+              if (typeof data50 == "number") {
+                if (data50 > 9007199254740991 || isNaN(data50)) {
+                  const err106 = {
+                    instancePath: instancePath + "/runtime_trace/policy/kv_page_size_tokens",
+                    schemaPath:
+                      "runtime-trace-input.schema.json/properties/policy/properties/kv_page_size_tokens/maximum",
+                    keyword: "maximum",
+                    params: { comparison: "<=", limit: 9007199254740991 },
+                    message: "must be <= 9007199254740991",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err106];
+                  } else {
+                    vErrors.push(err106);
+                  }
+                  errors++;
+                }
+                if (data50 < 0 || isNaN(data50)) {
+                  const err107 = {
+                    instancePath: instancePath + "/runtime_trace/policy/kv_page_size_tokens",
+                    schemaPath:
+                      "runtime-trace-input.schema.json/properties/policy/properties/kv_page_size_tokens/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 0 },
+                    message: "must be >= 0",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err107];
+                  } else {
+                    vErrors.push(err107);
+                  }
+                  errors++;
+                }
+              }
+            }
+            if (data41.kv_fragmentation_overhead !== undefined) {
+              let data51 = data41.kv_fragmentation_overhead;
+              if (typeof data51 == "number") {
+                if (data51 < 0 || isNaN(data51)) {
+                  const err108 = {
+                    instancePath: instancePath + "/runtime_trace/policy/kv_fragmentation_overhead",
+                    schemaPath:
+                      "runtime-trace-input.schema.json/properties/policy/properties/kv_fragmentation_overhead/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 0 },
+                    message: "must be >= 0",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err108];
+                  } else {
+                    vErrors.push(err108);
+                  }
+                  errors++;
+                }
+              } else {
+                const err109 = {
+                  instancePath: instancePath + "/runtime_trace/policy/kv_fragmentation_overhead",
+                  schemaPath:
+                    "runtime-trace-input.schema.json/properties/policy/properties/kv_fragmentation_overhead/type",
+                  keyword: "type",
+                  params: { type: "number" },
+                  message: "must be number",
+                };
+                if (vErrors === null) {
+                  vErrors = [err109];
+                } else {
+                  vErrors.push(err109);
+                }
+                errors++;
+              }
+            }
+            if (data41.kv_admission_watermark !== undefined) {
+              let data52 = data41.kv_admission_watermark;
+              if (typeof data52 == "number") {
+                if (data52 > 1 || isNaN(data52)) {
+                  const err110 = {
+                    instancePath: instancePath + "/runtime_trace/policy/kv_admission_watermark",
+                    schemaPath:
+                      "runtime-trace-input.schema.json/properties/policy/properties/kv_admission_watermark/maximum",
+                    keyword: "maximum",
+                    params: { comparison: "<=", limit: 1 },
+                    message: "must be <= 1",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err110];
+                  } else {
+                    vErrors.push(err110);
+                  }
+                  errors++;
+                }
+                if (data52 <= 0 || isNaN(data52)) {
+                  const err111 = {
+                    instancePath: instancePath + "/runtime_trace/policy/kv_admission_watermark",
+                    schemaPath:
+                      "runtime-trace-input.schema.json/properties/policy/properties/kv_admission_watermark/exclusiveMinimum",
+                    keyword: "exclusiveMinimum",
+                    params: { comparison: ">", limit: 0 },
+                    message: "must be > 0",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err111];
+                  } else {
+                    vErrors.push(err111);
+                  }
+                  errors++;
+                }
+              } else {
+                const err112 = {
+                  instancePath: instancePath + "/runtime_trace/policy/kv_admission_watermark",
+                  schemaPath:
+                    "runtime-trace-input.schema.json/properties/policy/properties/kv_admission_watermark/type",
+                  keyword: "type",
+                  params: { type: "number" },
+                  message: "must be number",
+                };
+                if (vErrors === null) {
+                  vErrors = [err112];
+                } else {
+                  vErrors.push(err112);
+                }
+                errors++;
+              }
+            }
+            if (data41.fabric_backpressure_active !== undefined) {
+              if (typeof data41.fabric_backpressure_active !== "boolean") {
+                const err113 = {
+                  instancePath: instancePath + "/runtime_trace/policy/fabric_backpressure_active",
+                  schemaPath:
+                    "runtime-trace-input.schema.json/properties/policy/properties/fabric_backpressure_active/type",
+                  keyword: "type",
+                  params: { type: "boolean" },
+                  message: "must be boolean",
+                };
+                if (vErrors === null) {
+                  vErrors = [err113];
+                } else {
+                  vErrors.push(err113);
+                }
+                errors++;
+              }
+            }
+            if (data41.fabric_backpressure_delay_us !== undefined) {
+              let data54 = data41.fabric_backpressure_delay_us;
+              if (typeof data54 == "number") {
+                if (data54 < 0 || isNaN(data54)) {
+                  const err114 = {
+                    instancePath: instancePath + "/runtime_trace/policy/fabric_backpressure_delay_us",
+                    schemaPath:
+                      "runtime-trace-input.schema.json/properties/policy/properties/fabric_backpressure_delay_us/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 0 },
+                    message: "must be >= 0",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err114];
+                  } else {
+                    vErrors.push(err114);
+                  }
+                  errors++;
+                }
+              } else {
+                const err115 = {
+                  instancePath: instancePath + "/runtime_trace/policy/fabric_backpressure_delay_us",
+                  schemaPath:
+                    "runtime-trace-input.schema.json/properties/policy/properties/fabric_backpressure_delay_us/type",
+                  keyword: "type",
+                  params: { type: "number" },
+                  message: "must be number",
+                };
+                if (vErrors === null) {
+                  vErrors = [err115];
+                } else {
+                  vErrors.push(err115);
+                }
+                errors++;
+              }
+            }
+            if (data41.fabric_backpressure_throttle_threshold_us !== undefined) {
+              let data55 = data41.fabric_backpressure_throttle_threshold_us;
+              if (typeof data55 == "number") {
+                if (data55 < 0 || isNaN(data55)) {
+                  const err116 = {
+                    instancePath: instancePath + "/runtime_trace/policy/fabric_backpressure_throttle_threshold_us",
+                    schemaPath:
+                      "runtime-trace-input.schema.json/properties/policy/properties/fabric_backpressure_throttle_threshold_us/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 0 },
+                    message: "must be >= 0",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err116];
+                  } else {
+                    vErrors.push(err116);
+                  }
+                  errors++;
                 }
               } else {
                 const err117 = {
-                  instancePath: instancePath + "/runtime_trace/requests/" + i1,
-                  schemaPath: "runtime-trace-input.schema.json/properties/requests/items/type",
+                  instancePath: instancePath + "/runtime_trace/policy/fabric_backpressure_throttle_threshold_us",
+                  schemaPath:
+                    "runtime-trace-input.schema.json/properties/policy/properties/fabric_backpressure_throttle_threshold_us/type",
                   keyword: "type",
-                  params: { type: "object" },
-                  message: "must be object",
+                  params: { type: "number" },
+                  message: "must be number",
                 };
                 if (vErrors === null) {
                   vErrors = [err117];
@@ -5121,8 +5433,1111 @@ function validate21(
                 errors++;
               }
             }
+            if (data41.fabric_backpressure_prefill_batch_limit !== undefined) {
+              let data56 = data41.fabric_backpressure_prefill_batch_limit;
+              if (!(typeof data56 == "number" && !(data56 % 1) && !isNaN(data56))) {
+                const err118 = {
+                  instancePath: instancePath + "/runtime_trace/policy/fabric_backpressure_prefill_batch_limit",
+                  schemaPath:
+                    "runtime-trace-input.schema.json/properties/policy/properties/fabric_backpressure_prefill_batch_limit/type",
+                  keyword: "type",
+                  params: { type: "integer" },
+                  message: "must be integer",
+                };
+                if (vErrors === null) {
+                  vErrors = [err118];
+                } else {
+                  vErrors.push(err118);
+                }
+                errors++;
+              }
+              if (typeof data56 == "number") {
+                if (data56 > 1024 || isNaN(data56)) {
+                  const err119 = {
+                    instancePath: instancePath + "/runtime_trace/policy/fabric_backpressure_prefill_batch_limit",
+                    schemaPath:
+                      "runtime-trace-input.schema.json/properties/policy/properties/fabric_backpressure_prefill_batch_limit/maximum",
+                    keyword: "maximum",
+                    params: { comparison: "<=", limit: 1024 },
+                    message: "must be <= 1024",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err119];
+                  } else {
+                    vErrors.push(err119);
+                  }
+                  errors++;
+                }
+                if (data56 < 0 || isNaN(data56)) {
+                  const err120 = {
+                    instancePath: instancePath + "/runtime_trace/policy/fabric_backpressure_prefill_batch_limit",
+                    schemaPath:
+                      "runtime-trace-input.schema.json/properties/policy/properties/fabric_backpressure_prefill_batch_limit/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 0 },
+                    message: "must be >= 0",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err120];
+                  } else {
+                    vErrors.push(err120);
+                  }
+                  errors++;
+                }
+              }
+            }
+            if (data41.long_context_threshold_tokens !== undefined) {
+              let data57 = data41.long_context_threshold_tokens;
+              if (!(typeof data57 == "number" && !(data57 % 1) && !isNaN(data57))) {
+                const err121 = {
+                  instancePath: instancePath + "/runtime_trace/policy/long_context_threshold_tokens",
+                  schemaPath:
+                    "runtime-trace-input.schema.json/properties/policy/properties/long_context_threshold_tokens/type",
+                  keyword: "type",
+                  params: { type: "integer" },
+                  message: "must be integer",
+                };
+                if (vErrors === null) {
+                  vErrors = [err121];
+                } else {
+                  vErrors.push(err121);
+                }
+                errors++;
+              }
+              if (typeof data57 == "number") {
+                if (data57 > 9007199254740991 || isNaN(data57)) {
+                  const err122 = {
+                    instancePath: instancePath + "/runtime_trace/policy/long_context_threshold_tokens",
+                    schemaPath:
+                      "runtime-trace-input.schema.json/properties/policy/properties/long_context_threshold_tokens/maximum",
+                    keyword: "maximum",
+                    params: { comparison: "<=", limit: 9007199254740991 },
+                    message: "must be <= 9007199254740991",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err122];
+                  } else {
+                    vErrors.push(err122);
+                  }
+                  errors++;
+                }
+                if (data57 < 0 || isNaN(data57)) {
+                  const err123 = {
+                    instancePath: instancePath + "/runtime_trace/policy/long_context_threshold_tokens",
+                    schemaPath:
+                      "runtime-trace-input.schema.json/properties/policy/properties/long_context_threshold_tokens/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 0 },
+                    message: "must be >= 0",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err123];
+                  } else {
+                    vErrors.push(err123);
+                  }
+                  errors++;
+                }
+              }
+            }
+            if (data41.decode_penalty_per_threshold !== undefined) {
+              let data58 = data41.decode_penalty_per_threshold;
+              if (typeof data58 == "number") {
+                if (data58 < 0 || isNaN(data58)) {
+                  const err124 = {
+                    instancePath: instancePath + "/runtime_trace/policy/decode_penalty_per_threshold",
+                    schemaPath:
+                      "runtime-trace-input.schema.json/properties/policy/properties/decode_penalty_per_threshold/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 0 },
+                    message: "must be >= 0",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err124];
+                  } else {
+                    vErrors.push(err124);
+                  }
+                  errors++;
+                }
+              } else {
+                const err125 = {
+                  instancePath: instancePath + "/runtime_trace/policy/decode_penalty_per_threshold",
+                  schemaPath:
+                    "runtime-trace-input.schema.json/properties/policy/properties/decode_penalty_per_threshold/type",
+                  keyword: "type",
+                  params: { type: "number" },
+                  message: "must be number",
+                };
+                if (vErrors === null) {
+                  vErrors = [err125];
+                } else {
+                  vErrors.push(err125);
+                }
+                errors++;
+              }
+            }
           } else {
-            const err118 = {
+            const err126 = {
+              instancePath: instancePath + "/runtime_trace/policy",
+              schemaPath: "runtime-trace-input.schema.json/properties/policy/type",
+              keyword: "type",
+              params: { type: "object" },
+              message: "must be object",
+            };
+            if (vErrors === null) {
+              vErrors = [err126];
+            } else {
+              vErrors.push(err126);
+            }
+            errors++;
+          }
+        }
+        if (data0.requests !== undefined) {
+          let data59 = data0.requests;
+          if (Array.isArray(data59)) {
+            if (data59.length > 1024) {
+              const err127 = {
+                instancePath: instancePath + "/runtime_trace/requests",
+                schemaPath: "runtime-trace-input.schema.json/properties/requests/maxItems",
+                keyword: "maxItems",
+                params: { limit: 1024 },
+                message: "must NOT have more than 1024 items",
+              };
+              if (vErrors === null) {
+                vErrors = [err127];
+              } else {
+                vErrors.push(err127);
+              }
+              errors++;
+            }
+            if (data59.length < 1) {
+              const err128 = {
+                instancePath: instancePath + "/runtime_trace/requests",
+                schemaPath: "runtime-trace-input.schema.json/properties/requests/minItems",
+                keyword: "minItems",
+                params: { limit: 1 },
+                message: "must NOT have fewer than 1 items",
+              };
+              if (vErrors === null) {
+                vErrors = [err128];
+              } else {
+                vErrors.push(err128);
+              }
+              errors++;
+            }
+            const len8 = data59.length;
+            for (let i9 = 0; i9 < len8; i9++) {
+              let data60 = data59[i9];
+              const _errs132 = errors;
+              let valid46 = true;
+              const _errs133 = errors;
+              if (data60 && typeof data60 == "object" && !Array.isArray(data60)) {
+                let missing8;
+                if (data60.phase === undefined && (missing8 = "phase")) {
+                  const err129 = {};
+                  if (vErrors === null) {
+                    vErrors = [err129];
+                  } else {
+                    vErrors.push(err129);
+                  }
+                  errors++;
+                } else {
+                  if (data60.phase !== undefined) {
+                    if ("request" !== data60.phase) {
+                      const err130 = {};
+                      if (vErrors === null) {
+                        vErrors = [err130];
+                      } else {
+                        vErrors.push(err130);
+                      }
+                      errors++;
+                    }
+                  }
+                }
+              }
+              var _valid8 = _errs133 === errors;
+              errors = _errs132;
+              if (vErrors !== null) {
+                if (_errs132) {
+                  vErrors.length = _errs132;
+                } else {
+                  vErrors = null;
+                }
+              }
+              if (_valid8) {
+                const _errs135 = errors;
+                if (data60 && typeof data60 == "object" && !Array.isArray(data60)) {
+                  if (data60.prompt_tokens === undefined) {
+                    const err131 = {
+                      instancePath: instancePath + "/runtime_trace/requests/" + i9,
+                      schemaPath: "runtime-trace-input.schema.json/properties/requests/items/then/required",
+                      keyword: "required",
+                      params: { missingProperty: "prompt_tokens" },
+                      message: "must have required property '" + "prompt_tokens" + "'",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err131];
+                    } else {
+                      vErrors.push(err131);
+                    }
+                    errors++;
+                  }
+                  if (data60.decode_tokens === undefined) {
+                    const err132 = {
+                      instancePath: instancePath + "/runtime_trace/requests/" + i9,
+                      schemaPath: "runtime-trace-input.schema.json/properties/requests/items/then/required",
+                      keyword: "required",
+                      params: { missingProperty: "decode_tokens" },
+                      message: "must have required property '" + "decode_tokens" + "'",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err132];
+                    } else {
+                      vErrors.push(err132);
+                    }
+                    errors++;
+                  }
+                  if (data60.kv_tokens === undefined) {
+                    const err133 = {
+                      instancePath: instancePath + "/runtime_trace/requests/" + i9,
+                      schemaPath: "runtime-trace-input.schema.json/properties/requests/items/then/required",
+                      keyword: "required",
+                      params: { missingProperty: "kv_tokens" },
+                      message: "must have required property '" + "kv_tokens" + "'",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err133];
+                    } else {
+                      vErrors.push(err133);
+                    }
+                    errors++;
+                  }
+                  if (data60.tp_degree === undefined) {
+                    const err134 = {
+                      instancePath: instancePath + "/runtime_trace/requests/" + i9,
+                      schemaPath: "runtime-trace-input.schema.json/properties/requests/items/then/required",
+                      keyword: "required",
+                      params: { missingProperty: "tp_degree" },
+                      message: "must have required property '" + "tp_degree" + "'",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err134];
+                    } else {
+                      vErrors.push(err134);
+                    }
+                    errors++;
+                  }
+                  if (data60.participants === undefined) {
+                    const err135 = {
+                      instancePath: instancePath + "/runtime_trace/requests/" + i9,
+                      schemaPath: "runtime-trace-input.schema.json/properties/requests/items/then/required",
+                      keyword: "required",
+                      params: { missingProperty: "participants" },
+                      message: "must have required property '" + "participants" + "'",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err135];
+                    } else {
+                      vErrors.push(err135);
+                    }
+                    errors++;
+                  }
+                  if (data60.prompt_tokens !== undefined) {
+                    let data62 = data60.prompt_tokens;
+                    if (typeof data62 == "number") {
+                      if (data62 < 1 || isNaN(data62)) {
+                        const err136 = {
+                          instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/prompt_tokens",
+                          schemaPath:
+                            "runtime-trace-input.schema.json/properties/requests/items/then/properties/prompt_tokens/minimum",
+                          keyword: "minimum",
+                          params: { comparison: ">=", limit: 1 },
+                          message: "must be >= 1",
+                        };
+                        if (vErrors === null) {
+                          vErrors = [err136];
+                        } else {
+                          vErrors.push(err136);
+                        }
+                        errors++;
+                      }
+                    }
+                  }
+                  if (data60.kv_tokens !== undefined) {
+                    let data63 = data60.kv_tokens;
+                    if (typeof data63 == "number") {
+                      if (data63 < 1 || isNaN(data63)) {
+                        const err137 = {
+                          instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/kv_tokens",
+                          schemaPath:
+                            "runtime-trace-input.schema.json/properties/requests/items/then/properties/kv_tokens/minimum",
+                          keyword: "minimum",
+                          params: { comparison: ">=", limit: 1 },
+                          message: "must be >= 1",
+                        };
+                        if (vErrors === null) {
+                          vErrors = [err137];
+                        } else {
+                          vErrors.push(err137);
+                        }
+                        errors++;
+                      }
+                    }
+                  }
+                  if (data60.participants !== undefined) {
+                    let data64 = data60.participants;
+                    if (Array.isArray(data64)) {
+                      if (data64.length < 1) {
+                        const err138 = {
+                          instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/participants",
+                          schemaPath:
+                            "runtime-trace-input.schema.json/properties/requests/items/then/properties/participants/minItems",
+                          keyword: "minItems",
+                          params: { limit: 1 },
+                          message: "must NOT have fewer than 1 items",
+                        };
+                        if (vErrors === null) {
+                          vErrors = [err138];
+                        } else {
+                          vErrors.push(err138);
+                        }
+                        errors++;
+                      }
+                    }
+                  }
+                }
+                var _valid8 = _errs135 === errors;
+                valid46 = _valid8;
+                if (valid46) {
+                  var props5 = {};
+                  props5.prompt_tokens = true;
+                  props5.kv_tokens = true;
+                  props5.participants = true;
+                  props5.phase = true;
+                }
+              }
+              if (!valid46) {
+                const err139 = {
+                  instancePath: instancePath + "/runtime_trace/requests/" + i9,
+                  schemaPath: "runtime-trace-input.schema.json/properties/requests/items/if",
+                  keyword: "if",
+                  params: { failingKeyword: "then" },
+                  message: 'must match "then" schema',
+                };
+                if (vErrors === null) {
+                  vErrors = [err139];
+                } else {
+                  vErrors.push(err139);
+                }
+                errors++;
+              }
+              if (data60 && typeof data60 == "object" && !Array.isArray(data60)) {
+                if (data60.request_id === undefined) {
+                  const err140 = {
+                    instancePath: instancePath + "/runtime_trace/requests/" + i9,
+                    schemaPath: "runtime-trace-input.schema.json/properties/requests/items/required",
+                    keyword: "required",
+                    params: { missingProperty: "request_id" },
+                    message: "must have required property '" + "request_id" + "'",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err140];
+                  } else {
+                    vErrors.push(err140);
+                  }
+                  errors++;
+                }
+                for (const key4 in data60) {
+                  if (!func5.call(schema34.properties.requests.items.properties, key4)) {
+                    const err141 = {
+                      instancePath: instancePath + "/runtime_trace/requests/" + i9,
+                      schemaPath: "runtime-trace-input.schema.json/properties/requests/items/additionalProperties",
+                      keyword: "additionalProperties",
+                      params: { additionalProperty: key4 },
+                      message: "must NOT have additional properties",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err141];
+                    } else {
+                      vErrors.push(err141);
+                    }
+                    errors++;
+                  }
+                }
+                if (data60.request_id !== undefined) {
+                  let data65 = data60.request_id;
+                  if (typeof data65 === "string") {
+                    if (func1(data65) > 256) {
+                      const err142 = {
+                        instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/request_id",
+                        schemaPath:
+                          "runtime-trace-input.schema.json/properties/requests/items/properties/request_id/maxLength",
+                        keyword: "maxLength",
+                        params: { limit: 256 },
+                        message: "must NOT have more than 256 characters",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err142];
+                      } else {
+                        vErrors.push(err142);
+                      }
+                      errors++;
+                    }
+                    if (func1(data65) < 1) {
+                      const err143 = {
+                        instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/request_id",
+                        schemaPath:
+                          "runtime-trace-input.schema.json/properties/requests/items/properties/request_id/minLength",
+                        keyword: "minLength",
+                        params: { limit: 1 },
+                        message: "must NOT have fewer than 1 characters",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err143];
+                      } else {
+                        vErrors.push(err143);
+                      }
+                      errors++;
+                    }
+                  } else {
+                    const err144 = {
+                      instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/request_id",
+                      schemaPath:
+                        "runtime-trace-input.schema.json/properties/requests/items/properties/request_id/type",
+                      keyword: "type",
+                      params: { type: "string" },
+                      message: "must be string",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err144];
+                    } else {
+                      vErrors.push(err144);
+                    }
+                    errors++;
+                  }
+                }
+                if (data60.model_id !== undefined) {
+                  let data66 = data60.model_id;
+                  if (typeof data66 === "string") {
+                    if (func1(data66) > 256) {
+                      const err145 = {
+                        instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/model_id",
+                        schemaPath:
+                          "runtime-trace-input.schema.json/properties/requests/items/properties/model_id/maxLength",
+                        keyword: "maxLength",
+                        params: { limit: 256 },
+                        message: "must NOT have more than 256 characters",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err145];
+                      } else {
+                        vErrors.push(err145);
+                      }
+                      errors++;
+                    }
+                  } else {
+                    const err146 = {
+                      instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/model_id",
+                      schemaPath: "runtime-trace-input.schema.json/properties/requests/items/properties/model_id/type",
+                      keyword: "type",
+                      params: { type: "string" },
+                      message: "must be string",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err146];
+                    } else {
+                      vErrors.push(err146);
+                    }
+                    errors++;
+                  }
+                }
+                if (data60.arrival_time_ps !== undefined) {
+                  let data67 = data60.arrival_time_ps;
+                  if (!(typeof data67 == "number" && !(data67 % 1) && !isNaN(data67))) {
+                    const err147 = {
+                      instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/arrival_time_ps",
+                      schemaPath:
+                        "runtime-trace-input.schema.json/properties/requests/items/properties/arrival_time_ps/type",
+                      keyword: "type",
+                      params: { type: "integer" },
+                      message: "must be integer",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err147];
+                    } else {
+                      vErrors.push(err147);
+                    }
+                    errors++;
+                  }
+                  if (typeof data67 == "number") {
+                    if (data67 > 9007199254740991 || isNaN(data67)) {
+                      const err148 = {
+                        instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/arrival_time_ps",
+                        schemaPath:
+                          "runtime-trace-input.schema.json/properties/requests/items/properties/arrival_time_ps/maximum",
+                        keyword: "maximum",
+                        params: { comparison: "<=", limit: 9007199254740991 },
+                        message: "must be <= 9007199254740991",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err148];
+                      } else {
+                        vErrors.push(err148);
+                      }
+                      errors++;
+                    }
+                    if (data67 < 0 || isNaN(data67)) {
+                      const err149 = {
+                        instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/arrival_time_ps",
+                        schemaPath:
+                          "runtime-trace-input.schema.json/properties/requests/items/properties/arrival_time_ps/minimum",
+                        keyword: "minimum",
+                        params: { comparison: ">=", limit: 0 },
+                        message: "must be >= 0",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err149];
+                      } else {
+                        vErrors.push(err149);
+                      }
+                      errors++;
+                    }
+                  }
+                }
+                if (data60.phase !== undefined) {
+                  let data68 = data60.phase;
+                  if (!(data68 === "prefill" || data68 === "decode" || data68 === "request")) {
+                    const err150 = {
+                      instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/phase",
+                      schemaPath: "runtime-trace-input.schema.json/properties/requests/items/properties/phase/enum",
+                      keyword: "enum",
+                      params: { allowedValues: schema34.properties.requests.items.properties.phase.enum },
+                      message: "must be equal to one of the allowed values",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err150];
+                    } else {
+                      vErrors.push(err150);
+                    }
+                    errors++;
+                  }
+                }
+                if (data60.prompt_tokens !== undefined) {
+                  let data69 = data60.prompt_tokens;
+                  if (!(typeof data69 == "number" && !(data69 % 1) && !isNaN(data69))) {
+                    const err151 = {
+                      instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/prompt_tokens",
+                      schemaPath:
+                        "runtime-trace-input.schema.json/properties/requests/items/properties/prompt_tokens/type",
+                      keyword: "type",
+                      params: { type: "integer" },
+                      message: "must be integer",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err151];
+                    } else {
+                      vErrors.push(err151);
+                    }
+                    errors++;
+                  }
+                  if (typeof data69 == "number") {
+                    if (data69 > 9007199254740991 || isNaN(data69)) {
+                      const err152 = {
+                        instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/prompt_tokens",
+                        schemaPath:
+                          "runtime-trace-input.schema.json/properties/requests/items/properties/prompt_tokens/maximum",
+                        keyword: "maximum",
+                        params: { comparison: "<=", limit: 9007199254740991 },
+                        message: "must be <= 9007199254740991",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err152];
+                      } else {
+                        vErrors.push(err152);
+                      }
+                      errors++;
+                    }
+                    if (data69 < 0 || isNaN(data69)) {
+                      const err153 = {
+                        instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/prompt_tokens",
+                        schemaPath:
+                          "runtime-trace-input.schema.json/properties/requests/items/properties/prompt_tokens/minimum",
+                        keyword: "minimum",
+                        params: { comparison: ">=", limit: 0 },
+                        message: "must be >= 0",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err153];
+                      } else {
+                        vErrors.push(err153);
+                      }
+                      errors++;
+                    }
+                  }
+                }
+                if (data60.decode_tokens !== undefined) {
+                  let data70 = data60.decode_tokens;
+                  if (!(typeof data70 == "number" && !(data70 % 1) && !isNaN(data70))) {
+                    const err154 = {
+                      instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/decode_tokens",
+                      schemaPath:
+                        "runtime-trace-input.schema.json/properties/requests/items/properties/decode_tokens/type",
+                      keyword: "type",
+                      params: { type: "integer" },
+                      message: "must be integer",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err154];
+                    } else {
+                      vErrors.push(err154);
+                    }
+                    errors++;
+                  }
+                  if (typeof data70 == "number") {
+                    if (data70 > 9007199254740991 || isNaN(data70)) {
+                      const err155 = {
+                        instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/decode_tokens",
+                        schemaPath:
+                          "runtime-trace-input.schema.json/properties/requests/items/properties/decode_tokens/maximum",
+                        keyword: "maximum",
+                        params: { comparison: "<=", limit: 9007199254740991 },
+                        message: "must be <= 9007199254740991",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err155];
+                      } else {
+                        vErrors.push(err155);
+                      }
+                      errors++;
+                    }
+                    if (data70 < 0 || isNaN(data70)) {
+                      const err156 = {
+                        instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/decode_tokens",
+                        schemaPath:
+                          "runtime-trace-input.schema.json/properties/requests/items/properties/decode_tokens/minimum",
+                        keyword: "minimum",
+                        params: { comparison: ">=", limit: 0 },
+                        message: "must be >= 0",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err156];
+                      } else {
+                        vErrors.push(err156);
+                      }
+                      errors++;
+                    }
+                  }
+                }
+                if (data60.kv_tokens !== undefined) {
+                  let data71 = data60.kv_tokens;
+                  if (!(typeof data71 == "number" && !(data71 % 1) && !isNaN(data71))) {
+                    const err157 = {
+                      instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/kv_tokens",
+                      schemaPath: "runtime-trace-input.schema.json/properties/requests/items/properties/kv_tokens/type",
+                      keyword: "type",
+                      params: { type: "integer" },
+                      message: "must be integer",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err157];
+                    } else {
+                      vErrors.push(err157);
+                    }
+                    errors++;
+                  }
+                  if (typeof data71 == "number") {
+                    if (data71 > 9007199254740991 || isNaN(data71)) {
+                      const err158 = {
+                        instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/kv_tokens",
+                        schemaPath:
+                          "runtime-trace-input.schema.json/properties/requests/items/properties/kv_tokens/maximum",
+                        keyword: "maximum",
+                        params: { comparison: "<=", limit: 9007199254740991 },
+                        message: "must be <= 9007199254740991",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err158];
+                      } else {
+                        vErrors.push(err158);
+                      }
+                      errors++;
+                    }
+                    if (data71 < 0 || isNaN(data71)) {
+                      const err159 = {
+                        instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/kv_tokens",
+                        schemaPath:
+                          "runtime-trace-input.schema.json/properties/requests/items/properties/kv_tokens/minimum",
+                        keyword: "minimum",
+                        params: { comparison: ">=", limit: 0 },
+                        message: "must be >= 0",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err159];
+                      } else {
+                        vErrors.push(err159);
+                      }
+                      errors++;
+                    }
+                  }
+                }
+                if (data60.priority_class !== undefined) {
+                  let data72 = data60.priority_class;
+                  if (!(typeof data72 == "number" && !(data72 % 1) && !isNaN(data72))) {
+                    const err160 = {
+                      instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/priority_class",
+                      schemaPath:
+                        "runtime-trace-input.schema.json/properties/requests/items/properties/priority_class/type",
+                      keyword: "type",
+                      params: { type: "integer" },
+                      message: "must be integer",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err160];
+                    } else {
+                      vErrors.push(err160);
+                    }
+                    errors++;
+                  }
+                }
+                if (data60.tp_degree !== undefined) {
+                  let data73 = data60.tp_degree;
+                  if (!(typeof data73 == "number" && !(data73 % 1) && !isNaN(data73))) {
+                    const err161 = {
+                      instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/tp_degree",
+                      schemaPath: "runtime-trace-input.schema.json/properties/requests/items/properties/tp_degree/type",
+                      keyword: "type",
+                      params: { type: "integer" },
+                      message: "must be integer",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err161];
+                    } else {
+                      vErrors.push(err161);
+                    }
+                    errors++;
+                  }
+                  if (typeof data73 == "number") {
+                    if (data73 > 1024 || isNaN(data73)) {
+                      const err162 = {
+                        instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/tp_degree",
+                        schemaPath:
+                          "runtime-trace-input.schema.json/properties/requests/items/properties/tp_degree/maximum",
+                        keyword: "maximum",
+                        params: { comparison: "<=", limit: 1024 },
+                        message: "must be <= 1024",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err162];
+                      } else {
+                        vErrors.push(err162);
+                      }
+                      errors++;
+                    }
+                    if (data73 < 1 || isNaN(data73)) {
+                      const err163 = {
+                        instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/tp_degree",
+                        schemaPath:
+                          "runtime-trace-input.schema.json/properties/requests/items/properties/tp_degree/minimum",
+                        keyword: "minimum",
+                        params: { comparison: ">=", limit: 1 },
+                        message: "must be >= 1",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err163];
+                      } else {
+                        vErrors.push(err163);
+                      }
+                      errors++;
+                    }
+                  }
+                }
+                if (data60.participants !== undefined) {
+                  let data74 = data60.participants;
+                  if (Array.isArray(data74)) {
+                    if (data74.length > 1024) {
+                      const err164 = {
+                        instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/participants",
+                        schemaPath:
+                          "runtime-trace-input.schema.json/properties/requests/items/properties/participants/maxItems",
+                        keyword: "maxItems",
+                        params: { limit: 1024 },
+                        message: "must NOT have more than 1024 items",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err164];
+                      } else {
+                        vErrors.push(err164);
+                      }
+                      errors++;
+                    }
+                    const len9 = data74.length;
+                    for (let i10 = 0; i10 < len9; i10++) {
+                      let data75 = data74[i10];
+                      if (typeof data75 === "string") {
+                        if (func1(data75) < 1) {
+                          const err165 = {
+                            instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/participants/" + i10,
+                            schemaPath:
+                              "runtime-trace-input.schema.json/properties/requests/items/properties/participants/items/minLength",
+                            keyword: "minLength",
+                            params: { limit: 1 },
+                            message: "must NOT have fewer than 1 characters",
+                          };
+                          if (vErrors === null) {
+                            vErrors = [err165];
+                          } else {
+                            vErrors.push(err165);
+                          }
+                          errors++;
+                        }
+                      } else {
+                        const err166 = {
+                          instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/participants/" + i10,
+                          schemaPath:
+                            "runtime-trace-input.schema.json/properties/requests/items/properties/participants/items/type",
+                          keyword: "type",
+                          params: { type: "string" },
+                          message: "must be string",
+                        };
+                        if (vErrors === null) {
+                          vErrors = [err166];
+                        } else {
+                          vErrors.push(err166);
+                        }
+                        errors++;
+                      }
+                    }
+                  } else {
+                    const err167 = {
+                      instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/participants",
+                      schemaPath:
+                        "runtime-trace-input.schema.json/properties/requests/items/properties/participants/type",
+                      keyword: "type",
+                      params: { type: "array" },
+                      message: "must be array",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err167];
+                    } else {
+                      vErrors.push(err167);
+                    }
+                    errors++;
+                  }
+                }
+                if (data60.collective_type !== undefined) {
+                  let data76 = data60.collective_type;
+                  if (typeof data76 === "string") {
+                    if (func1(data76) > 160) {
+                      const err168 = {
+                        instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/collective_type",
+                        schemaPath:
+                          "runtime-trace-input.schema.json/properties/requests/items/properties/collective_type/maxLength",
+                        keyword: "maxLength",
+                        params: { limit: 160 },
+                        message: "must NOT have more than 160 characters",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err168];
+                      } else {
+                        vErrors.push(err168);
+                      }
+                      errors++;
+                    }
+                  } else {
+                    const err169 = {
+                      instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/collective_type",
+                      schemaPath:
+                        "runtime-trace-input.schema.json/properties/requests/items/properties/collective_type/type",
+                      keyword: "type",
+                      params: { type: "string" },
+                      message: "must be string",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err169];
+                    } else {
+                      vErrors.push(err169);
+                    }
+                    errors++;
+                  }
+                }
+                if (data60.message_size_bytes !== undefined) {
+                  let data77 = data60.message_size_bytes;
+                  if (!(typeof data77 == "number" && !(data77 % 1) && !isNaN(data77))) {
+                    const err170 = {
+                      instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/message_size_bytes",
+                      schemaPath:
+                        "runtime-trace-input.schema.json/properties/requests/items/properties/message_size_bytes/type",
+                      keyword: "type",
+                      params: { type: "integer" },
+                      message: "must be integer",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err170];
+                    } else {
+                      vErrors.push(err170);
+                    }
+                    errors++;
+                  }
+                  if (typeof data77 == "number") {
+                    if (data77 > 9007199254740991 || isNaN(data77)) {
+                      const err171 = {
+                        instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/message_size_bytes",
+                        schemaPath:
+                          "runtime-trace-input.schema.json/properties/requests/items/properties/message_size_bytes/maximum",
+                        keyword: "maximum",
+                        params: { comparison: "<=", limit: 9007199254740991 },
+                        message: "must be <= 9007199254740991",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err171];
+                      } else {
+                        vErrors.push(err171);
+                      }
+                      errors++;
+                    }
+                    if (data77 < 0 || isNaN(data77)) {
+                      const err172 = {
+                        instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/message_size_bytes",
+                        schemaPath:
+                          "runtime-trace-input.schema.json/properties/requests/items/properties/message_size_bytes/minimum",
+                        keyword: "minimum",
+                        params: { comparison: ">=", limit: 0 },
+                        message: "must be >= 0",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err172];
+                      } else {
+                        vErrors.push(err172);
+                      }
+                      errors++;
+                    }
+                  }
+                }
+                if (data60.placement_group_id !== undefined) {
+                  let data78 = data60.placement_group_id;
+                  if (typeof data78 === "string") {
+                    if (func1(data78) > 256) {
+                      const err173 = {
+                        instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/placement_group_id",
+                        schemaPath:
+                          "runtime-trace-input.schema.json/properties/requests/items/properties/placement_group_id/maxLength",
+                        keyword: "maxLength",
+                        params: { limit: 256 },
+                        message: "must NOT have more than 256 characters",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err173];
+                      } else {
+                        vErrors.push(err173);
+                      }
+                      errors++;
+                    }
+                  } else {
+                    const err174 = {
+                      instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/placement_group_id",
+                      schemaPath:
+                        "runtime-trace-input.schema.json/properties/requests/items/properties/placement_group_id/type",
+                      keyword: "type",
+                      params: { type: "string" },
+                      message: "must be string",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err174];
+                    } else {
+                      vErrors.push(err174);
+                    }
+                    errors++;
+                  }
+                }
+                if (data60.disaggregation_group_id !== undefined) {
+                  let data79 = data60.disaggregation_group_id;
+                  if (typeof data79 === "string") {
+                    if (func1(data79) > 256) {
+                      const err175 = {
+                        instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/disaggregation_group_id",
+                        schemaPath:
+                          "runtime-trace-input.schema.json/properties/requests/items/properties/disaggregation_group_id/maxLength",
+                        keyword: "maxLength",
+                        params: { limit: 256 },
+                        message: "must NOT have more than 256 characters",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err175];
+                      } else {
+                        vErrors.push(err175);
+                      }
+                      errors++;
+                    }
+                  } else {
+                    const err176 = {
+                      instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/disaggregation_group_id",
+                      schemaPath:
+                        "runtime-trace-input.schema.json/properties/requests/items/properties/disaggregation_group_id/type",
+                      keyword: "type",
+                      params: { type: "string" },
+                      message: "must be string",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err176];
+                    } else {
+                      vErrors.push(err176);
+                    }
+                    errors++;
+                  }
+                }
+                if (data60.kv_handoff_id !== undefined) {
+                  let data80 = data60.kv_handoff_id;
+                  if (typeof data80 === "string") {
+                    if (func1(data80) > 256) {
+                      const err177 = {
+                        instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/kv_handoff_id",
+                        schemaPath:
+                          "runtime-trace-input.schema.json/properties/requests/items/properties/kv_handoff_id/maxLength",
+                        keyword: "maxLength",
+                        params: { limit: 256 },
+                        message: "must NOT have more than 256 characters",
+                      };
+                      if (vErrors === null) {
+                        vErrors = [err177];
+                      } else {
+                        vErrors.push(err177);
+                      }
+                      errors++;
+                    }
+                  } else {
+                    const err178 = {
+                      instancePath: instancePath + "/runtime_trace/requests/" + i9 + "/kv_handoff_id",
+                      schemaPath:
+                        "runtime-trace-input.schema.json/properties/requests/items/properties/kv_handoff_id/type",
+                      keyword: "type",
+                      params: { type: "string" },
+                      message: "must be string",
+                    };
+                    if (vErrors === null) {
+                      vErrors = [err178];
+                    } else {
+                      vErrors.push(err178);
+                    }
+                    errors++;
+                  }
+                }
+              } else {
+                const err179 = {
+                  instancePath: instancePath + "/runtime_trace/requests/" + i9,
+                  schemaPath: "runtime-trace-input.schema.json/properties/requests/items/type",
+                  keyword: "type",
+                  params: { type: "object" },
+                  message: "must be object",
+                };
+                if (vErrors === null) {
+                  vErrors = [err179];
+                } else {
+                  vErrors.push(err179);
+                }
+                errors++;
+              }
+            }
+          } else {
+            const err180 = {
               instancePath: instancePath + "/runtime_trace/requests",
               schemaPath: "runtime-trace-input.schema.json/properties/requests/type",
               keyword: "type",
@@ -5130,15 +6545,15 @@ function validate21(
               message: "must be array",
             };
             if (vErrors === null) {
-              vErrors = [err118];
+              vErrors = [err180];
             } else {
-              vErrors.push(err118);
+              vErrors.push(err180);
             }
             errors++;
           }
         }
       } else {
-        const err119 = {
+        const err181 = {
           instancePath: instancePath + "/runtime_trace",
           schemaPath: "runtime-trace-input.schema.json/type",
           keyword: "type",
@@ -5146,9 +6561,9 @@ function validate21(
           message: "must be object",
         };
         if (vErrors === null) {
-          vErrors = [err119];
+          vErrors = [err181];
         } else {
-          vErrors.push(err119);
+          vErrors.push(err181);
         }
         errors++;
       }
@@ -5168,7 +6583,7 @@ function validate21(
       }
     }
   } else {
-    const err120 = {
+    const err182 = {
       instancePath,
       schemaPath: "#/type",
       keyword: "type",
@@ -5176,9 +6591,9 @@ function validate21(
       message: "must be object",
     };
     if (vErrors === null) {
-      vErrors = [err120];
+      vErrors = [err182];
     } else {
-      vErrors.push(err120);
+      vErrors.push(err182);
     }
     errors++;
   }
@@ -5201,13 +6616,11 @@ function validate20(
     evaluated0.items = undefined;
   }
   const _errs2 = errors;
+  let valid1 = true;
   const _errs3 = errors;
   if (data && typeof data == "object" && !Array.isArray(data)) {
     let missing0;
-    if (
-      (data.overrides === undefined && (missing0 = "overrides")) ||
-      (data.custom_inputs === undefined && (missing0 = "custom_inputs"))
-    ) {
+    if (data.scenario_id === undefined && (missing0 = "scenario_id")) {
       const err0 = {};
       if (vErrors === null) {
         vErrors = [err0];
@@ -5215,53 +6628,108 @@ function validate20(
         vErrors.push(err0);
       }
       errors++;
-    }
-  }
-  var valid1 = _errs3 === errors;
-  if (valid1) {
-    const err1 = {
-      instancePath,
-      schemaPath: "#/allOf/0/not",
-      keyword: "not",
-      params: {},
-      message: "must NOT be valid",
-    };
-    if (vErrors === null) {
-      vErrors = [err1];
     } else {
-      vErrors.push(err1);
-    }
-    errors++;
-  } else {
-    errors = _errs2;
-    if (vErrors !== null) {
-      if (_errs2) {
-        vErrors.length = _errs2;
-      } else {
-        vErrors = null;
+      if (data.scenario_id !== undefined) {
+        if ("dense_des_package" !== data.scenario_id) {
+          const err1 = {};
+          if (vErrors === null) {
+            vErrors = [err1];
+          } else {
+            vErrors.push(err1);
+          }
+          errors++;
+        }
       }
     }
   }
-  const _errs5 = errors;
-  const _errs6 = errors;
+  var _valid0 = _errs3 === errors;
+  errors = _errs2;
+  if (vErrors !== null) {
+    if (_errs2) {
+      vErrors.length = _errs2;
+    } else {
+      vErrors = null;
+    }
+  }
+  if (_valid0) {
+    const _errs5 = errors;
+    if (data && typeof data == "object" && !Array.isArray(data)) {
+      if (data.trace_package_id === undefined) {
+        const err2 = {
+          instancePath,
+          schemaPath: "#/allOf/0/then/required",
+          keyword: "required",
+          params: { missingProperty: "trace_package_id" },
+          message: "must have required property '" + "trace_package_id" + "'",
+        };
+        if (vErrors === null) {
+          vErrors = [err2];
+        } else {
+          vErrors.push(err2);
+        }
+        errors++;
+      }
+      if (data.fidelity_policy !== undefined) {
+        if ("des" !== data.fidelity_policy) {
+          const err3 = {
+            instancePath: instancePath + "/fidelity_policy",
+            schemaPath: "#/allOf/0/then/properties/fidelity_policy/const",
+            keyword: "const",
+            params: { allowedValue: "des" },
+            message: "must be equal to constant",
+          };
+          if (vErrors === null) {
+            vErrors = [err3];
+          } else {
+            vErrors.push(err3);
+          }
+          errors++;
+        }
+      }
+    }
+    var _valid0 = _errs5 === errors;
+    valid1 = _valid0;
+    if (valid1) {
+      var props0 = {};
+      props0.fidelity_policy = true;
+      props0.scenario_id = true;
+    }
+  }
+  if (!valid1) {
+    const err4 = {
+      instancePath,
+      schemaPath: "#/allOf/0/if",
+      keyword: "if",
+      params: { failingKeyword: "then" },
+      message: 'must match "then" schema',
+    };
+    if (vErrors === null) {
+      vErrors = [err4];
+    } else {
+      vErrors.push(err4);
+    }
+    errors++;
+  }
+  const _errs8 = errors;
+  const _errs9 = errors;
   if (data && typeof data == "object" && !Array.isArray(data)) {
     let missing1;
     if (
-      (data.trace_package_id === undefined && (missing1 = "trace_package_id")) ||
-      (data.overrides === undefined && (missing1 = "overrides"))
+      (data.overrides === undefined && (missing1 = "overrides")) ||
+      (data.custom_inputs === undefined && (missing1 = "custom_inputs"))
     ) {
-      const err2 = {};
+      const err5 = {};
       if (vErrors === null) {
-        vErrors = [err2];
+        vErrors = [err5];
       } else {
-        vErrors.push(err2);
+        vErrors.push(err5);
       }
       errors++;
     }
   }
-  var valid2 = _errs6 === errors;
-  if (valid2) {
-    const err3 = {
+  var valid4 = _errs9 === errors;
+  if (valid4) {
+    const err6 = {
       instancePath,
       schemaPath: "#/allOf/1/not",
       keyword: "not",
@@ -5269,51 +6737,9 @@ function validate20(
       message: "must NOT be valid",
     };
     if (vErrors === null) {
-      vErrors = [err3];
+      vErrors = [err6];
     } else {
-      vErrors.push(err3);
-    }
-    errors++;
-  } else {
-    errors = _errs5;
-    if (vErrors !== null) {
-      if (_errs5) {
-        vErrors.length = _errs5;
-      } else {
-        vErrors = null;
-      }
-    }
-  }
-  const _errs8 = errors;
-  const _errs9 = errors;
-  if (data && typeof data == "object" && !Array.isArray(data)) {
-    let missing2;
-    if (
-      (data.trace_package_id === undefined && (missing2 = "trace_package_id")) ||
-      (data.custom_inputs === undefined && (missing2 = "custom_inputs"))
-    ) {
-      const err4 = {};
-      if (vErrors === null) {
-        vErrors = [err4];
-      } else {
-        vErrors.push(err4);
-      }
-      errors++;
-    }
-  }
-  var valid3 = _errs9 === errors;
-  if (valid3) {
-    const err5 = {
-      instancePath,
-      schemaPath: "#/allOf/2/not",
-      keyword: "not",
-      params: {},
-      message: "must NOT be valid",
-    };
-    if (vErrors === null) {
-      vErrors = [err5];
-    } else {
-      vErrors.push(err5);
+      vErrors.push(err6);
     }
     errors++;
   } else {
@@ -5329,33 +6755,33 @@ function validate20(
   const _errs11 = errors;
   const _errs12 = errors;
   if (data && typeof data == "object" && !Array.isArray(data)) {
-    let missing3;
+    let missing2;
     if (
-      (data.trace_package_id === undefined && (missing3 = "trace_package_id")) ||
-      (data.design_space_candidates === undefined && (missing3 = "design_space_candidates"))
+      (data.trace_package_id === undefined && (missing2 = "trace_package_id")) ||
+      (data.overrides === undefined && (missing2 = "overrides"))
     ) {
-      const err6 = {};
+      const err7 = {};
       if (vErrors === null) {
-        vErrors = [err6];
+        vErrors = [err7];
       } else {
-        vErrors.push(err6);
+        vErrors.push(err7);
       }
       errors++;
     }
   }
-  var valid4 = _errs12 === errors;
-  if (valid4) {
-    const err7 = {
+  var valid5 = _errs12 === errors;
+  if (valid5) {
+    const err8 = {
       instancePath,
-      schemaPath: "#/allOf/3/not",
+      schemaPath: "#/allOf/2/not",
       keyword: "not",
       params: {},
       message: "must NOT be valid",
     };
     if (vErrors === null) {
-      vErrors = [err7];
+      vErrors = [err8];
     } else {
-      vErrors.push(err7);
+      vErrors.push(err8);
     }
     errors++;
   } else {
@@ -5368,9 +6794,93 @@ function validate20(
       }
     }
   }
+  const _errs14 = errors;
+  const _errs15 = errors;
+  if (data && typeof data == "object" && !Array.isArray(data)) {
+    let missing3;
+    if (
+      (data.trace_package_id === undefined && (missing3 = "trace_package_id")) ||
+      (data.custom_inputs === undefined && (missing3 = "custom_inputs"))
+    ) {
+      const err9 = {};
+      if (vErrors === null) {
+        vErrors = [err9];
+      } else {
+        vErrors.push(err9);
+      }
+      errors++;
+    }
+  }
+  var valid6 = _errs15 === errors;
+  if (valid6) {
+    const err10 = {
+      instancePath,
+      schemaPath: "#/allOf/3/not",
+      keyword: "not",
+      params: {},
+      message: "must NOT be valid",
+    };
+    if (vErrors === null) {
+      vErrors = [err10];
+    } else {
+      vErrors.push(err10);
+    }
+    errors++;
+  } else {
+    errors = _errs14;
+    if (vErrors !== null) {
+      if (_errs14) {
+        vErrors.length = _errs14;
+      } else {
+        vErrors = null;
+      }
+    }
+  }
+  const _errs17 = errors;
+  const _errs18 = errors;
+  if (data && typeof data == "object" && !Array.isArray(data)) {
+    let missing4;
+    if (
+      (data.trace_package_id === undefined && (missing4 = "trace_package_id")) ||
+      (data.design_space_candidates === undefined && (missing4 = "design_space_candidates"))
+    ) {
+      const err11 = {};
+      if (vErrors === null) {
+        vErrors = [err11];
+      } else {
+        vErrors.push(err11);
+      }
+      errors++;
+    }
+  }
+  var valid7 = _errs18 === errors;
+  if (valid7) {
+    const err12 = {
+      instancePath,
+      schemaPath: "#/allOf/4/not",
+      keyword: "not",
+      params: {},
+      message: "must NOT be valid",
+    };
+    if (vErrors === null) {
+      vErrors = [err12];
+    } else {
+      vErrors.push(err12);
+    }
+    errors++;
+  } else {
+    errors = _errs17;
+    if (vErrors !== null) {
+      if (_errs17) {
+        vErrors.length = _errs17;
+      } else {
+        vErrors = null;
+      }
+    }
+  }
   if (data && typeof data == "object" && !Array.isArray(data)) {
     if (data.scenario_id === undefined) {
-      const err8 = {
+      const err13 = {
         instancePath,
         schemaPath: "#/required",
         keyword: "required",
@@ -5378,9 +6888,9 @@ function validate20(
         message: "must have required property '" + "scenario_id" + "'",
       };
       if (vErrors === null) {
-        vErrors = [err8];
+        vErrors = [err13];
       } else {
-        vErrors.push(err8);
+        vErrors.push(err13);
       }
       errors++;
     }
@@ -5395,7 +6905,7 @@ function validate20(
         key0 === "design_space_candidates" ||
         key0 === "trace_package_id"
       )) {
-        const err9 = {
+        const err14 = {
           instancePath,
           schemaPath: "#/additionalProperties",
           keyword: "additionalProperties",
@@ -5403,16 +6913,17 @@ function validate20(
           message: "must NOT have additional properties",
         };
         if (vErrors === null) {
-          vErrors = [err9];
+          vErrors = [err14];
         } else {
-          vErrors.push(err9);
+          vErrors.push(err14);
         }
         errors++;
       }
     }
     if (data.scenario_id !== undefined) {
-      if (!(data.scenario_id === "s1_des_example")) {
-        const err10 = {
+      let data2 = data.scenario_id;
+      if (!(data2 === "s1_des_example" || data2 === "dense_des_package")) {
+        const err15 = {
           instancePath: instancePath + "/scenario_id",
           schemaPath: "#/properties/scenario_id/enum",
           keyword: "enum",
@@ -5420,17 +6931,17 @@ function validate20(
           message: "must be equal to one of the allowed values",
         };
         if (vErrors === null) {
-          vErrors = [err10];
+          vErrors = [err15];
         } else {
-          vErrors.push(err10);
+          vErrors.push(err15);
         }
         errors++;
       }
     }
     if (data.fidelity_policy !== undefined) {
-      let data1 = data.fidelity_policy;
-      if (!(data1 === "default" || data1 === "des")) {
-        const err11 = {
+      let data3 = data.fidelity_policy;
+      if (!(data3 === "default" || data3 === "des")) {
+        const err16 = {
           instancePath: instancePath + "/fidelity_policy",
           schemaPath: "#/properties/fidelity_policy/enum",
           keyword: "enum",
@@ -5438,16 +6949,16 @@ function validate20(
           message: "must be equal to one of the allowed values",
         };
         if (vErrors === null) {
-          vErrors = [err11];
+          vErrors = [err16];
         } else {
-          vErrors.push(err11);
+          vErrors.push(err16);
         }
         errors++;
       }
     }
     if (data.gpu_participation_mode !== undefined) {
       if ("gpu_free" !== data.gpu_participation_mode) {
-        const err12 = {
+        const err17 = {
           instancePath: instancePath + "/gpu_participation_mode",
           schemaPath: "#/properties/gpu_participation_mode/const",
           keyword: "const",
@@ -5455,17 +6966,17 @@ function validate20(
           message: "must be equal to constant",
         };
         if (vErrors === null) {
-          vErrors = [err12];
+          vErrors = [err17];
         } else {
-          vErrors.push(err12);
+          vErrors.push(err17);
         }
         errors++;
       }
     }
     if (data.run_name !== undefined) {
-      let data3 = data.run_name;
-      if (typeof data3 !== "string" && data3 !== null) {
-        const err13 = {
+      let data5 = data.run_name;
+      if (typeof data5 !== "string" && data5 !== null) {
+        const err18 = {
           instancePath: instancePath + "/run_name",
           schemaPath: "#/properties/run_name/type",
           keyword: "type",
@@ -5473,15 +6984,15 @@ function validate20(
           message: "must be string,null",
         };
         if (vErrors === null) {
-          vErrors = [err13];
+          vErrors = [err18];
         } else {
-          vErrors.push(err13);
+          vErrors.push(err18);
         }
         errors++;
       }
-      if (typeof data3 === "string") {
-        if (func1(data3) > 80) {
-          const err14 = {
+      if (typeof data5 === "string") {
+        if (func1(data5) > 80) {
+          const err19 = {
             instancePath: instancePath + "/run_name",
             schemaPath: "#/properties/run_name/maxLength",
             keyword: "maxLength",
@@ -5489,20 +7000,20 @@ function validate20(
             message: "must NOT have more than 80 characters",
           };
           if (vErrors === null) {
-            vErrors = [err14];
+            vErrors = [err19];
           } else {
-            vErrors.push(err14);
+            vErrors.push(err19);
           }
           errors++;
         }
       }
     }
     if (data.overrides !== undefined) {
-      let data4 = data.overrides;
-      if (data4 && typeof data4 == "object" && !Array.isArray(data4)) {
-        for (const key1 in data4) {
+      let data6 = data.overrides;
+      if (data6 && typeof data6 == "object" && !Array.isArray(data6)) {
+        for (const key1 in data6) {
           if (!(key1 === "runtime" || key1 === "workload" || key1 === "fabric")) {
-            const err15 = {
+            const err20 = {
               instancePath: instancePath + "/overrides",
               schemaPath: "run-overrides.schema.json/additionalProperties",
               keyword: "additionalProperties",
@@ -5510,110 +7021,33 @@ function validate20(
               message: "must NOT have additional properties",
             };
             if (vErrors === null) {
-              vErrors = [err15];
+              vErrors = [err20];
             } else {
-              vErrors.push(err15);
+              vErrors.push(err20);
             }
             errors++;
           }
         }
-        if (data4.runtime !== undefined) {
-          let data5 = data4.runtime;
-          if (data5 && typeof data5 == "object" && !Array.isArray(data5)) {
-            for (const key2 in data5) {
-              if (!(key2 === "batch_scheduler" || key2 === "max_batch_size" || key2 === "kv_capacity_tokens")) {
-                const err16 = {
+        if (data6.runtime !== undefined) {
+          let data7 = data6.runtime;
+          if (data7 && typeof data7 == "object" && !Array.isArray(data7)) {
+            for (const key2 in data7) {
+              if (!(
+                key2 === "batch_scheduler" ||
+                key2 === "max_batch_size" ||
+                key2 === "kv_capacity_tokens" ||
+                key2 === "max_active_requests" ||
+                key2 === "initial_kv_tokens" ||
+                key2 === "kv_admission_watermark" ||
+                key2 === "long_context_threshold_tokens" ||
+                key2 === "decode_penalty_per_threshold"
+              )) {
+                const err21 = {
                   instancePath: instancePath + "/overrides/runtime",
                   schemaPath: "run-overrides.schema.json/properties/runtime/additionalProperties",
                   keyword: "additionalProperties",
                   params: { additionalProperty: key2 },
                   message: "must NOT have additional properties",
-                };
-                if (vErrors === null) {
-                  vErrors = [err16];
-                } else {
-                  vErrors.push(err16);
-                }
-                errors++;
-              }
-            }
-            if (data5.batch_scheduler !== undefined) {
-              let data6 = data5.batch_scheduler;
-              if (!(data6 === "fifo" || data6 === "decode_priority" || data6 === "fabric_backpressure_aware")) {
-                const err17 = {
-                  instancePath: instancePath + "/overrides/runtime/batch_scheduler",
-                  schemaPath: "run-overrides.schema.json/properties/runtime/properties/batch_scheduler/enum",
-                  keyword: "enum",
-                  params: { allowedValues: schema32.properties.runtime.properties.batch_scheduler.enum },
-                  message: "must be equal to one of the allowed values",
-                };
-                if (vErrors === null) {
-                  vErrors = [err17];
-                } else {
-                  vErrors.push(err17);
-                }
-                errors++;
-              }
-            }
-            if (data5.max_batch_size !== undefined) {
-              let data7 = data5.max_batch_size;
-              if (!(typeof data7 == "number" && !(data7 % 1) && !isNaN(data7))) {
-                const err18 = {
-                  instancePath: instancePath + "/overrides/runtime/max_batch_size",
-                  schemaPath: "run-overrides.schema.json/properties/runtime/properties/max_batch_size/type",
-                  keyword: "type",
-                  params: { type: "integer" },
-                  message: "must be integer",
-                };
-                if (vErrors === null) {
-                  vErrors = [err18];
-                } else {
-                  vErrors.push(err18);
-                }
-                errors++;
-              }
-              if (typeof data7 == "number") {
-                if (data7 > 64 || isNaN(data7)) {
-                  const err19 = {
-                    instancePath: instancePath + "/overrides/runtime/max_batch_size",
-                    schemaPath: "run-overrides.schema.json/properties/runtime/properties/max_batch_size/maximum",
-                    keyword: "maximum",
-                    params: { comparison: "<=", limit: 64 },
-                    message: "must be <= 64",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err19];
-                  } else {
-                    vErrors.push(err19);
-                  }
-                  errors++;
-                }
-                if (data7 < 1 || isNaN(data7)) {
-                  const err20 = {
-                    instancePath: instancePath + "/overrides/runtime/max_batch_size",
-                    schemaPath: "run-overrides.schema.json/properties/runtime/properties/max_batch_size/minimum",
-                    keyword: "minimum",
-                    params: { comparison: ">=", limit: 1 },
-                    message: "must be >= 1",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err20];
-                  } else {
-                    vErrors.push(err20);
-                  }
-                  errors++;
-                }
-              }
-            }
-            if (data5.kv_capacity_tokens !== undefined) {
-              let data8 = data5.kv_capacity_tokens;
-              if (!(typeof data8 == "number" && !(data8 % 1) && !isNaN(data8))) {
-                const err21 = {
-                  instancePath: instancePath + "/overrides/runtime/kv_capacity_tokens",
-                  schemaPath: "run-overrides.schema.json/properties/runtime/properties/kv_capacity_tokens/type",
-                  keyword: "type",
-                  params: { type: "integer" },
-                  message: "must be integer",
                 };
                 if (vErrors === null) {
                   vErrors = [err21];
@@ -5622,102 +7056,105 @@ function validate20(
                 }
                 errors++;
               }
-              if (typeof data8 == "number") {
-                if (data8 > 1000000 || isNaN(data8)) {
-                  const err22 = {
+            }
+            if (data7.batch_scheduler !== undefined) {
+              let data8 = data7.batch_scheduler;
+              if (!(
+                data8 === "fifo" ||
+                data8 === "decode_priority" ||
+                data8 === "fabric_backpressure_aware" ||
+                data8 === "starvation_aware"
+              )) {
+                const err22 = {
+                  instancePath: instancePath + "/overrides/runtime/batch_scheduler",
+                  schemaPath: "run-overrides.schema.json/properties/runtime/properties/batch_scheduler/enum",
+                  keyword: "enum",
+                  params: { allowedValues: schema32.properties.runtime.properties.batch_scheduler.enum },
+                  message: "must be equal to one of the allowed values",
+                };
+                if (vErrors === null) {
+                  vErrors = [err22];
+                } else {
+                  vErrors.push(err22);
+                }
+                errors++;
+              }
+            }
+            if (data7.max_batch_size !== undefined) {
+              let data9 = data7.max_batch_size;
+              if (!(typeof data9 == "number" && !(data9 % 1) && !isNaN(data9))) {
+                const err23 = {
+                  instancePath: instancePath + "/overrides/runtime/max_batch_size",
+                  schemaPath: "run-overrides.schema.json/properties/runtime/properties/max_batch_size/type",
+                  keyword: "type",
+                  params: { type: "integer" },
+                  message: "must be integer",
+                };
+                if (vErrors === null) {
+                  vErrors = [err23];
+                } else {
+                  vErrors.push(err23);
+                }
+                errors++;
+              }
+              if (typeof data9 == "number") {
+                if (data9 > 64 || isNaN(data9)) {
+                  const err24 = {
+                    instancePath: instancePath + "/overrides/runtime/max_batch_size",
+                    schemaPath: "run-overrides.schema.json/properties/runtime/properties/max_batch_size/maximum",
+                    keyword: "maximum",
+                    params: { comparison: "<=", limit: 64 },
+                    message: "must be <= 64",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err24];
+                  } else {
+                    vErrors.push(err24);
+                  }
+                  errors++;
+                }
+                if (data9 < 1 || isNaN(data9)) {
+                  const err25 = {
+                    instancePath: instancePath + "/overrides/runtime/max_batch_size",
+                    schemaPath: "run-overrides.schema.json/properties/runtime/properties/max_batch_size/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 1 },
+                    message: "must be >= 1",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err25];
+                  } else {
+                    vErrors.push(err25);
+                  }
+                  errors++;
+                }
+              }
+            }
+            if (data7.kv_capacity_tokens !== undefined) {
+              let data10 = data7.kv_capacity_tokens;
+              if (!(typeof data10 == "number" && !(data10 % 1) && !isNaN(data10))) {
+                const err26 = {
+                  instancePath: instancePath + "/overrides/runtime/kv_capacity_tokens",
+                  schemaPath: "run-overrides.schema.json/properties/runtime/properties/kv_capacity_tokens/type",
+                  keyword: "type",
+                  params: { type: "integer" },
+                  message: "must be integer",
+                };
+                if (vErrors === null) {
+                  vErrors = [err26];
+                } else {
+                  vErrors.push(err26);
+                }
+                errors++;
+              }
+              if (typeof data10 == "number") {
+                if (data10 > 1000000 || isNaN(data10)) {
+                  const err27 = {
                     instancePath: instancePath + "/overrides/runtime/kv_capacity_tokens",
                     schemaPath: "run-overrides.schema.json/properties/runtime/properties/kv_capacity_tokens/maximum",
                     keyword: "maximum",
                     params: { comparison: "<=", limit: 1000000 },
                     message: "must be <= 1000000",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err22];
-                  } else {
-                    vErrors.push(err22);
-                  }
-                  errors++;
-                }
-                if (data8 < 256 || isNaN(data8)) {
-                  const err23 = {
-                    instancePath: instancePath + "/overrides/runtime/kv_capacity_tokens",
-                    schemaPath: "run-overrides.schema.json/properties/runtime/properties/kv_capacity_tokens/minimum",
-                    keyword: "minimum",
-                    params: { comparison: ">=", limit: 256 },
-                    message: "must be >= 256",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err23];
-                  } else {
-                    vErrors.push(err23);
-                  }
-                  errors++;
-                }
-              }
-            }
-          } else {
-            const err24 = {
-              instancePath: instancePath + "/overrides/runtime",
-              schemaPath: "run-overrides.schema.json/properties/runtime/type",
-              keyword: "type",
-              params: { type: "object" },
-              message: "must be object",
-            };
-            if (vErrors === null) {
-              vErrors = [err24];
-            } else {
-              vErrors.push(err24);
-            }
-            errors++;
-          }
-        }
-        if (data4.workload !== undefined) {
-          let data9 = data4.workload;
-          if (data9 && typeof data9 == "object" && !Array.isArray(data9)) {
-            for (const key3 in data9) {
-              if (!(key3 === "message_size_multiplier")) {
-                const err25 = {
-                  instancePath: instancePath + "/overrides/workload",
-                  schemaPath: "run-overrides.schema.json/properties/workload/additionalProperties",
-                  keyword: "additionalProperties",
-                  params: { additionalProperty: key3 },
-                  message: "must NOT have additional properties",
-                };
-                if (vErrors === null) {
-                  vErrors = [err25];
-                } else {
-                  vErrors.push(err25);
-                }
-                errors++;
-              }
-            }
-            if (data9.message_size_multiplier !== undefined) {
-              let data10 = data9.message_size_multiplier;
-              if (typeof data10 == "number") {
-                if (data10 > 8 || isNaN(data10)) {
-                  const err26 = {
-                    instancePath: instancePath + "/overrides/workload/message_size_multiplier",
-                    schemaPath:
-                      "run-overrides.schema.json/properties/workload/properties/message_size_multiplier/maximum",
-                    keyword: "maximum",
-                    params: { comparison: "<=", limit: 8 },
-                    message: "must be <= 8",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err26];
-                  } else {
-                    vErrors.push(err26);
-                  }
-                  errors++;
-                }
-                if (data10 < 0.25 || isNaN(data10)) {
-                  const err27 = {
-                    instancePath: instancePath + "/overrides/workload/message_size_multiplier",
-                    schemaPath:
-                      "run-overrides.schema.json/properties/workload/properties/message_size_multiplier/minimum",
-                    keyword: "minimum",
-                    params: { comparison: ">=", limit: 0.25 },
-                    message: "must be >= 0.25",
                   };
                   if (vErrors === null) {
                     vErrors = [err27];
@@ -5726,74 +7163,63 @@ function validate20(
                   }
                   errors++;
                 }
-              } else {
-                const err28 = {
-                  instancePath: instancePath + "/overrides/workload/message_size_multiplier",
-                  schemaPath: "run-overrides.schema.json/properties/workload/properties/message_size_multiplier/type",
+                if (data10 < 256 || isNaN(data10)) {
+                  const err28 = {
+                    instancePath: instancePath + "/overrides/runtime/kv_capacity_tokens",
+                    schemaPath: "run-overrides.schema.json/properties/runtime/properties/kv_capacity_tokens/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 256 },
+                    message: "must be >= 256",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err28];
+                  } else {
+                    vErrors.push(err28);
+                  }
+                  errors++;
+                }
+              }
+            }
+            if (data7.max_active_requests !== undefined) {
+              let data11 = data7.max_active_requests;
+              if (!(typeof data11 == "number" && !(data11 % 1) && !isNaN(data11))) {
+                const err29 = {
+                  instancePath: instancePath + "/overrides/runtime/max_active_requests",
+                  schemaPath: "run-overrides.schema.json/properties/runtime/properties/max_active_requests/type",
                   keyword: "type",
-                  params: { type: "number" },
-                  message: "must be number",
+                  params: { type: "integer" },
+                  message: "must be integer",
                 };
                 if (vErrors === null) {
-                  vErrors = [err28];
+                  vErrors = [err29];
                 } else {
-                  vErrors.push(err28);
+                  vErrors.push(err29);
                 }
                 errors++;
               }
-            }
-          } else {
-            const err29 = {
-              instancePath: instancePath + "/overrides/workload",
-              schemaPath: "run-overrides.schema.json/properties/workload/type",
-              keyword: "type",
-              params: { type: "object" },
-              message: "must be object",
-            };
-            if (vErrors === null) {
-              vErrors = [err29];
-            } else {
-              vErrors.push(err29);
-            }
-            errors++;
-          }
-        }
-        if (data4.fabric !== undefined) {
-          let data11 = data4.fabric;
-          if (data11 && typeof data11 == "object" && !Array.isArray(data11)) {
-            for (const key4 in data11) {
-              if (!(
-                key4 === "scale_up_bandwidth_gbps" ||
-                key4 === "scale_up_latency_us" ||
-                key4 === "scale_out_bandwidth_gbps" ||
-                key4 === "scale_out_latency_us"
-              )) {
-                const err30 = {
-                  instancePath: instancePath + "/overrides/fabric",
-                  schemaPath: "run-overrides.schema.json/properties/fabric/additionalProperties",
-                  keyword: "additionalProperties",
-                  params: { additionalProperty: key4 },
-                  message: "must NOT have additional properties",
-                };
-                if (vErrors === null) {
-                  vErrors = [err30];
-                } else {
-                  vErrors.push(err30);
-                }
-                errors++;
-              }
-            }
-            if (data11.scale_up_bandwidth_gbps !== undefined) {
-              let data12 = data11.scale_up_bandwidth_gbps;
-              if (typeof data12 == "number") {
-                if (data12 > 2000 || isNaN(data12)) {
-                  const err31 = {
-                    instancePath: instancePath + "/overrides/fabric/scale_up_bandwidth_gbps",
-                    schemaPath:
-                      "run-overrides.schema.json/properties/fabric/properties/scale_up_bandwidth_gbps/maximum",
+              if (typeof data11 == "number") {
+                if (data11 > 1024 || isNaN(data11)) {
+                  const err30 = {
+                    instancePath: instancePath + "/overrides/runtime/max_active_requests",
+                    schemaPath: "run-overrides.schema.json/properties/runtime/properties/max_active_requests/maximum",
                     keyword: "maximum",
-                    params: { comparison: "<=", limit: 2000 },
-                    message: "must be <= 2000",
+                    params: { comparison: "<=", limit: 1024 },
+                    message: "must be <= 1024",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err30];
+                  } else {
+                    vErrors.push(err30);
+                  }
+                  errors++;
+                }
+                if (data11 < 1 || isNaN(data11)) {
+                  const err31 = {
+                    instancePath: instancePath + "/overrides/runtime/max_active_requests",
+                    schemaPath: "run-overrides.schema.json/properties/runtime/properties/max_active_requests/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 1 },
+                    message: "must be >= 1",
                   };
                   if (vErrors === null) {
                     vErrors = [err31];
@@ -5802,48 +7228,48 @@ function validate20(
                   }
                   errors++;
                 }
-                if (data12 < 25 || isNaN(data12)) {
-                  const err32 = {
-                    instancePath: instancePath + "/overrides/fabric/scale_up_bandwidth_gbps",
-                    schemaPath:
-                      "run-overrides.schema.json/properties/fabric/properties/scale_up_bandwidth_gbps/minimum",
-                    keyword: "minimum",
-                    params: { comparison: ">=", limit: 25 },
-                    message: "must be >= 25",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err32];
-                  } else {
-                    vErrors.push(err32);
-                  }
-                  errors++;
-                }
-              } else {
-                const err33 = {
-                  instancePath: instancePath + "/overrides/fabric/scale_up_bandwidth_gbps",
-                  schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_up_bandwidth_gbps/type",
+              }
+            }
+            if (data7.initial_kv_tokens !== undefined) {
+              let data12 = data7.initial_kv_tokens;
+              if (!(typeof data12 == "number" && !(data12 % 1) && !isNaN(data12))) {
+                const err32 = {
+                  instancePath: instancePath + "/overrides/runtime/initial_kv_tokens",
+                  schemaPath: "run-overrides.schema.json/properties/runtime/properties/initial_kv_tokens/type",
                   keyword: "type",
-                  params: { type: "number" },
-                  message: "must be number",
+                  params: { type: "integer" },
+                  message: "must be integer",
                 };
                 if (vErrors === null) {
-                  vErrors = [err33];
+                  vErrors = [err32];
                 } else {
-                  vErrors.push(err33);
+                  vErrors.push(err32);
                 }
                 errors++;
               }
-            }
-            if (data11.scale_up_latency_us !== undefined) {
-              let data13 = data11.scale_up_latency_us;
-              if (typeof data13 == "number") {
-                if (data13 > 100 || isNaN(data13)) {
-                  const err34 = {
-                    instancePath: instancePath + "/overrides/fabric/scale_up_latency_us",
-                    schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_up_latency_us/maximum",
+              if (typeof data12 == "number") {
+                if (data12 > 1000000 || isNaN(data12)) {
+                  const err33 = {
+                    instancePath: instancePath + "/overrides/runtime/initial_kv_tokens",
+                    schemaPath: "run-overrides.schema.json/properties/runtime/properties/initial_kv_tokens/maximum",
                     keyword: "maximum",
-                    params: { comparison: "<=", limit: 100 },
-                    message: "must be <= 100",
+                    params: { comparison: "<=", limit: 1000000 },
+                    message: "must be <= 1000000",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err33];
+                  } else {
+                    vErrors.push(err33);
+                  }
+                  errors++;
+                }
+                if (data12 < 0 || isNaN(data12)) {
+                  const err34 = {
+                    instancePath: instancePath + "/overrides/runtime/initial_kv_tokens",
+                    schemaPath: "run-overrides.schema.json/properties/runtime/properties/initial_kv_tokens/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 0 },
+                    message: "must be >= 0",
                   };
                   if (vErrors === null) {
                     vErrors = [err34];
@@ -5852,13 +7278,19 @@ function validate20(
                   }
                   errors++;
                 }
-                if (data13 < 0.05 || isNaN(data13)) {
+              }
+            }
+            if (data7.kv_admission_watermark !== undefined) {
+              let data13 = data7.kv_admission_watermark;
+              if (typeof data13 == "number") {
+                if (data13 > 1 || isNaN(data13)) {
                   const err35 = {
-                    instancePath: instancePath + "/overrides/fabric/scale_up_latency_us",
-                    schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_up_latency_us/minimum",
-                    keyword: "minimum",
-                    params: { comparison: ">=", limit: 0.05 },
-                    message: "must be >= 0.05",
+                    instancePath: instancePath + "/overrides/runtime/kv_admission_watermark",
+                    schemaPath:
+                      "run-overrides.schema.json/properties/runtime/properties/kv_admission_watermark/maximum",
+                    keyword: "maximum",
+                    params: { comparison: "<=", limit: 1 },
+                    message: "must be <= 1",
                   };
                   if (vErrors === null) {
                     vErrors = [err35];
@@ -5867,83 +7299,81 @@ function validate20(
                   }
                   errors++;
                 }
-              } else {
-                const err36 = {
-                  instancePath: instancePath + "/overrides/fabric/scale_up_latency_us",
-                  schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_up_latency_us/type",
-                  keyword: "type",
-                  params: { type: "number" },
-                  message: "must be number",
-                };
-                if (vErrors === null) {
-                  vErrors = [err36];
-                } else {
-                  vErrors.push(err36);
-                }
-                errors++;
-              }
-            }
-            if (data11.scale_out_bandwidth_gbps !== undefined) {
-              let data14 = data11.scale_out_bandwidth_gbps;
-              if (typeof data14 == "number") {
-                if (data14 > 2000 || isNaN(data14)) {
-                  const err37 = {
-                    instancePath: instancePath + "/overrides/fabric/scale_out_bandwidth_gbps",
+                if (data13 < 0.05 || isNaN(data13)) {
+                  const err36 = {
+                    instancePath: instancePath + "/overrides/runtime/kv_admission_watermark",
                     schemaPath:
-                      "run-overrides.schema.json/properties/fabric/properties/scale_out_bandwidth_gbps/maximum",
-                    keyword: "maximum",
-                    params: { comparison: "<=", limit: 2000 },
-                    message: "must be <= 2000",
-                  };
-                  if (vErrors === null) {
-                    vErrors = [err37];
-                  } else {
-                    vErrors.push(err37);
-                  }
-                  errors++;
-                }
-                if (data14 < 10 || isNaN(data14)) {
-                  const err38 = {
-                    instancePath: instancePath + "/overrides/fabric/scale_out_bandwidth_gbps",
-                    schemaPath:
-                      "run-overrides.schema.json/properties/fabric/properties/scale_out_bandwidth_gbps/minimum",
+                      "run-overrides.schema.json/properties/runtime/properties/kv_admission_watermark/minimum",
                     keyword: "minimum",
-                    params: { comparison: ">=", limit: 10 },
-                    message: "must be >= 10",
+                    params: { comparison: ">=", limit: 0.05 },
+                    message: "must be >= 0.05",
                   };
                   if (vErrors === null) {
-                    vErrors = [err38];
+                    vErrors = [err36];
                   } else {
-                    vErrors.push(err38);
+                    vErrors.push(err36);
                   }
                   errors++;
                 }
               } else {
-                const err39 = {
-                  instancePath: instancePath + "/overrides/fabric/scale_out_bandwidth_gbps",
-                  schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_out_bandwidth_gbps/type",
+                const err37 = {
+                  instancePath: instancePath + "/overrides/runtime/kv_admission_watermark",
+                  schemaPath: "run-overrides.schema.json/properties/runtime/properties/kv_admission_watermark/type",
                   keyword: "type",
                   params: { type: "number" },
                   message: "must be number",
                 };
                 if (vErrors === null) {
-                  vErrors = [err39];
+                  vErrors = [err37];
                 } else {
-                  vErrors.push(err39);
+                  vErrors.push(err37);
                 }
                 errors++;
               }
             }
-            if (data11.scale_out_latency_us !== undefined) {
-              let data15 = data11.scale_out_latency_us;
-              if (typeof data15 == "number") {
-                if (data15 > 500 || isNaN(data15)) {
-                  const err40 = {
-                    instancePath: instancePath + "/overrides/fabric/scale_out_latency_us",
-                    schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_out_latency_us/maximum",
+            if (data7.long_context_threshold_tokens !== undefined) {
+              let data14 = data7.long_context_threshold_tokens;
+              if (!(typeof data14 == "number" && !(data14 % 1) && !isNaN(data14))) {
+                const err38 = {
+                  instancePath: instancePath + "/overrides/runtime/long_context_threshold_tokens",
+                  schemaPath:
+                    "run-overrides.schema.json/properties/runtime/properties/long_context_threshold_tokens/type",
+                  keyword: "type",
+                  params: { type: "integer" },
+                  message: "must be integer",
+                };
+                if (vErrors === null) {
+                  vErrors = [err38];
+                } else {
+                  vErrors.push(err38);
+                }
+                errors++;
+              }
+              if (typeof data14 == "number") {
+                if (data14 > 1000000 || isNaN(data14)) {
+                  const err39 = {
+                    instancePath: instancePath + "/overrides/runtime/long_context_threshold_tokens",
+                    schemaPath:
+                      "run-overrides.schema.json/properties/runtime/properties/long_context_threshold_tokens/maximum",
                     keyword: "maximum",
-                    params: { comparison: "<=", limit: 500 },
-                    message: "must be <= 500",
+                    params: { comparison: "<=", limit: 1000000 },
+                    message: "must be <= 1000000",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err39];
+                  } else {
+                    vErrors.push(err39);
+                  }
+                  errors++;
+                }
+                if (data14 < 1 || isNaN(data14)) {
+                  const err40 = {
+                    instancePath: instancePath + "/overrides/runtime/long_context_threshold_tokens",
+                    schemaPath:
+                      "run-overrides.schema.json/properties/runtime/properties/long_context_threshold_tokens/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 1 },
+                    message: "must be >= 1",
                   };
                   if (vErrors === null) {
                     vErrors = [err40];
@@ -5952,13 +7382,19 @@ function validate20(
                   }
                   errors++;
                 }
-                if (data15 < 0.1 || isNaN(data15)) {
+              }
+            }
+            if (data7.decode_penalty_per_threshold !== undefined) {
+              let data15 = data7.decode_penalty_per_threshold;
+              if (typeof data15 == "number") {
+                if (data15 > 1 || isNaN(data15)) {
                   const err41 = {
-                    instancePath: instancePath + "/overrides/fabric/scale_out_latency_us",
-                    schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_out_latency_us/minimum",
-                    keyword: "minimum",
-                    params: { comparison: ">=", limit: 0.1 },
-                    message: "must be >= 0.1",
+                    instancePath: instancePath + "/overrides/runtime/decode_penalty_per_threshold",
+                    schemaPath:
+                      "run-overrides.schema.json/properties/runtime/properties/decode_penalty_per_threshold/maximum",
+                    keyword: "maximum",
+                    params: { comparison: "<=", limit: 1 },
+                    message: "must be <= 1",
                   };
                   if (vErrors === null) {
                     vErrors = [err41];
@@ -5967,8 +7403,353 @@ function validate20(
                   }
                   errors++;
                 }
+                if (data15 < 0 || isNaN(data15)) {
+                  const err42 = {
+                    instancePath: instancePath + "/overrides/runtime/decode_penalty_per_threshold",
+                    schemaPath:
+                      "run-overrides.schema.json/properties/runtime/properties/decode_penalty_per_threshold/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 0 },
+                    message: "must be >= 0",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err42];
+                  } else {
+                    vErrors.push(err42);
+                  }
+                  errors++;
+                }
               } else {
-                const err42 = {
+                const err43 = {
+                  instancePath: instancePath + "/overrides/runtime/decode_penalty_per_threshold",
+                  schemaPath:
+                    "run-overrides.schema.json/properties/runtime/properties/decode_penalty_per_threshold/type",
+                  keyword: "type",
+                  params: { type: "number" },
+                  message: "must be number",
+                };
+                if (vErrors === null) {
+                  vErrors = [err43];
+                } else {
+                  vErrors.push(err43);
+                }
+                errors++;
+              }
+            }
+          } else {
+            const err44 = {
+              instancePath: instancePath + "/overrides/runtime",
+              schemaPath: "run-overrides.schema.json/properties/runtime/type",
+              keyword: "type",
+              params: { type: "object" },
+              message: "must be object",
+            };
+            if (vErrors === null) {
+              vErrors = [err44];
+            } else {
+              vErrors.push(err44);
+            }
+            errors++;
+          }
+        }
+        if (data6.workload !== undefined) {
+          let data16 = data6.workload;
+          if (data16 && typeof data16 == "object" && !Array.isArray(data16)) {
+            for (const key3 in data16) {
+              if (!(key3 === "message_size_multiplier")) {
+                const err45 = {
+                  instancePath: instancePath + "/overrides/workload",
+                  schemaPath: "run-overrides.schema.json/properties/workload/additionalProperties",
+                  keyword: "additionalProperties",
+                  params: { additionalProperty: key3 },
+                  message: "must NOT have additional properties",
+                };
+                if (vErrors === null) {
+                  vErrors = [err45];
+                } else {
+                  vErrors.push(err45);
+                }
+                errors++;
+              }
+            }
+            if (data16.message_size_multiplier !== undefined) {
+              let data17 = data16.message_size_multiplier;
+              if (typeof data17 == "number") {
+                if (data17 > 8 || isNaN(data17)) {
+                  const err46 = {
+                    instancePath: instancePath + "/overrides/workload/message_size_multiplier",
+                    schemaPath:
+                      "run-overrides.schema.json/properties/workload/properties/message_size_multiplier/maximum",
+                    keyword: "maximum",
+                    params: { comparison: "<=", limit: 8 },
+                    message: "must be <= 8",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err46];
+                  } else {
+                    vErrors.push(err46);
+                  }
+                  errors++;
+                }
+                if (data17 < 0.25 || isNaN(data17)) {
+                  const err47 = {
+                    instancePath: instancePath + "/overrides/workload/message_size_multiplier",
+                    schemaPath:
+                      "run-overrides.schema.json/properties/workload/properties/message_size_multiplier/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 0.25 },
+                    message: "must be >= 0.25",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err47];
+                  } else {
+                    vErrors.push(err47);
+                  }
+                  errors++;
+                }
+              } else {
+                const err48 = {
+                  instancePath: instancePath + "/overrides/workload/message_size_multiplier",
+                  schemaPath: "run-overrides.schema.json/properties/workload/properties/message_size_multiplier/type",
+                  keyword: "type",
+                  params: { type: "number" },
+                  message: "must be number",
+                };
+                if (vErrors === null) {
+                  vErrors = [err48];
+                } else {
+                  vErrors.push(err48);
+                }
+                errors++;
+              }
+            }
+          } else {
+            const err49 = {
+              instancePath: instancePath + "/overrides/workload",
+              schemaPath: "run-overrides.schema.json/properties/workload/type",
+              keyword: "type",
+              params: { type: "object" },
+              message: "must be object",
+            };
+            if (vErrors === null) {
+              vErrors = [err49];
+            } else {
+              vErrors.push(err49);
+            }
+            errors++;
+          }
+        }
+        if (data6.fabric !== undefined) {
+          let data18 = data6.fabric;
+          if (data18 && typeof data18 == "object" && !Array.isArray(data18)) {
+            for (const key4 in data18) {
+              if (!(
+                key4 === "scale_up_bandwidth_gbps" ||
+                key4 === "scale_up_latency_us" ||
+                key4 === "scale_out_bandwidth_gbps" ||
+                key4 === "scale_out_latency_us"
+              )) {
+                const err50 = {
+                  instancePath: instancePath + "/overrides/fabric",
+                  schemaPath: "run-overrides.schema.json/properties/fabric/additionalProperties",
+                  keyword: "additionalProperties",
+                  params: { additionalProperty: key4 },
+                  message: "must NOT have additional properties",
+                };
+                if (vErrors === null) {
+                  vErrors = [err50];
+                } else {
+                  vErrors.push(err50);
+                }
+                errors++;
+              }
+            }
+            if (data18.scale_up_bandwidth_gbps !== undefined) {
+              let data19 = data18.scale_up_bandwidth_gbps;
+              if (typeof data19 == "number") {
+                if (data19 > 2000 || isNaN(data19)) {
+                  const err51 = {
+                    instancePath: instancePath + "/overrides/fabric/scale_up_bandwidth_gbps",
+                    schemaPath:
+                      "run-overrides.schema.json/properties/fabric/properties/scale_up_bandwidth_gbps/maximum",
+                    keyword: "maximum",
+                    params: { comparison: "<=", limit: 2000 },
+                    message: "must be <= 2000",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err51];
+                  } else {
+                    vErrors.push(err51);
+                  }
+                  errors++;
+                }
+                if (data19 < 25 || isNaN(data19)) {
+                  const err52 = {
+                    instancePath: instancePath + "/overrides/fabric/scale_up_bandwidth_gbps",
+                    schemaPath:
+                      "run-overrides.schema.json/properties/fabric/properties/scale_up_bandwidth_gbps/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 25 },
+                    message: "must be >= 25",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err52];
+                  } else {
+                    vErrors.push(err52);
+                  }
+                  errors++;
+                }
+              } else {
+                const err53 = {
+                  instancePath: instancePath + "/overrides/fabric/scale_up_bandwidth_gbps",
+                  schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_up_bandwidth_gbps/type",
+                  keyword: "type",
+                  params: { type: "number" },
+                  message: "must be number",
+                };
+                if (vErrors === null) {
+                  vErrors = [err53];
+                } else {
+                  vErrors.push(err53);
+                }
+                errors++;
+              }
+            }
+            if (data18.scale_up_latency_us !== undefined) {
+              let data20 = data18.scale_up_latency_us;
+              if (typeof data20 == "number") {
+                if (data20 > 100 || isNaN(data20)) {
+                  const err54 = {
+                    instancePath: instancePath + "/overrides/fabric/scale_up_latency_us",
+                    schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_up_latency_us/maximum",
+                    keyword: "maximum",
+                    params: { comparison: "<=", limit: 100 },
+                    message: "must be <= 100",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err54];
+                  } else {
+                    vErrors.push(err54);
+                  }
+                  errors++;
+                }
+                if (data20 < 0.05 || isNaN(data20)) {
+                  const err55 = {
+                    instancePath: instancePath + "/overrides/fabric/scale_up_latency_us",
+                    schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_up_latency_us/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 0.05 },
+                    message: "must be >= 0.05",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err55];
+                  } else {
+                    vErrors.push(err55);
+                  }
+                  errors++;
+                }
+              } else {
+                const err56 = {
+                  instancePath: instancePath + "/overrides/fabric/scale_up_latency_us",
+                  schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_up_latency_us/type",
+                  keyword: "type",
+                  params: { type: "number" },
+                  message: "must be number",
+                };
+                if (vErrors === null) {
+                  vErrors = [err56];
+                } else {
+                  vErrors.push(err56);
+                }
+                errors++;
+              }
+            }
+            if (data18.scale_out_bandwidth_gbps !== undefined) {
+              let data21 = data18.scale_out_bandwidth_gbps;
+              if (typeof data21 == "number") {
+                if (data21 > 2000 || isNaN(data21)) {
+                  const err57 = {
+                    instancePath: instancePath + "/overrides/fabric/scale_out_bandwidth_gbps",
+                    schemaPath:
+                      "run-overrides.schema.json/properties/fabric/properties/scale_out_bandwidth_gbps/maximum",
+                    keyword: "maximum",
+                    params: { comparison: "<=", limit: 2000 },
+                    message: "must be <= 2000",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err57];
+                  } else {
+                    vErrors.push(err57);
+                  }
+                  errors++;
+                }
+                if (data21 < 10 || isNaN(data21)) {
+                  const err58 = {
+                    instancePath: instancePath + "/overrides/fabric/scale_out_bandwidth_gbps",
+                    schemaPath:
+                      "run-overrides.schema.json/properties/fabric/properties/scale_out_bandwidth_gbps/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 10 },
+                    message: "must be >= 10",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err58];
+                  } else {
+                    vErrors.push(err58);
+                  }
+                  errors++;
+                }
+              } else {
+                const err59 = {
+                  instancePath: instancePath + "/overrides/fabric/scale_out_bandwidth_gbps",
+                  schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_out_bandwidth_gbps/type",
+                  keyword: "type",
+                  params: { type: "number" },
+                  message: "must be number",
+                };
+                if (vErrors === null) {
+                  vErrors = [err59];
+                } else {
+                  vErrors.push(err59);
+                }
+                errors++;
+              }
+            }
+            if (data18.scale_out_latency_us !== undefined) {
+              let data22 = data18.scale_out_latency_us;
+              if (typeof data22 == "number") {
+                if (data22 > 500 || isNaN(data22)) {
+                  const err60 = {
+                    instancePath: instancePath + "/overrides/fabric/scale_out_latency_us",
+                    schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_out_latency_us/maximum",
+                    keyword: "maximum",
+                    params: { comparison: "<=", limit: 500 },
+                    message: "must be <= 500",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err60];
+                  } else {
+                    vErrors.push(err60);
+                  }
+                  errors++;
+                }
+                if (data22 < 0.1 || isNaN(data22)) {
+                  const err61 = {
+                    instancePath: instancePath + "/overrides/fabric/scale_out_latency_us",
+                    schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_out_latency_us/minimum",
+                    keyword: "minimum",
+                    params: { comparison: ">=", limit: 0.1 },
+                    message: "must be >= 0.1",
+                  };
+                  if (vErrors === null) {
+                    vErrors = [err61];
+                  } else {
+                    vErrors.push(err61);
+                  }
+                  errors++;
+                }
+              } else {
+                const err62 = {
                   instancePath: instancePath + "/overrides/fabric/scale_out_latency_us",
                   schemaPath: "run-overrides.schema.json/properties/fabric/properties/scale_out_latency_us/type",
                   keyword: "type",
@@ -5976,15 +7757,15 @@ function validate20(
                   message: "must be number",
                 };
                 if (vErrors === null) {
-                  vErrors = [err42];
+                  vErrors = [err62];
                 } else {
-                  vErrors.push(err42);
+                  vErrors.push(err62);
                 }
                 errors++;
               }
             }
           } else {
-            const err43 = {
+            const err63 = {
               instancePath: instancePath + "/overrides/fabric",
               schemaPath: "run-overrides.schema.json/properties/fabric/type",
               keyword: "type",
@@ -5992,15 +7773,15 @@ function validate20(
               message: "must be object",
             };
             if (vErrors === null) {
-              vErrors = [err43];
+              vErrors = [err63];
             } else {
-              vErrors.push(err43);
+              vErrors.push(err63);
             }
             errors++;
           }
         }
       } else {
-        const err44 = {
+        const err64 = {
           instancePath: instancePath + "/overrides",
           schemaPath: "run-overrides.schema.json/type",
           keyword: "type",
@@ -6008,9 +7789,9 @@ function validate20(
           message: "must be object",
         };
         if (vErrors === null) {
-          vErrors = [err44];
+          vErrors = [err64];
         } else {
-          vErrors.push(err44);
+          vErrors.push(err64);
         }
         errors++;
       }
@@ -6030,14 +7811,14 @@ function validate20(
       }
     }
     if (data.design_space_candidates !== undefined) {
-      let data17 = data.design_space_candidates;
-      const _errs49 = errors;
-      let valid11 = false;
+      let data24 = data.design_space_candidates;
+      const _errs65 = errors;
+      let valid14 = false;
       let passing0 = null;
-      const _errs50 = errors;
-      if (data17 && typeof data17 == "object" && !Array.isArray(data17)) {
-        if (data17.manifest_id === undefined) {
-          const err45 = {
+      const _errs66 = errors;
+      if (data24 && typeof data24 == "object" && !Array.isArray(data24)) {
+        if (data24.manifest_id === undefined) {
+          const err65 = {
             instancePath: instancePath + "/design_space_candidates",
             schemaPath: "design-space-candidates.schema.json/required",
             keyword: "required",
@@ -6045,14 +7826,14 @@ function validate20(
             message: "must have required property '" + "manifest_id" + "'",
           };
           if (vErrors === null) {
-            vErrors = [err45];
+            vErrors = [err65];
           } else {
-            vErrors.push(err45);
+            vErrors.push(err65);
           }
           errors++;
         }
-        if (data17.source_mode === undefined) {
-          const err46 = {
+        if (data24.source_mode === undefined) {
+          const err66 = {
             instancePath: instancePath + "/design_space_candidates",
             schemaPath: "design-space-candidates.schema.json/required",
             keyword: "required",
@@ -6060,14 +7841,14 @@ function validate20(
             message: "must have required property '" + "source_mode" + "'",
           };
           if (vErrors === null) {
-            vErrors = [err46];
+            vErrors = [err66];
           } else {
-            vErrors.push(err46);
+            vErrors.push(err66);
           }
           errors++;
         }
-        if (data17.calibration_level === undefined) {
-          const err47 = {
+        if (data24.calibration_level === undefined) {
+          const err67 = {
             instancePath: instancePath + "/design_space_candidates",
             schemaPath: "design-space-candidates.schema.json/required",
             keyword: "required",
@@ -6075,14 +7856,14 @@ function validate20(
             message: "must have required property '" + "calibration_level" + "'",
           };
           if (vErrors === null) {
-            vErrors = [err47];
+            vErrors = [err67];
           } else {
-            vErrors.push(err47);
+            vErrors.push(err67);
           }
           errors++;
         }
-        if (data17.allowed_claim_scope === undefined) {
-          const err48 = {
+        if (data24.allowed_claim_scope === undefined) {
+          const err68 = {
             instancePath: instancePath + "/design_space_candidates",
             schemaPath: "design-space-candidates.schema.json/required",
             keyword: "required",
@@ -6090,14 +7871,14 @@ function validate20(
             message: "must have required property '" + "allowed_claim_scope" + "'",
           };
           if (vErrors === null) {
-            vErrors = [err48];
+            vErrors = [err68];
           } else {
-            vErrors.push(err48);
+            vErrors.push(err68);
           }
           errors++;
         }
-        if (data17.candidates === undefined) {
-          const err49 = {
+        if (data24.candidates === undefined) {
+          const err69 = {
             instancePath: instancePath + "/design_space_candidates",
             schemaPath: "design-space-candidates.schema.json/required",
             keyword: "required",
@@ -6105,13 +7886,13 @@ function validate20(
             message: "must have required property '" + "candidates" + "'",
           };
           if (vErrors === null) {
-            vErrors = [err49];
+            vErrors = [err69];
           } else {
-            vErrors.push(err49);
+            vErrors.push(err69);
           }
           errors++;
         }
-        for (const key5 in data17) {
+        for (const key5 in data24) {
           if (!(
             key5 === "schema_version" ||
             key5 === "manifest_id" ||
@@ -6120,7 +7901,7 @@ function validate20(
             key5 === "allowed_claim_scope" ||
             key5 === "candidates"
           )) {
-            const err50 = {
+            const err70 = {
               instancePath: instancePath + "/design_space_candidates",
               schemaPath: "design-space-candidates.schema.json/additionalProperties",
               keyword: "additionalProperties",
@@ -6128,16 +7909,16 @@ function validate20(
               message: "must NOT have additional properties",
             };
             if (vErrors === null) {
-              vErrors = [err50];
+              vErrors = [err70];
             } else {
-              vErrors.push(err50);
+              vErrors.push(err70);
             }
             errors++;
           }
         }
-        if (data17.schema_version !== undefined) {
-          if ("tilesim.design_space.s6_candidates.v1" !== data17.schema_version) {
-            const err51 = {
+        if (data24.schema_version !== undefined) {
+          if ("tilesim.design_space.s6_candidates.v1" !== data24.schema_version) {
+            const err71 = {
               instancePath: instancePath + "/design_space_candidates/schema_version",
               schemaPath: "design-space-candidates.schema.json/properties/schema_version/const",
               keyword: "const",
@@ -6145,18 +7926,18 @@ function validate20(
               message: "must be equal to constant",
             };
             if (vErrors === null) {
-              vErrors = [err51];
+              vErrors = [err71];
             } else {
-              vErrors.push(err51);
+              vErrors.push(err71);
             }
             errors++;
           }
         }
-        if (data17.manifest_id !== undefined) {
-          let data19 = data17.manifest_id;
-          if (typeof data19 === "string") {
-            if (func1(data19) > 160) {
-              const err52 = {
+        if (data24.manifest_id !== undefined) {
+          let data26 = data24.manifest_id;
+          if (typeof data26 === "string") {
+            if (func1(data26) > 160) {
+              const err72 = {
                 instancePath: instancePath + "/design_space_candidates/manifest_id",
                 schemaPath: "design-space-candidates.schema.json/properties/manifest_id/maxLength",
                 keyword: "maxLength",
@@ -6164,14 +7945,14 @@ function validate20(
                 message: "must NOT have more than 160 characters",
               };
               if (vErrors === null) {
-                vErrors = [err52];
+                vErrors = [err72];
               } else {
-                vErrors.push(err52);
+                vErrors.push(err72);
               }
               errors++;
             }
-            if (func1(data19) < 1) {
-              const err53 = {
+            if (func1(data26) < 1) {
+              const err73 = {
                 instancePath: instancePath + "/design_space_candidates/manifest_id",
                 schemaPath: "design-space-candidates.schema.json/properties/manifest_id/minLength",
                 keyword: "minLength",
@@ -6179,14 +7960,14 @@ function validate20(
                 message: "must NOT have fewer than 1 characters",
               };
               if (vErrors === null) {
-                vErrors = [err53];
+                vErrors = [err73];
               } else {
-                vErrors.push(err53);
+                vErrors.push(err73);
               }
               errors++;
             }
           } else {
-            const err54 = {
+            const err74 = {
               instancePath: instancePath + "/design_space_candidates/manifest_id",
               schemaPath: "design-space-candidates.schema.json/properties/manifest_id/type",
               keyword: "type",
@@ -6194,16 +7975,16 @@ function validate20(
               message: "must be string",
             };
             if (vErrors === null) {
-              vErrors = [err54];
+              vErrors = [err74];
             } else {
-              vErrors.push(err54);
+              vErrors.push(err74);
             }
             errors++;
           }
         }
-        if (data17.source_mode !== undefined) {
-          if ("synthetic_trace" !== data17.source_mode) {
-            const err55 = {
+        if (data24.source_mode !== undefined) {
+          if ("synthetic_trace" !== data24.source_mode) {
+            const err75 = {
               instancePath: instancePath + "/design_space_candidates/source_mode",
               schemaPath: "design-space-candidates.schema.json/properties/source_mode/const",
               keyword: "const",
@@ -6211,17 +7992,17 @@ function validate20(
               message: "must be equal to constant",
             };
             if (vErrors === null) {
-              vErrors = [err55];
+              vErrors = [err75];
             } else {
-              vErrors.push(err55);
+              vErrors.push(err75);
             }
             errors++;
           }
         }
-        if (data17.calibration_level !== undefined) {
-          let data21 = data17.calibration_level;
-          if (!(data21 === "uncalibrated" || data21 === "partially_calibrated")) {
-            const err56 = {
+        if (data24.calibration_level !== undefined) {
+          let data28 = data24.calibration_level;
+          if (!(data28 === "uncalibrated" || data28 === "partially_calibrated")) {
+            const err76 = {
               instancePath: instancePath + "/design_space_candidates/calibration_level",
               schemaPath: "design-space-candidates.schema.json/properties/calibration_level/enum",
               keyword: "enum",
@@ -6229,23 +8010,23 @@ function validate20(
               message: "must be equal to one of the allowed values",
             };
             if (vErrors === null) {
-              vErrors = [err56];
+              vErrors = [err76];
             } else {
-              vErrors.push(err56);
+              vErrors.push(err76);
             }
             errors++;
           }
         }
-        if (data17.allowed_claim_scope !== undefined) {
-          let data22 = data17.allowed_claim_scope;
+        if (data24.allowed_claim_scope !== undefined) {
+          let data29 = data24.allowed_claim_scope;
           if (!(
-            data22 === "exploratory" ||
-            data22 === "exploratory_s6_only" ||
-            data22 === "synthetic_consistency" ||
-            data22 === "synthetic_consistency_only" ||
-            data22 === "workflow_consistency_only"
+            data29 === "exploratory" ||
+            data29 === "exploratory_s6_only" ||
+            data29 === "synthetic_consistency" ||
+            data29 === "synthetic_consistency_only" ||
+            data29 === "workflow_consistency_only"
           )) {
-            const err57 = {
+            const err77 = {
               instancePath: instancePath + "/design_space_candidates/allowed_claim_scope",
               schemaPath: "design-space-candidates.schema.json/properties/allowed_claim_scope/enum",
               keyword: "enum",
@@ -6253,18 +8034,18 @@ function validate20(
               message: "must be equal to one of the allowed values",
             };
             if (vErrors === null) {
-              vErrors = [err57];
+              vErrors = [err77];
             } else {
-              vErrors.push(err57);
+              vErrors.push(err77);
             }
             errors++;
           }
         }
-        if (data17.candidates !== undefined) {
-          let data23 = data17.candidates;
-          if (Array.isArray(data23)) {
-            if (data23.length > 256) {
-              const err58 = {
+        if (data24.candidates !== undefined) {
+          let data30 = data24.candidates;
+          if (Array.isArray(data30)) {
+            if (data30.length > 256) {
+              const err78 = {
                 instancePath: instancePath + "/design_space_candidates/candidates",
                 schemaPath: "design-space-candidates.schema.json/properties/candidates/maxItems",
                 keyword: "maxItems",
@@ -6272,14 +8053,14 @@ function validate20(
                 message: "must NOT have more than 256 items",
               };
               if (vErrors === null) {
-                vErrors = [err58];
+                vErrors = [err78];
               } else {
-                vErrors.push(err58);
+                vErrors.push(err78);
               }
               errors++;
             }
-            if (data23.length < 1) {
-              const err59 = {
+            if (data30.length < 1) {
+              const err79 = {
                 instancePath: instancePath + "/design_space_candidates/candidates",
                 schemaPath: "design-space-candidates.schema.json/properties/candidates/minItems",
                 keyword: "minItems",
@@ -6287,18 +8068,18 @@ function validate20(
                 message: "must NOT have fewer than 1 items",
               };
               if (vErrors === null) {
-                vErrors = [err59];
+                vErrors = [err79];
               } else {
-                vErrors.push(err59);
+                vErrors.push(err79);
               }
               errors++;
             }
-            const len0 = data23.length;
+            const len0 = data30.length;
             for (let i0 = 0; i0 < len0; i0++) {
-              let data24 = data23[i0];
-              if (data24 && typeof data24 == "object" && !Array.isArray(data24)) {
-                if (data24.candidate_id === undefined) {
-                  const err60 = {
+              let data31 = data30[i0];
+              if (data31 && typeof data31 == "object" && !Array.isArray(data31)) {
+                if (data31.candidate_id === undefined) {
+                  const err80 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i0,
                     schemaPath: "design-space-candidates.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -6306,14 +8087,14 @@ function validate20(
                     message: "must have required property '" + "candidate_id" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err60];
+                    vErrors = [err80];
                   } else {
-                    vErrors.push(err60);
+                    vErrors.push(err80);
                   }
                   errors++;
                 }
-                if (data24.name === undefined) {
-                  const err61 = {
+                if (data31.name === undefined) {
+                  const err81 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i0,
                     schemaPath: "design-space-candidates.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -6321,14 +8102,14 @@ function validate20(
                     message: "must have required property '" + "name" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err61];
+                    vErrors = [err81];
                   } else {
-                    vErrors.push(err61);
+                    vErrors.push(err81);
                   }
                   errors++;
                 }
-                if (data24.bandwidth_gbps === undefined) {
-                  const err62 = {
+                if (data31.bandwidth_gbps === undefined) {
+                  const err82 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i0,
                     schemaPath: "design-space-candidates.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -6336,14 +8117,14 @@ function validate20(
                     message: "must have required property '" + "bandwidth_gbps" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err62];
+                    vErrors = [err82];
                   } else {
-                    vErrors.push(err62);
+                    vErrors.push(err82);
                   }
                   errors++;
                 }
-                if (data24.latency_us === undefined) {
-                  const err63 = {
+                if (data31.latency_us === undefined) {
+                  const err83 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i0,
                     schemaPath: "design-space-candidates.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -6351,14 +8132,14 @@ function validate20(
                     message: "must have required property '" + "latency_us" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err63];
+                    vErrors = [err83];
                   } else {
-                    vErrors.push(err63);
+                    vErrors.push(err83);
                   }
                   errors++;
                 }
-                if (data24.oversubscription_factor === undefined) {
-                  const err64 = {
+                if (data31.oversubscription_factor === undefined) {
+                  const err84 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i0,
                     schemaPath: "design-space-candidates.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -6366,14 +8147,14 @@ function validate20(
                     message: "must have required property '" + "oversubscription_factor" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err64];
+                    vErrors = [err84];
                   } else {
-                    vErrors.push(err64);
+                    vErrors.push(err84);
                   }
                   errors++;
                 }
-                if (data24.request_count === undefined) {
-                  const err65 = {
+                if (data31.request_count === undefined) {
+                  const err85 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i0,
                     schemaPath: "design-space-candidates.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -6381,14 +8162,14 @@ function validate20(
                     message: "must have required property '" + "request_count" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err65];
+                    vErrors = [err85];
                   } else {
-                    vErrors.push(err65);
+                    vErrors.push(err85);
                   }
                   errors++;
                 }
-                if (data24.message_bytes === undefined) {
-                  const err66 = {
+                if (data31.message_bytes === undefined) {
+                  const err86 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i0,
                     schemaPath: "design-space-candidates.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -6396,14 +8177,14 @@ function validate20(
                     message: "must have required property '" + "message_bytes" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err66];
+                    vErrors = [err86];
                   } else {
-                    vErrors.push(err66);
+                    vErrors.push(err86);
                   }
                   errors++;
                 }
-                if (data24.release_interval_ps === undefined) {
-                  const err67 = {
+                if (data31.release_interval_ps === undefined) {
+                  const err87 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i0,
                     schemaPath: "design-space-candidates.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -6411,14 +8192,14 @@ function validate20(
                     message: "must have required property '" + "release_interval_ps" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err67];
+                    vErrors = [err87];
                   } else {
-                    vErrors.push(err67);
+                    vErrors.push(err87);
                   }
                   errors++;
                 }
-                if (data24.uncertainty_score === undefined) {
-                  const err68 = {
+                if (data31.uncertainty_score === undefined) {
+                  const err88 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i0,
                     schemaPath: "design-space-candidates.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -6426,14 +8207,14 @@ function validate20(
                     message: "must have required property '" + "uncertainty_score" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err68];
+                    vErrors = [err88];
                   } else {
-                    vErrors.push(err68);
+                    vErrors.push(err88);
                   }
                   errors++;
                 }
-                if (data24.tail_risk === undefined) {
-                  const err69 = {
+                if (data31.tail_risk === undefined) {
+                  const err89 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i0,
                     schemaPath: "design-space-candidates.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -6441,14 +8222,14 @@ function validate20(
                     message: "must have required property '" + "tail_risk" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err69];
+                    vErrors = [err89];
                   } else {
-                    vErrors.push(err69);
+                    vErrors.push(err89);
                   }
                   errors++;
                 }
-                if (data24.source_id === undefined) {
-                  const err70 = {
+                if (data31.source_id === undefined) {
+                  const err90 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i0,
                     schemaPath: "design-space-candidates.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -6456,15 +8237,15 @@ function validate20(
                     message: "must have required property '" + "source_id" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err70];
+                    vErrors = [err90];
                   } else {
-                    vErrors.push(err70);
+                    vErrors.push(err90);
                   }
                   errors++;
                 }
-                for (const key6 in data24) {
-                  if (!func4.call(schema39.properties.candidates.items.properties, key6)) {
-                    const err71 = {
+                for (const key6 in data31) {
+                  if (!func5.call(schema39.properties.candidates.items.properties, key6)) {
+                    const err91 = {
                       instancePath: instancePath + "/design_space_candidates/candidates/" + i0,
                       schemaPath:
                         "design-space-candidates.schema.json/properties/candidates/items/additionalProperties",
@@ -6473,18 +8254,18 @@ function validate20(
                       message: "must NOT have additional properties",
                     };
                     if (vErrors === null) {
-                      vErrors = [err71];
+                      vErrors = [err91];
                     } else {
-                      vErrors.push(err71);
+                      vErrors.push(err91);
                     }
                     errors++;
                   }
                 }
-                if (data24.candidate_id !== undefined) {
-                  let data25 = data24.candidate_id;
-                  if (typeof data25 === "string") {
-                    if (func1(data25) > 512) {
-                      const err72 = {
+                if (data31.candidate_id !== undefined) {
+                  let data32 = data31.candidate_id;
+                  if (typeof data32 === "string") {
+                    if (func1(data32) > 512) {
+                      const err92 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/candidate_id",
                         schemaPath:
                           "design-space-candidates.schema.json/properties/candidates/items/properties/candidate_id/maxLength",
@@ -6493,14 +8274,14 @@ function validate20(
                         message: "must NOT have more than 512 characters",
                       };
                       if (vErrors === null) {
-                        vErrors = [err72];
+                        vErrors = [err92];
                       } else {
-                        vErrors.push(err72);
+                        vErrors.push(err92);
                       }
                       errors++;
                     }
-                    if (func1(data25) < 1) {
-                      const err73 = {
+                    if (func1(data32) < 1) {
+                      const err93 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/candidate_id",
                         schemaPath:
                           "design-space-candidates.schema.json/properties/candidates/items/properties/candidate_id/minLength",
@@ -6509,14 +8290,14 @@ function validate20(
                         message: "must NOT have fewer than 1 characters",
                       };
                       if (vErrors === null) {
-                        vErrors = [err73];
+                        vErrors = [err93];
                       } else {
-                        vErrors.push(err73);
+                        vErrors.push(err93);
                       }
                       errors++;
                     }
                   } else {
-                    const err74 = {
+                    const err94 = {
                       instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/candidate_id",
                       schemaPath:
                         "design-space-candidates.schema.json/properties/candidates/items/properties/candidate_id/type",
@@ -6525,18 +8306,18 @@ function validate20(
                       message: "must be string",
                     };
                     if (vErrors === null) {
-                      vErrors = [err74];
+                      vErrors = [err94];
                     } else {
-                      vErrors.push(err74);
+                      vErrors.push(err94);
                     }
                     errors++;
                   }
                 }
-                if (data24.name !== undefined) {
-                  let data26 = data24.name;
-                  if (typeof data26 === "string") {
-                    if (func1(data26) > 512) {
-                      const err75 = {
+                if (data31.name !== undefined) {
+                  let data33 = data31.name;
+                  if (typeof data33 === "string") {
+                    if (func1(data33) > 512) {
+                      const err95 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/name",
                         schemaPath:
                           "design-space-candidates.schema.json/properties/candidates/items/properties/name/maxLength",
@@ -6545,14 +8326,14 @@ function validate20(
                         message: "must NOT have more than 512 characters",
                       };
                       if (vErrors === null) {
-                        vErrors = [err75];
+                        vErrors = [err95];
                       } else {
-                        vErrors.push(err75);
+                        vErrors.push(err95);
                       }
                       errors++;
                     }
-                    if (func1(data26) < 1) {
-                      const err76 = {
+                    if (func1(data33) < 1) {
+                      const err96 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/name",
                         schemaPath:
                           "design-space-candidates.schema.json/properties/candidates/items/properties/name/minLength",
@@ -6561,14 +8342,14 @@ function validate20(
                         message: "must NOT have fewer than 1 characters",
                       };
                       if (vErrors === null) {
-                        vErrors = [err76];
+                        vErrors = [err96];
                       } else {
-                        vErrors.push(err76);
+                        vErrors.push(err96);
                       }
                       errors++;
                     }
                   } else {
-                    const err77 = {
+                    const err97 = {
                       instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/name",
                       schemaPath:
                         "design-space-candidates.schema.json/properties/candidates/items/properties/name/type",
@@ -6577,18 +8358,18 @@ function validate20(
                       message: "must be string",
                     };
                     if (vErrors === null) {
-                      vErrors = [err77];
+                      vErrors = [err97];
                     } else {
-                      vErrors.push(err77);
+                      vErrors.push(err97);
                     }
                     errors++;
                   }
                 }
-                if (data24.bandwidth_gbps !== undefined) {
-                  let data27 = data24.bandwidth_gbps;
-                  if (typeof data27 == "number") {
-                    if (data27 > 100000 || isNaN(data27)) {
-                      const err78 = {
+                if (data31.bandwidth_gbps !== undefined) {
+                  let data34 = data31.bandwidth_gbps;
+                  if (typeof data34 == "number") {
+                    if (data34 > 100000 || isNaN(data34)) {
+                      const err98 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/bandwidth_gbps",
                         schemaPath:
                           "design-space-candidates.schema.json/properties/candidates/items/properties/bandwidth_gbps/maximum",
@@ -6597,14 +8378,14 @@ function validate20(
                         message: "must be <= 100000",
                       };
                       if (vErrors === null) {
-                        vErrors = [err78];
+                        vErrors = [err98];
                       } else {
-                        vErrors.push(err78);
+                        vErrors.push(err98);
                       }
                       errors++;
                     }
-                    if (data27 < 0.000001 || isNaN(data27)) {
-                      const err79 = {
+                    if (data34 < 0.000001 || isNaN(data34)) {
+                      const err99 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/bandwidth_gbps",
                         schemaPath:
                           "design-space-candidates.schema.json/properties/candidates/items/properties/bandwidth_gbps/minimum",
@@ -6613,14 +8394,14 @@ function validate20(
                         message: "must be >= 0.000001",
                       };
                       if (vErrors === null) {
-                        vErrors = [err79];
+                        vErrors = [err99];
                       } else {
-                        vErrors.push(err79);
+                        vErrors.push(err99);
                       }
                       errors++;
                     }
                   } else {
-                    const err80 = {
+                    const err100 = {
                       instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/bandwidth_gbps",
                       schemaPath:
                         "design-space-candidates.schema.json/properties/candidates/items/properties/bandwidth_gbps/type",
@@ -6629,18 +8410,18 @@ function validate20(
                       message: "must be number",
                     };
                     if (vErrors === null) {
-                      vErrors = [err80];
+                      vErrors = [err100];
                     } else {
-                      vErrors.push(err80);
+                      vErrors.push(err100);
                     }
                     errors++;
                   }
                 }
-                if (data24.latency_us !== undefined) {
-                  let data28 = data24.latency_us;
-                  if (typeof data28 == "number") {
-                    if (data28 > 1000000 || isNaN(data28)) {
-                      const err81 = {
+                if (data31.latency_us !== undefined) {
+                  let data35 = data31.latency_us;
+                  if (typeof data35 == "number") {
+                    if (data35 > 1000000 || isNaN(data35)) {
+                      const err101 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/latency_us",
                         schemaPath:
                           "design-space-candidates.schema.json/properties/candidates/items/properties/latency_us/maximum",
@@ -6649,14 +8430,14 @@ function validate20(
                         message: "must be <= 1000000",
                       };
                       if (vErrors === null) {
-                        vErrors = [err81];
+                        vErrors = [err101];
                       } else {
-                        vErrors.push(err81);
+                        vErrors.push(err101);
                       }
                       errors++;
                     }
-                    if (data28 < 0 || isNaN(data28)) {
-                      const err82 = {
+                    if (data35 < 0 || isNaN(data35)) {
+                      const err102 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/latency_us",
                         schemaPath:
                           "design-space-candidates.schema.json/properties/candidates/items/properties/latency_us/minimum",
@@ -6665,14 +8446,14 @@ function validate20(
                         message: "must be >= 0",
                       };
                       if (vErrors === null) {
-                        vErrors = [err82];
+                        vErrors = [err102];
                       } else {
-                        vErrors.push(err82);
+                        vErrors.push(err102);
                       }
                       errors++;
                     }
                   } else {
-                    const err83 = {
+                    const err103 = {
                       instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/latency_us",
                       schemaPath:
                         "design-space-candidates.schema.json/properties/candidates/items/properties/latency_us/type",
@@ -6681,18 +8462,18 @@ function validate20(
                       message: "must be number",
                     };
                     if (vErrors === null) {
-                      vErrors = [err83];
+                      vErrors = [err103];
                     } else {
-                      vErrors.push(err83);
+                      vErrors.push(err103);
                     }
                     errors++;
                   }
                 }
-                if (data24.oversubscription_factor !== undefined) {
-                  let data29 = data24.oversubscription_factor;
-                  if (typeof data29 == "number") {
-                    if (data29 > 1000000 || isNaN(data29)) {
-                      const err84 = {
+                if (data31.oversubscription_factor !== undefined) {
+                  let data36 = data31.oversubscription_factor;
+                  if (typeof data36 == "number") {
+                    if (data36 > 1000000 || isNaN(data36)) {
+                      const err104 = {
                         instancePath:
                           instancePath + "/design_space_candidates/candidates/" + i0 + "/oversubscription_factor",
                         schemaPath:
@@ -6702,14 +8483,14 @@ function validate20(
                         message: "must be <= 1000000",
                       };
                       if (vErrors === null) {
-                        vErrors = [err84];
+                        vErrors = [err104];
                       } else {
-                        vErrors.push(err84);
+                        vErrors.push(err104);
                       }
                       errors++;
                     }
-                    if (data29 < 0.000001 || isNaN(data29)) {
-                      const err85 = {
+                    if (data36 < 0.000001 || isNaN(data36)) {
+                      const err105 = {
                         instancePath:
                           instancePath + "/design_space_candidates/candidates/" + i0 + "/oversubscription_factor",
                         schemaPath:
@@ -6719,14 +8500,14 @@ function validate20(
                         message: "must be >= 0.000001",
                       };
                       if (vErrors === null) {
-                        vErrors = [err85];
+                        vErrors = [err105];
                       } else {
-                        vErrors.push(err85);
+                        vErrors.push(err105);
                       }
                       errors++;
                     }
                   } else {
-                    const err86 = {
+                    const err106 = {
                       instancePath:
                         instancePath + "/design_space_candidates/candidates/" + i0 + "/oversubscription_factor",
                       schemaPath:
@@ -6736,17 +8517,17 @@ function validate20(
                       message: "must be number",
                     };
                     if (vErrors === null) {
-                      vErrors = [err86];
+                      vErrors = [err106];
                     } else {
-                      vErrors.push(err86);
+                      vErrors.push(err106);
                     }
                     errors++;
                   }
                 }
-                if (data24.request_count !== undefined) {
-                  let data30 = data24.request_count;
-                  if (!(typeof data30 == "number" && !(data30 % 1) && !isNaN(data30))) {
-                    const err87 = {
+                if (data31.request_count !== undefined) {
+                  let data37 = data31.request_count;
+                  if (!(typeof data37 == "number" && !(data37 % 1) && !isNaN(data37))) {
+                    const err107 = {
                       instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/request_count",
                       schemaPath:
                         "design-space-candidates.schema.json/properties/candidates/items/properties/request_count/type",
@@ -6755,15 +8536,15 @@ function validate20(
                       message: "must be integer",
                     };
                     if (vErrors === null) {
-                      vErrors = [err87];
+                      vErrors = [err107];
                     } else {
-                      vErrors.push(err87);
+                      vErrors.push(err107);
                     }
                     errors++;
                   }
-                  if (typeof data30 == "number") {
-                    if (data30 > 100000 || isNaN(data30)) {
-                      const err88 = {
+                  if (typeof data37 == "number") {
+                    if (data37 > 100000 || isNaN(data37)) {
+                      const err108 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/request_count",
                         schemaPath:
                           "design-space-candidates.schema.json/properties/candidates/items/properties/request_count/maximum",
@@ -6772,14 +8553,14 @@ function validate20(
                         message: "must be <= 100000",
                       };
                       if (vErrors === null) {
-                        vErrors = [err88];
+                        vErrors = [err108];
                       } else {
-                        vErrors.push(err88);
+                        vErrors.push(err108);
                       }
                       errors++;
                     }
-                    if (data30 < 1 || isNaN(data30)) {
-                      const err89 = {
+                    if (data37 < 1 || isNaN(data37)) {
+                      const err109 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/request_count",
                         schemaPath:
                           "design-space-candidates.schema.json/properties/candidates/items/properties/request_count/minimum",
@@ -6788,18 +8569,18 @@ function validate20(
                         message: "must be >= 1",
                       };
                       if (vErrors === null) {
-                        vErrors = [err89];
+                        vErrors = [err109];
                       } else {
-                        vErrors.push(err89);
+                        vErrors.push(err109);
                       }
                       errors++;
                     }
                   }
                 }
-                if (data24.message_bytes !== undefined) {
-                  let data31 = data24.message_bytes;
-                  if (!(typeof data31 == "number" && !(data31 % 1) && !isNaN(data31))) {
-                    const err90 = {
+                if (data31.message_bytes !== undefined) {
+                  let data38 = data31.message_bytes;
+                  if (!(typeof data38 == "number" && !(data38 % 1) && !isNaN(data38))) {
+                    const err110 = {
                       instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/message_bytes",
                       schemaPath:
                         "design-space-candidates.schema.json/properties/candidates/items/properties/message_bytes/type",
@@ -6808,15 +8589,15 @@ function validate20(
                       message: "must be integer",
                     };
                     if (vErrors === null) {
-                      vErrors = [err90];
+                      vErrors = [err110];
                     } else {
-                      vErrors.push(err90);
+                      vErrors.push(err110);
                     }
                     errors++;
                   }
-                  if (typeof data31 == "number") {
-                    if (data31 > 9007199254740991 || isNaN(data31)) {
-                      const err91 = {
+                  if (typeof data38 == "number") {
+                    if (data38 > 9007199254740991 || isNaN(data38)) {
+                      const err111 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/message_bytes",
                         schemaPath:
                           "design-space-candidates.schema.json/properties/candidates/items/properties/message_bytes/maximum",
@@ -6825,14 +8606,14 @@ function validate20(
                         message: "must be <= 9007199254740991",
                       };
                       if (vErrors === null) {
-                        vErrors = [err91];
+                        vErrors = [err111];
                       } else {
-                        vErrors.push(err91);
+                        vErrors.push(err111);
                       }
                       errors++;
                     }
-                    if (data31 < 1 || isNaN(data31)) {
-                      const err92 = {
+                    if (data38 < 1 || isNaN(data38)) {
+                      const err112 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/message_bytes",
                         schemaPath:
                           "design-space-candidates.schema.json/properties/candidates/items/properties/message_bytes/minimum",
@@ -6841,18 +8622,18 @@ function validate20(
                         message: "must be >= 1",
                       };
                       if (vErrors === null) {
-                        vErrors = [err92];
+                        vErrors = [err112];
                       } else {
-                        vErrors.push(err92);
+                        vErrors.push(err112);
                       }
                       errors++;
                     }
                   }
                 }
-                if (data24.release_interval_ps !== undefined) {
-                  let data32 = data24.release_interval_ps;
-                  if (!(typeof data32 == "number" && !(data32 % 1) && !isNaN(data32))) {
-                    const err93 = {
+                if (data31.release_interval_ps !== undefined) {
+                  let data39 = data31.release_interval_ps;
+                  if (!(typeof data39 == "number" && !(data39 % 1) && !isNaN(data39))) {
+                    const err113 = {
                       instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/release_interval_ps",
                       schemaPath:
                         "design-space-candidates.schema.json/properties/candidates/items/properties/release_interval_ps/type",
@@ -6861,15 +8642,15 @@ function validate20(
                       message: "must be integer",
                     };
                     if (vErrors === null) {
-                      vErrors = [err93];
+                      vErrors = [err113];
                     } else {
-                      vErrors.push(err93);
+                      vErrors.push(err113);
                     }
                     errors++;
                   }
-                  if (typeof data32 == "number") {
-                    if (data32 > 9007199254740991 || isNaN(data32)) {
-                      const err94 = {
+                  if (typeof data39 == "number") {
+                    if (data39 > 9007199254740991 || isNaN(data39)) {
+                      const err114 = {
                         instancePath:
                           instancePath + "/design_space_candidates/candidates/" + i0 + "/release_interval_ps",
                         schemaPath:
@@ -6879,14 +8660,14 @@ function validate20(
                         message: "must be <= 9007199254740991",
                       };
                       if (vErrors === null) {
-                        vErrors = [err94];
+                        vErrors = [err114];
                       } else {
-                        vErrors.push(err94);
+                        vErrors.push(err114);
                       }
                       errors++;
                     }
-                    if (data32 < 0 || isNaN(data32)) {
-                      const err95 = {
+                    if (data39 < 0 || isNaN(data39)) {
+                      const err115 = {
                         instancePath:
                           instancePath + "/design_space_candidates/candidates/" + i0 + "/release_interval_ps",
                         schemaPath:
@@ -6896,19 +8677,19 @@ function validate20(
                         message: "must be >= 0",
                       };
                       if (vErrors === null) {
-                        vErrors = [err95];
+                        vErrors = [err115];
                       } else {
-                        vErrors.push(err95);
+                        vErrors.push(err115);
                       }
                       errors++;
                     }
                   }
                 }
-                if (data24.uncertainty_score !== undefined) {
-                  let data33 = data24.uncertainty_score;
-                  if (typeof data33 == "number") {
-                    if (data33 > 1 || isNaN(data33)) {
-                      const err96 = {
+                if (data31.uncertainty_score !== undefined) {
+                  let data40 = data31.uncertainty_score;
+                  if (typeof data40 == "number") {
+                    if (data40 > 1 || isNaN(data40)) {
+                      const err116 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/uncertainty_score",
                         schemaPath:
                           "design-space-candidates.schema.json/properties/candidates/items/properties/uncertainty_score/maximum",
@@ -6917,14 +8698,14 @@ function validate20(
                         message: "must be <= 1",
                       };
                       if (vErrors === null) {
-                        vErrors = [err96];
+                        vErrors = [err116];
                       } else {
-                        vErrors.push(err96);
+                        vErrors.push(err116);
                       }
                       errors++;
                     }
-                    if (data33 < 0 || isNaN(data33)) {
-                      const err97 = {
+                    if (data40 < 0 || isNaN(data40)) {
+                      const err117 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/uncertainty_score",
                         schemaPath:
                           "design-space-candidates.schema.json/properties/candidates/items/properties/uncertainty_score/minimum",
@@ -6933,14 +8714,14 @@ function validate20(
                         message: "must be >= 0",
                       };
                       if (vErrors === null) {
-                        vErrors = [err97];
+                        vErrors = [err117];
                       } else {
-                        vErrors.push(err97);
+                        vErrors.push(err117);
                       }
                       errors++;
                     }
                   } else {
-                    const err98 = {
+                    const err118 = {
                       instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/uncertainty_score",
                       schemaPath:
                         "design-space-candidates.schema.json/properties/candidates/items/properties/uncertainty_score/type",
@@ -6949,16 +8730,16 @@ function validate20(
                       message: "must be number",
                     };
                     if (vErrors === null) {
-                      vErrors = [err98];
+                      vErrors = [err118];
                     } else {
-                      vErrors.push(err98);
+                      vErrors.push(err118);
                     }
                     errors++;
                   }
                 }
-                if (data24.tail_risk !== undefined) {
-                  if (typeof data24.tail_risk !== "boolean") {
-                    const err99 = {
+                if (data31.tail_risk !== undefined) {
+                  if (typeof data31.tail_risk !== "boolean") {
+                    const err119 = {
                       instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/tail_risk",
                       schemaPath:
                         "design-space-candidates.schema.json/properties/candidates/items/properties/tail_risk/type",
@@ -6967,18 +8748,18 @@ function validate20(
                       message: "must be boolean",
                     };
                     if (vErrors === null) {
-                      vErrors = [err99];
+                      vErrors = [err119];
                     } else {
-                      vErrors.push(err99);
+                      vErrors.push(err119);
                     }
                     errors++;
                   }
                 }
-                if (data24.promotion_hint !== undefined) {
-                  let data35 = data24.promotion_hint;
-                  if (typeof data35 === "string") {
-                    if (func1(data35) > 160) {
-                      const err100 = {
+                if (data31.promotion_hint !== undefined) {
+                  let data42 = data31.promotion_hint;
+                  if (typeof data42 === "string") {
+                    if (func1(data42) > 160) {
+                      const err120 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/promotion_hint",
                         schemaPath:
                           "design-space-candidates.schema.json/properties/candidates/items/properties/promotion_hint/maxLength",
@@ -6987,14 +8768,14 @@ function validate20(
                         message: "must NOT have more than 160 characters",
                       };
                       if (vErrors === null) {
-                        vErrors = [err100];
+                        vErrors = [err120];
                       } else {
-                        vErrors.push(err100);
+                        vErrors.push(err120);
                       }
                       errors++;
                     }
                   } else {
-                    const err101 = {
+                    const err121 = {
                       instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/promotion_hint",
                       schemaPath:
                         "design-space-candidates.schema.json/properties/candidates/items/properties/promotion_hint/type",
@@ -7003,18 +8784,18 @@ function validate20(
                       message: "must be string",
                     };
                     if (vErrors === null) {
-                      vErrors = [err101];
+                      vErrors = [err121];
                     } else {
-                      vErrors.push(err101);
+                      vErrors.push(err121);
                     }
                     errors++;
                   }
                 }
-                if (data24.source_id !== undefined) {
-                  let data36 = data24.source_id;
-                  if (typeof data36 === "string") {
-                    if (func1(data36) > 512) {
-                      const err102 = {
+                if (data31.source_id !== undefined) {
+                  let data43 = data31.source_id;
+                  if (typeof data43 === "string") {
+                    if (func1(data43) > 512) {
+                      const err122 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/source_id",
                         schemaPath:
                           "design-space-candidates.schema.json/properties/candidates/items/properties/source_id/maxLength",
@@ -7023,14 +8804,14 @@ function validate20(
                         message: "must NOT have more than 512 characters",
                       };
                       if (vErrors === null) {
-                        vErrors = [err102];
+                        vErrors = [err122];
                       } else {
-                        vErrors.push(err102);
+                        vErrors.push(err122);
                       }
                       errors++;
                     }
-                    if (func1(data36) < 1) {
-                      const err103 = {
+                    if (func1(data43) < 1) {
+                      const err123 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/source_id",
                         schemaPath:
                           "design-space-candidates.schema.json/properties/candidates/items/properties/source_id/minLength",
@@ -7039,14 +8820,14 @@ function validate20(
                         message: "must NOT have fewer than 1 characters",
                       };
                       if (vErrors === null) {
-                        vErrors = [err103];
+                        vErrors = [err123];
                       } else {
-                        vErrors.push(err103);
+                        vErrors.push(err123);
                       }
                       errors++;
                     }
                   } else {
-                    const err104 = {
+                    const err124 = {
                       instancePath: instancePath + "/design_space_candidates/candidates/" + i0 + "/source_id",
                       schemaPath:
                         "design-space-candidates.schema.json/properties/candidates/items/properties/source_id/type",
@@ -7055,15 +8836,15 @@ function validate20(
                       message: "must be string",
                     };
                     if (vErrors === null) {
-                      vErrors = [err104];
+                      vErrors = [err124];
                     } else {
-                      vErrors.push(err104);
+                      vErrors.push(err124);
                     }
                     errors++;
                   }
                 }
               } else {
-                const err105 = {
+                const err125 = {
                   instancePath: instancePath + "/design_space_candidates/candidates/" + i0,
                   schemaPath: "design-space-candidates.schema.json/properties/candidates/items/type",
                   keyword: "type",
@@ -7071,15 +8852,15 @@ function validate20(
                   message: "must be object",
                 };
                 if (vErrors === null) {
-                  vErrors = [err105];
+                  vErrors = [err125];
                 } else {
-                  vErrors.push(err105);
+                  vErrors.push(err125);
                 }
                 errors++;
               }
             }
           } else {
-            const err106 = {
+            const err126 = {
               instancePath: instancePath + "/design_space_candidates/candidates",
               schemaPath: "design-space-candidates.schema.json/properties/candidates/type",
               keyword: "type",
@@ -7087,15 +8868,15 @@ function validate20(
               message: "must be array",
             };
             if (vErrors === null) {
-              vErrors = [err106];
+              vErrors = [err126];
             } else {
-              vErrors.push(err106);
+              vErrors.push(err126);
             }
             errors++;
           }
         }
       } else {
-        const err107 = {
+        const err127 = {
           instancePath: instancePath + "/design_space_candidates",
           schemaPath: "design-space-candidates.schema.json/type",
           keyword: "type",
@@ -7103,22 +8884,22 @@ function validate20(
           message: "must be object",
         };
         if (vErrors === null) {
-          vErrors = [err107];
+          vErrors = [err127];
         } else {
-          vErrors.push(err107);
+          vErrors.push(err127);
         }
         errors++;
       }
-      var _valid0 = _errs50 === errors;
-      if (_valid0) {
-        valid11 = true;
+      var _valid1 = _errs66 === errors;
+      if (_valid1) {
+        valid14 = true;
         passing0 = 0;
-        var props0 = true;
+        var props1 = true;
       }
-      const _errs89 = errors;
-      if (data17 && typeof data17 == "object" && !Array.isArray(data17)) {
-        if (data17.schema_version === undefined) {
-          const err108 = {
+      const _errs105 = errors;
+      if (data24 && typeof data24 == "object" && !Array.isArray(data24)) {
+        if (data24.schema_version === undefined) {
+          const err128 = {
             instancePath: instancePath + "/design_space_candidates",
             schemaPath: "design-space-candidates-v2.schema.json/required",
             keyword: "required",
@@ -7126,14 +8907,14 @@ function validate20(
             message: "must have required property '" + "schema_version" + "'",
           };
           if (vErrors === null) {
-            vErrors = [err108];
+            vErrors = [err128];
           } else {
-            vErrors.push(err108);
+            vErrors.push(err128);
           }
           errors++;
         }
-        if (data17.manifest_id === undefined) {
-          const err109 = {
+        if (data24.manifest_id === undefined) {
+          const err129 = {
             instancePath: instancePath + "/design_space_candidates",
             schemaPath: "design-space-candidates-v2.schema.json/required",
             keyword: "required",
@@ -7141,14 +8922,14 @@ function validate20(
             message: "must have required property '" + "manifest_id" + "'",
           };
           if (vErrors === null) {
-            vErrors = [err109];
+            vErrors = [err129];
           } else {
-            vErrors.push(err109);
+            vErrors.push(err129);
           }
           errors++;
         }
-        if (data17.source_mode === undefined) {
-          const err110 = {
+        if (data24.source_mode === undefined) {
+          const err130 = {
             instancePath: instancePath + "/design_space_candidates",
             schemaPath: "design-space-candidates-v2.schema.json/required",
             keyword: "required",
@@ -7156,14 +8937,14 @@ function validate20(
             message: "must have required property '" + "source_mode" + "'",
           };
           if (vErrors === null) {
-            vErrors = [err110];
+            vErrors = [err130];
           } else {
-            vErrors.push(err110);
+            vErrors.push(err130);
           }
           errors++;
         }
-        if (data17.calibration_level === undefined) {
-          const err111 = {
+        if (data24.calibration_level === undefined) {
+          const err131 = {
             instancePath: instancePath + "/design_space_candidates",
             schemaPath: "design-space-candidates-v2.schema.json/required",
             keyword: "required",
@@ -7171,14 +8952,14 @@ function validate20(
             message: "must have required property '" + "calibration_level" + "'",
           };
           if (vErrors === null) {
-            vErrors = [err111];
+            vErrors = [err131];
           } else {
-            vErrors.push(err111);
+            vErrors.push(err131);
           }
           errors++;
         }
-        if (data17.allowed_claim_scope === undefined) {
-          const err112 = {
+        if (data24.allowed_claim_scope === undefined) {
+          const err132 = {
             instancePath: instancePath + "/design_space_candidates",
             schemaPath: "design-space-candidates-v2.schema.json/required",
             keyword: "required",
@@ -7186,14 +8967,14 @@ function validate20(
             message: "must have required property '" + "allowed_claim_scope" + "'",
           };
           if (vErrors === null) {
-            vErrors = [err112];
+            vErrors = [err132];
           } else {
-            vErrors.push(err112);
+            vErrors.push(err132);
           }
           errors++;
         }
-        if (data17.candidates === undefined) {
-          const err113 = {
+        if (data24.candidates === undefined) {
+          const err133 = {
             instancePath: instancePath + "/design_space_candidates",
             schemaPath: "design-space-candidates-v2.schema.json/required",
             keyword: "required",
@@ -7201,13 +8982,13 @@ function validate20(
             message: "must have required property '" + "candidates" + "'",
           };
           if (vErrors === null) {
-            vErrors = [err113];
+            vErrors = [err133];
           } else {
-            vErrors.push(err113);
+            vErrors.push(err133);
           }
           errors++;
         }
-        for (const key7 in data17) {
+        for (const key7 in data24) {
           if (!(
             key7 === "schema_version" ||
             key7 === "manifest_id" ||
@@ -7216,7 +8997,7 @@ function validate20(
             key7 === "allowed_claim_scope" ||
             key7 === "candidates"
           )) {
-            const err114 = {
+            const err134 = {
               instancePath: instancePath + "/design_space_candidates",
               schemaPath: "design-space-candidates-v2.schema.json/additionalProperties",
               keyword: "additionalProperties",
@@ -7224,16 +9005,16 @@ function validate20(
               message: "must NOT have additional properties",
             };
             if (vErrors === null) {
-              vErrors = [err114];
+              vErrors = [err134];
             } else {
-              vErrors.push(err114);
+              vErrors.push(err134);
             }
             errors++;
           }
         }
-        if (data17.schema_version !== undefined) {
-          if ("tilesim.design_space.s6_candidates.v2" !== data17.schema_version) {
-            const err115 = {
+        if (data24.schema_version !== undefined) {
+          if ("tilesim.design_space.s6_candidates.v2" !== data24.schema_version) {
+            const err135 = {
               instancePath: instancePath + "/design_space_candidates/schema_version",
               schemaPath: "design-space-candidates-v2.schema.json/properties/schema_version/const",
               keyword: "const",
@@ -7241,18 +9022,18 @@ function validate20(
               message: "must be equal to constant",
             };
             if (vErrors === null) {
-              vErrors = [err115];
+              vErrors = [err135];
             } else {
-              vErrors.push(err115);
+              vErrors.push(err135);
             }
             errors++;
           }
         }
-        if (data17.manifest_id !== undefined) {
-          let data38 = data17.manifest_id;
-          if (typeof data38 === "string") {
-            if (func1(data38) > 160) {
-              const err116 = {
+        if (data24.manifest_id !== undefined) {
+          let data45 = data24.manifest_id;
+          if (typeof data45 === "string") {
+            if (func1(data45) > 160) {
+              const err136 = {
                 instancePath: instancePath + "/design_space_candidates/manifest_id",
                 schemaPath: "design-space-candidates-v2.schema.json/properties/manifest_id/maxLength",
                 keyword: "maxLength",
@@ -7260,14 +9041,14 @@ function validate20(
                 message: "must NOT have more than 160 characters",
               };
               if (vErrors === null) {
-                vErrors = [err116];
+                vErrors = [err136];
               } else {
-                vErrors.push(err116);
+                vErrors.push(err136);
               }
               errors++;
             }
-            if (func1(data38) < 1) {
-              const err117 = {
+            if (func1(data45) < 1) {
+              const err137 = {
                 instancePath: instancePath + "/design_space_candidates/manifest_id",
                 schemaPath: "design-space-candidates-v2.schema.json/properties/manifest_id/minLength",
                 keyword: "minLength",
@@ -7275,14 +9056,14 @@ function validate20(
                 message: "must NOT have fewer than 1 characters",
               };
               if (vErrors === null) {
-                vErrors = [err117];
+                vErrors = [err137];
               } else {
-                vErrors.push(err117);
+                vErrors.push(err137);
               }
               errors++;
             }
           } else {
-            const err118 = {
+            const err138 = {
               instancePath: instancePath + "/design_space_candidates/manifest_id",
               schemaPath: "design-space-candidates-v2.schema.json/properties/manifest_id/type",
               keyword: "type",
@@ -7290,16 +9071,16 @@ function validate20(
               message: "must be string",
             };
             if (vErrors === null) {
-              vErrors = [err118];
+              vErrors = [err138];
             } else {
-              vErrors.push(err118);
+              vErrors.push(err138);
             }
             errors++;
           }
         }
-        if (data17.source_mode !== undefined) {
-          if ("synthetic_trace" !== data17.source_mode) {
-            const err119 = {
+        if (data24.source_mode !== undefined) {
+          if ("synthetic_trace" !== data24.source_mode) {
+            const err139 = {
               instancePath: instancePath + "/design_space_candidates/source_mode",
               schemaPath: "design-space-candidates-v2.schema.json/properties/source_mode/const",
               keyword: "const",
@@ -7307,16 +9088,16 @@ function validate20(
               message: "must be equal to constant",
             };
             if (vErrors === null) {
-              vErrors = [err119];
+              vErrors = [err139];
             } else {
-              vErrors.push(err119);
+              vErrors.push(err139);
             }
             errors++;
           }
         }
-        if (data17.calibration_level !== undefined) {
-          if ("uncalibrated" !== data17.calibration_level) {
-            const err120 = {
+        if (data24.calibration_level !== undefined) {
+          if ("uncalibrated" !== data24.calibration_level) {
+            const err140 = {
               instancePath: instancePath + "/design_space_candidates/calibration_level",
               schemaPath: "design-space-candidates-v2.schema.json/properties/calibration_level/const",
               keyword: "const",
@@ -7324,16 +9105,16 @@ function validate20(
               message: "must be equal to constant",
             };
             if (vErrors === null) {
-              vErrors = [err120];
+              vErrors = [err140];
             } else {
-              vErrors.push(err120);
+              vErrors.push(err140);
             }
             errors++;
           }
         }
-        if (data17.allowed_claim_scope !== undefined) {
-          if ("exploratory" !== data17.allowed_claim_scope) {
-            const err121 = {
+        if (data24.allowed_claim_scope !== undefined) {
+          if ("exploratory" !== data24.allowed_claim_scope) {
+            const err141 = {
               instancePath: instancePath + "/design_space_candidates/allowed_claim_scope",
               schemaPath: "design-space-candidates-v2.schema.json/properties/allowed_claim_scope/const",
               keyword: "const",
@@ -7341,18 +9122,18 @@ function validate20(
               message: "must be equal to constant",
             };
             if (vErrors === null) {
-              vErrors = [err121];
+              vErrors = [err141];
             } else {
-              vErrors.push(err121);
+              vErrors.push(err141);
             }
             errors++;
           }
         }
-        if (data17.candidates !== undefined) {
-          let data42 = data17.candidates;
-          if (Array.isArray(data42)) {
-            if (data42.length > 256) {
-              const err122 = {
+        if (data24.candidates !== undefined) {
+          let data49 = data24.candidates;
+          if (Array.isArray(data49)) {
+            if (data49.length > 256) {
+              const err142 = {
                 instancePath: instancePath + "/design_space_candidates/candidates",
                 schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/maxItems",
                 keyword: "maxItems",
@@ -7360,14 +9141,14 @@ function validate20(
                 message: "must NOT have more than 256 items",
               };
               if (vErrors === null) {
-                vErrors = [err122];
+                vErrors = [err142];
               } else {
-                vErrors.push(err122);
+                vErrors.push(err142);
               }
               errors++;
             }
-            if (data42.length < 1) {
-              const err123 = {
+            if (data49.length < 1) {
+              const err143 = {
                 instancePath: instancePath + "/design_space_candidates/candidates",
                 schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/minItems",
                 keyword: "minItems",
@@ -7375,18 +9156,18 @@ function validate20(
                 message: "must NOT have fewer than 1 items",
               };
               if (vErrors === null) {
-                vErrors = [err123];
+                vErrors = [err143];
               } else {
-                vErrors.push(err123);
+                vErrors.push(err143);
               }
               errors++;
             }
-            const len1 = data42.length;
+            const len1 = data49.length;
             for (let i1 = 0; i1 < len1; i1++) {
-              let data43 = data42[i1];
-              if (data43 && typeof data43 == "object" && !Array.isArray(data43)) {
-                if (data43.candidate_id === undefined) {
-                  const err124 = {
+              let data50 = data49[i1];
+              if (data50 && typeof data50 == "object" && !Array.isArray(data50)) {
+                if (data50.candidate_id === undefined) {
+                  const err144 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i1,
                     schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -7394,14 +9175,14 @@ function validate20(
                     message: "must have required property '" + "candidate_id" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err124];
+                    vErrors = [err144];
                   } else {
-                    vErrors.push(err124);
+                    vErrors.push(err144);
                   }
                   errors++;
                 }
-                if (data43.name === undefined) {
-                  const err125 = {
+                if (data50.name === undefined) {
+                  const err145 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i1,
                     schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -7409,14 +9190,14 @@ function validate20(
                     message: "must have required property '" + "name" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err125];
+                    vErrors = [err145];
                   } else {
-                    vErrors.push(err125);
+                    vErrors.push(err145);
                   }
                   errors++;
                 }
-                if (data43.bandwidth_gbps === undefined) {
-                  const err126 = {
+                if (data50.bandwidth_gbps === undefined) {
+                  const err146 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i1,
                     schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -7424,14 +9205,14 @@ function validate20(
                     message: "must have required property '" + "bandwidth_gbps" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err126];
+                    vErrors = [err146];
                   } else {
-                    vErrors.push(err126);
+                    vErrors.push(err146);
                   }
                   errors++;
                 }
-                if (data43.latency_us === undefined) {
-                  const err127 = {
+                if (data50.latency_us === undefined) {
+                  const err147 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i1,
                     schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -7439,14 +9220,14 @@ function validate20(
                     message: "must have required property '" + "latency_us" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err127];
+                    vErrors = [err147];
                   } else {
-                    vErrors.push(err127);
+                    vErrors.push(err147);
                   }
                   errors++;
                 }
-                if (data43.oversubscription_factor === undefined) {
-                  const err128 = {
+                if (data50.oversubscription_factor === undefined) {
+                  const err148 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i1,
                     schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -7454,14 +9235,14 @@ function validate20(
                     message: "must have required property '" + "oversubscription_factor" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err128];
+                    vErrors = [err148];
                   } else {
-                    vErrors.push(err128);
+                    vErrors.push(err148);
                   }
                   errors++;
                 }
-                if (data43.request_count === undefined) {
-                  const err129 = {
+                if (data50.request_count === undefined) {
+                  const err149 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i1,
                     schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -7469,14 +9250,14 @@ function validate20(
                     message: "must have required property '" + "request_count" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err129];
+                    vErrors = [err149];
                   } else {
-                    vErrors.push(err129);
+                    vErrors.push(err149);
                   }
                   errors++;
                 }
-                if (data43.message_bytes === undefined) {
-                  const err130 = {
+                if (data50.message_bytes === undefined) {
+                  const err150 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i1,
                     schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -7484,14 +9265,14 @@ function validate20(
                     message: "must have required property '" + "message_bytes" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err130];
+                    vErrors = [err150];
                   } else {
-                    vErrors.push(err130);
+                    vErrors.push(err150);
                   }
                   errors++;
                 }
-                if (data43.release_interval_ps === undefined) {
-                  const err131 = {
+                if (data50.release_interval_ps === undefined) {
+                  const err151 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i1,
                     schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -7499,14 +9280,14 @@ function validate20(
                     message: "must have required property '" + "release_interval_ps" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err131];
+                    vErrors = [err151];
                   } else {
-                    vErrors.push(err131);
+                    vErrors.push(err151);
                   }
                   errors++;
                 }
-                if (data43.uncertainty_score === undefined) {
-                  const err132 = {
+                if (data50.uncertainty_score === undefined) {
+                  const err152 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i1,
                     schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -7514,14 +9295,14 @@ function validate20(
                     message: "must have required property '" + "uncertainty_score" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err132];
+                    vErrors = [err152];
                   } else {
-                    vErrors.push(err132);
+                    vErrors.push(err152);
                   }
                   errors++;
                 }
-                if (data43.tail_risk === undefined) {
-                  const err133 = {
+                if (data50.tail_risk === undefined) {
+                  const err153 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i1,
                     schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -7529,14 +9310,14 @@ function validate20(
                     message: "must have required property '" + "tail_risk" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err133];
+                    vErrors = [err153];
                   } else {
-                    vErrors.push(err133);
+                    vErrors.push(err153);
                   }
                   errors++;
                 }
-                if (data43.source_id === undefined) {
-                  const err134 = {
+                if (data50.source_id === undefined) {
+                  const err154 = {
                     instancePath: instancePath + "/design_space_candidates/candidates/" + i1,
                     schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/items/required",
                     keyword: "required",
@@ -7544,15 +9325,15 @@ function validate20(
                     message: "must have required property '" + "source_id" + "'",
                   };
                   if (vErrors === null) {
-                    vErrors = [err134];
+                    vErrors = [err154];
                   } else {
-                    vErrors.push(err134);
+                    vErrors.push(err154);
                   }
                   errors++;
                 }
-                for (const key8 in data43) {
-                  if (!func4.call(schema40.properties.candidates.items.properties, key8)) {
-                    const err135 = {
+                for (const key8 in data50) {
+                  if (!func5.call(schema40.properties.candidates.items.properties, key8)) {
+                    const err155 = {
                       instancePath: instancePath + "/design_space_candidates/candidates/" + i1,
                       schemaPath:
                         "design-space-candidates-v2.schema.json/properties/candidates/items/additionalProperties",
@@ -7561,18 +9342,18 @@ function validate20(
                       message: "must NOT have additional properties",
                     };
                     if (vErrors === null) {
-                      vErrors = [err135];
+                      vErrors = [err155];
                     } else {
-                      vErrors.push(err135);
+                      vErrors.push(err155);
                     }
                     errors++;
                   }
                 }
-                if (data43.candidate_id !== undefined) {
-                  let data44 = data43.candidate_id;
-                  if (typeof data44 === "string") {
-                    if (func1(data44) > 512) {
-                      const err136 = {
+                if (data50.candidate_id !== undefined) {
+                  let data51 = data50.candidate_id;
+                  if (typeof data51 === "string") {
+                    if (func1(data51) > 512) {
+                      const err156 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/candidate_id",
                         schemaPath:
                           "design-space-candidates-v2.schema.json/properties/candidates/items/properties/candidate_id/maxLength",
@@ -7581,14 +9362,14 @@ function validate20(
                         message: "must NOT have more than 512 characters",
                       };
                       if (vErrors === null) {
-                        vErrors = [err136];
+                        vErrors = [err156];
                       } else {
-                        vErrors.push(err136);
+                        vErrors.push(err156);
                       }
                       errors++;
                     }
-                    if (func1(data44) < 1) {
-                      const err137 = {
+                    if (func1(data51) < 1) {
+                      const err157 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/candidate_id",
                         schemaPath:
                           "design-space-candidates-v2.schema.json/properties/candidates/items/properties/candidate_id/minLength",
@@ -7597,14 +9378,14 @@ function validate20(
                         message: "must NOT have fewer than 1 characters",
                       };
                       if (vErrors === null) {
-                        vErrors = [err137];
+                        vErrors = [err157];
                       } else {
-                        vErrors.push(err137);
+                        vErrors.push(err157);
                       }
                       errors++;
                     }
                   } else {
-                    const err138 = {
+                    const err158 = {
                       instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/candidate_id",
                       schemaPath:
                         "design-space-candidates-v2.schema.json/properties/candidates/items/properties/candidate_id/type",
@@ -7613,18 +9394,18 @@ function validate20(
                       message: "must be string",
                     };
                     if (vErrors === null) {
-                      vErrors = [err138];
+                      vErrors = [err158];
                     } else {
-                      vErrors.push(err138);
+                      vErrors.push(err158);
                     }
                     errors++;
                   }
                 }
-                if (data43.name !== undefined) {
-                  let data45 = data43.name;
-                  if (typeof data45 === "string") {
-                    if (func1(data45) > 512) {
-                      const err139 = {
+                if (data50.name !== undefined) {
+                  let data52 = data50.name;
+                  if (typeof data52 === "string") {
+                    if (func1(data52) > 512) {
+                      const err159 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/name",
                         schemaPath:
                           "design-space-candidates-v2.schema.json/properties/candidates/items/properties/name/maxLength",
@@ -7633,14 +9414,14 @@ function validate20(
                         message: "must NOT have more than 512 characters",
                       };
                       if (vErrors === null) {
-                        vErrors = [err139];
+                        vErrors = [err159];
                       } else {
-                        vErrors.push(err139);
+                        vErrors.push(err159);
                       }
                       errors++;
                     }
-                    if (func1(data45) < 1) {
-                      const err140 = {
+                    if (func1(data52) < 1) {
+                      const err160 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/name",
                         schemaPath:
                           "design-space-candidates-v2.schema.json/properties/candidates/items/properties/name/minLength",
@@ -7649,14 +9430,14 @@ function validate20(
                         message: "must NOT have fewer than 1 characters",
                       };
                       if (vErrors === null) {
-                        vErrors = [err140];
+                        vErrors = [err160];
                       } else {
-                        vErrors.push(err140);
+                        vErrors.push(err160);
                       }
                       errors++;
                     }
                   } else {
-                    const err141 = {
+                    const err161 = {
                       instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/name",
                       schemaPath:
                         "design-space-candidates-v2.schema.json/properties/candidates/items/properties/name/type",
@@ -7665,18 +9446,18 @@ function validate20(
                       message: "must be string",
                     };
                     if (vErrors === null) {
-                      vErrors = [err141];
+                      vErrors = [err161];
                     } else {
-                      vErrors.push(err141);
+                      vErrors.push(err161);
                     }
                     errors++;
                   }
                 }
-                if (data43.bandwidth_gbps !== undefined) {
-                  let data46 = data43.bandwidth_gbps;
-                  if (typeof data46 == "number") {
-                    if (data46 > 100000 || isNaN(data46)) {
-                      const err142 = {
+                if (data50.bandwidth_gbps !== undefined) {
+                  let data53 = data50.bandwidth_gbps;
+                  if (typeof data53 == "number") {
+                    if (data53 > 100000 || isNaN(data53)) {
+                      const err162 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/bandwidth_gbps",
                         schemaPath:
                           "design-space-candidates-v2.schema.json/properties/candidates/items/properties/bandwidth_gbps/maximum",
@@ -7685,14 +9466,14 @@ function validate20(
                         message: "must be <= 100000",
                       };
                       if (vErrors === null) {
-                        vErrors = [err142];
+                        vErrors = [err162];
                       } else {
-                        vErrors.push(err142);
+                        vErrors.push(err162);
                       }
                       errors++;
                     }
-                    if (data46 < 0.000001 || isNaN(data46)) {
-                      const err143 = {
+                    if (data53 < 0.000001 || isNaN(data53)) {
+                      const err163 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/bandwidth_gbps",
                         schemaPath:
                           "design-space-candidates-v2.schema.json/properties/candidates/items/properties/bandwidth_gbps/minimum",
@@ -7701,14 +9482,14 @@ function validate20(
                         message: "must be >= 0.000001",
                       };
                       if (vErrors === null) {
-                        vErrors = [err143];
+                        vErrors = [err163];
                       } else {
-                        vErrors.push(err143);
+                        vErrors.push(err163);
                       }
                       errors++;
                     }
                   } else {
-                    const err144 = {
+                    const err164 = {
                       instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/bandwidth_gbps",
                       schemaPath:
                         "design-space-candidates-v2.schema.json/properties/candidates/items/properties/bandwidth_gbps/type",
@@ -7717,18 +9498,18 @@ function validate20(
                       message: "must be number",
                     };
                     if (vErrors === null) {
-                      vErrors = [err144];
+                      vErrors = [err164];
                     } else {
-                      vErrors.push(err144);
+                      vErrors.push(err164);
                     }
                     errors++;
                   }
                 }
-                if (data43.latency_us !== undefined) {
-                  let data47 = data43.latency_us;
-                  if (typeof data47 == "number") {
-                    if (data47 > 1000000 || isNaN(data47)) {
-                      const err145 = {
+                if (data50.latency_us !== undefined) {
+                  let data54 = data50.latency_us;
+                  if (typeof data54 == "number") {
+                    if (data54 > 1000000 || isNaN(data54)) {
+                      const err165 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/latency_us",
                         schemaPath:
                           "design-space-candidates-v2.schema.json/properties/candidates/items/properties/latency_us/maximum",
@@ -7737,14 +9518,14 @@ function validate20(
                         message: "must be <= 1000000",
                       };
                       if (vErrors === null) {
-                        vErrors = [err145];
+                        vErrors = [err165];
                       } else {
-                        vErrors.push(err145);
+                        vErrors.push(err165);
                       }
                       errors++;
                     }
-                    if (data47 < 0 || isNaN(data47)) {
-                      const err146 = {
+                    if (data54 < 0 || isNaN(data54)) {
+                      const err166 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/latency_us",
                         schemaPath:
                           "design-space-candidates-v2.schema.json/properties/candidates/items/properties/latency_us/minimum",
@@ -7753,14 +9534,14 @@ function validate20(
                         message: "must be >= 0",
                       };
                       if (vErrors === null) {
-                        vErrors = [err146];
+                        vErrors = [err166];
                       } else {
-                        vErrors.push(err146);
+                        vErrors.push(err166);
                       }
                       errors++;
                     }
                   } else {
-                    const err147 = {
+                    const err167 = {
                       instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/latency_us",
                       schemaPath:
                         "design-space-candidates-v2.schema.json/properties/candidates/items/properties/latency_us/type",
@@ -7769,18 +9550,18 @@ function validate20(
                       message: "must be number",
                     };
                     if (vErrors === null) {
-                      vErrors = [err147];
+                      vErrors = [err167];
                     } else {
-                      vErrors.push(err147);
+                      vErrors.push(err167);
                     }
                     errors++;
                   }
                 }
-                if (data43.oversubscription_factor !== undefined) {
-                  let data48 = data43.oversubscription_factor;
-                  if (typeof data48 == "number") {
-                    if (data48 > 1000000 || isNaN(data48)) {
-                      const err148 = {
+                if (data50.oversubscription_factor !== undefined) {
+                  let data55 = data50.oversubscription_factor;
+                  if (typeof data55 == "number") {
+                    if (data55 > 1000000 || isNaN(data55)) {
+                      const err168 = {
                         instancePath:
                           instancePath + "/design_space_candidates/candidates/" + i1 + "/oversubscription_factor",
                         schemaPath:
@@ -7790,14 +9571,14 @@ function validate20(
                         message: "must be <= 1000000",
                       };
                       if (vErrors === null) {
-                        vErrors = [err148];
+                        vErrors = [err168];
                       } else {
-                        vErrors.push(err148);
+                        vErrors.push(err168);
                       }
                       errors++;
                     }
-                    if (data48 < 1 || isNaN(data48)) {
-                      const err149 = {
+                    if (data55 < 1 || isNaN(data55)) {
+                      const err169 = {
                         instancePath:
                           instancePath + "/design_space_candidates/candidates/" + i1 + "/oversubscription_factor",
                         schemaPath:
@@ -7807,14 +9588,14 @@ function validate20(
                         message: "must be >= 1",
                       };
                       if (vErrors === null) {
-                        vErrors = [err149];
+                        vErrors = [err169];
                       } else {
-                        vErrors.push(err149);
+                        vErrors.push(err169);
                       }
                       errors++;
                     }
                   } else {
-                    const err150 = {
+                    const err170 = {
                       instancePath:
                         instancePath + "/design_space_candidates/candidates/" + i1 + "/oversubscription_factor",
                       schemaPath:
@@ -7824,17 +9605,17 @@ function validate20(
                       message: "must be number",
                     };
                     if (vErrors === null) {
-                      vErrors = [err150];
+                      vErrors = [err170];
                     } else {
-                      vErrors.push(err150);
+                      vErrors.push(err170);
                     }
                     errors++;
                   }
                 }
-                if (data43.request_count !== undefined) {
-                  let data49 = data43.request_count;
-                  if (!(typeof data49 == "number" && !(data49 % 1) && !isNaN(data49))) {
-                    const err151 = {
+                if (data50.request_count !== undefined) {
+                  let data56 = data50.request_count;
+                  if (!(typeof data56 == "number" && !(data56 % 1) && !isNaN(data56))) {
+                    const err171 = {
                       instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/request_count",
                       schemaPath:
                         "design-space-candidates-v2.schema.json/properties/candidates/items/properties/request_count/type",
@@ -7843,15 +9624,15 @@ function validate20(
                       message: "must be integer",
                     };
                     if (vErrors === null) {
-                      vErrors = [err151];
+                      vErrors = [err171];
                     } else {
-                      vErrors.push(err151);
+                      vErrors.push(err171);
                     }
                     errors++;
                   }
-                  if (typeof data49 == "number") {
-                    if (data49 > 100000 || isNaN(data49)) {
-                      const err152 = {
+                  if (typeof data56 == "number") {
+                    if (data56 > 100000 || isNaN(data56)) {
+                      const err172 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/request_count",
                         schemaPath:
                           "design-space-candidates-v2.schema.json/properties/candidates/items/properties/request_count/maximum",
@@ -7860,14 +9641,14 @@ function validate20(
                         message: "must be <= 100000",
                       };
                       if (vErrors === null) {
-                        vErrors = [err152];
+                        vErrors = [err172];
                       } else {
-                        vErrors.push(err152);
+                        vErrors.push(err172);
                       }
                       errors++;
                     }
-                    if (data49 < 1 || isNaN(data49)) {
-                      const err153 = {
+                    if (data56 < 1 || isNaN(data56)) {
+                      const err173 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/request_count",
                         schemaPath:
                           "design-space-candidates-v2.schema.json/properties/candidates/items/properties/request_count/minimum",
@@ -7876,18 +9657,18 @@ function validate20(
                         message: "must be >= 1",
                       };
                       if (vErrors === null) {
-                        vErrors = [err153];
+                        vErrors = [err173];
                       } else {
-                        vErrors.push(err153);
+                        vErrors.push(err173);
                       }
                       errors++;
                     }
                   }
                 }
-                if (data43.message_bytes !== undefined) {
-                  let data50 = data43.message_bytes;
-                  if (!(typeof data50 == "number" && !(data50 % 1) && !isNaN(data50))) {
-                    const err154 = {
+                if (data50.message_bytes !== undefined) {
+                  let data57 = data50.message_bytes;
+                  if (!(typeof data57 == "number" && !(data57 % 1) && !isNaN(data57))) {
+                    const err174 = {
                       instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/message_bytes",
                       schemaPath:
                         "design-space-candidates-v2.schema.json/properties/candidates/items/properties/message_bytes/type",
@@ -7896,15 +9677,15 @@ function validate20(
                       message: "must be integer",
                     };
                     if (vErrors === null) {
-                      vErrors = [err154];
+                      vErrors = [err174];
                     } else {
-                      vErrors.push(err154);
+                      vErrors.push(err174);
                     }
                     errors++;
                   }
-                  if (typeof data50 == "number") {
-                    if (data50 > 9007199254740991 || isNaN(data50)) {
-                      const err155 = {
+                  if (typeof data57 == "number") {
+                    if (data57 > 9007199254740991 || isNaN(data57)) {
+                      const err175 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/message_bytes",
                         schemaPath:
                           "design-space-candidates-v2.schema.json/properties/candidates/items/properties/message_bytes/maximum",
@@ -7913,14 +9694,14 @@ function validate20(
                         message: "must be <= 9007199254740991",
                       };
                       if (vErrors === null) {
-                        vErrors = [err155];
+                        vErrors = [err175];
                       } else {
-                        vErrors.push(err155);
+                        vErrors.push(err175);
                       }
                       errors++;
                     }
-                    if (data50 < 1 || isNaN(data50)) {
-                      const err156 = {
+                    if (data57 < 1 || isNaN(data57)) {
+                      const err176 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/message_bytes",
                         schemaPath:
                           "design-space-candidates-v2.schema.json/properties/candidates/items/properties/message_bytes/minimum",
@@ -7929,18 +9710,18 @@ function validate20(
                         message: "must be >= 1",
                       };
                       if (vErrors === null) {
-                        vErrors = [err156];
+                        vErrors = [err176];
                       } else {
-                        vErrors.push(err156);
+                        vErrors.push(err176);
                       }
                       errors++;
                     }
                   }
                 }
-                if (data43.release_interval_ps !== undefined) {
-                  let data51 = data43.release_interval_ps;
-                  if (!(typeof data51 == "number" && !(data51 % 1) && !isNaN(data51))) {
-                    const err157 = {
+                if (data50.release_interval_ps !== undefined) {
+                  let data58 = data50.release_interval_ps;
+                  if (!(typeof data58 == "number" && !(data58 % 1) && !isNaN(data58))) {
+                    const err177 = {
                       instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/release_interval_ps",
                       schemaPath:
                         "design-space-candidates-v2.schema.json/properties/candidates/items/properties/release_interval_ps/type",
@@ -7949,15 +9730,15 @@ function validate20(
                       message: "must be integer",
                     };
                     if (vErrors === null) {
-                      vErrors = [err157];
+                      vErrors = [err177];
                     } else {
-                      vErrors.push(err157);
+                      vErrors.push(err177);
                     }
                     errors++;
                   }
-                  if (typeof data51 == "number") {
-                    if (data51 > 9007199254740991 || isNaN(data51)) {
-                      const err158 = {
+                  if (typeof data58 == "number") {
+                    if (data58 > 9007199254740991 || isNaN(data58)) {
+                      const err178 = {
                         instancePath:
                           instancePath + "/design_space_candidates/candidates/" + i1 + "/release_interval_ps",
                         schemaPath:
@@ -7967,14 +9748,14 @@ function validate20(
                         message: "must be <= 9007199254740991",
                       };
                       if (vErrors === null) {
-                        vErrors = [err158];
+                        vErrors = [err178];
                       } else {
-                        vErrors.push(err158);
+                        vErrors.push(err178);
                       }
                       errors++;
                     }
-                    if (data51 < 0 || isNaN(data51)) {
-                      const err159 = {
+                    if (data58 < 0 || isNaN(data58)) {
+                      const err179 = {
                         instancePath:
                           instancePath + "/design_space_candidates/candidates/" + i1 + "/release_interval_ps",
                         schemaPath:
@@ -7984,19 +9765,19 @@ function validate20(
                         message: "must be >= 0",
                       };
                       if (vErrors === null) {
-                        vErrors = [err159];
+                        vErrors = [err179];
                       } else {
-                        vErrors.push(err159);
+                        vErrors.push(err179);
                       }
                       errors++;
                     }
                   }
                 }
-                if (data43.uncertainty_score !== undefined) {
-                  let data52 = data43.uncertainty_score;
-                  if (typeof data52 == "number") {
-                    if (data52 > 1 || isNaN(data52)) {
-                      const err160 = {
+                if (data50.uncertainty_score !== undefined) {
+                  let data59 = data50.uncertainty_score;
+                  if (typeof data59 == "number") {
+                    if (data59 > 1 || isNaN(data59)) {
+                      const err180 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/uncertainty_score",
                         schemaPath:
                           "design-space-candidates-v2.schema.json/properties/candidates/items/properties/uncertainty_score/maximum",
@@ -8005,14 +9786,14 @@ function validate20(
                         message: "must be <= 1",
                       };
                       if (vErrors === null) {
-                        vErrors = [err160];
+                        vErrors = [err180];
                       } else {
-                        vErrors.push(err160);
+                        vErrors.push(err180);
                       }
                       errors++;
                     }
-                    if (data52 < 0 || isNaN(data52)) {
-                      const err161 = {
+                    if (data59 < 0 || isNaN(data59)) {
+                      const err181 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/uncertainty_score",
                         schemaPath:
                           "design-space-candidates-v2.schema.json/properties/candidates/items/properties/uncertainty_score/minimum",
@@ -8021,14 +9802,14 @@ function validate20(
                         message: "must be >= 0",
                       };
                       if (vErrors === null) {
-                        vErrors = [err161];
+                        vErrors = [err181];
                       } else {
-                        vErrors.push(err161);
+                        vErrors.push(err181);
                       }
                       errors++;
                     }
                   } else {
-                    const err162 = {
+                    const err182 = {
                       instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/uncertainty_score",
                       schemaPath:
                         "design-space-candidates-v2.schema.json/properties/candidates/items/properties/uncertainty_score/type",
@@ -8037,16 +9818,16 @@ function validate20(
                       message: "must be number",
                     };
                     if (vErrors === null) {
-                      vErrors = [err162];
+                      vErrors = [err182];
                     } else {
-                      vErrors.push(err162);
+                      vErrors.push(err182);
                     }
                     errors++;
                   }
                 }
-                if (data43.tail_risk !== undefined) {
-                  if (typeof data43.tail_risk !== "boolean") {
-                    const err163 = {
+                if (data50.tail_risk !== undefined) {
+                  if (typeof data50.tail_risk !== "boolean") {
+                    const err183 = {
                       instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/tail_risk",
                       schemaPath:
                         "design-space-candidates-v2.schema.json/properties/candidates/items/properties/tail_risk/type",
@@ -8055,18 +9836,18 @@ function validate20(
                       message: "must be boolean",
                     };
                     if (vErrors === null) {
-                      vErrors = [err163];
+                      vErrors = [err183];
                     } else {
-                      vErrors.push(err163);
+                      vErrors.push(err183);
                     }
                     errors++;
                   }
                 }
-                if (data43.promotion_hint !== undefined) {
-                  let data54 = data43.promotion_hint;
-                  if (typeof data54 === "string") {
-                    if (func1(data54) > 160) {
-                      const err164 = {
+                if (data50.promotion_hint !== undefined) {
+                  let data61 = data50.promotion_hint;
+                  if (typeof data61 === "string") {
+                    if (func1(data61) > 160) {
+                      const err184 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/promotion_hint",
                         schemaPath:
                           "design-space-candidates-v2.schema.json/properties/candidates/items/properties/promotion_hint/maxLength",
@@ -8075,14 +9856,14 @@ function validate20(
                         message: "must NOT have more than 160 characters",
                       };
                       if (vErrors === null) {
-                        vErrors = [err164];
+                        vErrors = [err184];
                       } else {
-                        vErrors.push(err164);
+                        vErrors.push(err184);
                       }
                       errors++;
                     }
                   } else {
-                    const err165 = {
+                    const err185 = {
                       instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/promotion_hint",
                       schemaPath:
                         "design-space-candidates-v2.schema.json/properties/candidates/items/properties/promotion_hint/type",
@@ -8091,18 +9872,18 @@ function validate20(
                       message: "must be string",
                     };
                     if (vErrors === null) {
-                      vErrors = [err165];
+                      vErrors = [err185];
                     } else {
-                      vErrors.push(err165);
+                      vErrors.push(err185);
                     }
                     errors++;
                   }
                 }
-                if (data43.source_id !== undefined) {
-                  let data55 = data43.source_id;
-                  if (typeof data55 === "string") {
-                    if (func1(data55) > 512) {
-                      const err166 = {
+                if (data50.source_id !== undefined) {
+                  let data62 = data50.source_id;
+                  if (typeof data62 === "string") {
+                    if (func1(data62) > 512) {
+                      const err186 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/source_id",
                         schemaPath:
                           "design-space-candidates-v2.schema.json/properties/candidates/items/properties/source_id/maxLength",
@@ -8111,14 +9892,14 @@ function validate20(
                         message: "must NOT have more than 512 characters",
                       };
                       if (vErrors === null) {
-                        vErrors = [err166];
+                        vErrors = [err186];
                       } else {
-                        vErrors.push(err166);
+                        vErrors.push(err186);
                       }
                       errors++;
                     }
-                    if (func1(data55) < 1) {
-                      const err167 = {
+                    if (func1(data62) < 1) {
+                      const err187 = {
                         instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/source_id",
                         schemaPath:
                           "design-space-candidates-v2.schema.json/properties/candidates/items/properties/source_id/minLength",
@@ -8127,14 +9908,14 @@ function validate20(
                         message: "must NOT have fewer than 1 characters",
                       };
                       if (vErrors === null) {
-                        vErrors = [err167];
+                        vErrors = [err187];
                       } else {
-                        vErrors.push(err167);
+                        vErrors.push(err187);
                       }
                       errors++;
                     }
                   } else {
-                    const err168 = {
+                    const err188 = {
                       instancePath: instancePath + "/design_space_candidates/candidates/" + i1 + "/source_id",
                       schemaPath:
                         "design-space-candidates-v2.schema.json/properties/candidates/items/properties/source_id/type",
@@ -8143,15 +9924,15 @@ function validate20(
                       message: "must be string",
                     };
                     if (vErrors === null) {
-                      vErrors = [err168];
+                      vErrors = [err188];
                     } else {
-                      vErrors.push(err168);
+                      vErrors.push(err188);
                     }
                     errors++;
                   }
                 }
               } else {
-                const err169 = {
+                const err189 = {
                   instancePath: instancePath + "/design_space_candidates/candidates/" + i1,
                   schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/items/type",
                   keyword: "type",
@@ -8159,15 +9940,15 @@ function validate20(
                   message: "must be object",
                 };
                 if (vErrors === null) {
-                  vErrors = [err169];
+                  vErrors = [err189];
                 } else {
-                  vErrors.push(err169);
+                  vErrors.push(err189);
                 }
                 errors++;
               }
             }
           } else {
-            const err170 = {
+            const err190 = {
               instancePath: instancePath + "/design_space_candidates/candidates",
               schemaPath: "design-space-candidates-v2.schema.json/properties/candidates/type",
               keyword: "type",
@@ -8175,15 +9956,15 @@ function validate20(
               message: "must be array",
             };
             if (vErrors === null) {
-              vErrors = [err170];
+              vErrors = [err190];
             } else {
-              vErrors.push(err170);
+              vErrors.push(err190);
             }
             errors++;
           }
         }
       } else {
-        const err171 = {
+        const err191 = {
           instancePath: instancePath + "/design_space_candidates",
           schemaPath: "design-space-candidates-v2.schema.json/type",
           keyword: "type",
@@ -8191,27 +9972,27 @@ function validate20(
           message: "must be object",
         };
         if (vErrors === null) {
-          vErrors = [err171];
+          vErrors = [err191];
         } else {
-          vErrors.push(err171);
+          vErrors.push(err191);
         }
         errors++;
       }
-      var _valid0 = _errs89 === errors;
-      if (_valid0 && valid11) {
-        valid11 = false;
+      var _valid1 = _errs105 === errors;
+      if (_valid1 && valid14) {
+        valid14 = false;
         passing0 = [passing0, 1];
       } else {
-        if (_valid0) {
-          valid11 = true;
+        if (_valid1) {
+          valid14 = true;
           passing0 = 1;
-          if (props0 !== true) {
-            props0 = true;
+          if (props1 !== true) {
+            props1 = true;
           }
         }
       }
-      if (!valid11) {
-        const err172 = {
+      if (!valid14) {
+        const err192 = {
           instancePath: instancePath + "/design_space_candidates",
           schemaPath: "#/properties/design_space_candidates/oneOf",
           keyword: "oneOf",
@@ -8219,16 +10000,16 @@ function validate20(
           message: "must match exactly one schema in oneOf",
         };
         if (vErrors === null) {
-          vErrors = [err172];
+          vErrors = [err192];
         } else {
-          vErrors.push(err172);
+          vErrors.push(err192);
         }
         errors++;
       } else {
-        errors = _errs49;
+        errors = _errs65;
         if (vErrors !== null) {
-          if (_errs49) {
-            vErrors.length = _errs49;
+          if (_errs65) {
+            vErrors.length = _errs65;
           } else {
             vErrors = null;
           }
@@ -8236,10 +10017,10 @@ function validate20(
       }
     }
     if (data.trace_package_id !== undefined) {
-      let data56 = data.trace_package_id;
-      if (typeof data56 === "string") {
-        if (!pattern4.test(data56)) {
-          const err173 = {
+      let data63 = data.trace_package_id;
+      if (typeof data63 === "string") {
+        if (!pattern4.test(data63)) {
+          const err193 = {
             instancePath: instancePath + "/trace_package_id",
             schemaPath: "#/properties/trace_package_id/pattern",
             keyword: "pattern",
@@ -8247,14 +10028,14 @@ function validate20(
             message: 'must match pattern "' + "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$" + '"',
           };
           if (vErrors === null) {
-            vErrors = [err173];
+            vErrors = [err193];
           } else {
-            vErrors.push(err173);
+            vErrors.push(err193);
           }
           errors++;
         }
       } else {
-        const err174 = {
+        const err194 = {
           instancePath: instancePath + "/trace_package_id",
           schemaPath: "#/properties/trace_package_id/type",
           keyword: "type",
@@ -8262,15 +10043,15 @@ function validate20(
           message: "must be string",
         };
         if (vErrors === null) {
-          vErrors = [err174];
+          vErrors = [err194];
         } else {
-          vErrors.push(err174);
+          vErrors.push(err194);
         }
         errors++;
       }
     }
   } else {
-    const err175 = {
+    const err195 = {
       instancePath,
       schemaPath: "#/type",
       keyword: "type",
@@ -8278,9 +10059,9 @@ function validate20(
       message: "must be object",
     };
     if (vErrors === null) {
-      vErrors = [err175];
+      vErrors = [err195];
     } else {
-      vErrors.push(err175);
+      vErrors.push(err195);
     }
     errors++;
   }
@@ -8421,7 +10202,12 @@ const schema41 = {
         },
       },
     },
-    parameter_descriptors: { type: "array", minItems: 8, maxItems: 8, items: { $ref: "#/$defs/parameterDescriptor" } },
+    parameter_descriptors: {
+      type: "array",
+      minItems: 13,
+      maxItems: 13,
+      items: { $ref: "#/$defs/parameterDescriptor" },
+    },
     resolved_fidelity_source: { const: "run_execution_envelope_and_validation_reports" },
   },
   $defs: {
@@ -8604,7 +10390,6 @@ const schema48 = {
   },
 };
 const schema50 = { enum: ["S0", "S1", "S2", "S3", "S4", "S5", "S6"] };
-import func0 from "ajv/dist/runtime/equal";
 const pattern5 = new RegExp("^sha256:[0-9a-f]{64}$", "u");
 const pattern7 = new RegExp("^/", "u");
 const schema52 = {
@@ -8990,7 +10775,7 @@ function validate26(
       errors++;
     }
     for (const key0 in data) {
-      if (!func4.call(schema52.properties, key0)) {
+      if (!func5.call(schema52.properties, key0)) {
         const err21 = {
           instancePath,
           schemaPath: "#/additionalProperties",
@@ -10112,7 +11897,7 @@ function validate25(
       errors++;
     }
     for (const key0 in data) {
-      if (!func4.call(schema41.properties, key0)) {
+      if (!func5.call(schema41.properties, key0)) {
         const err17 = {
           instancePath,
           schemaPath: "#/additionalProperties",
@@ -12834,13 +14619,13 @@ function validate25(
     if (data.parameter_descriptors !== undefined) {
       let data71 = data.parameter_descriptors;
       if (Array.isArray(data71)) {
-        if (data71.length > 8) {
+        if (data71.length > 13) {
           const err169 = {
             instancePath: instancePath + "/parameter_descriptors",
             schemaPath: "#/properties/parameter_descriptors/maxItems",
             keyword: "maxItems",
-            params: { limit: 8 },
-            message: "must NOT have more than 8 items",
+            params: { limit: 13 },
+            message: "must NOT have more than 13 items",
           };
           if (vErrors === null) {
             vErrors = [err169];
@@ -12849,13 +14634,13 @@ function validate25(
           }
           errors++;
         }
-        if (data71.length < 8) {
+        if (data71.length < 13) {
           const err170 = {
             instancePath: instancePath + "/parameter_descriptors",
             schemaPath: "#/properties/parameter_descriptors/minItems",
             keyword: "minItems",
-            params: { limit: 8 },
-            message: "must NOT have fewer than 8 items",
+            params: { limit: 13 },
+            message: "must NOT have fewer than 13 items",
           };
           if (vErrors === null) {
             vErrors = [err170];
@@ -13373,7 +15158,7 @@ function validate28(
               errors++;
             }
             for (const key1 in data6) {
-              if (!func4.call(schema39.properties.candidates.items.properties, key1)) {
+              if (!func5.call(schema39.properties.candidates.items.properties, key1)) {
                 const err26 = {
                   instancePath: instancePath + "/candidates/" + i0,
                   schemaPath: "#/properties/candidates/items/additionalProperties",
@@ -14433,7 +16218,7 @@ function validate29(
               errors++;
             }
             for (const key1 in data6) {
-              if (!func4.call(schema40.properties.candidates.items.properties, key1)) {
+              if (!func5.call(schema40.properties.candidates.items.properties, key1)) {
                 const err27 = {
                   instancePath: instancePath + "/candidates/" + i0,
                   schemaPath: "#/properties/candidates/items/additionalProperties",

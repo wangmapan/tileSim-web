@@ -3,6 +3,8 @@ param(
     [string]$WslDistro = "Ubuntu-24.04",
     [string]$BuildRootWsl = "",
     [string]$BuildDirWsl = "",
+    [switch]$ReuseVerifiedArtifacts,
+    [switch]$ForceFullValidation,
     [switch]$NoRestart
 )
 
@@ -20,6 +22,7 @@ $runtimeRoot = Join-Path $webRoot "runtime"
 $manifestPath = Join-Path $runtimeRoot "backend-current.json"
 $node = Resolve-TileSimNode
 $mutex = [System.Threading.Mutex]::new($false, "Local\TileSimBackendUpdate")
+$fastPath = $ReuseVerifiedArtifacts -and -not $ForceFullValidation
 
 function Invoke-Checked {
     param([string]$File, [string[]]$Arguments, [string]$WorkingDirectory = "")
@@ -73,6 +76,101 @@ function Get-SchemaSetRevision {
     return $revision.Trim()
 }
 
+function Test-WslExecutable {
+    param([string]$Path)
+    if ([string]::IsNullOrWhiteSpace($Path)) { return $false }
+    & wsl.exe -d $WslDistro --exec test -x $Path *> $null
+    return $LASTEXITCODE -eq 0
+}
+
+function Get-WslFileDigest {
+    param([string]$Path)
+    if ([string]::IsNullOrWhiteSpace($Path)) { throw "Cannot hash an empty WSL path." }
+    $output = @(& wsl.exe -d $WslDistro --exec sha256sum -- $Path)
+    if ($LASTEXITCODE -ne 0) { throw "Could not hash WSL file: $Path" }
+    $digest = $output | Where-Object { $_ -match '^([0-9a-f]{64})\s' } | ForEach-Object { $matches[1] } | Select-Object -Last 1
+    if (-not $digest) { throw "WSL did not return a SHA-256 digest for: $Path" }
+    return $digest.Trim()
+}
+
+function Get-ManifestValue {
+    param([object]$Manifest, [string]$Name)
+    if ($null -eq $Manifest) { return $null }
+    $property = $Manifest.PSObject.Properties[$Name]
+    if ($null -eq $property) { return $null }
+    return $property.Value
+}
+
+function Test-ReusableBackendBuild {
+    param(
+        [object]$Manifest,
+        [string]$SourceRoot,
+        [string]$Revision,
+        [string]$SourceDigest,
+        [string]$BuildDirectory
+    )
+    if (-not $fastPath -or $null -eq $Manifest) { return $false }
+    if ((Get-ManifestValue $Manifest "deployment_mode") -ne "local_worktree_snapshot") { return $false }
+    if ([string](Get-ManifestValue $Manifest "wsl_distro") -ne $WslDistro) { return $false }
+    $manifestSourceValue = Get-ManifestValue $Manifest "source_root_windows"
+    if ([string]::IsNullOrWhiteSpace([string]$manifestSourceValue)) { return $false }
+    $manifestSource = ([System.IO.Path]::GetFullPath([string]$manifestSourceValue)).TrimEnd('\', '/')
+    $requestedSource = ([System.IO.Path]::GetFullPath($SourceRoot)).TrimEnd('\', '/')
+    if (-not $manifestSource.Equals($requestedSource, [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $false
+    }
+    if ([string](Get-ManifestValue $Manifest "source_revision") -ne $Revision -or
+        [string](Get-ManifestValue $Manifest "build_revision") -ne $Revision -or
+        [string](Get-ManifestValue $Manifest "source_state_digest") -ne $SourceDigest -or
+        [string](Get-ManifestValue $Manifest "build_state_digest") -ne $SourceDigest -or
+        [string](Get-ManifestValue $Manifest "build_dir_wsl") -ne $BuildDirectory) {
+        return $false
+    }
+    $validation = Get-ManifestValue $Manifest "validation"
+    $ctestStatus = Get-ManifestValue $validation "tilesim_ctest"
+    if ([string]$ctestStatus -notmatch '^([1-9][0-9]*)/\1$') { return $false }
+    $cliPath = [string](Get-ManifestValue $Manifest "tilesim_cli_wsl")
+    if ($cliPath -ne "$BuildDirectory/TileSimCLI" -or -not (Test-WslExecutable $cliPath)) { return $false }
+    $declaredCliDigest = [string](Get-ManifestValue $Manifest "tilesim_cli_digest")
+    if ($declaredCliDigest -notmatch '^[0-9a-f]{64}$' -or (Get-WslFileDigest $cliPath) -ne $declaredCliDigest) { return $false }
+    return $true
+}
+
+function Get-ReusableWebRelease {
+    param(
+        [object]$Manifest,
+        [string]$WebSourceDigest,
+        [string]$SchemaSetRevision
+    )
+    if (-not $fastPath -or $null -eq $Manifest) { return $null }
+    $releaseRootValue = Get-ManifestValue $Manifest "web_release_root_windows"
+    $buildDigestValue = Get-ManifestValue $Manifest "web_build_digest"
+    if ([string](Get-ManifestValue $Manifest "web_source_state_digest") -ne $WebSourceDigest -or
+        [string](Get-ManifestValue $Manifest "schema_set_revision") -ne $SchemaSetRevision -or
+        [string]::IsNullOrWhiteSpace([string]$releaseRootValue) -or
+        [string]::IsNullOrWhiteSpace([string]$buildDigestValue)) {
+        return $null
+    }
+    $releaseRoot = [string]$releaseRootValue
+    $releasesRoot = [System.IO.Path]::GetFullPath((Join-Path $runtimeRoot "releases")).TrimEnd('\', '/')
+    $resolvedRelease = [System.IO.Path]::GetFullPath($releaseRoot)
+    if (-not ([System.IO.Path]::GetDirectoryName($resolvedRelease)).TrimEnd('\', '/').Equals(
+        $releasesRoot, [System.StringComparison]::OrdinalIgnoreCase)) { return $null }
+    if (-not (Test-Path -LiteralPath $releaseRoot -PathType Container)) { return $null }
+    $output = & $node (Join-Path $PSScriptRoot "release-snapshot.mjs") verify --release-root $releaseRoot 2>&1
+    if ($LASTEXITCODE -ne 0) { return $null }
+    try { $verified = ($output | Select-Object -Last 1) | ConvertFrom-Json } catch { return $null }
+    if ([string](Get-ManifestValue $verified "web_source_state_digest") -ne $WebSourceDigest -or
+        [string](Get-ManifestValue $verified "web_build_digest") -ne [string]$buildDigestValue -or
+        [string](Get-ManifestValue $verified "schema_set_revision") -ne $SchemaSetRevision -or
+        [string](Get-ManifestValue $verified "release_digest") -ne [string](Get-ManifestValue $Manifest "web_release_digest") -or
+        [string](Get-ManifestValue (Get-ManifestValue $verified "bridge") "digest") -ne [string](Get-ManifestValue $Manifest "web_bridge_digest") -or
+        [string](Get-ManifestValue (Get-ManifestValue $verified "static") "digest") -ne [string](Get-ManifestValue $Manifest "web_static_digest")) {
+        return $null
+    }
+    return $verified
+}
+
 function New-WebReleaseSnapshot {
     param(
         [string]$WebRevision,
@@ -101,11 +199,13 @@ function Start-DeployedBridge {
 
 if (-not $mutex.WaitOne(0)) { throw "Another backend deployment is already running." }
 $previousManifestText = $null
+$previousManifest = $null
 $manifestWritten = $false
 $restartAttempted = $false
 try {
     if (Test-Path -LiteralPath $manifestPath) {
         $previousManifestText = Get-Content -Raw -LiteralPath $manifestPath
+        $previousManifest = $previousManifestText | ConvertFrom-Json
     }
     $revision = (& git -C $source rev-parse HEAD).Trim()
     if ($LASTEXITCODE -ne 0 -or $revision -notmatch '^[0-9a-f]{40}$') {
@@ -126,39 +226,83 @@ try {
         } else {
             $null
         }
-        if ($previousManifest.deployment_mode -eq "local_worktree_snapshot" -and
-            $previousManifest.source_root_windows -eq $source -and
-            $previousManifest.build_dir_wsl) {
-            $BuildDirWsl = $previousManifest.build_dir_wsl
+        $previousMode = Get-ManifestValue $previousManifest "deployment_mode"
+        $previousSource = Get-ManifestValue $previousManifest "source_root_windows"
+        $previousBuildDir = Get-ManifestValue $previousManifest "build_dir_wsl"
+        if ($previousMode -eq "local_worktree_snapshot" -and
+            $previousSource -and
+            ([System.IO.Path]::GetFullPath([string]$previousSource)).TrimEnd('\', '/').Equals(
+                ([System.IO.Path]::GetFullPath($source)).TrimEnd('\', '/'),
+                [System.StringComparison]::OrdinalIgnoreCase) -and
+            $previousBuildDir) {
+            $BuildDirWsl = $previousBuildDir
         } else {
             $resolvedBuildRootWsl = Resolve-TileSimWslBuildRoot $WslDistro $BuildRootWsl
             $BuildDirWsl = "$resolvedBuildRootWsl/local-builds/$($revision.Substring(0, 12))-snapshot"
         }
     }
 
-    Write-Output "Building local TileSim snapshot $branch at state $sourceDigest"
-    Invoke-Checked "wsl.exe" @(
-        "-d", $WslDistro, "--exec", "env", "TILESIM_WSL_BUILD_DIR=$BuildDirWsl",
-        "bash", "$sourceWsl/scripts/build_wsl.sh"
-    )
-    Invoke-Checked "wsl.exe" @(
-        "-d", $WslDistro, "--exec", "ctest", "--test-dir", $BuildDirWsl,
-        "--output-on-failure", "-j1"
-    )
-    $testInventory = (& wsl.exe -d $WslDistro --exec ctest --test-dir $BuildDirWsl --show-only=json-v1 | Out-String) | ConvertFrom-Json
-    if ($LASTEXITCODE -ne 0) { throw "Could not read the local backend CTest inventory." }
-    $testCount = @($testInventory.tests).Count
+    $schemaSetRevision = Get-SchemaSetRevision
+    $backendReused = Test-ReusableBackendBuild $previousManifest $source $revision $sourceDigest $BuildDirWsl
+    $webRelease = Get-ReusableWebRelease $previousManifest $webSourceDigest $schemaSetRevision
+    $webReused = $null -ne $webRelease
 
-    Invoke-Checked "wsl.exe" @(
-        "-d", $WslDistro, "--cd", "$webRootWsl/bridge", "--exec",
-        "python3", "-m", "unittest", "test_server.py"
-    )
-    Invoke-Checked "wsl.exe" @(
-        "-d", $WslDistro, "--exec", "python3", "-m", "py_compile",
-        "$webRootWsl/bridge/server.py"
-    )
-    Invoke-Checked $node @((Join-Path $webRoot "node_modules\vitest\vitest.mjs"), "run") $webRoot
-    Invoke-Checked $node @((Join-Path $webRoot "node_modules\vite\bin\vite.js"), "build") $webRoot
+    if ($backendReused) {
+        Write-Output "Reusing verified TileSim build and CTest result for unchanged backend state. Use -ForceFullValidation to rerun them."
+        $testStatus = [string](Get-ManifestValue (Get-ManifestValue $previousManifest "validation") "tilesim_ctest")
+    } else {
+        Write-Output "Building local TileSim snapshot $branch at state $sourceDigest"
+        Invoke-Checked "wsl.exe" @(
+            "-d", $WslDistro, "--exec", "env", "TILESIM_WSL_BUILD_DIR=$BuildDirWsl",
+            "bash", "$sourceWsl/scripts/build_wsl.sh"
+        )
+        Invoke-Checked "wsl.exe" @(
+            "-d", $WslDistro, "--exec", "ctest", "--test-dir", $BuildDirWsl,
+            "--output-on-failure", "-j1"
+        )
+        $testInventory = (& wsl.exe -d $WslDistro --exec ctest --test-dir $BuildDirWsl --show-only=json-v1 | Out-String) | ConvertFrom-Json
+        if ($LASTEXITCODE -ne 0) { throw "Could not read the local backend CTest inventory." }
+        $testCount = @($testInventory.tests).Count
+        $testStatus = "$testCount/$testCount"
+    }
+    $cliPath = "$BuildDirWsl/TileSimCLI"
+    $cliDigest = Get-WslFileDigest $cliPath
+
+    if ($webReused) {
+        Write-Output "Reusing verified immutable Web release for unchanged Web state. Use -ForceFullValidation to rerun Web tests and build."
+        $webBuildDigest = [string](Get-ManifestValue $previousManifest "web_build_digest")
+    } elseif ($fastPath -and $null -ne $previousManifest) {
+        Write-Output "Fast path: validating contract drift and rebuilding changed Web sources; use -ForceFullValidation to rerun the full Vitest suite."
+        Invoke-Checked $node @((Join-Path $webRoot "scripts\generate-contract-types.mjs"), "--check") $webRoot
+        Invoke-Checked $node @((Join-Path $webRoot "scripts\generate-bridge-client.mjs"), "--check") $webRoot
+        Invoke-Checked "wsl.exe" @(
+            "-d", $WslDistro, "--cd", "$webRootWsl/bridge", "--exec",
+            "python3", "check_schema_set_revision.py"
+        )
+        Invoke-Checked "wsl.exe" @(
+            "-d", $WslDistro, "--cd", "$webRootWsl/bridge", "--exec",
+            "python3", "-m", "unittest", "test_server.py"
+        )
+        Invoke-Checked "wsl.exe" @(
+            "-d", $WslDistro, "--exec", "python3", "-m", "py_compile",
+            "$webRootWsl/bridge/server.py"
+        )
+        Invoke-Checked $node @((Join-Path $webRoot "node_modules\vite\bin\vite.js"), "build") $webRoot
+        $webBuildDigest = Get-DirectoryDigest (Join-Path $webRoot "dist") ""
+    } else {
+        Write-Output "Web source changed or no verified release matched; running the existing Bridge and Web validation flow."
+        Invoke-Checked "wsl.exe" @(
+            "-d", $WslDistro, "--cd", "$webRootWsl/bridge", "--exec",
+            "python3", "-m", "unittest", "test_server.py"
+        )
+        Invoke-Checked "wsl.exe" @(
+            "-d", $WslDistro, "--exec", "python3", "-m", "py_compile",
+            "$webRootWsl/bridge/server.py"
+        )
+        Invoke-Checked $node @((Join-Path $webRoot "node_modules\vitest\vitest.mjs"), "run") $webRoot
+        Invoke-Checked $node @((Join-Path $webRoot "node_modules\vite\bin\vite.js"), "build") $webRoot
+        $webBuildDigest = Get-DirectoryDigest (Join-Path $webRoot "dist") ""
+    }
 
     $verifiedDigest = Get-SourceStateDigest $sourceWsl
     if ($verifiedDigest -ne $sourceDigest) {
@@ -168,9 +312,9 @@ try {
     if ($verifiedWebSourceDigest -ne $webSourceDigest) {
         throw "TileSim Web source changed during build or validation; deployment aborted."
     }
-    $webBuildDigest = Get-DirectoryDigest (Join-Path $webRoot "dist") ""
-    $schemaSetRevision = Get-SchemaSetRevision
-    $webRelease = New-WebReleaseSnapshot $webRevision $webSourceDigest $webBuildDigest $schemaSetRevision
+    if (-not $webReused) {
+        $webRelease = New-WebReleaseSnapshot $webRevision $webSourceDigest $webBuildDigest $schemaSetRevision
+    }
     $webReleaseRootWsl = ConvertTo-TileSimWslPath $webRelease.release_root_windows
     $webStateRootWsl = ConvertTo-TileSimWslPath $webRoot
 
@@ -197,13 +341,16 @@ try {
         tilesim_root_wsl = $sourceWsl
         build_dir_wsl = $BuildDirWsl
         tilesim_cli_wsl = "$BuildDirWsl/TileSimCLI"
+        tilesim_cli_digest = $cliDigest
+        wsl_distro = $WslDistro
         manifest_path_wsl = ConvertTo-TileSimWslPath $manifestPath
         deployed_at = [DateTimeOffset]::Now.ToString("o")
         validation = [ordered]@{
-            tilesim_ctest = "$testCount/$testCount"
+            tilesim_ctest = $testStatus
             source_state = "sha256:$sourceDigest"
-            frontend_bridge = "passed"
-            web = "passed"
+            frontend_bridge = if ($webReused) { "reused:verified-release" } elseif ($fastPath -and $null -ne $previousManifest) { "fast:contract+bridge+compile" } else { "passed" }
+            web = if ($webReused) { "reused:verified-release" } elseif ($fastPath -and $null -ne $previousManifest) { "fast:production-build" } else { "passed" }
+            backend_build = if ($backendReused) { "reused:verified-build" } else { "passed" }
         }
     }
     Write-AtomicTextFile $manifestPath ($manifest | ConvertTo-Json -Depth 6)

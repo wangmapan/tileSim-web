@@ -184,8 +184,8 @@ expectValid(validateDescriptor, descriptor);
 
 const fieldIds = descriptor.parameter_descriptors.map((field) => field.field_id);
 const pointers = descriptor.parameter_descriptors.map((field) => field.request_json_pointer);
-assert.equal(new Set(fieldIds).size, 8);
-assert.equal(new Set(pointers).size, 8);
+assert.equal(new Set(fieldIds).size, 13);
+assert.equal(new Set(pointers).size, 13);
 assert.deepEqual(
   new Set(descriptor.parameter_descriptors.map((field) => field.subsystem)),
   new Set(["S0", "S1", "S6"]),

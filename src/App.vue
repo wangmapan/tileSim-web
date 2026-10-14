@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
-import { RouterView, useRoute } from "vue-router";
+import { storeToRefs } from "pinia";
+import { RouterView, useRoute, useRouter } from "vue-router";
 import AppHeader from "./components/AppHeader.vue";
 import AppSidebar from "./components/AppSidebar.vue";
 import EvidenceStrip from "./components/EvidenceStrip.vue";
 import ToastStack from "./components/ToastStack.vue";
 import UnsupportedSchemaView from "./views/UnsupportedSchemaView.vue";
 import { useDashboard } from "./store/dashboard";
+import { queryContext } from "./store/dashboard-state";
 import { unsupportedSchemaReports } from "./lib/reports";
 import { useI18n } from "./i18n";
 import { useEvidenceSelectionStore } from "./stores/evidence-selection";
@@ -18,25 +20,64 @@ import {
   type AgentTypedBlock,
   type DraftFieldValue,
   type PageContextEnvelope,
-  type Phase1CapabilityProjection,
 } from "./entities/agent-orchestration";
-import { createAgentContextRegistry } from "./entities/agent-context";
+import { createAgentContextRegistry, createPageContextRevisionKeeper } from "./entities/agent-context";
+import { createAgentCommandRegistry, type AgentParameterReceipt } from "./entities/agent-command";
 import { AgentCopilotEntry } from "./features/agent-copilot-shell";
 import {
-  buildPhase1CapabilityProjection,
+  assessParameterPlan,
+  describePlanValue,
   formalErrorBlock,
   intentOutputToTypedBlocks,
   markAgentBlocksStale,
   redactSingleTurnInstruction,
-  unsupportedResultForUnavailableContext,
 } from "./features/agent-copilot-integration";
-import { compileIntent, resolveClarificationAnswer, type ClarificationAnswer } from "./features/agent-intent-compiler";
-import type { ExperimentAgentContextPublication } from "./features/run-experiment";
-import { getAgentOrchestrationCapabilitySnapshot } from "./lib/api/agent-orchestration-capabilities";
+import { resolveClarificationAnswer, type ClarificationAnswer } from "./features/agent-intent-compiler";
+import {
+  looksInterrogative,
+  describeAgentParameterCatalog,
+  modelScenarioRecommendation,
+  parameterKeyOf,
+  type ExperimentAgentContextPublication,
+} from "./features/run-experiment";
+import {
+  fetchAssistantModelCatalogue,
+  fetchAssistantModelDescriptor,
+  selectAssistantModel,
+  streamAssistantChat,
+  streamAssistantResultAnalysis,
+  type AssistantChatMessage,
+} from "./lib/api/assistant-model";
 import { LightweightWorkbenchShell } from "./features/lightweight-workbench";
+import type { EvidenceQueryContext } from "./features/run-evidence";
+import { useLightweightStore } from "./stores/lightweight";
+import { useAgentSessionsStore } from "./stores/agent-sessions";
+import {
+  buildCompleteResultAnalysisContext,
+  canUseResultAnalysisRoute,
+  summarizeRunResult,
+  teachingForQuestion,
+  wantsResultAnalysis,
+  type ResultAnalysisProgress,
+  type GuidanceSection,
+} from "./features/agent-copilot-integration";
 
 const activeRoute = useRoute();
+const router = useRouter();
 const { state, initialize, synchronizeNavigation, ensureBridgeReady } = useDashboard();
+const lightweightStore = useLightweightStore();
+const agentSessions = useAgentSessionsStore();
+const {
+  activeSessionId: agentActiveSessionId,
+  blocks: agentBlocks,
+  messages: agentConversation,
+  contextRevision: agentContextRevision,
+  lastInstruction: agentLastInstruction,
+  capability: agentCapability,
+  turnSequence: agentTurnSequence,
+  editSequence: agentEditSequence,
+  persistenceError: agentPersistenceError,
+} = storeToRefs(agentSessions);
 const isEntryRoute = computed(() => activeRoute.meta.layout === "entry");
 const isLightweightRoute = computed(() => activeRoute.meta.workspace === "lightweight");
 const dashboardInitialized = ref(false);
@@ -56,17 +97,80 @@ const currentGuideId = computed<GuideId>(() =>
 );
 const currentGuide = computed(() => guideFor(currentGuideId.value));
 const agentContextRegistry = createAgentContextRegistry();
+/**
+ * The single downward channel to the page that owns the experiment form. The
+ * sidebar never writes the form itself: it hands over resolved edits and shows
+ * whatever receipt comes back.
+ */
+const agentCommandRegistry = createAgentCommandRegistry();
 const agentContext = shallowRef<PageContextEnvelope | null>(null);
 const agentCurrentValues = shallowRef<Readonly<Record<string, DraftFieldValue | null>>>({});
-const agentBlocks = shallowRef<readonly AgentTypedBlock[]>([]);
+/**
+ * Everything the current page can write, published by the experiment pages.
+ * Empty on pages without a parameter surface, which is what keeps the
+ * parameter-edit mode off there.
+ */
+const agentParameterCatalog = shallowRef<ExperimentAgentContextPublication["parameter_catalog"]>([]);
+/**
+ * The parameter-edit mode needs both a published catalogue and a mounted page
+ * that registered a handler; either one missing must keep the entry point off.
+ */
+const agentCanEditParameters = computed(
+  () => agentParameterCatalog.value.length > 0 && agentCommandRegistry.available(),
+);
+let pendingResultAnalysisRunId: string | null = null;
+let pendingResultAnalysisTimer: ReturnType<typeof setTimeout> | null = null;
+let resultAnalysisFallbackReason = "";
+
+function clearPendingResultAnalysis(): void {
+  pendingResultAnalysisRunId = null;
+  if (pendingResultAnalysisTimer) clearTimeout(pendingResultAnalysisTimer);
+  pendingResultAnalysisTimer = null;
+}
 const agentPanelState = ref<AgentCopilotPanelState>("closed");
 const agentPanelWidth = ref(420);
 const agentStatus = ref("可以开始");
-// Inputs of the last successful draft compilation, kept so an answered
-// clarification can be rebound against exactly the revision that produced it.
-const agentLastInstruction = shallowRef<string | null>(null);
-const agentCapability = shallowRef<Phase1CapabilityProjection | null>(null);
-let appContextSequence = 0;
+/**
+ * The turns the panel has already answered, oldest first, as the user and the
+ * assistant saw them. It is the panel's own memory: it is replayed to the
+ * assistant model with the next sentence, so a follow-up such as 「再激进一点」
+ * means something. The local session store persists the visible bounded form;
+ * the Bridge still never stores this transcript.
+ */
+/** True while a streamed answer is still arriving, which is what disables the send action. */
+const agentStreaming = ref(false);
+let agentStreamAbort: AbortController | null = null;
+let agentStreamSessionId: string | null = null;
+let agentStreamToken = 0;
+/**
+ * The assistant model channel this Bridge publishes, and the identity it will answer with next.
+ *
+ * The channel is optional, so nothing here is read until the panel is actually opened, and a machine
+ * without a channel keeps exactly the panel it had before: `agentModelChannel` stays false and the
+ * model controls are never rendered. The chosen identity is session-scoped by design - the saved
+ * configuration belongs to the launcher - and the panel says so next to the control.
+ */
+const agentModelChannel = ref(false);
+const agentModelCatalogue = shallowRef<readonly string[]>([]);
+const agentModelSelected = ref("");
+const agentModelPending = ref(false);
+let agentModelAbort: AbortController | null = null;
+// Legacy clarification state is retained only so persisted pre-model sessions
+// can fail closed without applying a stale proposal.
+const agentSessionSummaries = computed(() => agentSessions.summaries());
+
+/** Keep lifecycle-triggered async work from becoming an unhandled Promise rejection. */
+function observeBackground<T>(operation: Promise<T>, failureStatus?: string): void {
+  void operation.catch(() => {
+    if (failureStatus) agentStatus.value = failureStatus;
+  });
+}
+/**
+ * Holds the shell's own context revision steady while the projection it publishes is
+ * unchanged. Every re-projection used to mint a new token, which is what made the
+ * panel refuse a plan over a page that had not actually moved.
+ */
+const appContextRevision = createPageContextRevisionKeeper();
 
 const unregisterAgentContext = agentContextRegistry.register("app-shell", genericPageContext());
 const unsubscribeAgentContext = agentContextRegistry.subscribe((context) => {
@@ -86,7 +190,6 @@ const agentDockStyle = computed(() => {
 });
 
 function genericPageContext(): PageContextEnvelope {
-  appContextSequence += 1;
   const routeName = typeof activeRoute.name === "string" ? activeRoute.name : "overview";
   const lightweightRunId = isLightweightRoute.value ? lightweightAgentRunId() : null;
   const contextRunId = isLightweightRoute.value ? lightweightRunId : state.runId;
@@ -107,6 +210,7 @@ function genericPageContext(): PageContextEnvelope {
         // the assistant never exposes an internal route name to users.
         lightweight_status: "轻量运行状态",
         lightweight_results: "轻量结果摘要",
+        raw_evidence: "原始证据",
       } as Record<string, string>
     )[routeName] || routeName;
   const schemaRevision = state.bridge.manifest?.schema_set_revision || "schema-unavailable";
@@ -121,7 +225,14 @@ function genericPageContext(): PageContextEnvelope {
       .filter(Boolean)
       .join("|") || "backend-unavailable";
   const routeRevision = encodeURIComponent(activeRoute.fullPath || `/${routeName}`);
-  const revision = `context:${routeName}:${routeRevision}:${contextRunId || "no-run"}:${schemaRevision}:${backendRevision}:${contextAvailability}:${appContextSequence}`;
+  // A re-projection of an unchanged page keeps the revision it already had: the panel
+  // refuses a plan whose revision is gone, so minting a fresh token here would condemn a
+  // plan over a re-projection that moved nothing. The content passed alongside the
+  // prefix covers the parts of the envelope the prefix does not name.
+  const { revision } = appContextRevision(
+    `context:${routeName}:${routeRevision}:${contextRunId || "no-run"}:${schemaRevision}:${backendRevision}:${contextAvailability}`,
+    [pageLabel, contextRunId, contextAvailability, isLightweightRoute.value, state.runName || ""],
+  );
   return {
     contract_revision: PHASE1_LOCAL_CONTRACT_REVISION,
     page_id: `page-${routeName}`,
@@ -161,6 +272,9 @@ function lightweightAgentRunId(): string | null {
 
 function synchronizeAgentRouteContext(): void {
   agentCurrentValues.value = {};
+  // Pages without a parameter surface must not leave the previous page's
+  // catalogue behind: the assistant would offer edits nothing can apply.
+  agentParameterCatalog.value = [];
   agentContextRegistry.update("app-shell", genericPageContext());
   agentContextRegistry.activate("app-shell");
 }
@@ -177,106 +291,844 @@ function refreshAgentContextAfterBridgeChange(): void {
 function publishExperimentAgentContext(publication: ExperimentAgentContextPublication): void {
   if (!["experiment", "lightweight_prepare"].includes(String(activeRoute.name))) return;
   agentCurrentValues.value = { ...publication.current_values };
+  agentParameterCatalog.value = publication.parameter_catalog;
+  // The page declares its context on every touch of its inputs, which is not the
+  // same as its content having changed. Replacing the registry entry with an
+  // identical one would push a new object through every panel that reads it, so
+  // the page's own publication is only forwarded when it is not the one already
+  // standing: the same revision is the same content (the keeper guarantees it).
+  const current = agentContextRegistry.current();
+  if (
+    current?.page_id === publication.context.page_id &&
+    current.context_revision === publication.context.context_revision
+  ) {
+    return;
+  }
   agentContextRegistry.update("app-shell", publication.context);
 }
 
-async function loadAgentCapability() {
-  // The shared Agent is available in the lightweight shell too. A direct
-  // prepare deep link can open the panel before App.vue's Bridge bootstrap;
-  // wait for the same readiness gate used by run-bound pages before reading
-  // the capability snapshot.
-  if (!(await ensureBridgeReady())) throw new Error("bridge_unavailable");
-  const manifest = state.bridge.manifest;
-  if (!manifest) throw new Error("agent_orchestration_manifest_unavailable");
-  const snapshot = await getAgentOrchestrationCapabilitySnapshot(manifest);
-  return buildPhase1CapabilityProjection(snapshot);
+/** How many turns the panel replays to the assistant model, and how many it keeps in memory. */
+const MAXIMUM_AGENT_TURNS = 12;
+
+function agentTimestamp(): string {
+  return new Date().toISOString();
 }
 
+/**
+ * Opens one turn of the panel conversation with the user's own sentence.
+ *
+ * The returned number is the turn's identity: every block the answer produces
+ * shares it, so the transcript keeps every turn while two answers of the same
+ * shape can never collide on one block id.
+ */
+function openAgentTurn(instruction: string): number {
+  agentTurnSequence.value += 1;
+  if (!agentContextRevision.value) {
+    agentContextRevision.value = agentContext.value?.context_revision ?? null;
+  }
+  agentSessions.titleFromFirstInstruction(instruction);
+  agentBlocks.value = [
+    ...agentBlocks.value,
+    {
+      block_type: "user_message",
+      block_id: `user-message:${agentTurnSequence.value}`,
+      text: instruction,
+      created_at: agentTimestamp(),
+    },
+  ];
+  return agentTurnSequence.value;
+}
+
+/** Appends the blocks one turn produced, under that turn's identity. */
+function appendAgentAnswerBlocks(turn: number, blocks: readonly AgentTypedBlock[]): void {
+  agentBlocks.value = [
+    ...agentBlocks.value,
+    ...blocks.map((block) => ({
+      ...block,
+      block_id: `${block.block_id}:${turn}`,
+      created_at: block.created_at || agentTimestamp(),
+    })),
+  ];
+}
+
+/** Rewrites the answer block that is currently being written. */
+function updateAgentAnswerBlock(
+  blockId: string,
+  patch: { text?: string; streaming?: boolean; model_id?: string; error?: string },
+): void {
+  agentBlocks.value = agentBlocks.value.map((block) =>
+    block.block_type === "assistant_message" && block.block_id === blockId
+      ? { ...block, ...patch, ...(patch.text === undefined ? {} : { text: clipAgentText(patch.text) }) }
+      : block,
+  );
+}
+
+function clipAgentText(text: string): string {
+  return redactSingleTurnInstruction(text);
+}
+
+/**
+ * Remembers one answered turn so the next sentence can build on it.
+ *
+ * A turn that produced no answer records only the user's half: an empty assistant
+ * message would be replayed on the next request as if the panel had answered.
+ * Oldest turns fall off first; the Bridge refuses an over-long transcript too.
+ */
+function recordAgentTurn(instruction: string, answer: string): void {
+  const turns: AssistantChatMessage[] = [
+    ...agentConversation.value,
+    { role: "user", content: clipAgentText(instruction) },
+  ];
+  const trimmed = answer.trim();
+  if (trimmed) turns.push({ role: "assistant", content: clipAgentText(trimmed) });
+  agentConversation.value = turns.slice(-MAXIMUM_AGENT_TURNS);
+}
+
+/** The transcript replayed with the next sentence, leaving room for that sentence. */
+function agentConversationForModel(): AssistantChatMessage[] {
+  const replay = agentConversation.value.slice(-(MAXIMUM_AGENT_TURNS - 6));
+  const selected: AssistantChatMessage[] = [];
+  let characters = 0;
+  // Leave room in the Bridge's 12,000-character envelope for the live page
+  // catalogue and the new user sentence. Keep the newest turns first, then
+  // restore their original order for the model.
+  for (let index = replay.length - 1; index >= 0; index -= 1) {
+    const turn = replay[index];
+    const next = characters + turn.content.length;
+    if (next > 7_000) break;
+    selected.unshift({ ...turn });
+    characters = next;
+  }
+  return selected;
+}
+
+/**
+ * The panel's current values, keyed the way the parameter catalogue names them.
+ *
+ * The Bridge accepts only short bare names and short values, so anything that does
+ * not fit is left out rather than risking the whole request being refused.
+ */
+function agentPanelValues(): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const entry of agentParameterCatalog.value) {
+    const key = parameterKeyOf(entry.path);
+    if (key in values || entry.current === null) continue;
+    if (!/^[A-Za-z0-9_]{1,64}$/u.test(key) || entry.current.length > 120) continue;
+    values[key] = entry.current;
+    if (Object.keys(values).length >= 40) break;
+  }
+  return values;
+}
+
+/** The values of a plan, as one replayable line for the next turn's context. */
+function planValueLine(settings: readonly { key: string; value: string }[]): string {
+  return settings.length ? `方案：${settings.map((setting) => `${setting.key} = ${setting.value}`).join("；")}` : "";
+}
+
+/** Stops a streamed answer; the panel keeps whatever prose already arrived. */
+function cancelAgentStream(): void {
+  agentStreamAbort?.abort();
+}
+
+/**
+ * Reads the model channel: first whether this Bridge publishes one, then which identities it serves.
+ *
+ * The descriptor is asked first because it is the published answer to "is there a channel here". A
+ * machine without one is left alone entirely; a machine with one whose list could not be read keeps
+ * the control visible with a way to try again, so a failed read is never mistaken for a missing
+ * feature.
+ */
+async function loadAgentModels(): Promise<void> {
+  if (agentModelPending.value) return;
+  agentModelPending.value = true;
+  const controller = new AbortController();
+  agentModelAbort = controller;
+  try {
+    const descriptor = await fetchAssistantModelDescriptor({ signal: controller.signal });
+    agentModelChannel.value = descriptor !== null;
+    if (!descriptor) {
+      agentModelCatalogue.value = [];
+      agentModelSelected.value = "";
+      return;
+    }
+    agentModelSelected.value = descriptor.provider.model_id;
+    const catalogue = await fetchAssistantModelCatalogue({ signal: controller.signal });
+    agentModelCatalogue.value = catalogue ? catalogue.models : [];
+    if (catalogue?.selected_model) agentModelSelected.value = catalogue.selected_model;
+  } finally {
+    agentModelAbort = null;
+    agentModelPending.value = false;
+  }
+}
+
+/**
+ * Switches the identity this Bridge answers with, for as long as that process stays up.
+ *
+ * The choice is shown at once, and a refused switch puts the previous identity back: a control that
+ * silently kept a value the backend never accepted would be worse than one that never moved.
+ */
+async function switchAgentModel(model: string): Promise<void> {
+  if (!model || model === agentModelSelected.value || agentModelPending.value) return;
+  const previous = agentModelSelected.value;
+  agentModelPending.value = true;
+  agentModelSelected.value = model;
+  try {
+    const selection = await selectAssistantModel(model);
+    if (!selection) {
+      agentModelSelected.value = previous;
+      agentStatus.value = "切换模型没有成功，仍使用原来的模型。";
+      return;
+    }
+    agentModelSelected.value = selection.selected_model;
+    agentStatus.value = `已改用 ${selection.selected_model}（本次运行有效）`;
+  } finally {
+    agentModelPending.value = false;
+  }
+}
+
+// The channel is read the first time the panel is opened rather than on page load, so a page a user
+// never opens the assistant on costs no extra request.
+watch(agentPanelState, (value) => {
+  if (value === "closed" || agentModelChannel.value || agentModelPending.value) return;
+  void loadAgentModels();
+});
+
+onBeforeUnmount(() => {
+  agentModelAbort?.abort();
+});
+
+/**
+ * Asks the configured assistant model to answer this turn, and shows the answer
+ * while it is being written.
+ *
+ * The sentence and the turns already shown travel together, so a follow-up that
+ * only means something with the earlier turns attached - 「再激进一点」, 「为什么
+ * 是 4?」 - is answered in context. Every configuration sentence is sent to
+ * the assistant model; the browser
+ * never turns keywords or field names into a guessed scenario plan.
+ *
+ * When no channel is configured, the Bridge does not publish the route yet, or the
+ * model returns nothing usable, this returns false so the caller can fail
+ * closed without writing a guessed plan.
+ *
+ * The answer is a proposal: the values reach the panel only after 应用到面板, and
+ * nothing here writes a document or creates a run.
+ */
+async function planAgentModelRecommendation(instruction: string, context: PageContextEnvelope): Promise<boolean> {
+  const catalog = agentParameterCatalog.value;
+  if (!catalog.length) return false;
+  const sentence = instruction.trim();
+  if (!sentence) return false;
+  const messages: AssistantChatMessage[] = [
+    ...agentConversationForModel(),
+    // Keep the live page surface in the validated transcript rather than
+    // teaching the model a second, stale parameter schema. The final message
+    // remains the user's exact sentence so provider-side instruction ordering
+    // and existing conversation semantics stay unchanged.
+    { role: "user", content: describeAgentParameterCatalog(catalog) },
+    { role: "user", content: clipAgentText(sentence) },
+  ];
+
+  const turn = openAgentTurn(sentence);
+  const streamSessionId = agentActiveSessionId.value;
+  const streamToken = ++agentStreamToken;
+  const userBlockId = `user-message:${turn}`;
+  const answerBlockId = `assistant-answer:${turn}`;
+  agentBlocks.value = [
+    ...agentBlocks.value,
+    {
+      block_type: "assistant_message",
+      block_id: answerBlockId,
+      text: "",
+      streaming: true,
+      model_id: "",
+      error: "",
+      created_at: agentTimestamp(),
+    },
+  ];
+  agentStatus.value = "模型正在回答…";
+
+  const controller = new AbortController();
+  agentStreamAbort = controller;
+  agentStreamSessionId = streamSessionId;
+  agentStreaming.value = true;
+  let answer = "";
+  const outcome = await streamAssistantChat(
+    { messages, panel_values: agentPanelValues() },
+    {
+      onAnswer: (text) => {
+        if (agentActiveSessionId.value !== streamSessionId || agentStreamToken !== streamToken) return;
+        answer = text;
+        updateAgentAnswerBlock(answerBlockId, { text });
+      },
+      onPlan: (plan) => {
+        if (agentActiveSessionId.value !== streamSessionId || agentStreamToken !== streamToken) return;
+        const served = plan.served_model || plan.model_id;
+        if (served) updateAgentAnswerBlock(answerBlockId, { model_id: served });
+      },
+    },
+    { signal: controller.signal },
+  );
+  const streamStillBelongsToSession =
+    agentActiveSessionId.value === streamSessionId &&
+    agentStreamSessionId === streamSessionId &&
+    agentStreamToken === streamToken;
+  if (streamStillBelongsToSession) {
+    agentStreaming.value = false;
+    agentStreamAbort = null;
+  }
+  if (!streamStillBelongsToSession) return true;
+
+  if (!outcome) {
+    // No channel answered: withdraw the transient turn. Configuration requests
+    // fail closed; no local keyword table is allowed to synthesize a plan.
+    agentBlocks.value = agentBlocks.value.filter(
+      (block) => block.block_id !== userBlockId && block.block_id !== answerBlockId,
+    );
+    return false;
+  }
+  if (outcome.cancelled) {
+    updateAgentAnswerBlock(answerBlockId, { streaming: false, error: "已停止这次回答。" });
+    recordAgentTurn(sentence, answer);
+    agentStatus.value = "回答已停止";
+    return true;
+  }
+
+  const plan = outcome.plan;
+  updateAgentAnswerBlock(answerBlockId, { streaming: false, error: outcome.failure });
+  recordAgentTurn(sentence, answer || planValueLine(plan?.settings ?? []));
+
+  if (plan && plan.answer_state !== "prose_only") {
+    const recommendation = modelScenarioRecommendation(
+      { ...plan, dropped: plan.dropped ?? [], instruction: sentence },
+      catalog,
+    );
+    if (recommendation) {
+      agentEditSequence.value += 1;
+      agentBlocks.value = [
+        ...agentBlocks.value,
+        {
+          block_type: "parameter_edits",
+          block_id: `parameter-edits:${agentEditSequence.value}`,
+          edits: recommendation.plan.items,
+          rejected: recommendation.plan.rejected,
+          unknown: recommendation.plan.unknown,
+          receipts: null,
+          channelMoved: false,
+          note: "",
+          title: recommendation.title,
+          rationale: recommendation.rationale,
+          reasons: recommendation.reasons ?? {},
+          incomplete: recommendation.incomplete ?? [],
+          plan_revision: context.context_revision,
+        },
+      ];
+      agentStatus.value = recommendation.incomplete?.length
+        ? `模型方案有 ${recommendation.incomplete.length} 项缺口，未写入面板`
+        : `模型给了 ${recommendation.plan.items.length} 项建议，尚未写入面板`;
+      return true;
+    }
+    const hasStructuredCollections = catalog.some(
+      (entry) => entry.path === "topology/devices" || entry.path === "runtime_trace/requests",
+    );
+    updateAgentAnswerBlock(answerBlockId, {
+      error: hasStructuredCollections
+        ? "模型没有返回当前目录可验证的完整方案，可以重试或换一种说法。"
+        : "当前页面尚未发布设备、请求和拓扑字段；请先点击“用表单配置全部输入”，再重新提交。此次没有写入面板。",
+    });
+  }
+  agentStatus.value = outcome.failure ? "模型没有答完，可以重试或换个说法" : "回答完成；这次没有要写入的参数改动";
+  return true;
+}
+
+/** Return only the report belonging to the run currently shown by this route. */
+function currentGuidanceBundle(): {
+  bundle: import("./contracts/report-model").ReportBundle;
+  runId: string;
+  artifactManifest: import("./contracts/bridge-api").ArtifactManifestResponse | null;
+  evidenceQueryContext: EvidenceQueryContext;
+} | null {
+  // A matching run/report in a global store is not enough to authorize result
+  // analysis. Configuration and run-preparation routes must stay on their
+  // page explanation / compiler paths even when an older run is still loaded.
+  if (!canUseResultAnalysisRoute(activeRoute.name)) return null;
+  const querySchema = Array.isArray(activeRoute.query.schema_set_revision)
+    ? activeRoute.query.schema_set_revision[0]
+    : activeRoute.query.schema_set_revision;
+  const querySha = Array.isArray(activeRoute.query.artifact_sha256)
+    ? activeRoute.query.artifact_sha256[0]
+    : activeRoute.query.artifact_sha256;
+  if (isLightweightRoute.value) {
+    const runId =
+      lightweightAgentRunId() ||
+      (activeRoute.name === "lightweight_results" ? lightweightStore.run.value?.runId : null);
+    const manifest = lightweightStore.reports.artifactManifest;
+    const manifestRunId = manifest?.run_id;
+    const bundle = lightweightStore.reports.bundle;
+    if (!runId || !bundle || (manifestRunId && manifestRunId !== runId)) return null;
+    if (lightweightStore.run.value && lightweightStore.run.value.runId !== runId) return null;
+    if (querySchema && manifest?.schema_set_revision !== querySchema) return null;
+    if (
+      querySha &&
+      !manifest?.artifacts.some((item) =>
+        [String(item.sha256).toLowerCase(), `sha256:${String(item.sha256).toLowerCase()}`].includes(
+          querySha.toLowerCase(),
+        ),
+      )
+    )
+      return null;
+    const reportIds = [bundle.run?.run_id, bundle.metrics?.run_id].filter(Boolean);
+    if ((!manifestRunId && !reportIds.length) || reportIds.some((value) => value !== runId)) return null;
+    if (
+      manifest?.rejected_artifacts.length ||
+      manifest?.artifacts.some((item) => !["supported", "not_applicable"].includes(item.contract_status))
+    )
+      return null;
+    if (Object.values(bundle.compatibility || {}).some((item) => item && !item.supported)) return null;
+    return { bundle, runId, artifactManifest: manifest, evidenceQueryContext: queryContext() };
+  }
+  const runId = state.runId;
+  const manifestRunId = state.artifactManifest?.run_id;
+  if (!runId || state.isDemo || !state.bundle || (manifestRunId && manifestRunId !== runId)) return null;
+  if (navigationSnapshot().runId && navigationSnapshot().runId !== runId) return null;
+  if (querySchema && state.artifactManifest?.schema_set_revision !== querySchema) return null;
+  if (state.artifactManifest?.rejected_artifacts.length || unsupportedSchemaReports(state.bundle).length) return null;
+  const reportIds = [state.bundle.run?.run_id, state.bundle.metrics?.run_id].filter(Boolean);
+  if ((!manifestRunId && !reportIds.length) || reportIds.some((value) => value !== runId)) return null;
+  const compatibility = Object.values(state.bundle.compatibility || {});
+  if (compatibility.some((item) => item && item.supported === false)) return null;
+  return {
+    bundle: state.bundle,
+    runId,
+    artifactManifest: state.artifactManifest,
+    evidenceQueryContext: queryContext(),
+  };
+}
+
+function appendGuidance(instruction: string, sections: readonly GuidanceSection[]): void {
+  const turn = openAgentTurn(instruction);
+  appendAgentAnswerBlocks(
+    turn,
+    sections.map((section, index) => ({
+      block_type: "explanation" as const,
+      block_id: `agent-guidance:${index}`,
+      title: section.title,
+      body: section.body,
+    })),
+  );
+  recordAgentTurn(instruction, sections.map((section) => `${section.title}：${section.body}`).join("\n"));
+  agentStatus.value = "小拓已整理当前信息";
+}
+
+/** Ask the read-only result-analysis model, falling back without leaving a half turn behind. */
+async function analyzeResultWithModel(
+  instruction: string,
+  result: {
+    bundle: import("./contracts/report-model").ReportBundle;
+    runId: string;
+    artifactManifest: import("./contracts/bridge-api").ArtifactManifestResponse | null;
+    evidenceQueryContext: EvidenceQueryContext;
+  },
+): Promise<boolean> {
+  // Do not fetch every evidence artifact when this Bridge has already told the shell that no
+  // assistant channel is configured. The deterministic local summary is the intended fallback.
+  if (!agentModelChannel.value && !agentModelPending.value) return false;
+  const messages: AssistantChatMessage[] = [
+    ...agentConversationForModel(),
+    { role: "user", content: clipAgentText(instruction) },
+  ];
+  const turn = openAgentTurn(instruction);
+  const streamSessionId = agentActiveSessionId.value;
+  const streamToken = ++agentStreamToken;
+  const userBlockId = `user-message:${turn}`;
+  const answerBlockId = `assistant-result-analysis:${turn}`;
+  agentBlocks.value = [
+    ...agentBlocks.value,
+    {
+      block_type: "assistant_message",
+      block_id: answerBlockId,
+      text: "",
+      streaming: true,
+      model_id: "",
+      error: "",
+      created_at: agentTimestamp(),
+    },
+  ];
+  agentStatus.value = "小拓正在分析当前报告…";
+  const controller = new AbortController();
+  agentStreamAbort = controller;
+  agentStreamSessionId = streamSessionId;
+  agentStreaming.value = true;
+  let answer = "";
+  const artifactTotal = result.artifactManifest?.artifacts.length ?? 0;
+  const announceProgress = (progress: ResultAnalysisProgress): void => {
+    if (progress.stage === "reading_evidence") {
+      agentStatus.value = `正在读取证据 · 已读取 ${progress.completed}/${progress.total} 个 artifact`;
+    } else if (progress.stage === "assembling_context") {
+      agentStatus.value = "正在整理证据上下文";
+    } else if (progress.stage === "waiting_model") {
+      agentStatus.value = "正在等待模型";
+    } else if (progress.stage === "model_output") {
+      agentStatus.value = "模型正在输出";
+    }
+  };
+  if (result.evidenceQueryContext) {
+    announceProgress({ stage: "reading_evidence", completed: 0, total: artifactTotal });
+  } else {
+    announceProgress({ stage: "assembling_context", completed: 0, total: artifactTotal });
+  }
+  let context: Awaited<ReturnType<typeof buildCompleteResultAnalysisContext>>;
+  try {
+    context = await buildCompleteResultAnalysisContext(
+      result.bundle,
+      result.runId,
+      result.artifactManifest,
+      result.evidenceQueryContext,
+      announceProgress,
+    );
+  } catch {
+    if (agentActiveSessionId.value === streamSessionId && agentStreamToken === streamToken) {
+      agentStreaming.value = false;
+      agentStreamAbort = null;
+      agentBlocks.value = agentBlocks.value.filter((block) => block.block_id !== answerBlockId);
+    }
+    resultAnalysisFallbackReason = "证据读取失败";
+    return false;
+  }
+  if (agentActiveSessionId.value !== streamSessionId || agentStreamToken !== streamToken) return true;
+  announceProgress({ stage: "waiting_model", completed: artifactTotal, total: artifactTotal });
+  let outcome: Awaited<ReturnType<typeof streamAssistantResultAnalysis>>;
+  try {
+    outcome = await streamAssistantResultAnalysis(
+      {
+        messages,
+        context,
+      },
+      {
+        onAnswer: (text) => {
+          if (agentActiveSessionId.value !== streamSessionId || agentStreamToken !== streamToken) return;
+          answer = text;
+          announceProgress({ stage: "model_output", completed: artifactTotal, total: artifactTotal });
+          updateAgentAnswerBlock(answerBlockId, { text, model_id: agentModelSelected.value });
+        },
+      },
+      { signal: controller.signal },
+    );
+  } catch {
+    if (agentActiveSessionId.value === streamSessionId && agentStreamToken === streamToken) {
+      agentStreaming.value = false;
+      agentStreamAbort = null;
+      agentBlocks.value = agentBlocks.value.filter((block) => block.block_id !== answerBlockId);
+    }
+    resultAnalysisFallbackReason = "模型请求失败";
+    return false;
+  }
+  const streamStillBelongsToSession =
+    agentActiveSessionId.value === streamSessionId &&
+    agentStreamSessionId === streamSessionId &&
+    agentStreamToken === streamToken;
+  if (streamStillBelongsToSession) {
+    agentStreaming.value = false;
+    agentStreamAbort = null;
+  }
+  if (!streamStillBelongsToSession) return true;
+
+  if (!outcome) {
+    agentBlocks.value = agentBlocks.value.filter(
+      (block) => block.block_id !== userBlockId && block.block_id !== answerBlockId,
+    );
+    return false;
+  }
+  if (outcome.cancelled) {
+    updateAgentAnswerBlock(answerBlockId, { streaming: false, error: "已停止这次回答。" });
+    recordAgentTurn(instruction, answer);
+    agentStatus.value = "回答已停止";
+    return true;
+  }
+  if (outcome.failure || !answer.trim()) {
+    agentBlocks.value = agentBlocks.value.filter(
+      (block) => block.block_id !== userBlockId && block.block_id !== answerBlockId,
+    );
+    if (outcome.failure) resultAnalysisFallbackReason = outcome.failure;
+    return false;
+  }
+  updateAgentAnswerBlock(answerBlockId, {
+    text: answer,
+    streaming: false,
+    model_id: agentModelSelected.value,
+  });
+  recordAgentTurn(instruction, answer);
+  agentStatus.value = "小拓已基于当前报告整理结果";
+  return true;
+}
+
+async function presentResultAnalysis(
+  instruction: string,
+  result: {
+    bundle: import("./contracts/report-model").ReportBundle;
+    runId: string;
+    artifactManifest: import("./contracts/bridge-api").ArtifactManifestResponse | null;
+    evidenceQueryContext: EvidenceQueryContext;
+  } | null,
+): Promise<void> {
+  resultAnalysisFallbackReason = "";
+  let modelAnswered = false;
+  try {
+    modelAnswered = result ? await analyzeResultWithModel(instruction, result) : false;
+  } catch {
+    // Evidence loading and model transport are optional for the panel. A
+    // malformed/partial local artifact must degrade to the deterministic
+    // summary instead of surfacing as `Uncaught (in promise) Object`.
+    resultAnalysisFallbackReason = "模型请求准备失败";
+  }
+  if (modelAnswered) return;
+  appendGuidance(
+    instruction,
+    result
+      ? summarizeRunResult(result.bundle, result.runId)
+      : [
+          {
+            title: "暂时不能分析",
+            body: "当前页面没有与本次 run 身份匹配的已加载报告，或报告仍是示例/过期 schema。请先打开对应运行的结果页并等待报告载入。",
+          },
+        ],
+  );
+  if (result) {
+    agentStatus.value = resultAnalysisFallbackReason
+      ? `${resultAnalysisFallbackReason}；已使用本地证据整理（本地证据兜底），可重试`
+      : "模型暂不可用；已使用本地证据整理（本地证据兜底），可重试";
+  }
+}
+
+function reconcileAgentSessionContext(): void {
+  const currentRevision = agentContext.value?.context_revision;
+  const sessionRevision = agentContextRevision.value;
+  if (!currentRevision || currentRevision === sessionRevision) return;
+  if (sessionRevision && agentBlocks.value.length) {
+    agentBlocks.value = markAgentBlocksStale(agentBlocks.value, currentRevision);
+    agentLastInstruction.value = null;
+    agentCapability.value = null;
+    agentStatus.value = "已恢复会话；其中内容使用旧页面上下文";
+  }
+  // The session remembers the latest context seen by its active turn. Each
+  // persisted draft/block keeps its own revision, so advancing this marker does
+  // not make an older block look fresh; it only lets the next turn bind to the
+  // page that is actually open now.
+  agentContextRevision.value = currentRevision;
+}
+
+function createAgentSession(): void {
+  cancelAgentStream();
+  agentStreaming.value = false;
+  agentStreamAbort = null;
+  agentSessions.createSession();
+  agentStatus.value = "已新建会话";
+}
+
+function selectAgentSession(sessionId: string): void {
+  cancelAgentStream();
+  agentStreaming.value = false;
+  agentStreamAbort = null;
+  if (!agentSessions.selectSession(sessionId)) return;
+  reconcileAgentSessionContext();
+  agentStatus.value = agentBlocks.value.length ? "已恢复会话" : "可以开始";
+}
+
+function deleteAgentSession(sessionId: string): void {
+  cancelAgentStream();
+  agentStreaming.value = false;
+  agentStreamAbort = null;
+  if (!agentSessions.deleteSession(sessionId)) return;
+  reconcileAgentSessionContext();
+  agentStatus.value = agentBlocks.value.length ? "已切换到其他会话" : "已删除会话，可以开始新对话";
+}
+
+function clearAllAgentSessions(): void {
+  cancelAgentStream();
+  agentStreaming.value = false;
+  agentStreamAbort = null;
+  agentSessions.clearAllSessions();
+  agentStatus.value = "已清理全部本地会话";
+}
+
+async function handleAgentStart(task: "configure" | "analyze" | "learn"): Promise<void> {
+  clearPendingResultAnalysis();
+  if (task === "configure") {
+    agentSessions.createSession("实验配置");
+    agentStatus.value = "正在打开实验配置";
+    void router.push({ name: isLightweightRoute.value ? "lightweight_prepare" : "experiment" });
+    return;
+  }
+  if (task === "learn") {
+    const result = currentGuidanceBundle();
+    appendGuidance("（学习怎么看结果）", [
+      teachingForQuestion("怎么读实验结果？", result?.bundle || null) || {
+        title: "三步读懂实验结果",
+        body: "先确认运行状态与报告身份，再看吞吐、TTFT/TPOT P99，最后读后端瓶颈和验证边界。缺失项保持“未报告”，不要当作零。",
+      },
+    ]);
+    return;
+  }
+  const result = currentGuidanceBundle();
+  if (!result && isLightweightRoute.value && activeRoute.name !== "lightweight_results") {
+    const runId = lightweightAgentRunId() || lightweightStore.run.value?.runId;
+    if (runId) {
+      pendingResultAnalysisRunId = runId;
+      agentStatus.value = "正在打开当前运行的结果页…";
+      pendingResultAnalysisTimer = setTimeout(() => {
+        if (pendingResultAnalysisRunId !== runId) return;
+        clearPendingResultAnalysis();
+        appendGuidance("（分析实验结果）", [
+          {
+            title: "报告暂不可用",
+            body: "结果页未能载入当前 run 的可分析报告。请核对结果页的错误状态，稍后重新点击分析。",
+          },
+        ]);
+      }, 15_000);
+      void router.push({ name: "lightweight_results", query: { run: runId } }).catch(() => {
+        clearPendingResultAnalysis();
+        agentStatus.value = "结果页未能打开";
+      });
+      return;
+    }
+  }
+  if (!result) {
+    appendGuidance("（分析实验结果）", [
+      {
+        title: "暂时不能分析",
+        body: "当前页面没有与本次 run 身份匹配的已加载报告，或报告仍是示例/过期 schema。请先打开对应运行的结果页并等待报告载入；小拓不会用旧报告或示例数据代替。",
+      },
+    ]);
+    return;
+  }
+  await presentResultAnalysis("（分析实验结果）", result);
+}
+
+watch(
+  () => [activeRoute.name, lightweightStore.reports.bundle, lightweightStore.reports.artifactManifest] as const,
+  () => {
+    const pendingRunId = pendingResultAnalysisRunId;
+    if (!pendingRunId) return;
+    if (activeRoute.name !== "lightweight_results") {
+      if (activeRoute.name !== "lightweight") clearPendingResultAnalysis();
+      return;
+    }
+    const result = currentGuidanceBundle();
+    if (!result || result.runId !== pendingRunId) {
+      if (lightweightStore.reports.artifactManifest?.run_id === pendingRunId && lightweightStore.reports.bundle) {
+        clearPendingResultAnalysis();
+        appendGuidance("（分析实验结果）", [
+          {
+            title: "暂时不能分析",
+            body: "当前报告的身份、schema 或 artifact 状态不符合分析条件；请在结果页核对报告状态。",
+          },
+        ]);
+      }
+      return;
+    }
+    clearPendingResultAnalysis();
+    observeBackground(presentResultAnalysis("（分析实验结果）", result), "结果分析未完成，请重试");
+  },
+);
+
 async function submitAgentInstruction(payload: AgentCopilotSubmitPayload): Promise<void> {
+  clearPendingResultAnalysis();
   const context = agentContext.value;
   if (!context || payload.context_revision !== context.context_revision) {
-    agentBlocks.value = [formalErrorBlock("context_stale", "页面上下文已经变化，本次请求未执行。")];
+    appendAgentAnswerBlocks(openAgentTurn(payload.instruction), [
+      formalErrorBlock("context_stale", "页面上下文已经变化，本次请求未执行。"),
+    ]);
     agentStatus.value = "上下文已变化";
     return;
   }
-  if (payload.purpose === "draft" && !context.allowed_purposes.includes("draft")) {
-    agentBlocks.value = [
-      {
-        block_type: "unsupported",
-        block_id: "phase1-context-unavailable",
-        result: unsupportedResultForUnavailableContext("page_context_draft_not_allowed"),
-      },
-    ];
-    agentStatus.value = "当前页面仅支持询问";
+  const instruction = redactSingleTurnInstruction(payload.instruction);
+  const report = currentGuidanceBundle();
+  // On a real result page, an interrogative is a request about this run even
+  // when it contains a teaching keyword such as “TTFT” or “P99”. Give the
+  // result-analysis model the verified evidence first; only the read-only
+  // explanation path may use local page guidance when no model is available.
+  // Configuration requests never take that fallback.
+  const resultQuestion = Boolean(report && (wantsResultAnalysis(instruction) || looksInterrogative(instruction)));
+  if (resultQuestion) {
+    await presentResultAnalysis(instruction, report);
     return;
   }
-  if (payload.purpose === "explain") {
-    agentBlocks.value = [
+
+  // The assistant model owns all configuration requests. No local keyword or
+  // field-name table may synthesize an alternative plan when it is unavailable.
+  if (context.allowed_purposes.includes("draft")) {
+    if (agentCanEditParameters.value && (await planAgentModelRecommendation(instruction, context))) return;
+    appendAgentAnswerBlocks(openAgentTurn(instruction), [
       {
         block_type: "explanation",
-        block_id: `phase1-page-explanation:${context.context_revision}`,
+        block_id: "configuration-model-unavailable",
+        title: "当前未生成参数方案",
+        body: "配置助手没有返回可验证的方案，请重试。小拓没有调用本地字段匹配来代写方案，也没有写入配置或创建运行；仍可直接使用页面表单编辑。",
+      },
+    ]);
+    agentStatus.value = "配置助手暂不可用；未写入配置";
+    return;
+  }
+
+  const teaching = teachingForQuestion(instruction, report?.bundle || null);
+  if (teaching) {
+    appendGuidance(instruction, [teaching]);
+    return;
+  }
+  if (wantsResultAnalysis(instruction)) {
+    await presentResultAnalysis(instruction, report);
+    return;
+  }
+  // A question, or a page that cannot carry a draft, is answered from the page
+  // itself. That keeps read-only pages free of any capability round trip.
+  if (looksInterrogative(instruction) || !context.allowed_purposes.includes("draft")) {
+    appendAgentAnswerBlocks(openAgentTurn(instruction), [
+      {
+        block_type: "explanation",
+        block_id: "phase1-page-explanation",
         title: context.display_label,
         body: context.allowed_purposes.includes("draft")
-          ? "这里可以核对当前实验参数，并把正式能力目录中的八个字段整理为草案。"
+          ? "这里可以核对当前实验参数；描述一个场景会交给配置助手生成方案，确认后才写入面板。"
           : "这里可以说明当前页面状态；参数草案请在新建实验页生成。",
       },
-    ];
+    ]);
     agentStatus.value = "页面说明已就绪";
     return;
   }
-  agentStatus.value = "正在确定性解析";
-  const submittedRoute = activeRoute.fullPath;
-  try {
-    const capability = await loadAgentCapability();
-    const latestContext = agentContextRegistry.current();
-    if (
-      !latestContext ||
-      activeRoute.fullPath !== submittedRoute ||
-      latestContext.context_revision !== context.context_revision ||
-      latestContext.availability !== "available" ||
-      (state.bridge.manifest?.schema_set_revision &&
-        capability.schema_set_revision !== state.bridge.manifest.schema_set_revision)
-    ) {
-      agentBlocks.value = [formalErrorBlock("context_stale", "页面上下文已经变化，本次请求未执行。")];
-      agentStatus.value = "上下文已变化";
-      return;
-    }
-    const instruction = redactSingleTurnInstruction(payload.instruction);
-    const output = compileIntent({
-      contract_revision: PHASE1_LOCAL_CONTRACT_REVISION,
-      instruction,
-      locale: isEnglish.value ? "en-US" : "zh-CN",
-      capability,
-      current_values: agentCurrentValues.value,
-      context,
-    });
-    agentLastInstruction.value = instruction;
-    agentCapability.value = capability;
-    const blocks = intentOutputToTypedBlocks(output);
-    agentBlocks.value = blocks;
-    agentStatus.value = output.kind === "draft" ? "草案已生成，尚未创建运行" : "只读处理完成";
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    agentBlocks.value = [formalErrorBlock("phase1_compiler_unavailable", message)];
-    agentStatus.value = "处理失败，主工作台未受影响";
-  }
+  // Configuration contexts are handled by the model branch above. A
+  // read-only page reaches this point only when it has no draft surface;
+  // keep the response explanatory and never invoke a local field compiler.
+  appendAgentAnswerBlocks(openAgentTurn(instruction), [
+    {
+      block_type: "explanation",
+      block_id: "page-explanation",
+      title: context.display_label,
+      body: "当前页面没有可写的参数面板；请在实验配置页让配置助手生成方案。",
+    },
+  ]);
+  agentStatus.value = "页面说明已就绪";
 }
 
 /**
  * Answers one clarification option (WP-2C-06). The option is bound back to the
  * instruction that produced the current clarification block, the deterministic
- * compiler runs again on the bound input, and the sidebar blocks are replaced
- * with the new result. A rejected binding or a failed recomputation is shown
- * through the existing formal error block; the main workspace is untouched and
- * the previous draft is never presented as still valid.
+ * compiler runs again on the bound input, and the new result is appended to the
+ * transcript below the question it answers. A rejected binding or a failed
+ * recomputation is shown through the existing formal error block; the main
+ * workspace is untouched and the previous draft is never presented as still valid.
  */
 function answerAgentClarification(payload: ClarificationAnswer): void {
   const context = agentContext.value;
   const instruction = agentLastInstruction.value;
   const capability = agentCapability.value;
-  const clarification = agentBlocks.value.find((block) => block.block_type === "clarification")?.questions ?? null;
+  // The newest clarification is the one the user just answered: older turns stay
+  // in the transcript, so a plain `find` would bind the option to a stale question.
+  const clarification =
+    [...agentBlocks.value].reverse().find((block) => block.block_type === "clarification")?.questions ?? null;
   if (!context || !instruction || !capability || !clarification) {
-    agentBlocks.value = [formalErrorBlock("phase1_clarification_binding_unavailable", "当前没有可绑定的澄清问题。")];
+    appendAgentAnswerBlocks(openAgentTurn("（选择了一个选项）"), [
+      formalErrorBlock("phase1_clarification_binding_unavailable", "当前没有可绑定的澄清问题。"),
+    ]);
     agentStatus.value = "选项无法绑定，草案未更新";
     return;
   }
@@ -290,14 +1142,15 @@ function answerAgentClarification(payload: ClarificationAnswer): void {
     context,
   });
   if (!outcome.ok) {
-    agentBlocks.value = [
+    appendAgentAnswerBlocks(openAgentTurn("（选择了一个选项）"), [
       formalErrorBlock(outcome.code, "所选选项无法与当前澄清问题绑定，草案未更新；请重新描述要调整的字段和值。"),
-    ];
+    ]);
     agentStatus.value = "选项无法绑定，草案未更新";
     return;
   }
   agentLastInstruction.value = outcome.instruction;
-  agentBlocks.value = intentOutputToTypedBlocks(outcome.output);
+  appendAgentAnswerBlocks(openAgentTurn("（按选项补充）"), intentOutputToTypedBlocks(outcome.output));
+  recordAgentTurn(instruction, outcome.output.kind === "draft" ? outcome.output.draft.task_summary : "");
   agentStatus.value =
     outcome.output.kind === "draft"
       ? "已按所选选项重算草案，尚未创建运行"
@@ -306,6 +1159,85 @@ function answerAgentClarification(payload: ClarificationAnswer): void {
         : outcome.output.kind === "unsupported"
           ? "已按所选选项重算，当前能力不支持"
           : "已按所选选项重算，参数没有变化";
+}
+
+/**
+ * Applies one parameter-edit plan through the page that owns the form.
+ *
+ * The sidebar never touches the form: it sends the resolved edits down the
+ * command channel and renders whatever receipt comes back.
+ *
+ * Whether the plan is still good is decided by the addresses it names, not by
+ * the page's revision token: a plan says "this address holds `previous`, write
+ * `next`", so it is refused only when one of those addresses now holds
+ * something else, or is gone from the page altogether. The token alone refused
+ * plans over a page that had merely republished its envelope (a health check, a
+ * re-projection of equal content), which is what made a plan the user had just
+ * read permanently unapplicable.
+ */
+function applyAgentParameterEdits(blockId: string): void {
+  const block = agentBlocks.value.find(
+    (candidate): candidate is Extract<AgentTypedBlock, { block_type: "parameter_edits" }> =>
+      candidate.block_type === "parameter_edits" && candidate.block_id === blockId,
+  );
+  if (!block || block.receipts) return;
+  if (block.incomplete?.length || block.rejected.length || block.unknown.length) {
+    appendAgentAnswerBlocks(openAgentTurn("（按了应用到面板）"), [
+      formalErrorBlock("parameter_plan_incomplete", "这份方案有未写入的参数，未对面板作任何改动。请补齐后重新生成。"),
+    ]);
+    agentStatus.value = "方案不完整，未写入";
+    return;
+  }
+  const assessment = assessParameterPlan({
+    edits: block.edits,
+    live: agentParameterCatalog.value,
+    planRevision: block.plan_revision,
+    currentRevision: agentContext.value?.context_revision ?? null,
+  });
+  if (!assessment.applicable) {
+    const moved = assessment.moved;
+    appendAgentAnswerBlocks(openAgentTurn("（按了应用到面板）"), [
+      formalErrorBlock(
+        "parameter_plan_stale",
+        moved
+          ? moved.missing
+            ? `「${moved.label}」在当前面板上已经找不到了，这份改动没有写入。请重新描述一次。`
+            : `「${moved.label}」现在是 ${describePlanValue(moved.current)}，这份改动是按 ${describePlanValue(moved.expected)} 写的，没有写入。请重新提交。`
+          : "页面上下文已变化，这份改动没有写入。请重新提交。",
+      ),
+    ]);
+    agentStatus.value = "改动已过期，未写入";
+    return;
+  }
+  const result = agentCommandRegistry.apply(block.edits);
+  const receipts: readonly AgentParameterReceipt[] = result.receipts.length
+    ? result.receipts
+    : block.edits.map((edit) => ({
+        path: edit.path,
+        label: edit.label,
+        previous: edit.previous,
+        next: edit.next,
+        status: "rejected" as const,
+        reason: result.note || "页面没有接受这项改动。",
+      }));
+  const appliedCount = receipts.filter((receipt) => receipt.status === "applied").length;
+  // The page published something while this plan was on screen, but not the
+  // values it addresses. Say so rather than let the user wonder whether the
+  // applied values are the ones they just read.
+  const republished = assessment.basis === "values";
+  agentBlocks.value = agentBlocks.value.map((candidate) =>
+    candidate.block_type === "parameter_edits" && candidate.block_id === blockId
+      ? {
+          ...candidate,
+          receipts,
+          channelMoved: result.channelMoved,
+          note: [republished ? "页面在此期间刷新过一次，但这几项指向的值没有变，已按当前值写入。" : "", result.note]
+            .filter(Boolean)
+            .join(" "),
+        }
+      : candidate,
+  );
+  agentStatus.value = appliedCount ? `已写入 ${appliedCount} 项；没有创建运行` : "没有写入任何改动";
 }
 
 const requestedRunId = computed(() => navigationSnapshot().runId);
@@ -335,6 +1267,10 @@ watch(
   () => activeRoute.fullPath,
   () => {
     if (isEntryRoute.value) return;
+    // A route change does not destroy the local conversation. The active session
+    // remains available for explicit follow-up, while the context watcher below
+    // marks plans and drafts stale when they no longer match this page.
+    cancelAgentStream();
     synchronizeAgentRouteContext();
     if (isLightweightRoute.value) {
       // The lightweight shell owns its URL navigation, but a changed legal
@@ -342,7 +1278,7 @@ watch(
       // Never reset the professional workspace merely because a lightweight
       // section has no run query; only an explicit new run triggers loading.
       if (!state.bridge.connected) {
-        void ensureBridgeReady();
+        observeBackground(ensureBridgeReady());
       }
       // Run-bound lightweight views restore their own state through the
       // lightweight store/query adapters. Do not ask the professional
@@ -353,9 +1289,12 @@ watch(
     const navigation = navigationSnapshot();
     if (!dashboardInitialized.value) {
       dashboardInitialized.value = true;
-      void initialize({ ...navigation, runId: navigation.runId || state.runId });
+      observeBackground(
+        initialize({ ...navigation, runId: navigation.runId || state.runId }),
+        "工作台初始化未完成，请重试",
+      );
     } else {
-      void synchronizeNavigation(navigation.view, navigation.runId);
+      observeBackground(synchronizeNavigation(navigation.view, navigation.runId), "页面数据同步未完成，请重试");
     }
   },
 );
@@ -390,14 +1329,19 @@ watch(
 );
 watch(
   () => agentContext.value?.context_revision,
-  (currentRevision, previousRevision) => {
-    if (!currentRevision || !previousRevision || currentRevision === previousRevision || !agentBlocks.value.length)
-      return;
-    const hasDraft = agentBlocks.value.some(
-      (block) => block.block_type === "draft_summary" || block.block_type === "validation_result",
-    );
-    agentBlocks.value = markAgentBlocksStale(agentBlocks.value, currentRevision);
-    agentStatus.value = hasDraft ? "页面上下文已变化，现有草案已过期" : "页面上下文已变化，现有内容使用旧上下文";
+  (currentRevision) => {
+    if (!currentRevision) return;
+    if (currentRevision === agentContextRevision.value) return;
+    if (agentBlocks.value.length) {
+      const hasDraft = agentBlocks.value.some(
+        (block) => block.block_type === "draft_summary" || block.block_type === "validation_result",
+      );
+      agentBlocks.value = markAgentBlocksStale(agentBlocks.value, currentRevision);
+      agentLastInstruction.value = null;
+      agentCapability.value = null;
+      agentStatus.value = hasDraft ? "页面上下文已变化，现有草案已过期" : "页面上下文已变化，现有内容使用旧上下文";
+    }
+    agentContextRevision.value = currentRevision;
   },
 );
 watch(
@@ -416,14 +1360,19 @@ onMounted(() => {
     // Lightweight content is local-only, but direct result/deep links still
     // need the existing Bridge health state to distinguish "no run" from
     // "Bridge unavailable". This does not create a run or call a Provider.
-    void ensureBridgeReady();
+    observeBackground(ensureBridgeReady());
     return;
   }
   dashboardInitialized.value = true;
   const navigation = navigationSnapshot();
-  void initialize({ ...navigation, runId: navigation.runId || state.runId });
+  observeBackground(
+    initialize({ ...navigation, runId: navigation.runId || state.runId }),
+    "工作台初始化未完成，请重试",
+  );
 });
 onBeforeUnmount(() => {
+  clearPendingResultAnalysis();
+  cancelAgentStream();
   unsubscribeAgentContext();
   unregisterAgentContext();
 });
@@ -440,7 +1389,11 @@ onBeforeUnmount(() => {
       <component
         :is="Component"
         :key="route.fullPath"
-        v-bind="route.name === 'lightweight_prepare' ? { agentContextPublisher: publishExperimentAgentContext } : {}"
+        v-bind="
+          route.name === 'lightweight_prepare'
+            ? { agentContextPublisher: publishExperimentAgentContext, agentCommandRegistry }
+            : {}
+        "
       />
     </LightweightWorkbenchShell>
     <div v-else class="app-shell" :style="agentDockStyle" :data-agent-copilot-state="agentPanelState">
@@ -463,7 +1416,11 @@ onBeforeUnmount(() => {
             <component
               :is="showUnsupported ? UnsupportedSchemaView : Component"
               :key="String(route.name)"
-              v-bind="route.name === 'experiment' ? { agentContextPublisher: publishExperimentAgentContext } : {}"
+              v-bind="
+                route.name === 'experiment'
+                  ? { agentContextPublisher: publishExperimentAgentContext, agentCommandRegistry }
+                  : {}
+              "
             />
           </KeepAlive>
         </div>
@@ -481,8 +1438,27 @@ onBeforeUnmount(() => {
     :current-task="agentContext?.display_label || '当前页面助手'"
     :status-label="agentStatus"
     :initial-width="agentPanelWidth"
+    :allow-parameter-edit="agentCanEditParameters"
+    :busy="agentStreaming"
+    :model-channel="agentModelChannel"
+    :model-catalogue="agentModelCatalogue"
+    :model-selected="agentModelSelected"
+    :model-pending="agentModelPending"
+    :sessions="agentSessionSummaries"
+    :active-session-id="agentActiveSessionId"
+    :persistence-error="agentPersistenceError"
+    :retention-notice="agentSessions.retentionNotice"
     @resize="agentPanelWidth = $event"
     @submit="submitAgentInstruction"
     @answer="answerAgentClarification"
+    @apply="applyAgentParameterEdits"
+    @cancel="cancelAgentStream"
+    @select-model="switchAgentModel"
+    @refresh-models="loadAgentModels"
+    @new-session="createAgentSession"
+    @select-session="selectAgentSession"
+    @delete-session="deleteAgentSession"
+    @clear-all-sessions="clearAllAgentSessions"
+    @start="handleAgentStart"
   />
 </template>

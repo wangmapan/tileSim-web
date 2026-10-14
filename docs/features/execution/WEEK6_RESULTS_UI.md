@@ -14,6 +14,7 @@
 - 证据与验证：provenance、calibration、validation lane、claim scope 和 fidelity resolution。
 - 设计空间：当前仅展示 `execution_scope=S6_only`。
 - 运行记录：恢复、重命名和最多两个 run 的比较。
+- 原始证据：独立 `/raw-evidence` 页面浏览可信清单中的完整 JSON；图表、字段和 citation 链接携带 run、artifact、SHA-256、JSON Pointer 定位。旧执行过程证据深链转向此页，普通执行过程仍专注执行语义。
 - 新建实验：受控参数、JSON 输入和 S6 candidate manifest。
 - 结构化报告导出：单文件 HTML 中汇总 S0-S9、聚合前性能明细和机器可读 JSON。
 - Week 8 run-bound 证据链：从后端声明的 P99/request 展示 S1、并列 S3/S4/S5、S6、S7/S8/S9 与 manifest-bound EvidenceRef。
@@ -54,6 +55,8 @@
 - `design-space.json`（可选）
 
 前端先固定 API/schema-set revision，再读取 artifact manifest，并逐项校验 SHA-256 和 schema identity。revision、hash 或 identity 不一致时失败关闭。私有 `run-metadata.json` 不属于浏览器 allow-list。
+
+专业工作台主导航由小拓助手承担常用结果分析/教学入口，原独立「AI 解释」不再列于主导航；旧 `/evidence-agent` 仅作为历史深链兼容，其 Provider 能力和 citation 契约没有并入原始 JSON 查看器。
 
 unknown schema 不进入旧结构化视图，但完整原始 JSON 仍可查看。损坏的可选 artifact 不阻断合法报告；损坏或缺失主 run artifact 返回结构化错误。
 

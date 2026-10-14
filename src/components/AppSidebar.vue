@@ -1,7 +1,7 @@
 <script setup>
 import {
   Activity,
-  Bot,
+  Braces,
   ChartNoAxesCombined,
   FlaskConical,
   Gauge,
@@ -28,7 +28,7 @@ const icons = {
   design_space: Layers3,
   attribution: Activity,
   validation: ShieldCheck,
-  evidence_agent: Bot,
+  raw_evidence: Braces,
   evidence_lab: ScanSearch,
   history: History,
 };

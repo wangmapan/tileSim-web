@@ -183,7 +183,7 @@ test("deployed Week 8 Bridge exposes the formal F8 schema-driven experiment surf
   await expect(schemaPanel).toContainText("supported");
   await expect(schemaPanel).toContainText("S3=not_exposed");
   await expect(schemaPanel).toContainText("real_trace=unavailable");
-  await expect(page.locator("[data-field-path]")).toHaveCount(8);
+  await expect(page.locator("[data-field-path]")).toHaveCount(13);
 
   const latency = page.locator('[data-field-path="/overrides/fabric/scale_out_latency_us"] input');
   await latency.fill("1000");

@@ -8,7 +8,7 @@
 新建实验 → 配置 → 校验 → 提交 run → 查看状态 → 查看结果与必要图表
 ```
 
-轻量版不是学习中心、任务目录、模板展示页或已有 run 的只读浏览器。工作台可以创建正式 run；专业版现有的同一个 `TileSim 助手` 复用于轻量工作台，但只负责解释和生成本地草案，不写入表单、不自行创建 run、不调用 Provider，也不能替代实验配置或绕过正式 run 流程。
+轻量版不是学习中心、任务目录、模板展示页或已有 run 的只读浏览器。工作台可以创建正式 run；专业版现有的同一个 `TileSim 助手` 复用于轻量工作台。配置与参数草案仍只做本地确定性处理，不写入表单、不自行创建 run；结果页的只读分析在 Bridge 配置了模型时可调用独立结果分析通道，否则回退本地整理，不能替代实验配置或绕过正式 run 流程。
 
 L3R/L4R/L5R 已实现：基础配置、canonical request preview、正式提交、idempotency 恢复、run 状态轮询、真实报告摘要与图表、专业版切换和 query 上下文保留。L6R 已加入 fixture/mock Bridge 的桌面闭环验收与失败边界审查；fixture 仅证明 UI、路由、状态机和契约映射，不构成 Provider、live、calibration 或 held-out 证据。
 
@@ -18,7 +18,7 @@ L3R/L4R/L5R 已实现：基础配置、canonical request preview、正式提交�
 
 run/results 合法深链会先等待共享 Bridge manifest/schema bootstrap；bootstrap 失败时 fail closed，不从无 manifest/schema 上下文回退到 legacy evidence 路径。App shell 与轻量页面并发进入时共用同一个 readiness promise，避免重复 bootstrap 和竞态读取。
 
-两个工作台只共享同一套 Agent 外壳、状态和公共 context adapter，不混用页面帮助。轻量配置页向助手发布正式八字段与当前值，轻量运行/结果页从合法 run ID 恢复上下文；切换模式后助手面板状态可以保留，但前一页面的 context 必须失效。fixture 只验证这条 UI、路由、状态机和契约映射路径，不能证明模型 Provider、live 执行、calibration 或 held-out validation。
+两个工作台只共享同一套 Agent 外壳、状态和公共 context adapter，不混用页面帮助。轻量配置页向助手发布当前 descriptor/页面目录允许的字段与当前值；其中“可编辑目录”只代表前端可生成受校验的草案，不代表后端已接入对应 Profile 或执行语义。轻量运行/结果页从合法 run ID 恢复上下文；切换模式后助手面板状态可以保留，但前一页面的 context 必须失效。fixture 只验证这条 UI、路由、状态机和契约映射路径，不能证明模型 Provider、live 执行、calibration 或 held-out validation。
 
 ## 当前产品基线
 

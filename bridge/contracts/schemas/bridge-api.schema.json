@@ -8,6 +8,7 @@
     "manifest": { "$ref": "api-manifest.schema.json" },
     "error": { "$ref": "error.schema.json" },
     "artifactManifest": { "$ref": "artifact-manifest.schema.json" },
+    "expectedAbsenceDescriptor": { "$ref": "artifact-descriptor.schema.json" },
     "createRunRequest": { "$ref": "create-run-request.schema.json" },
     "runOverrides": { "$ref": "run-overrides.schema.json" },
     "customRunInputs": { "$ref": "custom-run-inputs.schema.json" },
@@ -25,6 +26,10 @@
     "topologyInput": { "$ref": "topology-input.schema.json" },
     "tailCauseChainReport": { "$ref": "tail-cause-chain-report.schema.json" },
     "executionEnvelope": { "$ref": "execution-envelope.schema.json" },
+    "runtimeEventTrace": { "$ref": "runtime-evidence.schema.json#/$defs/trace" },
+    "runtimeEventSummary": { "$ref": "runtime-evidence.schema.json#/$defs/eventSummary" },
+    "runtimeRequestSummaries": { "$ref": "runtime-evidence.schema.json#/$defs/requestSummaries" },
+    "runtimeAnalysis": { "$ref": "runtime-evidence.schema.json#/$defs/analysis" },
     "validationReport": { "$ref": "validation-report.schema.json" },
     "week8RunEvidence": { "$ref": "week8-run-evidence.schema.json" },
     "evidenceAgentDescriptor": { "$ref": "evidence-agent-descriptor.schema.json" },
@@ -34,17 +39,33 @@
     "agentOrchestrationCapabilitySnapshot": {
       "$ref": "../agent_orchestration_capability/schemas/capability-snapshot.schema.json"
     },
-    "agentOrchestrationRunIntakePreviewRequest": { "$ref": "agent-orchestration-run-intake-preview-request.schema.json" },
-    "agentOrchestrationRunIntakePreviewResponse": { "$ref": "agent-orchestration-run-intake-preview-response.schema.json" },
-    "agentOrchestrationProfileBindingV1": { "$ref": "../agent_orchestration_phase2/schemas/profile-binding.schema.json" },
+    "agentOrchestrationRunIntakePreviewRequest": {
+      "$ref": "agent-orchestration-run-intake-preview-request.schema.json"
+    },
+    "agentOrchestrationRunIntakePreviewResponse": {
+      "$ref": "agent-orchestration-run-intake-preview-response.schema.json"
+    },
+    "agentOrchestrationProfileBindingV1": {
+      "$ref": "../agent_orchestration_phase2/schemas/profile-binding.schema.json"
+    },
     "agentOrchestrationRunIntakeV2": { "$ref": "../agent_orchestration_phase2/schemas/run-intake.schema.json" },
-    "agentOrchestrationValidationReportV1": { "$ref": "../agent_orchestration_phase2/schemas/validation-report.schema.json" },
-    "agentOrchestrationCalculatorReceiptV1": { "$ref": "../agent_orchestration_phase2/schemas/calculator-receipt.schema.json" },
-    "agentOrchestrationIdempotencyRetentionPolicyV1": { "$ref": "../agent_orchestration_phase2/schemas/idempotency-retention-policy.schema.json" },
+    "agentOrchestrationValidationReportV1": {
+      "$ref": "../agent_orchestration_phase2/schemas/validation-report.schema.json"
+    },
+    "agentOrchestrationCalculatorReceiptV1": {
+      "$ref": "../agent_orchestration_phase2/schemas/calculator-receipt.schema.json"
+    },
+    "agentOrchestrationIdempotencyRetentionPolicyV1": {
+      "$ref": "../agent_orchestration_phase2/schemas/idempotency-retention-policy.schema.json"
+    },
     "agentOrchestrationModelProfileV2": { "$ref": "../agent_orchestration_phase2/schemas/model-profile.schema.json" },
     "agentOrchestrationEngineProfileV2": { "$ref": "../agent_orchestration_phase2/schemas/engine-profile.schema.json" },
     "agentOrchestrationDeviceProfileV2": { "$ref": "../agent_orchestration_phase2/schemas/device-profile.schema.json" },
-    "agentOrchestrationTopologyProfileV2": { "$ref": "../agent_orchestration_phase2/schemas/topology-profile.schema.json" },
-    "agentOrchestrationWorkloadProfileV2": { "$ref": "../agent_orchestration_phase2/schemas/workload-profile.schema.json" }
+    "agentOrchestrationTopologyProfileV2": {
+      "$ref": "../agent_orchestration_phase2/schemas/topology-profile.schema.json"
+    },
+    "agentOrchestrationWorkloadProfileV2": {
+      "$ref": "../agent_orchestration_phase2/schemas/workload-profile.schema.json"
+    }
   }
 }

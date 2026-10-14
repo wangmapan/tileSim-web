@@ -150,101 +150,97 @@ function node(page, deviceId) {
   return page.locator(".topology-device").filter({ hasText: deviceId });
 }
 
-async function center(locator) {
-  await locator.scrollIntoViewIfNeeded();
-  const box = await locator.boundingBox();
-  expect(box, `expected a visible topology node for ${await locator.getAttribute("aria-label")}`).not.toBeNull();
-  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-}
-
-function assertNoLayoutCoordinates(value) {
-  if (Array.isArray(value)) {
-    for (const item of value) assertNoLayoutCoordinates(item);
-    return;
-  }
-  if (!value || typeof value !== "object") return;
-  expect(value).not.toHaveProperty("x");
-  expect(value).not.toHaveProperty("y");
-  for (const child of Object.values(value)) assertNoLayoutCoordinates(child);
-}
-
-test.describe("topology graph pointer editing", () => {
-  test("dragging layout, creating/editing/deleting links, and reverse duplicate protection stay in JSON contract", async ({
-    page,
-  }) => {
+test.describe("topology preview in the JSON tab", () => {
+  test("draws a read-only graph that follows the JSON text and offers no editing", async ({ page }) => {
     await installTopologyApi(page);
     await page.goto("/experiment", { waitUntil: "networkidle" });
 
-    await expect(page.getByRole("button", { name: "JSON 输入", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "JSON 输入", exact: true }).click();
     const editor = page.locator(".topology-editor");
     await expect(editor).toBeVisible();
+    await expect(editor).toHaveClass(/topology-editor--readonly/);
+
     const json = editor.locator(".topology-editor__json textarea");
-    const initialJson = JSON.stringify(topologyEnvelope, null, 2);
-    await json.fill(initialJson);
+    await json.fill(JSON.stringify(topologyEnvelope, null, 2));
     await expect(editor.locator(".topology-device")).toHaveCount(3);
+    await expect(editor.locator(".topology-domain-node")).toHaveCount(1);
+    await expect(editor.locator(".topology-link")).toHaveCount(0);
 
-    // Device layout is local editor state: moving a node changes its SVG transform,
-    // but must not emit a different request JSON value.
-    const firstNode = node(editor, "gpu-0");
-    const beforeTransform = await firstNode.getAttribute("transform");
-    const beforeJson = await json.inputValue();
-    const firstPoint = await center(firstNode);
-    await page.mouse.move(firstPoint.x, firstPoint.y);
-    await page.mouse.down();
-    await page.mouse.move(firstPoint.x + 90, firstPoint.y + 35, { steps: 5 });
-    await page.mouse.up();
-    await expect(firstNode).not.toHaveAttribute("transform", beforeTransform);
-    await expect(json).toHaveValue(beforeJson);
-    assertNoLayoutCoordinates(JSON.parse(await json.inputValue()));
+    // Typing is the only route into the topology here, so none of the editing
+    // chrome is rendered: no connect mode, no domain chips, no module list, no
+    // layout hint. Those live in the quick-control tab.
+    await expect(editor.getByRole("button", { name: "连接设备", exact: true })).toHaveCount(0);
+    await expect(editor.locator(".topology-module-bindings")).toHaveCount(0);
+    await expect(editor.locator(".topology-domains")).toHaveCount(0);
+    await expect(editor.locator(".topology-editor__hint")).toHaveCount(0);
 
-    // Drag-connect gpu-0 -> gpu-1 in the selected domain.
-    await editor.getByRole("button", { name: "连接设备", exact: true }).click();
-    await editor.getByRole("combobox", { name: "选择连接 domain" }).selectOption("fabric-0");
-    const sourcePoint = await center(node(editor, "gpu-0"));
-    const targetPoint = await center(node(editor, "gpu-1"));
-    await page.mouse.move(sourcePoint.x, sourcePoint.y);
-    await page.mouse.down();
-    await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 8 });
-    await page.mouse.up();
+    // A node click opens nothing and leaves the JSON text untouched.
+    const before = await json.inputValue();
+    await node(page, "gpu-0").click();
+    await expect(editor.locator(".topology-link-panel")).toHaveCount(0);
+    await expect(json).toHaveValue(before);
+
+    // Editing the text is what moves the graph: a hand-written link appears...
+    const linked = structuredClone(topologyEnvelope);
+    linked.topology.links = [{ src_device: "gpu-0", dst_device: "gpu-1", domain_id: "fabric-0" }];
+    await json.fill(JSON.stringify(linked, null, 2));
     await expect(editor.locator(".topology-link")).toHaveCount(1);
-    let requestValue = JSON.parse(await json.inputValue());
-    expect(requestValue.topology.links).toEqual([{ src_device: "gpu-0", dst_device: "gpu-1", domain_id: "fabric-0" }]);
     await expect(editor.locator(".topology-link text").first()).toHaveText("fabric-0");
 
-    // The opposite direction is the same physical link and must not be appended.
-    await (await node(editor, "gpu-1")).click();
-    await (await node(editor, "gpu-0")).click();
-    await expect(editor.locator(".topology-link")).toHaveCount(1);
-    requestValue = JSON.parse(await json.inputValue());
-    expect(requestValue.topology.links).toHaveLength(1);
-
-    // A click-to-connect gesture creates another undirected edge as well.
-    await node(editor, "gpu-1").click();
-    await node(editor, "gpu-2").click();
-    await expect(editor.locator(".topology-link")).toHaveCount(2);
-    requestValue = JSON.parse(await json.inputValue());
-    expect(requestValue.topology.links).toEqual([
-      { src_device: "gpu-0", dst_device: "gpu-1", domain_id: "fabric-0" },
-      { src_device: "gpu-1", dst_device: "gpu-2", domain_id: "fabric-0" },
-    ]);
-
-    // The newly-created edge is selected by the editor; edit it through the panel.
-    await expect(editor.locator(".topology-link-panel")).toBeVisible();
-    const bandwidth = editor.locator('.topology-link-panel input[type="number"]').first();
-    await bandwidth.fill("400");
-    await expect(json).toHaveValue(/bandwidth_gbps/);
-    requestValue = JSON.parse(await json.inputValue());
-    expect(requestValue.topology.links[1]).toEqual(
-      expect.objectContaining({ bandwidth_gbps: 400, src_device: "gpu-1", dst_device: "gpu-2" }),
-    );
-    await editor.getByRole("button", { name: "删除连接", exact: true }).click();
-    await expect(editor.locator(".topology-link")).toHaveCount(1);
-    await editor.locator(".topology-link").press("Enter");
-    await editor.getByRole("button", { name: "删除连接", exact: true }).click();
+    // ...and shrinking the document shrinks the picture.
+    linked.topology.devices = [{ device_id: "gpu-0", device_type: "gpu" }];
+    linked.topology.domains[0].member_devices = ["gpu-0"];
+    linked.topology.links = [];
+    await json.fill(JSON.stringify(linked, null, 2));
+    await expect(editor.locator(".topology-device")).toHaveCount(1);
     await expect(editor.locator(".topology-link")).toHaveCount(0);
-    requestValue = JSON.parse(await json.inputValue());
-    expect(requestValue.topology.links).toEqual([]);
-    assertNoLayoutCoordinates(requestValue);
   });
+});
+
+test("versioned engine JSON preview keeps requested DES separate and invalid input never posts", async ({ page }) => {
+  await installTopologyApi(page);
+  let posts = 0;
+  await page.route("**/api/runs", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    posts += 1;
+    await route.fulfill({
+      status: 400,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: { field_path: "/custom_inputs/runtime_trace/requested_features/0", message: "Unsupported feature" },
+      }),
+    });
+  });
+  await page.goto("/experiment", { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "JSON 输入", exact: true }).click();
+  const runtime = {
+    engine_type: "sglang",
+    engine_semantic_version: "sglang.0.4.semantic.v1",
+    requested_features: [],
+    policy: { kv_capacity_tokens: 1024, max_active_requests: 2, max_batch_size: 2 },
+    requests: [
+      {
+        request_id: "r",
+        phase: "request",
+        prompt_tokens: 8,
+        decode_tokens: 2,
+        kv_tokens: 10,
+        tp_degree: 1,
+        participants: ["gpu-0"],
+      },
+    ],
+  };
+  await page.locator(".json-grid textarea").first().fill(JSON.stringify(runtime));
+  await page.locator(".topology-editor__json textarea").fill(JSON.stringify(topologyEnvelope));
+  await expect(page.locator(".experiment-request-preview pre")).toContainText('"engine_type": "sglang"');
+  await expect(page.getByText("请求 fidelity", { exact: true }).last()).toBeVisible();
+  await expect(page.locator(".experiment-request-preview pre")).not.toContainText("resolved_fidelity");
+  await page.reload({ waitUntil: "networkidle" });
+  await expect(page.locator(".experiment-request-preview pre")).toContainText('"engine_type": "sglang"');
+  await expect(page.locator(".experiment-request-preview pre")).toContainText('"phase": "request"');
+  runtime.requested_features = ["prefix_cache"];
+  await page.locator(".json-grid textarea").first().fill(JSON.stringify(runtime));
+  await expect(page.locator(".request-preview-error code")).toContainText("requested_features");
+  await expect(page.locator(".run-submit")).toBeDisabled();
+  expect(posts).toBe(0);
 });

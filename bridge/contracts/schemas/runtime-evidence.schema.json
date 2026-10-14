@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/runtime-evidence.schema.json",
+  "title": "RuntimeEvidenceContracts",
+  "type": "object",
+  "$defs": {
+    "event": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "kind",
+        "request_id",
+        "batch_id",
+        "batch_request_ids",
+        "event_time_ps",
+        "logical_step",
+        "kv_tokens",
+        "active_requests"
+      ],
+      "properties": {
+        "kind": { "type": "string" },
+        "request_id": { "type": "string" },
+        "batch_id": { "type": "string" },
+        "batch_request_ids": { "type": "array", "items": { "type": "string" } },
+        "event_time_ps": { "type": "integer", "minimum": 0 },
+        "logical_step": { "type": "integer", "minimum": 0 },
+        "kv_tokens": { "type": "integer", "minimum": 0 },
+        "active_requests": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "has_events",
+        "total_events",
+        "first_event_time_ps",
+        "last_event_time_ps",
+        "peak_active_requests",
+        "monotonic_time_order",
+        "contiguous_logical_steps"
+      ],
+      "properties": {
+        "has_events": { "type": "boolean" },
+        "total_events": { "type": "integer", "minimum": 0 },
+        "first_event_time_ps": { "type": "integer", "minimum": 0 },
+        "last_event_time_ps": { "type": "integer", "minimum": 0 },
+        "peak_active_requests": { "type": "integer", "minimum": 0 },
+        "monotonic_time_order": { "type": "boolean" },
+        "contiguous_logical_steps": { "type": "boolean" }
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "request_id",
+        "arrival_time_ps",
+        "admit_time_ps",
+        "first_batch_issue_time_ps",
+        "first_token_time_ps",
+        "completion_time_ps",
+        "final_kv_tokens"
+      ],
+      "properties": {
+        "request_id": { "type": "string", "minLength": 1 },
+        "arrival_time_ps": { "type": "integer", "minimum": 0 },
+        "admit_time_ps": { "type": "integer", "minimum": 0 },
+        "first_batch_issue_time_ps": { "type": "integer", "minimum": 0 },
+        "first_token_time_ps": { "type": "integer", "minimum": 0 },
+        "completion_time_ps": { "type": "integer", "minimum": 0 },
+        "final_kv_tokens": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "trace": {
+      "title": "RuntimeEventTrace",
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["schema_version", "run_id", "trace_name", "events"],
+      "properties": {
+        "schema_version": { "const": "tilesim.s1_runtime_event_trace.v1" },
+        "run_id": { "type": "string", "minLength": 1 },
+        "trace_name": { "type": "string" },
+        "events": { "type": "array", "items": { "$ref": "#/$defs/event" } }
+      }
+    },
+    "eventSummary": {
+      "title": "RuntimeEventSummary",
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "schema_version": { "const": "tilesim.s1_runtime_event_summary.v1" },
+        "run_id": { "type": "string", "minLength": 1 },
+        "has_events": { "type": "boolean" },
+        "total_events": { "type": "integer", "minimum": 0 },
+        "first_event_time_ps": { "type": "integer", "minimum": 0 },
+        "last_event_time_ps": { "type": "integer", "minimum": 0 },
+        "peak_active_requests": { "type": "integer", "minimum": 0 },
+        "monotonic_time_order": { "type": "boolean" },
+        "contiguous_logical_steps": { "type": "boolean" }
+      },
+      "required": [
+        "schema_version",
+        "run_id",
+        "has_events",
+        "total_events",
+        "first_event_time_ps",
+        "last_event_time_ps",
+        "peak_active_requests",
+        "monotonic_time_order",
+        "contiguous_logical_steps"
+      ]
+    },
+    "requestSummaries": {
+      "title": "RuntimeRequestSummaries",
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["schema_version", "run_id", "requests"],
+      "properties": {
+        "schema_version": { "const": "tilesim.s1_runtime_request_summaries.v1" },
+        "run_id": { "type": "string", "minLength": 1 },
+        "requests": { "type": "array", "items": { "$ref": "#/$defs/request" } }
+      }
+    },
+    "analysis": {
+      "title": "RuntimeAnalysis",
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["schema_version", "run_id", "trace_name", "summary", "requests", "events"],
+      "properties": {
+        "schema_version": { "const": "tilesim.s1_runtime_analysis.v1" },
+        "run_id": { "type": "string", "minLength": 1 },
+        "trace_name": { "type": "string" },
+        "summary": { "$ref": "#/$defs/summary" },
+        "requests": { "type": "array", "items": { "$ref": "#/$defs/request" } },
+        "events": { "type": "array", "items": { "$ref": "#/$defs/event" } }
+      }
+    }
+  }
+}
