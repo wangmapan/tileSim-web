@@ -59,6 +59,13 @@
 
 文档中的任何历史测试数字（例如 archived phase records 里的 505/105/63/265）都是**当时**的事实，不得当作当前基线引用。
 
+> **2026-09-23 追加说明**：本节 §0.1–§0.3 是 **2026-09-17 的 dated 快照，原文不改**。当前的门禁基线、
+> 模块规模与最近改动**不在这里**，请读 [`docs/AI_HANDOFF.md`](../AI_HANDOFF.md)（当前事实来源）；
+> 做**前端开发**时的代码地图、状态归属与本机可跑命令见
+> [`getting-started/AI_FRONTEND_DEVELOPMENT_REFERENCE.md`](../getting-started/AI_FRONTEND_DEVELOPMENT_REFERENCE.md)。
+> 本目录的活跃文档清单见下方 §3.1；已结束阶段记录见 §3.2 与
+> [`docs/archive/agent-orchestration/phase-records/`](../archive/agent-orchestration/phase-records/)。
+
 ## 1. AI 必读协议
 
 任何接手该模块的 AI 在修改代码或契约前必须：
@@ -122,14 +129,20 @@
 
 ### 3.2 已归档的阶段记录
 
-以下四篇是 dated 阶段证据，**不是当前事实来源**。只有追溯决定、测试来源或历史回归时才读取。
+下表所列各篇是 dated 阶段证据，**不是当前事实来源**。只有追溯决定、测试来源或历史回归时才读取。
+**2026-09-23 追加归档两篇**（`24`/`25`）：它们此前留在本目录、既不在本 §3.1 活跃清单内、也未被任何文档引用，
+而其结论（五类 Profile 仍 `0/unavailable`、Phase 2 数据侧/执行侧仍 `blocked`）已折进 §0.2 与
+`docs/AI_HANDOFF.md`，故按「结束阶段即移入 archive」的规则归档。**注意 `24` 号曾出现两个文件**（本目录的
+`24_PHASE2C_WORK_PACKAGE_PROMPTS.md` 与已归档的 `24_PHASE2D_PROFILE_DATA_ACCEPTANCE.md`）；归档只搬位置，编号不改写。
 
-| 原序号 | 归档路径                                                                                                                                            | 归档原因                                |
-| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| 19     | [`phase-records/19_PHASE1_WEB_LOCAL_ACCEPTANCE.md`](../archive/agent-orchestration/phase-records/19_PHASE1_WEB_LOCAL_ACCEPTANCE.md)                 | Phase 1 已结束并集成 `main`             |
-| 20     | [`phase-records/20_PHASE2_READINESS_AUDIT.md`](../archive/agent-orchestration/phase-records/20_PHASE2_READINESS_AUDIT.md)                           | 契约侧 `blocked` 裁决已被 2A/2B/2C 取代 |
-| 21     | [`phase-records/21_PHASE2A_CONTRACT_PROPOSAL.md`](../archive/agent-orchestration/phase-records/21_PHASE2A_CONTRACT_PROPOSAL.md)                     | 候选已由 Phase 2B 正式发布取代          |
-| 22     | [`phase-records/22_PHASE2B_BRIDGE_CONTRACT_PUBLICATION.md`](../archive/agent-orchestration/phase-records/22_PHASE2B_BRIDGE_CONTRACT_PUBLICATION.md) | Phase 2B 已提交完成（`4d7f9fa`）        |
+| 原序号 | 归档路径                                                                                                                                            | 归档原因                                                   |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| 19     | [`phase-records/19_PHASE1_WEB_LOCAL_ACCEPTANCE.md`](../archive/agent-orchestration/phase-records/19_PHASE1_WEB_LOCAL_ACCEPTANCE.md)                 | Phase 1 已结束并集成 `main`                                |
+| 20     | [`phase-records/20_PHASE2_READINESS_AUDIT.md`](../archive/agent-orchestration/phase-records/20_PHASE2_READINESS_AUDIT.md)                           | 契约侧 `blocked` 裁决已被 2A/2B/2C 取代                    |
+| 21     | [`phase-records/21_PHASE2A_CONTRACT_PROPOSAL.md`](../archive/agent-orchestration/phase-records/21_PHASE2A_CONTRACT_PROPOSAL.md)                     | 候选已由 Phase 2B 正式发布取代                             |
+| 22     | [`phase-records/22_PHASE2B_BRIDGE_CONTRACT_PUBLICATION.md`](../archive/agent-orchestration/phase-records/22_PHASE2B_BRIDGE_CONTRACT_PUBLICATION.md) | Phase 2B 已提交完成（`4d7f9fa`）                           |
+| 24     | [`phase-records/24_PHASE2D_PROFILE_DATA_ACCEPTANCE.md`](../archive/agent-orchestration/phase-records/24_PHASE2D_PROFILE_DATA_ACCEPTANCE.md)         | Phase 2D 已收口（2026-09-23 归档）                         |
+| 25     | [`phase-records/25_PHASE2E_DOR_AUDIT.md`](../archive/agent-orchestration/phase-records/25_PHASE2E_DOR_AUDIT.md)                                     | Phase 2E 裁决 `blocked_data` 已折进基线（2026-09-23 归档） |
 
 ## 4. 按任务路由阅读
 

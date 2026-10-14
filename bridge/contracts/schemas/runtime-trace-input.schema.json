@@ -8,22 +8,32 @@
   "required": ["policy", "requests"],
   "properties": {
     "trace_name": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "engine_type": { "enum": ["legacy_generic", "vllm", "sglang", "tensorrt_llm"] },
+    "engine_semantic_version": {
+      "enum": ["legacy_generic.v1", "vllm.0.6.semantic.v1", "sglang.0.4.semantic.v1", "tensorrt_llm.0.12.semantic.v1"]
+    },
+    "requested_features": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 3,
+      "items": {
+        "enum": [
+          "continuous_batching",
+          "prefix_aware_scheduling",
+          "inflight_batching",
+          "paged_kv_cache",
+          "capacity_aware_scheduling"
+        ]
+      }
+    },
     "trace_provenance": {
       "type": "object",
       "additionalProperties": false,
       "required": ["source_mode", "calibration_level", "allowed_claim_scope"],
       "properties": {
         "source_mode": { "const": "synthetic_trace" },
-        "calibration_level": { "enum": ["uncalibrated", "partially_calibrated"] },
-        "allowed_claim_scope": {
-          "enum": [
-            "exploratory",
-            "exploratory_s6_only",
-            "synthetic_consistency",
-            "synthetic_consistency_only",
-            "workflow_consistency_only"
-          ]
-        },
+        "calibration_level": { "const": "uncalibrated" },
+        "allowed_claim_scope": { "const": "exploratory" },
         "source_id": { "type": "string", "maxLength": 512 },
         "generation_path": { "type": "string", "maxLength": 512 },
         "capture_or_generation_time": { "type": "string", "maxLength": 160 },
@@ -36,17 +46,17 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "kv_capacity_tokens": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "kv_capacity_tokens": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
         "initial_kv_tokens": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-        "max_active_requests": { "type": "integer", "minimum": 0, "maximum": 1024 },
-        "max_batch_size": { "type": "integer", "minimum": 0, "maximum": 1024 },
-        "batch_scheduler": { "enum": ["fifo", "decode_priority", "fabric_backpressure_aware"] },
+        "max_active_requests": { "type": "integer", "minimum": 1, "maximum": 1024 },
+        "max_batch_size": { "type": "integer", "minimum": 1, "maximum": 1024 },
+        "batch_scheduler": { "enum": ["fifo", "decode_priority", "fabric_backpressure_aware", "starvation_aware"] },
         "prefill_starvation_threshold_ps": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
         "pd_handoff_delay_ps": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
         "pd_handoff_queue_service_ps": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
         "kv_page_size_tokens": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
         "kv_fragmentation_overhead": { "type": "number", "minimum": 0 },
-        "kv_admission_watermark": { "type": "number", "minimum": 0, "maximum": 1 },
+        "kv_admission_watermark": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
         "fabric_backpressure_active": { "type": "boolean" },
         "fabric_backpressure_delay_us": { "type": "number", "minimum": 0 },
         "fabric_backpressure_throttle_threshold_us": { "type": "number", "minimum": 0 },
@@ -67,7 +77,7 @@
           "request_id": { "type": "string", "minLength": 1, "maxLength": 256 },
           "model_id": { "type": "string", "maxLength": 256 },
           "arrival_time_ps": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-          "phase": { "enum": ["prefill", "decode"] },
+          "phase": { "enum": ["prefill", "decode", "request"] },
           "prompt_tokens": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
           "decode_tokens": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
           "kv_tokens": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
@@ -79,8 +89,82 @@
           "placement_group_id": { "type": "string", "maxLength": 256 },
           "disaggregation_group_id": { "type": "string", "maxLength": 256 },
           "kv_handoff_id": { "type": "string", "maxLength": 256 }
+        },
+        "if": { "properties": { "phase": { "const": "request" } }, "required": ["phase"] },
+        "then": {
+          "required": ["prompt_tokens", "decode_tokens", "kv_tokens", "tp_degree", "participants"],
+          "properties": {
+            "prompt_tokens": { "minimum": 1 },
+            "kv_tokens": { "minimum": 1 },
+            "participants": { "minItems": 1 }
+          }
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "engine_type": { "const": "vllm" } }, "required": ["engine_type"] },
+      "then": {
+        "required": ["engine_semantic_version", "requested_features"],
+        "properties": {
+          "engine_semantic_version": { "const": "vllm.0.6.semantic.v1" },
+          "requested_features": { "items": { "const": "continuous_batching" } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "engine_type": { "const": "sglang" } }, "required": ["engine_type"] },
+      "then": {
+        "required": ["engine_semantic_version", "requested_features"],
+        "properties": {
+          "engine_semantic_version": { "const": "sglang.0.4.semantic.v1" },
+          "requested_features": { "items": { "enum": ["continuous_batching", "prefix_aware_scheduling"] } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "engine_type": { "const": "tensorrt_llm" } }, "required": ["engine_type"] },
+      "then": {
+        "required": ["engine_semantic_version", "requested_features"],
+        "properties": {
+          "engine_semantic_version": { "const": "tensorrt_llm.0.12.semantic.v1" },
+          "requested_features": {
+            "items": { "enum": ["inflight_batching", "paged_kv_cache", "capacity_aware_scheduling"] }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "anyOf": [
+          { "properties": { "engine_type": { "const": "legacy_generic" } }, "required": ["engine_type"] },
+          { "not": { "required": ["engine_type"] } }
+        ]
+      },
+      "then": {
+        "properties": {
+          "engine_semantic_version": { "const": "legacy_generic.v1" },
+          "requested_features": { "maxItems": 0 },
+          "requests": { "items": { "properties": { "phase": { "enum": ["prefill", "decode"] } } } }
+        }
+      },
+      "else": { "required": ["engine_semantic_version", "requested_features"] }
+    },
+    { "if": { "required": ["engine_semantic_version"] }, "then": { "required": ["engine_type"] } },
+    { "if": { "required": ["requested_features"] }, "then": { "required": ["engine_type"] } },
+    {
+      "if": {
+        "properties": {
+          "requests": { "contains": { "properties": { "phase": { "const": "request" } }, "required": ["phase"] } }
+        }
+      },
+      "then": {
+        "required": ["engine_type"],
+        "properties": {
+          "requests": { "items": { "required": ["phase"], "properties": { "phase": { "const": "request" } } } }
+        }
+      }
+    }
+  ]
 }

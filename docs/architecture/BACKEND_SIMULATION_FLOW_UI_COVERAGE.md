@@ -11,7 +11,23 @@
 
 ---
 
-## 0. 结论摘要
+## 当前模块基线（2026-10-10，第六阶段工作树，未部署）
+
+本文下方 2026-09-17 的 C1 判定和“全仓 0 命中”是当时审计快照，不再代表当前工作树。Bridge 对已发布的直接 S1 runtime trace 一次运行请求四种运行期工件：event trace、event summary、request summaries、analysis；后端序列化各自的 schema/run 身份，manifest 区分 `ready` 和 `expected_absence` 描述符，并保留字节数与 SHA-256。执行页按需读、分页显示后端已有值，原始证据查看器支持 Pointer 和大文件虚拟行。Trace package 不预判入口，因此四工件未请求；S3 等非运行时入口若由 CLI 显式请求则返回有身份的 `expected_absence`，不是空集合。
+
+逐请求归因是独立的第五工件。当前只对后端真实生成 dense DES、设备/KV、网络/Fabric 证据和唯一 request metric identity 的 **S0 dense runtime entry** 生成 `ready` 归因；S1 runtime package 在当前输入边界上明确返回 `REQUEST_ATTRIBUTION_REQUIRES_DENSE_DES_EVIDENCE` 并保持 fail-closed。Bridge 校验其 run/schema/SHA/bytes 和后端 subject/evidence JSON Pointer。轻量 S1 或缺任一前置时保持 `expected_absence`/`unavailable` 或在 CLI 生成前以稳定错误关闭；不能通过放宽 Schema 或前端累加批次时间代替。大于 8 MB 工件只在原始证据 Worker 中按需索引，结果分析只保留身份与省略原因。当前验收仅为 synthetic hosted execution 和临时 Bridge/4173 浏览器，不是硬件／Provider／held-out 验证。
+
+---
+
+## 当前模块基线（2026-10-13，文档复核）
+
+- 上一节及本文下方以 2026-09-17 为事实日期的表格是历史审计快照；其中“运行期工件从未被采集”“S2–S5 未进入 Bridge”等表述不能覆盖当前工作树。
+- 当前已验证的运行期覆盖：直接 S1 runtime entry 可由 Bridge 请求 runtime events、summary、request summaries 和 analysis；S0/S1 dense 条件满足时，逐请求 attribution 是独立工件。Trace package 的入口由 CLI inspect 返回的 `entry_boundary`/`entry_trace_kind` 决定，Bridge 不按 package ID 猜测。
+- 当前已验证的 canonical Trace package：S2 execution、S2 kernel、S3 memory、S4 device、S5 collective 均可经临时 Bridge 创建 `202 → completed` run；页面展示 `S2→S6`、`S3→S6`、`S4→S6`、`S5→S6`、provenance、fidelity、Fabric 数量和带身份的 `expected_absence`。不适用 runtime 工件不解析为空事件，也不生成 attribution。
+- 当前前端责任边界是显示、校验、索引和可追溯导航；不补造 S2–S5 的后端指标，不把 synthetic/compatibility-harness 证据升级为真实硬件、校准或 held-out 证据。S2–S5 的完整深链、刷新恢复和全部原始证据入口仍属于浏览器复验项；未逐项复跑不得写成完全覆盖。
+- §3.2、§4、§6 中关于 C1 采集缺口和工作包的内容保留作为 2026-09-17 历史审计依据；当前状态以本节、`docs/AI_HANDOFF.md` 的第十至第十二阶段记录和运行时 manifest 为准。后端未实现的 Profile/Run Intake v2 执行能力不转化为前端伪入口。
+
+## 0. 结论摘要（2026-09-17 历史审计快照；当前状态见上方基线）
 
 - 后端一次 `TileSimCLI run` 是一个**十产出物 + 九段跨层契约链 + 十类中间状态机**的完整流水线；其中只有 **7 个报告**经 Bridge 到达前端。四个运行期工件（`runtime-event-trace` / `runtime-event-summary` / `runtime-request-summaries` / `runtime-analysis`）**根本没有被采集**。
 - 已到达前端的 7 个报告里，**大量已有字段没有被任何页面渲染**。这些字段已被后端序列化、已随 artifact 经过 SHA-256 与 run-binding 校验、已在 `bundle` 内，只是 View 层未声明或未渲染。
@@ -88,7 +104,7 @@
 | 设计空间报告       | `--design-space-report-out`    | `tilesim.design_space_report.v1`                                                                                                                                                           |
 | 运行绑定 DES 证据  | `--run-bound-des-evidence-out` | `tilesim.s7_run_bound_des_evidence.v1`（仅 `--fidelity-policy des` 追加）                                                                                                                  |
 
-> Bridge 实际只请求 7 个（`bridge/services/execution.py:186-226`）。前四个运行期产物**从未被请求** → 见 §3.2 C1-1。
+> **2026-09-17 历史注**：当时 Bridge 实际只请求 7 个（`bridge/services/execution.py:186-226`），前四个运行期产物尚未接入。当前已接入四类 runtime 工件；适用性和 `expected_absence` 语义见本文上方 2026-10-13 基线。
 
 ### 1.4 跨层规范契约链（`PlatformContractBundle`，`include/Core/PlatformContracts.h:113-172`）
 
@@ -239,11 +255,13 @@ RequestContract(request_id, model_id, arrival_time_ps)
 | --- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | 36  | Overview 与 Metrics 页把 `SourcedValue.availability` 压成两态（`available` / 其余一律 `—` 或「不适用」） | `dashboard-view-model.ts:3-13` 定义了 5 态；`OverviewView` / `MetricsView` 只读 `.value` | 恢复 `available / expected_absence / not_covered / missing / unsupported_schema` 五态，并与 `report-registry` 的 compatibility 状态对齐 |
 
-### 3.2 C1 —— Bridge 采集缺口（需重新开契约窗口）
+### 3.2 C1 —— Bridge 采集缺口（2026-09-17 历史快照）
+
+> 本节的 C1-1/C1-2 记录审计时 Bridge 尚未采集运行期工件的状态。第六阶段已接入四类 runtime 工件，第十二阶段又完成了 S2–S5 package 的临时 Bridge 矩阵；本节保留用于追溯缺口如何关闭，不再作为当前工作包派发依据。当前未完成的浏览器深链/刷新复验和全量门禁，见 `docs/AI_HANDOFF.md` 当前条目。
 
 | #    | 缺口                                                                                                                                                                                                                                                                                                                                                                                 | 证据                                                                                                                 | 后果                                                                                                                                                                                                                                                                                                                          |
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| C1-1 | **四个运行期工件从未被采集**：`--runtime-events-out` / `--runtime-summary-out` / `--runtime-requests-out` / `--runtime-analysis-out`                                                                                                                                                                                                                                                 | `bridge/services/execution.py:186-226` 只列 7 个 `--*-out`                                                           | 前端无法拿到真实的 `S1RuntimeEventTrace` / `S1RuntimeEventSummary` / 逐请求 `S1RuntimeRequestSummary` / runtime 分析产物。Execution 页的 S1 记录只能由 `input-runtime-trace.requests × metrics.request_metrics` 做**显示级 join**，不是运行期真实事件流                                                                       |
+| C1-1 | **历史问题，已关闭**：第六阶段接入四个运行期工件：`--runtime-events-out` / `--runtime-summary-out` / `--runtime-requests-out` / `--runtime-analysis-out`                                                                                                                                                                                                                             | 当前实现见 `bridge/services/execution.py`、`RuntimeEvidencePanel.vue` 和 manifest runtime artifact identities        | 直接 S1 runtime entry 已可按需读取真实运行期工件；Trace package 和 S2–S5 入口按 CLI boundary 返回适用工件或带身份的 `expected_absence`，不把描述符当数据                                                                                                                                                                      |
 | C1-2 | 上述补齐需修改 `bridge/contracts/openapi.json` 的 `x-tilesim-contract.report_files`（37-45）、`known_report_schema_identities`（27-36）、`artifacts`（46+，10 个条目）+ `bridge/contracts/schemas/*` + 生成物 + `src/lib/api/artifacts.ts:50-102`                                                                                                                                    | 同上                                                                                                                 | **`SCHEMA_SET_REVISION` 必然变化**。当前契约窗口已按 WP-2C-01b 的裁决关闭，须由指挥方显式重新授权                                                                                                                                                                                                                             |
 | C1-3 | `run` 报告本身无法携带运行期事件（`S7ExecutionEnvelope.has_runtime_event_trace` 目前恒为 false 的成因）                                                                                                                                                                                                                                                                              | `LayerAdapters.h:202`                                                                                                | 即使不新增 artifact，也可先**如实展示** `has_runtime_event_trace=false`（属 C0-5）                                                                                                                                                                                                                                            |
 | C1-4 | **C1 会改变 run 的终态语义，不是单纯的「多采集一个文件」**：后端规定只要请求了某 artifact 而其 state 既非 `ready` 也非 `expected_absence`，工件写入即失败并让 CLI 以 `exit 1` 结束；`runtime_event_trace` 的 state 恰为 `has_runtime_event_trace ? ready : (expects_runtime_trace ? unavailable : expected_absence)`，而 `expects_runtime_trace` 在 Bridge 当前的 `--from S1` 下为真 | `D:\tileSim\src\Core\WindTunnel.cpp:276-278`、`6194-6207`、`6404-6419`；`D:\tileSim\src\apps\TileSimCLI.cpp:304-309` | 若在 runtime 不可用的情况下无条件追加四个 `--runtime-*-out`，原本成功的 run 会变成 `exit 1` 的失败 run。**必须先做只读探针**再决定实现方案（见 §6.2 步骤 0）                                                                                                                                                                  |
@@ -288,7 +306,9 @@ RequestContract(request_id, model_id, arrival_time_ps)
 
 ---
 
-## 4. 缺口分级与优先级
+## 4. 缺口分级与优先级（2026-09-17 历史派发快照）
+
+> 本表保留原始审计时的工作包排序，不代表当前仍可派发。C0 已验收，C1 runtime 工件已接入，S2–S5 Bridge package 已完成临时矩阵；剩余项以 `docs/AI_HANDOFF.md` 当前状态和明确的后端/环境责任边界为准。
 
 | 优先级 | 类别                     | 内容                                                                                                                                           | 工作包与前置                                                                                                                                                                   |
 | ------ | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

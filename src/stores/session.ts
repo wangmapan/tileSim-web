@@ -33,7 +33,9 @@ export const useSessionStore = defineStore("session", () => {
   const toasts = reactive<Array<{ id: string; message: string; tone: string }>>([]);
   const toastTimers = new Map<string, number>();
   const experimentSubmission = reactive(restoreExperimentSubmission());
-  const currentTitle = computed(() => navItems.find((item) => item.id === view.value)?.label || "新建实验");
+  const currentTitle = computed(() =>
+    view.value === "evidence_agent" ? "AI 解释" : navItems.find((item) => item.id === view.value)?.label || "新建实验",
+  );
 
   function setCurrentView(value: unknown) {
     view.value = isWorkspaceView(value) ? value : "overview";

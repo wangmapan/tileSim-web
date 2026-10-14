@@ -103,6 +103,12 @@ export function markAgentBlocksStale(blocks: readonly AgentTypedBlock[], current
       return { ...block, draft: staleDraft(block.draft, currentRevision) };
     }
     if (block.block_type === "validation_result") return { ...block, overall: "stale" };
+    // A parameter plan is deliberately left alone. A page republishing its
+    // envelope — a health check, an equal re-projection — does not tell us that
+    // the values this plan addresses moved, and the apply step checks those
+    // addresses one by one before it writes anything. Dropping the revision here
+    // is what made a plan the user had just read permanently unapplicable, so
+    // the decision is left to the step that can actually make it.
     return block;
   });
 }

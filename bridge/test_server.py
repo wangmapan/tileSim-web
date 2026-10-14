@@ -1,7 +1,9 @@
 import ast
 import hashlib
+import http.server
 import json
 import math
+import os
 import tempfile
 import threading
 import unittest
@@ -318,7 +320,7 @@ def valid_custom_inputs() -> dict:
             "trace_provenance": {
                 "source_mode": "synthetic_trace",
                 "calibration_level": "uncalibrated",
-                "allowed_claim_scope": "synthetic_consistency_only",
+                "allowed_claim_scope": "exploratory",
             },
             "policy": {"batch_scheduler": "decode_priority"},
             "requests": [{"request_id": "request-f8", "phase": "decode"}],
@@ -574,6 +576,41 @@ class DesignSpaceBridgeTest(unittest.TestCase):
             (root / "untracked.txt").write_text("three\n", encoding="utf-8")
             self.assertNotEqual(second, server.worktree_state_digest(root))
 
+    def test_worktree_digest_streams_large_untracked_files_without_changing_its_format(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            server.subprocess.run(["git", "init", str(root)], check=True, capture_output=True)
+            server.subprocess.run(["git", "-C", str(root), "config", "user.name", "TileSim Test"], check=True)
+            server.subprocess.run(
+                ["git", "-C", str(root), "config", "user.email", "tilesim-test@example.invalid"], check=True
+            )
+            (root / ".gitignore").write_text("/build-*/\n", encoding="utf-8")
+            server.subprocess.run(["git", "-C", str(root), "add", ".gitignore"], check=True)
+            server.subprocess.run(
+                ["git", "-C", str(root), "commit", "-m", "baseline"], check=True, capture_output=True
+            )
+            payload = b"a" * (2 * 1024 * 1024 + 7)
+            (root / "untracked.bin").write_bytes(payload)
+            revision = server.subprocess.run(
+                ["git", "-C", str(root), "rev-parse", "HEAD"], check=True, capture_output=True
+            ).stdout.strip()
+            expected = hashlib.sha256(
+                b"tilesim.worktree_state.v1\0"
+                + revision
+                + b"\0tracked-diff\0\0untracked\0"
+                + len(b"untracked.bin").to_bytes(8, "big")
+                + b"untracked.bin"
+                + b"file\0"
+                + len(payload).to_bytes(8, "big")
+                + payload
+            ).hexdigest()
+            with mock.patch.object(Path, "read_bytes", side_effect=AssertionError("untracked files must be streamed")):
+                self.assertEqual(server.worktree_state_digest(root), expected)
+            ignored = root / "build-cache"
+            ignored.mkdir()
+            (ignored / "large-output.bin").write_bytes(payload)
+            self.assertEqual(server.worktree_state_digest(root), expected)
+
     def test_windows_worktree_git_pointer_is_translated_for_wsl(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -751,9 +788,9 @@ class F8ExperimentDescriptorContractTest(unittest.TestCase):
             self.capabilities(),
         )
         fields = descriptor["parameter_descriptors"]
-        self.assertEqual(len(fields), 8)
-        self.assertEqual(len({field["field_id"] for field in fields}), 8)
-        self.assertEqual(len({field["request_json_pointer"] for field in fields}), 8)
+        self.assertEqual(len(fields), 13)
+        self.assertEqual(len({field["field_id"] for field in fields}), 13)
+        self.assertEqual(len({field["request_json_pointer"] for field in fields}), 13)
         self.assertEqual(
             {field["subsystem"] for field in fields},
             {"S0", "S1", "S6"},
@@ -981,6 +1018,85 @@ class F8ExperimentDescriptorContractTest(unittest.TestCase):
             raised.exception.field_path,
             "/custom_inputs/topology/topology/domains/0/cycle_window",
         )
+
+    def test_runtime_policy_boundary_and_synthetic_tuple_are_fail_closed(self) -> None:
+        for field in ("kv_capacity_tokens", "max_active_requests", "max_batch_size", "kv_admission_watermark"):
+            with self.subTest(field=field):
+                inputs = valid_custom_inputs()
+                inputs["runtime_trace"]["policy"][field] = 0
+                with self.assertRaises(server.RequestValidationError) as raised:
+                    server.validate_custom_inputs(inputs)
+                self.assertEqual(raised.exception.field_path, f"/custom_inputs/runtime_trace/policy/{field}")
+        for field, value in (("calibration_level", "partially_calibrated"),
+                             ("allowed_claim_scope", "synthetic_consistency_only")):
+            with self.subTest(field=field):
+                inputs = valid_custom_inputs()
+                inputs["runtime_trace"]["trace_provenance"][field] = value
+                with self.assertRaises(server.RequestValidationError) as raised:
+                    server.validate_custom_inputs(inputs)
+                self.assertEqual(raised.exception.field_path, f"/custom_inputs/runtime_trace/trace_provenance/{field}")
+
+    def test_topology_workload_requires_one_message_size_unit(self) -> None:
+        inputs = valid_custom_inputs()
+        inputs["topology"]["workload"] = {"requests": [{"request_id": "r", "message_size_bytes": 1024,
+                                                          "message_size_mb": 999}]}
+        with self.assertRaises(server.RequestValidationError) as raised:
+            server.validate_custom_inputs(inputs)
+        self.assertEqual(raised.exception.field_path, "/custom_inputs/topology/workload/requests/0/message_size_mb")
+
+    def test_three_versioned_dynamic_profiles_and_replay_are_separate(self) -> None:
+        profiles = (("vllm", "vllm.0.6.semantic.v1", ["continuous_batching"]),
+                    ("sglang", "sglang.0.4.semantic.v1", ["prefix_aware_scheduling"]),
+                    ("tensorrt_llm", "tensorrt_llm.0.12.semantic.v1", ["inflight_batching"]))
+        for engine, version, features in profiles:
+            with self.subTest(engine=engine):
+                inputs = valid_custom_inputs()
+                trace = inputs["runtime_trace"]
+                trace.update(engine_type=engine, engine_semantic_version=version, requested_features=features)
+                trace["policy"].update(kv_capacity_tokens=8192, max_active_requests=4, max_batch_size=4)
+                trace["requests"] = [{"request_id": "r", "phase": "request", "prompt_tokens": 8,
+                                      "decode_tokens": 2, "kv_tokens": 10, "tp_degree": 1,
+                                      "participants": ["gpu0"]}]
+                self.assertEqual(server.validate_custom_inputs(inputs), inputs)
+                invalid = json.loads(json.dumps(inputs))
+                invalid["runtime_trace"]["requests"].append({"request_id": "observed", "phase": "prefill"})
+                with self.assertRaises(server.RequestValidationError) as raised:
+                    server.validate_custom_inputs(invalid)
+                self.assertEqual(raised.exception.field_path, "/custom_inputs/runtime_trace/requests/1/phase")
+                trace["requests"][0]["phase"] = "prefill"
+                self.assertEqual(server.validate_custom_inputs(inputs), inputs)
+                trace["engine_semantic_version"] = "vllm.0.6.tilesim_pd.v1"
+                with self.assertRaises(server.RequestValidationError) as raised:
+                    server.validate_custom_inputs(inputs)
+                self.assertEqual(raised.exception.field_path, "/custom_inputs/runtime_trace/engine_semantic_version")
+        invalid = valid_custom_inputs()
+        invalid["runtime_trace"]["engine_type"] = {"not": "an engine"}
+        with self.assertRaises(server.RequestValidationError) as raised:
+            server.validate_custom_inputs(invalid)
+        self.assertEqual(raised.exception.field_path, "/custom_inputs/runtime_trace/engine_type")
+
+    def test_dynamic_kv_participants_and_features_fail_at_exact_fields(self) -> None:
+        inputs = valid_custom_inputs()
+        trace = inputs["runtime_trace"]
+        trace.update(engine_type="vllm", engine_semantic_version="vllm.0.6.semantic.v1",
+                     requested_features=["continuous_batching"])
+        trace["policy"].update(kv_capacity_tokens=1024, max_active_requests=2, max_batch_size=2)
+        trace["requests"] = [{"request_id": "r", "phase": "request", "prompt_tokens": 8,
+                              "decode_tokens": 2, "kv_tokens": 10, "tp_degree": 1,
+                              "participants": ["gpu0"]}]
+        for field, value, pointer in (("kv_tokens", 9, "kv_tokens"),
+                                      ("participants", [], "participants"),
+                                      ("tp_degree", 2, "participants")):
+            with self.subTest(field=field):
+                invalid = json.loads(json.dumps(inputs))
+                invalid["runtime_trace"]["requests"][0][field] = value
+                with self.assertRaises(server.RequestValidationError) as raised:
+                    server.validate_custom_inputs(invalid)
+                self.assertEqual(raised.exception.field_path, f"/custom_inputs/runtime_trace/requests/0/{pointer}")
+        trace["requested_features"] = ["chunked_prefill"]
+        with self.assertRaises(server.RequestValidationError) as raised:
+            server.validate_custom_inputs(inputs)
+        self.assertEqual(raised.exception.field_path, "/custom_inputs/runtime_trace/requested_features/0")
 
     def test_design_space_source_mode_fails_closed(self) -> None:
         manifest = valid_manifest()
@@ -1257,7 +1373,7 @@ class BridgeApiContractTest(unittest.TestCase):
         status, capabilities, _ = self.request("/api/capabilities")
         self.assertEqual(status, 200)
         run_surface = capabilities["run_surface"]
-        self.assertEqual(len(run_surface["override_parameter_field_ids"]), 8)
+        self.assertEqual(len(run_surface["override_parameter_field_ids"]), 13)
         self.assertEqual(run_surface["override_parameter_subsystems"], ["S0", "S1", "S6"])
         self.assertFalse(run_surface["cycle_hotspot_request_available"])
         self.assertFalse(run_surface["real_trace_submission_available"])
@@ -1436,6 +1552,23 @@ class BridgeApiContractTest(unittest.TestCase):
         self.assertEqual(payload["error"]["code"], "trace_package_inspect_nonzero_exit")
         self.assertEqual(payload["error"]["field_path"], "/trace_package_id")
         self.assertNotIn("/private/trace-packages", json.dumps(payload))
+
+    def test_trace_package_intake_rejection_is_422_without_run_or_artifact(self) -> None:
+        error = server.trace_packages.TracePackageError(
+            "trace_package_inspect_nonzero_exit",
+            "TileSimCLI Trace-package inspection failed validation.",
+        )
+        with mock.patch.object(server, "inspect_trace_package", side_effect=error):
+            status, payload, _ = self.create_run(
+                {"scenario_id": "s1_des_example", "trace_package_id": "duplicate-package"},
+                "trace-package-intake-rejected",
+            )
+        self.assertEqual(status, 422)
+        self.assertEqual(payload["error"]["code"], "trace_package_inspect_nonzero_exit")
+        self.assertEqual(payload["error"]["field_path"], "/trace_package_id")
+        self.assertFalse(server.runs)
+        self.assertEqual(list(server.RUNS_ROOT.iterdir()), [])
+        self.assertNotIn("request-attribution", json.dumps(payload))
 
     def test_week7_allow_listed_endpoints_return_cli_reports(self) -> None:
         responses = {
@@ -1763,6 +1896,51 @@ class BridgeApiContractTest(unittest.TestCase):
         self.assertEqual(durable["status"], "failed")
         self.assertEqual(durable["failure_code"], "cli_timeout")
 
+    def test_cli_utf8_output_is_decoded_independently_of_windows_code_page(self) -> None:
+        run_id = "run-cli-utf8-code-page"
+        run_dir = server.RUNS_ROOT / run_id
+        run_dir.mkdir()
+        metadata = {"run_id": run_id, "status": "running"}
+        server.atomic_write_json(run_dir / "run-metadata.json", metadata)
+        server.runs[run_id] = metadata.copy()
+        scenario = {"from": "S1", "to": "S6", "trace": Path("trace.json"), "topology": Path("topology.json")}
+
+        def utf8_runner(command, **kwargs):
+            self.assertFalse(kwargs["text"])
+            report = {"report_kind": "wind_tunnel_run_result", "cause": "中文证据"}
+            return server.subprocess.CompletedProcess(
+                command, 0, stdout=json.dumps(report, ensure_ascii=False).encode("utf-8"), stderr=b""
+            )
+
+        with mock.patch.object(server.subprocess, "run", side_effect=utf8_runner):
+            server.execute_run(run_id, scenario, "des")
+
+        # The stdout artifact is valid UTF-8 even if the host's preferred code page is GBK.
+        self.assertEqual(server.read_json_file(run_dir / "run-result.json")["cause"], "中文证据")
+        self.assertEqual(server.runs[run_id]["status"], "completed")
+        self.assertEqual(server.read_json_file(run_dir / "run-metadata.json")["exit_code"], 0)
+
+    def test_cli_invalid_utf8_and_unavailable_output_reach_durable_failure(self) -> None:
+        scenario = {"from": "S1", "to": "S6", "trace": Path("trace.json"), "topology": Path("topology.json")}
+        for suffix, stdout, code in (("invalid", b"\xff", "cli_output_decode_error"),
+                                     ("missing", None, "cli_output_unavailable")):
+            with self.subTest(suffix=suffix):
+                run_id = f"run-cli-output-{suffix}"
+                run_dir = server.RUNS_ROOT / run_id
+                run_dir.mkdir()
+                metadata = {"run_id": run_id, "status": "running"}
+                server.atomic_write_json(run_dir / "run-metadata.json", metadata)
+                server.runs[run_id] = metadata.copy()
+                completed = server.subprocess.CompletedProcess([], 0, stdout=stdout, stderr=b"failure detail")
+                with mock.patch.object(server.subprocess, "run", return_value=completed):
+                    server.execute_run(run_id, scenario, "des")
+                durable = server.read_json_file(run_dir / "run-metadata.json")
+                self.assertEqual(durable["status"], "failed")
+                self.assertEqual(durable["failure_code"], code)
+                self.assertEqual(durable["exit_code"], 0)
+                self.assertEqual(durable["stderr_summary"], "failure detail")
+                self.assertTrue(durable["finished_at"])
+
     def test_cli_process_start_error_reaches_a_durable_failed_state(self) -> None:
         run_id = "run-cli-start-error"
         run_dir = server.RUNS_ROOT / run_id
@@ -1912,6 +2090,40 @@ class BridgeApiContractTest(unittest.TestCase):
         )
         self.assertEqual(status, 400)
         self.assertEqual(payload["error"]["field_path"], "/custom_inputs")
+
+    def test_invalid_dynamic_run_returns_field_pointer_without_creating_run(self) -> None:
+        inputs = valid_custom_inputs()
+        inputs["runtime_trace"].update(engine_type="sglang", engine_semantic_version="sglang.0.4.semantic.v1",
+                                       requested_features=["prefix_cache"])
+        inputs["runtime_trace"]["requests"] = [{"request_id": "r", "phase": "request", "prompt_tokens": 8,
+                                                 "decode_tokens": 2, "kv_tokens": 10, "tp_degree": 1,
+                                                 "participants": ["gpu0"]}]
+        inputs["runtime_trace"]["policy"].update(kv_capacity_tokens=1024, max_active_requests=2,
+                                                  max_batch_size=2)
+        status, payload, _ = self.create_run({"scenario_id": "s1_des_example", "fidelity_policy": "des",
+                                               "custom_inputs": inputs}, "invalid-dynamic-engine-key")
+        self.assertEqual(status, 400)
+        self.assertEqual(payload["error"]["field_path"], "/custom_inputs/runtime_trace/requested_features/0")
+        self.assertEqual(server.runs, {})
+        self.assertEqual(list(server.RUNS_ROOT.iterdir()), [])
+
+    def test_three_dynamic_profiles_are_accepted_by_run_intake_without_execution(self) -> None:
+        profiles = (("vllm", "vllm.0.6.semantic.v1"), ("sglang", "sglang.0.4.semantic.v1"),
+                    ("tensorrt_llm", "tensorrt_llm.0.12.semantic.v1"))
+        for engine, version in profiles:
+            with self.subTest(engine=engine):
+                inputs = valid_custom_inputs()
+                trace = inputs["runtime_trace"]
+                trace.update(engine_type=engine, engine_semantic_version=version, requested_features=[])
+                trace["policy"].update(kv_capacity_tokens=1024, max_active_requests=2, max_batch_size=2)
+                trace["requests"] = [{"request_id": "r", "phase": "request", "prompt_tokens": 8,
+                                      "decode_tokens": 2, "kv_tokens": 10, "tp_degree": 1,
+                                      "participants": ["gpu0"]}]
+                status, payload, _ = self.create_run({"scenario_id": "s1_des_example", "fidelity_policy": "des",
+                                                       "custom_inputs": inputs}, f"valid-{engine}-key")
+                self.assertEqual(status, 202, payload)
+                server.runs.clear()  # The test Bridge has one active-slot limit; no execution starts.
+        self.assertEqual(self.start_execution_mock.call_count, 3)
 
     def test_trace_package_run_creation_persists_validated_identity(self) -> None:
         manifest = write_trace_package_candidate(
@@ -4928,6 +5140,800 @@ class RunIntakePreviewEndpointTest(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertEqual(sorted(path.name for path in server.RUNS_ROOT.iterdir()), before)
         self.assertEqual(server.runs, {})
+
+
+class AssistantModelEndpointTest(unittest.TestCase):
+    """The assistant model channel: the descriptor, the one-shot plan route and the streaming chat route.
+
+    The channel is optional by design: an unconfigured Bridge reports it as unavailable and answers both
+    planning routes with ``503`` *before* the stream starts, so the prepare page keeps its local rule
+    table and never blocks.  No test here contacts a Provider - the channel state is injected, the
+    planning routes are observed through their gate, and the adapter's stream is replaced by a generator
+    this test owns, while ``test_assistant_model.py`` covers the adapter itself.
+    """
+
+    DESCRIPTOR_PATH = "/api/agent/assistant-model"
+    PLAN_PATH = "/api/agent/scenario-plan"
+    CHAT_PATH = "/api/agent/scenario-chat"
+    RESULT_ANALYSIS_PATH = "/api/agent/result-analysis"
+
+    def setUp(self) -> None:
+        self.httpd = server.ThreadingHTTPServer(("127.0.0.1", 0), server.BridgeHandler)
+        self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
+        self.thread.start()
+        self.base_url = f"http://127.0.0.1:{self.httpd.server_port}"
+        self.replayed: list[tuple[list[dict[str, str]], dict[str, str]]] = []
+
+    def tearDown(self) -> None:
+        self.httpd.shutdown()
+        self.httpd.server_close()
+        self.thread.join(timeout=2)
+
+    def get(self, path: str) -> tuple[int, dict, object]:
+        request = urllib.request.Request(self.base_url + path, headers={}, method="GET")
+        with urllib.request.urlopen(request, timeout=5) as response:
+            return response.status, json.loads(response.read()), response.headers
+
+    def post(self, payload: object) -> tuple[int, dict, object]:
+        request = urllib.request.Request(
+            self.base_url + self.PLAN_PATH,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            response = urllib.request.urlopen(request, timeout=5)
+        except urllib.error.HTTPError as error:
+            return error.code, json.loads(error.read()), error.headers
+        with response:
+            return response.status, json.loads(response.read()), response.headers
+
+    def unconfigured(self):  # noqa: ANN201
+        return mock.patch.object(
+            server.assistant_model, "config_from_environment", return_value=None
+        )
+
+    def channel_configured(self):  # noqa: ANN201
+        config = server.assistant_model.AssistantModelConfig(
+            endpoint="https://ai-pixel.online/v1/chat/completions",
+            api_key="unit-test-credential",
+            model="deepseek-v4-flash",
+            timeout_ms=120_000,
+        )
+        return mock.patch.object(
+            server.assistant_model, "config_from_environment", return_value=config
+        )
+
+    def chat(self, payload: object) -> tuple[int, object, bytes]:
+        request = urllib.request.Request(
+            self.base_url + self.CHAT_PATH,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=5) as response:
+                return response.status, response.headers, response.read()
+        except urllib.error.HTTPError as error:
+            return error.code, error.headers, error.read()
+
+    def result_analysis(self, payload: object) -> tuple[int, object, bytes]:
+        request = urllib.request.Request(
+            self.base_url + self.RESULT_ANALYSIS_PATH,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=5) as response:
+                return response.status, response.headers, response.read()
+        except urllib.error.HTTPError as error:
+            return error.code, error.headers, error.read()
+
+    def read_frames(self, body: bytes) -> list[tuple[str, dict]]:
+        """Parse a server-sent event body into ``(event_name, data)`` pairs, in arrival order."""
+
+        frames: list[tuple[str, dict]] = []
+        for block in body.decode("utf-8").split("\n\n"):
+            lines = block.splitlines()
+            names = [line[len("event: ") :] for line in lines if line.startswith("event: ")]
+            payloads = [line[len("data: ") :] for line in lines if line.startswith("data: ")]
+            if names:
+                frames.append((names[0], json.loads("\n".join(payloads))))
+        return frames
+
+    def answer_with(self, events: list):  # noqa: ANN201
+        """Stand in for the adapter's stream so no test here contacts a Provider.
+
+        ``events`` is the sequence of ``(name, data)`` pairs the adapter is to produce, and an
+        ``Exception`` placed in that sequence is raised at that point of the stream: the adapter is
+        itself a generator, so a Provider that dies halfway through an answer fails while the caller is
+        iterating, not before it starts.
+        """
+
+        def stream(conversation, panel_values):  # noqa: ANN001, ANN202
+            self.replayed.append((conversation, panel_values))
+            for item in events:
+                if isinstance(item, Exception):
+                    raise item
+                yield item
+
+        return mock.patch.object(server.assistant_model, "stream_events", side_effect=stream)
+
+    def test_descriptor_reports_an_unconfigured_channel(self) -> None:
+        with self.unconfigured():
+            status, body, _ = self.get(self.DESCRIPTOR_PATH)
+        self.assertEqual(status, 200)
+        self.assertEqual(body["schema_version"], server.assistant_model.DESCRIPTOR_SCHEMA_VERSION)
+        self.assertEqual(body["availability"], "unavailable")
+        self.assertEqual(body["degradation_state"], "not_configured")
+        self.assertFalse(body["provider"]["configured"])
+
+    def test_descriptor_reports_a_configured_channel_without_the_credential(self) -> None:
+        config = server.assistant_model.AssistantModelConfig(
+            endpoint="https://ai-pixel.online/v1/chat/completions",
+            api_key="unit-test-credential",
+            model="deepseek-v4-flash",
+            timeout_ms=120_000,
+        )
+        with mock.patch.object(
+            server.assistant_model, "config_from_environment", return_value=config
+        ):
+            status, body, _ = self.get(self.DESCRIPTOR_PATH)
+        self.assertEqual(status, 200)
+        self.assertEqual(body["availability"], "available")
+        self.assertEqual(body["provider"]["model_id"], "deepseek-v4-flash")
+        self.assertNotIn("unit-test-credential", json.dumps(body))
+
+    def test_the_planning_route_is_unavailable_without_a_channel(self) -> None:
+        with self.unconfigured():
+            status, body, _ = self.post({"instruction": "低延迟在线服务"})
+        self.assertEqual(status, 503)
+        self.assertEqual(body["error"]["code"], "assistant_model_unavailable")
+        self.assertTrue(body["error"]["retryable"])
+
+    def test_the_planning_route_validates_the_instruction(self) -> None:
+        with self.unconfigured():
+            for payload in (
+                {},
+                {"instruction": ""},
+                {"instruction": "   "},
+                {"instruction": 42},
+                {"instruction": "x" * 2001},
+            ):
+                status, body, _ = self.post(payload)
+                self.assertEqual(status, 400)
+                self.assertEqual(body["error"]["code"], "invalid_assistant_instruction")
+                self.assertEqual(body["error"]["field_path"], "/instruction")
+
+    def test_the_planning_route_returns_the_proposal_and_creates_no_run(self) -> None:
+        proposal = {
+            "schema_version": server.assistant_model.PLAN_SCHEMA_VERSION,
+            "protocol": server.assistant_model.PROTOCOL,
+            "provider_id": server.assistant_model.PROVIDER_ID,
+            "model_id": "deepseek-v4-flash",
+            "served_model": "deepseek-v4-flash",
+            "instruction": "低延迟在线服务",
+            "title": "低延迟在线服务",
+            "rationale": "以尾延迟优先。",
+            "settings": [{"key": "max_batch_size", "value": "4", "why": "压住尾延迟。"}],
+            "dropped": [],
+            "applied": False,
+            "executed": False,
+        }
+        before = dict(server.runs)
+        with mock.patch.object(server.assistant_model, "plan", return_value=proposal):
+            status, body, _ = self.post({"instruction": "低延迟在线服务"})
+        self.assertEqual(status, 200)
+        self.assertEqual(body, {**proposal, "schema_set_revision": server.SCHEMA_SET_REVISION})
+        self.assertEqual(server.runs, before)
+
+    def test_a_provider_timeout_is_a_retryable_503(self) -> None:
+        with mock.patch.object(
+            server.assistant_model,
+            "plan",
+            side_effect=server.ProviderTimeoutError("The configured Provider timed out."),
+        ):
+            status, body, _ = self.post({"instruction": "低延迟在线服务"})
+        self.assertEqual(status, 503)
+        self.assertEqual(body["error"]["code"], "assistant_model_timeout")
+        self.assertTrue(body["error"]["retryable"])
+
+    def test_the_chat_route_refuses_a_transcript_it_cannot_validate(self) -> None:
+        with self.channel_configured():
+            for payload in (
+                {},
+                {"messages": []},
+                {"messages": "低延迟在线服务"},
+                {"messages": [{"role": "system", "content": "低延迟在线服务"}]},
+                {"messages": [{"role": "user", "content": "低延迟在线服务"}, 42]},
+                {"messages": [{"role": "assistant", "content": "低延迟在线服务"}]},
+                {"messages": [{"role": "user", "content": "   "}]},
+                {"messages": [{"role": "user", "content": "低延迟在线服务"}], "panel_values": ["4"]},
+            ):
+                status, headers, body = self.chat(payload)
+                self.assertEqual(status, 400, payload)
+                self.assertEqual(json.loads(body)["error"]["code"], "invalid_assistant_conversation")
+                self.assertNotIn("text/event-stream", headers.get("Content-Type", ""))
+
+    def test_a_bad_panel_value_is_reported_against_its_own_field(self) -> None:
+        payload = {
+            "messages": [{"role": "user", "content": "低延迟在线服务"}],
+            "panel_values": {"max_batch_size": 4},
+        }
+        with self.channel_configured():
+            status, _, body = self.chat(payload)
+        self.assertEqual(status, 400)
+        self.assertEqual(json.loads(body)["error"]["field_path"], "/panel_values")
+
+    def test_the_chat_route_is_unavailable_without_a_channel(self) -> None:
+        payload = {"messages": [{"role": "user", "content": "低延迟在线服务"}]}
+        with self.unconfigured():
+            status, headers, body = self.chat(payload)
+        self.assertEqual(status, 503)
+        self.assertEqual(json.loads(body)["error"]["code"], "assistant_model_unavailable")
+        self.assertNotIn("text/event-stream", headers.get("Content-Type", ""))
+
+    def test_the_result_analysis_route_is_read_only_and_streams_without_a_plan(self) -> None:
+        events = [
+            (
+                "prose",
+                {
+                    "schema_version": server.assistant_model.RESULT_ANALYSIS_CHAT_SCHEMA_VERSION,
+                    "text": "当前报告的重点是吞吐，仍需核对尾延迟。",
+                },
+            )
+        ]
+        payload = {
+            "messages": [{"role": "user", "content": "请分析当前结果"}],
+            "context": {
+                "run_id": "run-result-1",
+                "sections": [{"title": "速览", "body": "吞吐 12 req/s（/metrics/summary）。"}],
+                "evidence_paths": ["/metrics/summary"],
+                "evidence": {
+                    "manifest_status": "verified",
+                    "artifact_count": 1,
+                    "full_content_count": 1,
+                    "summary_only_count": 0,
+                    "unavailable_count": 0,
+                    "rejected_count": 0,
+                    "artifacts": [
+                        {
+                            "artifact_id": "metrics",
+                            "file_name": "metrics.json",
+                            "report_kind": "metrics",
+                            "schema_identity": "tilesim.metrics_report.v1",
+                            "sha256": "a" * 64,
+                            "bytes": "120",
+                            "contract_status": "supported",
+                            "content_status": "full",
+                            "content": {"summary": {"throughput_requests_per_second": 12}},
+                        }
+                    ],
+                    "rejected_artifacts": [],
+                },
+            },
+        }
+        before = dict(server.runs)
+        with self.channel_configured(), mock.patch.object(
+            server.assistant_model, "stream_result_analysis_events", return_value=iter(events)
+        ):
+            status, headers, body = self.result_analysis(payload)
+        self.assertEqual(status, 200)
+        self.assertIn("text/event-stream", headers.get("Content-Type", ""))
+        self.assertEqual([name for name, _ in self.read_frames(body)], ["prose", "done"])
+        self.assertEqual(server.runs, before)
+
+    def test_the_result_analysis_route_falls_back_when_channel_is_unconfigured(self) -> None:
+        payload = {
+            "messages": [{"role": "user", "content": "请分析当前结果"}],
+            "context": {
+                "run_id": "run-result-1",
+                "sections": [{"title": "速览", "body": "暂无。"}],
+                "evidence_paths": [],
+                "evidence": {
+                    "manifest_status": "verified",
+                    "artifact_count": 0,
+                    "full_content_count": 0,
+                    "summary_only_count": 0,
+                    "unavailable_count": 0,
+                    "rejected_count": 0,
+                    "artifacts": [],
+                    "rejected_artifacts": [],
+                },
+            },
+        }
+        with self.unconfigured():
+            status, headers, body = self.result_analysis(payload)
+        self.assertEqual(status, 503)
+        self.assertEqual(json.loads(body)["error"]["code"], "assistant_model_unavailable")
+        self.assertNotIn("text/event-stream", headers.get("Content-Type", ""))
+
+    def test_the_chat_route_streams_prose_then_the_plan_then_the_done_marker(self) -> None:
+        events = [
+            ("prose", {"schema_version": server.assistant_model.CHAT_SCHEMA_VERSION, "text": "先压小批量。"}),
+            (
+                "prose",
+                {
+                    "schema_version": server.assistant_model.CHAT_SCHEMA_VERSION,
+                    "text": "先压小批量。并发上限也降一点。",
+                },
+            ),
+            (
+                "plan",
+                {
+                    "schema_version": server.assistant_model.PLAN_SCHEMA_VERSION,
+                    "protocol": server.assistant_model.PROTOCOL,
+                    "provider_id": server.assistant_model.PROVIDER_ID,
+                    "model_id": "deepseek-v4-flash",
+                    "served_model": "deepseek-v4-flash",
+                    "instruction": "低延迟在线服务",
+                    "answer_state": "settings",
+                    "title": "低延迟在线服务",
+                    "rationale": "以尾延迟优先。",
+                    "settings": [{"key": "max_batch_size", "value": "4", "why": "压住尾延迟。"}],
+                    "dropped": [],
+                    "applied": False,
+                    "executed": False,
+                },
+            ),
+        ]
+        before = dict(server.runs)
+        with self.channel_configured(), self.answer_with(events):
+            status, headers, body = self.chat(
+                {
+                    "messages": [
+                        {"role": "user", "content": "先讲延迟。"},
+                        {"role": "assistant", "content": "结论如下。"},
+                        {"role": "user", "content": "低延迟在线服务"},
+                    ],
+                    "panel_values": {"max_batch_size": "8"},
+                }
+            )
+        self.assertEqual(status, 200)
+        self.assertIn("text/event-stream", headers.get("Content-Type", ""))
+        frames = self.read_frames(body)
+        self.assertEqual([name for name, _ in frames], ["prose", "prose", "plan", "done"])
+        self.assertEqual(frames[0][1]["text"], "先压小批量。")
+        self.assertEqual(frames[-1][1]["schema_version"], server.assistant_model.CHAT_SCHEMA_VERSION)
+        plan = frames[-2][1]
+        # The streamed plan is a contract-bound payload like any other: it is stamped with the same
+        # revision the one-shot route stamps, and it is still a proposal.
+        self.assertEqual(plan["schema_set_revision"], server.SCHEMA_SET_REVISION)
+        self.assertFalse(plan["applied"])
+        self.assertFalse(plan["executed"])
+        self.assertEqual([item["key"] for item in plan["settings"]], ["max_batch_size"])
+        self.assertEqual(server.runs, before)
+        # The transcript is replayed in the order the client shows it, and the panel values travel
+        # beside it as read-only context.
+        replayed, panel_values = self.replayed[0]
+        self.assertEqual(
+            [(turn["role"], turn["content"]) for turn in replayed],
+            [("user", "先讲延迟。"), ("assistant", "结论如下。"), ("user", "低延迟在线服务")],
+        )
+        self.assertEqual(panel_values, {"max_batch_size": "8"})
+
+    def test_a_provider_that_dies_mid_answer_ends_the_stream_with_one_error_event(self) -> None:
+        events = [
+            ("prose", {"schema_version": server.assistant_model.CHAT_SCHEMA_VERSION, "text": "先压"}),
+            server.ProviderError("The assistant model stream was interrupted."),
+        ]
+        with self.channel_configured(), self.answer_with(events):
+            status, headers, body = self.chat(
+                {"messages": [{"role": "user", "content": "低延迟在线服务"}]}
+            )
+        # The headers are already sent by the time a stream can fail, so the failure has to be
+        # reported inside the stream rather than by turning the response into a JSON error.
+        self.assertEqual(status, 200)
+        self.assertIn("text/event-stream", headers.get("Content-Type", ""))
+        frames = self.read_frames(body)
+        self.assertEqual([name for name, _ in frames], ["prose", "error"])
+        failure = frames[-1][1]
+        self.assertEqual(failure["code"], "assistant_model_unavailable")
+        self.assertTrue(failure["retryable"])
+
+    def test_a_stream_that_is_interrupted_never_pretends_the_answer_finished(self) -> None:
+        def abandon(conversation, panel_values):  # noqa: ANN001, ANN202
+            yield (
+                "prose",
+                {"schema_version": server.assistant_model.CHAT_SCHEMA_VERSION, "text": "先压"},
+            )
+            raise BrokenPipeError("The client went away.")
+
+        payload = {"messages": [{"role": "user", "content": "低延迟在线服务"}]}
+        with self.channel_configured(), mock.patch.object(
+            server.assistant_model, "stream_events", side_effect=abandon
+        ):
+            status, _, body = self.chat(payload)
+            # The write failure is swallowed by the handler instead of escaping into the server loop,
+            # so the next request is still answered.
+            again, _, _ = self.chat(payload)
+        self.assertEqual(status, 200)
+        self.assertEqual([name for name, _ in self.read_frames(body)], ["prose"])
+        self.assertEqual(again, 200)
+
+
+class AssistantModelCatalogueEndpointTest(unittest.TestCase):
+    """The two routes that let a panel offer the identities the service itself publishes.
+
+    The catalogue route is a read made with the credential the Bridge already holds; the selection
+    route switches the identity for the lifetime of this process.  Neither writes a document and
+    neither creates a run.  As above, the Provider is never contacted: the catalogue read is injected
+    and the channel state is patched, so no case here opens an outbound connection.
+    """
+
+    CATALOGUE_PATH = "/api/agent/assistant-model-catalogue"
+    SELECTION_PATH = "/api/agent/assistant-model-selection"
+
+    def setUp(self) -> None:
+        self.httpd = server.ThreadingHTTPServer(("127.0.0.1", 0), server.BridgeHandler)
+        self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
+        self.thread.start()
+        self.base_url = f"http://127.0.0.1:{self.httpd.server_port}"
+        server.assistant_model.clear_session_model()
+
+    def tearDown(self) -> None:
+        server.assistant_model.clear_session_model()
+        self.httpd.shutdown()
+        self.httpd.server_close()
+        self.thread.join(timeout=2)
+
+    def get(self, path: str) -> tuple[int, dict, object]:
+        request = urllib.request.Request(self.base_url + path, headers={}, method="GET")
+        try:
+            with urllib.request.urlopen(request, timeout=5) as response:
+                return response.status, json.loads(response.read()), response.headers
+        except urllib.error.HTTPError as error:
+            return error.code, json.loads(error.read()), error.headers
+
+    def post(self, payload: object) -> tuple[int, dict, object]:
+        request = urllib.request.Request(
+            self.base_url + self.SELECTION_PATH,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=5) as response:
+                return response.status, json.loads(response.read()), response.headers
+        except urllib.error.HTTPError as error:
+            return error.code, json.loads(error.read()), error.headers
+
+    def unconfigured(self):  # noqa: ANN201
+        return mock.patch.object(
+            server.assistant_model, "config_from_environment", return_value=None
+        )
+
+    def channel_configured(self):  # noqa: ANN201
+        config = server.assistant_model.AssistantModelConfig(
+            endpoint="https://ai-pixel.online/v1/chat/completions",
+            api_key="unit-test-credential",
+            model="deepseek-v4-flash",
+            timeout_ms=120_000,
+        )
+        return mock.patch.object(
+            server.assistant_model, "config_from_environment", return_value=config
+        )
+
+    def publishing(self, identities: list[str]):  # noqa: ANN201
+        reply = {"object": "list", "data": [{"id": identity} for identity in identities]}
+        return mock.patch.object(server.assistant_model, "get_json", return_value=reply)
+
+    def test_the_catalogue_route_reports_what_the_service_publishes(self) -> None:
+        with self.channel_configured(), self.publishing(["deepseek-v4-flash", "glm-5.1"]):
+            status, body, headers = self.get(self.CATALOGUE_PATH)
+        self.assertEqual(status, 200)
+        self.assertEqual(body["schema_version"], server.assistant_model.CATALOGUE_SCHEMA_VERSION)
+        self.assertEqual(body["protocol"], server.assistant_model.PROTOCOL)
+        self.assertEqual(body["models"], ["deepseek-v4-flash", "glm-5.1"])
+        self.assertEqual(body["count"], 2)
+        self.assertEqual(body["selected_model"], "deepseek-v4-flash")
+        self.assertFalse(body["session_override"])
+        self.assertEqual(body["schema_set_revision"], server.SCHEMA_SET_REVISION)
+        self.assertEqual(headers["x-tilesim-schema-set-revision"], server.SCHEMA_SET_REVISION)
+
+    def test_the_catalogue_route_never_carries_the_credential(self) -> None:
+        with self.channel_configured(), self.publishing(["deepseek-v4-flash"]):
+            _, body, _ = self.get(self.CATALOGUE_PATH)
+        self.assertNotIn("unit-test-credential", json.dumps(body))
+
+    def test_an_unconfigured_bridge_refuses_the_catalogue(self) -> None:
+        with self.unconfigured(), self.publishing(["deepseek-v4-flash"]):
+            status, body, _ = self.get(self.CATALOGUE_PATH)
+        self.assertEqual(status, 503)
+        self.assertEqual(body["error"]["code"], "assistant_model_unavailable")
+        self.assertTrue(body["error"]["retryable"])
+
+    def test_an_unreadable_catalogue_is_a_permanent_failure(self) -> None:
+        # The service answered, but not with anything this Bridge can read; asking again would fail the
+        # same way, so the error is not marked retryable.
+        with self.channel_configured(), self.publishing([]):
+            status, body, _ = self.get(self.CATALOGUE_PATH)
+        self.assertEqual(status, 503)
+        self.assertEqual(body["error"]["code"], "assistant_model_catalogue_unreadable")
+        self.assertFalse(body["error"]["retryable"])
+
+    def test_a_provider_failure_keeps_its_own_code(self) -> None:
+        with self.channel_configured(), mock.patch.object(
+            server.assistant_model,
+            "get_json",
+            side_effect=server.ProviderTimeoutError("The configured Provider timed out."),
+        ):
+            status, body, _ = self.get(self.CATALOGUE_PATH)
+        self.assertEqual(status, 503)
+        self.assertEqual(body["error"]["code"], "assistant_model_timeout")
+        self.assertTrue(body["error"]["retryable"])
+
+    def test_the_selection_route_switches_the_identity_without_persisting_it(self) -> None:
+        with self.channel_configured():
+            status, body, _ = self.post({"model": "glm-5.1"})
+        self.assertEqual(status, 200)
+        self.assertEqual(body["schema_version"], server.assistant_model.SELECTION_SCHEMA_VERSION)
+        self.assertEqual(body["selected_model"], "glm-5.1")
+        self.assertEqual(body["previous_model"], "deepseek-v4-flash")
+        self.assertTrue(body["in_force"])
+        self.assertFalse(body["persisted"])
+        self.assertTrue(body["session_only"])
+        self.assertEqual(body["schema_set_revision"], server.SCHEMA_SET_REVISION)
+        self.assertEqual(server.assistant_model.session_model(), "glm-5.1")
+
+    def test_a_switch_is_visible_to_the_next_request_and_is_not_written_down(self) -> None:
+        """Proves the switch is live *and* session-scoped, with the real configuration reader.
+
+        The channel is configured through the environment here rather than patched, because the point
+        of this case is exactly that the adapter re-reads the identity per request: the descriptor
+        follows the switch with no restart, and dropping the switch brings the configured identity
+        back, which is what shows that nothing was written anywhere.
+        """
+
+        environment = {
+            "TILESIM_ASSISTANT_BASE_URL": "https://ai-pixel.online",
+            "TILESIM_ASSISTANT_API_KEY": "unit-test-credential",
+            "TILESIM_ASSISTANT_MODEL": "deepseek-v4-flash",
+        }
+        descriptor_path = "/api/agent/assistant-model"
+        with mock.patch.dict(os.environ, environment, clear=False):
+            before = self.get(descriptor_path)[1]["provider"]["model_id"]
+            self.post({"model": "glm-5.1"})
+            after = self.get(descriptor_path)[1]["provider"]["model_id"]
+            server.assistant_model.clear_session_model()
+            reverted = self.get(descriptor_path)[1]["provider"]["model_id"]
+        self.assertEqual(before, "deepseek-v4-flash")
+        self.assertEqual(after, "glm-5.1")
+        self.assertEqual(reverted, "deepseek-v4-flash")
+
+    def test_the_selection_route_creates_no_run(self) -> None:
+        before = set(server.runs)
+        with self.channel_configured(), mock.patch.object(server, "start_run_execution") as start:
+            status, _, _ = self.post({"model": "glm-5.1"})
+        self.assertEqual(status, 200)
+        start.assert_not_called()
+        self.assertEqual(set(server.runs), before)
+
+    def test_the_selection_route_refuses_an_unusable_identity(self) -> None:
+        for payload in ({}, {"model": ""}, {"model": "  "}, {"model": "a b"}, {"model": 7}, {"model": "x" * 201}):
+            with self.channel_configured():
+                status, body, _ = self.post(payload)
+            self.assertEqual(status, 400, payload)
+            self.assertEqual(body["error"]["code"], "invalid_assistant_model_selection")
+        self.assertIsNone(server.assistant_model.session_model())
+
+    def test_the_selection_route_refuses_a_body_that_is_not_one_object(self) -> None:
+        with self.channel_configured():
+            status, body, _ = self.post(["glm-5.1"])
+        self.assertEqual(status, 400)
+        self.assertEqual(body["error"]["code"], "invalid_assistant_model_selection")
+
+    def test_the_selection_route_needs_a_request_body(self) -> None:
+        request = urllib.request.Request(
+            self.base_url + self.SELECTION_PATH, data=b"", method="POST"
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=5) as response:
+                status, body = response.status, json.loads(response.read())
+        except urllib.error.HTTPError as error:
+            status, body = error.code, json.loads(error.read())
+        self.assertEqual(status, 400)
+        self.assertEqual(body["error"]["code"], "invalid_assistant_model_selection")
+
+    def test_the_selection_route_refuses_an_unconfigured_bridge(self) -> None:
+        with self.unconfigured():
+            status, body, _ = self.post({"model": "glm-5.1"})
+        self.assertEqual(status, 503)
+        self.assertEqual(body["error"]["code"], "assistant_model_unavailable")
+        self.assertIsNone(server.assistant_model.session_model())
+
+
+def _upstream_chunk(delta: dict) -> bytes:
+    """One OpenAI-compatible streaming chunk, shaped the way a Provider writes it."""
+
+    payload = {"model": "deepseek-v4-flash", "choices": [{"index": 0, "delta": delta}]}
+    return ("data: " + json.dumps(payload, ensure_ascii=False) + "\n\n").encode("utf-8")
+
+
+# Reasoning is written first and asserted against below: it must never reach the panel.
+UPSTREAM_PREFIX_DELTAS = (
+    {"reasoning_content": "先想一想。"},
+    {"content": "先压小批量。"},
+    {"content": "并发上限也降一点。"},
+)
+UPSTREAM_SUFFIX_DELTAS = ({"content": '\n```json\n{"title": "低延迟在线服务", "settings": []}\n```'},)
+
+
+class _UpstreamSseHandler(http.server.BaseHTTPRequestHandler):
+    """A stand-in Provider answering one request with a real ``text/event-stream`` reply.
+
+    The reply is split around a gate: the prefix is written immediately, the suffix only once the test
+    releases the gate.  That is what makes streaming observable - a client can prove it held an answer
+    while the Provider was still writing the rest, which a single late reply can never show.
+    """
+
+    protocol_version = "HTTP/1.0"
+
+    def log_message(self, *args) -> None:  # noqa: ANN002
+        """Silence the request log: the assertion report is this test's output."""
+
+    def do_POST(self) -> None:
+        length = int(self.headers.get("Content-Length", "0"))
+        self.server.received.append(
+            {
+                "path": self.path,
+                "headers": {name.lower(): value for name, value in self.headers.items()},
+                "body": json.loads(self.rfile.read(length)),
+            }
+        )
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.end_headers()
+        for delta in UPSTREAM_PREFIX_DELTAS:
+            self.wfile.write(_upstream_chunk(delta))
+            self.wfile.flush()
+        self.server.gate.wait(timeout=15)
+        for delta in UPSTREAM_SUFFIX_DELTAS:
+            self.wfile.write(_upstream_chunk(delta))
+            self.wfile.flush()
+        self.wfile.write(b"data: [DONE]\n\n")
+        self.wfile.flush()
+
+
+class AssistantModelStreamingChainTest(unittest.TestCase):
+    """The streaming chain over real sockets: the panel's route, the adapter, and a Provider's reply.
+
+    ``AssistantModelEndpointTest`` observes the route with the adapter replaced by a generator it owns.
+    This one observes the bytes: a stand-in Provider answers with a real server-sent-event body, the
+    Bridge is pointed at it through the channel environment, and the frames are asserted in arrival
+    order - including the promise the panel makes to the user, that the answer is shown *while it is
+    being written* rather than in one piece at the end.
+    """
+
+    CHAT_PATH = "/api/agent/scenario-chat"
+    REQUEST = {
+        "messages": [{"role": "user", "content": "我要模拟一个低延迟在线服务场景"}],
+        "panel_values": {"max_batch_size": "8"},
+    }
+
+    def setUp(self) -> None:
+        self.gate = threading.Event()
+        self.received: list[dict] = []
+        self.upstream = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _UpstreamSseHandler)
+        self.upstream.gate = self.gate
+        self.upstream.received = self.received
+        self.upstream_thread = threading.Thread(target=self.upstream.serve_forever, daemon=True)
+        self.upstream_thread.start()
+
+        self.bridge = server.ThreadingHTTPServer(("127.0.0.1", 0), server.BridgeHandler)
+        self.bridge_thread = threading.Thread(target=self.bridge.serve_forever, daemon=True)
+        self.bridge_thread.start()
+        self.base_url = f"http://127.0.0.1:{self.bridge.server_port}"
+
+        self.environment = mock.patch.dict(
+            os.environ,
+            {
+                "TILESIM_ASSISTANT_BASE_URL": f"http://127.0.0.1:{self.upstream.server_port}",
+                "TILESIM_ASSISTANT_API_KEY": "unit-test-credential",
+                "TILESIM_ASSISTANT_MODEL": "deepseek-v4-flash",
+            },
+        )
+        self.environment.start()
+
+    def tearDown(self) -> None:
+        # Never leave the stand-in Provider blocked on the gate when an assertion fails.
+        self.gate.set()
+        self.environment.stop()
+        for httpd, thread in (
+            (self.bridge, self.bridge_thread),
+            (self.upstream, self.upstream_thread),
+        ):
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=2)
+
+    def open_chat(self):  # noqa: ANN201
+        request = urllib.request.Request(
+            self.base_url + self.CHAT_PATH,
+            data=json.dumps(self.REQUEST).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        return urllib.request.urlopen(request, timeout=15)
+
+    def read_frames(self, stream):  # noqa: ANN001, ANN201
+        """Yield frames as they arrive, so an assertion can run while the Provider is still writing."""
+
+        name = ""
+        data = ""
+        for raw_line in stream:
+            line = raw_line.decode("utf-8").rstrip("\n")
+            if not line:
+                if name:
+                    yield (name, json.loads(data))
+                name = ""
+                data = ""
+            elif line.startswith("event: "):
+                name = line[len("event: ") :]
+            elif line.startswith("data: "):
+                data += line[len("data: ") :]
+
+    def test_the_answer_arrives_while_the_provider_is_still_writing_it(self) -> None:
+        with self.open_chat() as stream:
+            frames = self.read_frames(stream)
+            first = next(frames)
+            # The stand-in Provider is still holding the suffix back, so this frame can only be here
+            # because the answer was streamed rather than handed over in one piece at the end.
+            self.assertFalse(self.gate.is_set())
+            self.assertEqual(first[0], "prose")
+            self.assertEqual(first[1]["text"], "先压小批量。")
+            self.assertEqual(first[1]["schema_version"], server.assistant_model.CHAT_SCHEMA_VERSION)
+
+            self.gate.set()
+            rest = list(frames)
+
+        # The second prefix delta was already on its way when the first frame was read: the answer
+        # keeps growing rather than arriving as one piece.
+        self.assertEqual([name for name, _ in rest], ["prose", "plan", "done"])
+        self.assertEqual(rest[0][1]["text"], "先压小批量。并发上限也降一点。")
+        plan = rest[1][1]
+        self.assertEqual(plan["answer_state"], "settings")
+        self.assertEqual(plan["model_id"], "deepseek-v4-flash")
+        self.assertEqual(plan["served_model"], "deepseek-v4-flash")
+        # A plan is an offer, never an action: nothing is written and nothing is run by answering.
+        self.assertFalse(plan["applied"])
+        self.assertFalse(plan["executed"])
+        # The route stamps the published contract set on a plan, so a client can tell which contract
+        # judged the values it is being offered.
+        self.assertEqual(plan["schema_set_revision"], server.SCHEMA_SET_REVISION)
+
+    def test_reasoning_and_the_settings_fence_never_reach_the_panel(self) -> None:
+        self.gate.set()
+        with self.open_chat() as stream:
+            frames = list(self.read_frames(stream))
+
+        prose = [data["text"] for name, data in frames if name == "prose"]
+        self.assertEqual(prose, ["先压小批量。", "先压小批量。并发上限也降一点。"])
+        self.assertNotIn("先想一想。", json.dumps(frames, ensure_ascii=False))
+        self.assertNotIn("```", json.dumps(prose, ensure_ascii=False))
+
+    def test_the_provider_sees_the_replayed_transcript_and_the_panel_values(self) -> None:
+        self.gate.set()
+        with self.open_chat() as stream:
+            # Drain the reply: the Provider call is made while the answer is being written, so the
+            # request this test inspects only exists once the round trip has run.
+            list(self.read_frames(stream))
+
+        self.assertEqual(len(self.received), 1)
+        request = self.received[0]
+        self.assertEqual(request["path"], "/v1/chat/completions")
+        self.assertEqual(request["headers"]["authorization"], "Bearer unit-test-credential")
+        self.assertEqual(request["headers"]["accept"], "text/event-stream")
+        self.assertTrue(request["body"]["stream"])
+        self.assertEqual(request["body"]["model"], "deepseek-v4-flash")
+        messages = request["body"]["messages"]
+        self.assertEqual(
+            messages[-1], {"role": "user", "content": "我要模拟一个低延迟在线服务场景"}
+        )
+        # The catalogue and the current panel values travel as read-only context on the system turn.
+        self.assertEqual(messages[0]["role"], "system")
+        self.assertIn("max_batch_size = 8", messages[0]["content"])
 
 
 if __name__ == "__main__":

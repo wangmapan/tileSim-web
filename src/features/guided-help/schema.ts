@@ -8,6 +8,7 @@ export const professionalRoutedGuideIds = [
   "validation",
   "design_space",
   "history",
+  "raw_evidence",
   "evidence_agent",
   "evidence_lab",
 ] as const;
@@ -21,7 +22,7 @@ export const lightweightRoutedGuideIds = [
 
 export const routedGuideIds = [...professionalRoutedGuideIds, ...lightweightRoutedGuideIds] as const;
 
-export const embeddedGuideIds = ["unsupported_schema", "raw_evidence"] as const;
+export const embeddedGuideIds = ["unsupported_schema"] as const;
 
 export type RoutedGuideId = (typeof routedGuideIds)[number];
 export type EmbeddedGuideId = (typeof embeddedGuideIds)[number];

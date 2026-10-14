@@ -144,14 +144,14 @@ GPU 参与方式：
 
 ## 11. 数据与留存禁止项
 
-默认不得新增持久化：
+默认不得新增无期限持久化。浏览器助手可以在单独的本地 retention policy 下保存有限期、可删除且经过 redaction/长度限制的用户可见消息和已展示 typed blocks；它仍不是正式 Conversation store：
 
 - credential；
 - hidden reasoning；
 - Provider raw response；
-- 未经授权的完整用户问题；
+- 未经授权的、未经裁剪的完整用户问题或完整对话；
 - 完整 artifact payload；
-- validated claims 的额外长期副本。
+- validated claims 的额外长期副本；本地缓存也必须提供 expiry、总量上限和删除入口。
 
 需要保存用户可见对话时，必须先发布 retention、redaction、expiry、delete 和 consent 契约。
 

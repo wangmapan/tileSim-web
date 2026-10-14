@@ -28,7 +28,7 @@ TileSim 应在桌面页面右侧提供一个跨页面常驻的 Agent 对话栏�
 - 不自动读取整个页面 DOM、所有 artifact 或用户未选择的数据；
 - 不因用户打开侧栏就调用 Provider；
 - 不允许模型直接修改表单、创建 run、取消任务或导航到敏感资源；
-- 不把侧栏 transcript 当作参数或运行真源；
+- 不把侧栏 transcript 当作参数或运行真源；本地恢复也不等于服务端 Conversation/Turn；
 - 不在浏览器持久化 credential、Provider raw response、hidden reasoning 或完整 artifact；
 - 不在没有正式 contract 时用本地消息数组冒充可恢复多轮会话。
 
@@ -131,6 +131,19 @@ TileSim 应在桌面页面右侧提供一个跨页面常驻的 Agent 对话栏�
 
 Header 不长期展示模型名、SHA 或 contract 小字。模型/provider identity、revision、citation 和诊断信息进入“专业详情”。
 
+> **2026-09-22 修订（已实现）**：Conversation Timeline 的“用户消息 + typed response”落地为两个新的 typed block：
+> `user_message`（用户自己那一句）与 `assistant_message`（模型的回答，带**写它的模型名**、`streaming` 与 `error`
+> 三个字段）。回答是**边写边显**的：每次可见增量都以 `prose` 事件把**到目前为止的全文**重发一次，面板直接整体替换
+> 该块正文，不需要前端自行拼接增量；只要 `streaming` 为真，块内就保持一行“正在写回答…”状态，**短回答也不会被误当
+> 已写完**。断流或停止后正文保留，并在同一块内说明原因。
+>
+> 多轮上下文只由**面板已显示的内容**构成：前端保留最近若干轮 `{role, content}` 并在下一次请求里整体回放，Bridge
+> **不持久化** transcript。当前 Web 端通过版本化 Pinia/localStorage 会话仓库恢复多个本机可见会话，恢复的是已展示的
+> typed blocks、受界定的 transcript 和 context revision，不是服务端 Conversation/Turn/Goal；因此仍不是 §5 矩阵里的“正式多轮”。
+> 用户可显式新建、切换或删除会话，跨页面/重启恢复后仍执行 stale 与权限守卫。
+>
+> 隐藏 reasoning（`delta.reasoning_content` / `delta.reasoning`）在 provider 适配层被丢弃：既不返回、也不落盘。
+
 ## 8. Typed Message Blocks
 
 Timeline 不只渲染自由文本，至少支持：
@@ -154,13 +167,25 @@ Composer 支持自然语言和显式上下文附件：
 
 - “附加当前页面”；
 - “附加当前 run”；
-- “附加已选参数/候选/图表点/claim”；
-- “仅询问，不修改草案”；
-- 已有正式草案时选择“提出修改”。
+- “附加已选参数/候选/图表点/claim”。
+
+> **2026-09-22 修订（已实现）**：Composer 不再提供意图模式选择。本节原文中的两条——“仅询问，不修改草案”、
+> “已有正式草案时选择‘提出修改’”——**已随模式单选项一起删除**，改为**一个输入框**：用户描述一个场景，
+> 前端判读后给出**推荐方案**（含理由与“应用到面板”按钮）；也可直接写 `参数路径 = 值` 得到确定性改动；
+> 提问句则只解释。判读与推荐**全部在前端本地完成**，不额外请求 capability 快照；
+> **任何一路都不会创建运行**，只有用户点“应用到面板”才写入面板。
 
 默认不上传整个页面或完整 artifact。提交前显示将发送的 context 类型和数量；受限、过大或不兼容对象不能附加。
 
 Enter/换行行为、IME 中文输入、停止生成和错误恢复必须明确。发送期间不得锁死主页面操作。
+
+> **2026-09-22 修订（已实现）**：回答边写边显期间，提交按钮换成**“停止”**——停止只结束本次回答（已收到的正文保留
+> 并说明“已停止这次回答”），**不是失败**，与通道不可用区分开。此时仍可继续写下一句，但 Enter 不会开始第二轮，
+> 避免在同一轮上叠加请求。
+>
+> 通道是可选的，**没配模型时行为与从前完全一致**：Bridge 在流开始前用普通 JSON 回应（未配置 `503`、尚未发布该
+> 路由 `404`、请求非法 `400`），前端据此**退回内置预设与本地规则**，不把半开的流当结果。模型提案一律只在用户点
+> “应用到面板”后写入，任何一路都不创建运行。
 
 ## 10. Page Context Envelope
 
@@ -189,15 +214,15 @@ Envelope 不包含 credential、完整 artifact payload、未提交敏感表单�
 
 ## 12. 状态所有权
 
-| 状态                      | Owner                               | 前端保存方式                |
-| ------------------------- | ----------------------------------- | --------------------------- |
-| 侧栏开关、宽度、expanded  | Agent shell UI                      | Pinia/local UI preference   |
-| current page context      | 各 feature context adapter          | 内存、revisioned、只读      |
-| conversation/turn         | Bridge conversation service         | TanStack Query/server state |
-| draft/validation/approval | 各正式 domain service               | Query cache + object refs   |
-| operation/progress        | workflow service                    | Query/SSE snapshot          |
-| current run               | 既有 workspace/run state            | 只引用，不复制              |
-| Evidence response         | Evidence Agent query/store 既有边界 | 保持 lease/stale 规则       |
+| 状态                      | Owner                                          | 前端保存方式                                 |
+| ------------------------- | ---------------------------------------------- | -------------------------------------------- |
+| 侧栏开关、宽度、expanded  | Agent shell UI                                 | Pinia/local UI preference                    |
+| current page context      | 各 feature context adapter                     | 内存、revisioned、只读                       |
+| conversation/turn         | 当前 Web 本地会话仓库（非正式服务端 contract） | Pinia + 版本化 localStorage；Bridge 不持久化 |
+| draft/validation/approval | 各正式 domain service                          | Query cache + object refs                    |
+| operation/progress        | workflow service                               | Query/SSE snapshot                           |
+| current run               | 既有 workspace/run state                       | 只引用，不复制                               |
+| Evidence response         | Evidence Agent query/store 既有边界            | 保持 lease/stale 规则                        |
 
 侧栏 shell 不成为新的全局业务 store。它只编排子模块和展示当前 references。
 
@@ -220,7 +245,7 @@ Envelope 不包含 credential、完整 artifact payload、未提交敏感表单�
 - 打开 Agent 引用的页面时保留对话滚动和 pending task；
 - 切换 workspace/run 时必须提示上下文变化，未完成草案或 claims 按契约 stale；
 - 新建 conversation、切换 conversation 和清除 transcript 是显式动作；
-- 若 retention 未获同意，刷新后可以不恢复 transcript，但不得假装已持久化；
+- Web 端本地会话留存只保存用户可见、受界定的 transcript 与 typed blocks，用户可显式删除；不得保存 credential、hidden reasoning、Provider raw response 或未展示的完整 artifact。Bridge 不保存 transcript，不能将本地恢复描述成服务端留存；
 - 深链接只包含非敏感 object IDs，不包含问题、payload 或 credential。
 
 ## 15. 审批和高风险操作体验
@@ -372,3 +397,77 @@ Conversation/Turn/Goal、retention 和 approval contract 发布后，启用可�
 依赖 `GAP-COPILOT-UI-001`、`GAP-CONV-001`、`GAP-DRAFT-001`、`GAP-APPROVAL-001`、`GAP-WORKFLOW-001`、`GAP-RAG-001` 和 `GAP-TOOLS-001`。
 
 侧栏全局装载、Context Envelope、typed blocks、状态 owner、支持动作、approval/cancel、retention 或桌面布局变化时，必须更新本文以及 [产品体验](02_PRODUCT_AND_USER_EXPERIENCE.md)、[目标架构](03_TARGET_ARCHITECTURE_AND_OWNERSHIP.md) 和 [并行开发规范](15_MODULE_BOUNDARIES_AND_PARALLEL_DEVELOPMENT.md)。
+
+> **2026-09-22 修订（已实现）**：「应用到面板」不再因为一次空转的重发布而永久失效。
+> 三处 context publisher（`App.vue` 的通用投影、`ExperimentView`、`LightweightPrepareView`）此前用**单调计数器**
+> 生成 `context_revision`，而它们的 watcher 是 `deep: true` ⇒ **任一被监视对象被「碰到」就换号**（对象引用被替换、
+> 深层写入但值不变、keep-alive 页面重入都会触发）。`parameter_edits.plan_revision` 取的是计划生成时的 revision，
+> 这之后一换号，应用守卫就拒；`markAgentBlocksStale` 还会把 `plan_revision` 置 null，使那块计划**再也点不动**
+> （用户所见：反复点「应用到面板」都回「页面上下文已变化」）。
+> 现在改由 `src/entities/agent-context/revision.ts` 的 `createPageContextRevisionKeeper()` 统一持有：
+> revision 只在**被发布内容（含 page identity 前缀）真正变化**时前进，内容没变时不发布也不换号。
+> revision 字符串格式不变，`compareAgentContexts` / 编译器 / stale 标记的语义不变 —— 真正变化的页面照旧会被拒。
+>
+> **2026-09-22 第二次修订（已实现）**：判据从「令牌没换」改成「**这份计划要改的那些地址没动**」。
+> 上一版只是让令牌少换号，令牌仍然是唯一判据；而**任何**未预料到的重发布（桥接自检把 `state.bridge.checking`
+> 翻一次、描述符刷新、页面重进、发布内容里 `availability`/`parameter_catalog` 跟着翻）都会换号，
+> 于是同一症状再次出现。现在由 `src/features/agent-copilot-integration/parameter-plan.ts` 的
+> `assessParameterPlan()` 裁决，`parameter_edits` 的每条编辑都带着它读到的 `previous`：
+> 逐个地址与页面当次发布的 `parameter_catalog[].current` 比对，**任一地址的值变了、或地址已不在目录里 → 拒绝**
+> （错误详情仍是 `parameter_plan_stale`，但消息指名道姓说是哪个参数从什么变成了什么，或已不存在）；
+> 全部相符 → 写入，`plan_revision` 与当前 revision 一致时标 `basis: "revision"`，不一致（期间重发布过但没动到这些地址）
+> 时标 `basis: "values"` 并在回执里说明「页面在此期间刷新过一次，但这几项指向的值没有变」。
+> 相应地把 `markAgentBlocksStale` 里对 `parameter_edits` 的 `plan_revision: null` 去掉（草案类 block 的 stale 语义不变）：
+> 重发布本身不能作为「值动过」的证据，判定权交回给真正能判定的那一步。
+> 守护测试：`tests/unit/agent-parameter-plan-applicability.test.ts`（含「令牌换号但地址未动仍然可写」等回归用例）。
+>
+> **2026-09-22 第三次修订（已实现）**：上一版 keeper 的「内容没变就不发布」把**声明**也一起省掉了，
+> 这是另一条独立的失效路径。`AgentContextRegistry` 里通用投影与页面发布用的是**同一个 provider id**（`app-shell`），
+> 谁最后发布谁生效；而 `App.vue` 的路由 watch 每次路由变化都会 `synchronizeAgentRouteContext()` 发一次
+> **无参数目录**的通用投影（`allowed_purposes:["explain"]`、`parameter_catalog:[]`）。
+> `ExperimentView` 在 `<KeepAlive include="ExperimentView">` 里、`LightweightPrepareView` 也在同一 shell 下复用，
+> 回到页面时组件**不重新 setup**（keeper 不重置）⇒ 内容与上次相同 ⇒ `changed=false` 直接 return ⇒
+> **页面的富上下文再也没被声明回来**，通用投影一直是生效上下文。
+> 症状有二：面板把带 `参数 = 值` 的句子答成「这里可以说明当前页面状态；参数草案请在新建实验页配置」（draft 不在
+> `allowed_purposes` 里）；以及 `parameter_edits` 的 `plan_revision` 取自富上下文、当前却是通用投影的号 ⇒ 点「应用」被拒。
+> 现在：**保持 revision 稳定**与**每次都声明上下文**是两件事 —— 两个页面 publisher 每次都 `publish`（revision 仍由 keeper
+> 钉住不变号），`App.vue` 的 `publishExperimentAgentContext()` 只在「生效上下文已经是这份发布（`page_id` + `context_revision`
+> 都相同）」时才跳过 registry 更新，避免把同一个对象推给面板重复渲染。
+> 守护测试：`tests/unit/agent-context-revision.test.ts` 新增两条（两个 publisher **不得**再出现 `if (!changed) return;`；
+> shell 必须按 `page_id` + `context_revision` 判重）；端到端证据见 `tests/e2e/dashboard.spec.js:54`（该用例会
+> `/experiment → /overview → /experiment` 往返，正是这条路径）。
+
+> **2026-09-23 修订（已实现）**：助手可写参数面从「13 个 `overrides` 旋钮」扩到**整份表单**（含「显卡数量」与
+> `gpu_participation_mode`）。此前桥接侧 `bridge/providers/assistant_model.py` 的规则表只由描述符的
+> `PARAMETER_DEFINITIONS` 生成，`_validated_plan()` 只认那 13 个地址，模型给表单字段一律按 `unknown_parameter`
+> **静默丢弃**；前端 `parameter-catalog.ts` 虽已枚举整份表单，但验收在桥接侧 ⇒ 「加显卡」这类诉求必然落空。
+> 现在新增 `bridge/contracts/parameter_surface.py`：从 `run-overrides` / `runtime-trace-input` / `topology-request-input`
+> 三份 schema ＋描述符**推导**出全部可写地址（`SURFACE_ADDRESSES`，64 条），`resolve_address()` 负责归一化与判错，
+> `surface_catalogue_text()` 产出的目录文本与校验口径**同源**（模型看到的与能通过的是同一份东西）。
+> 引用型字段（`device_id`/`domain_id`/`module_name`/`src_device`/`dst_device`/`module_binding`）、容器与数组本身继续排除；
+> 元素地址以 `[i]` 占位，模型若直接写 `devices[i]/...` 会收到 `address_needs_an_index`（明确说缺索引，而非含糊的未知参数）。
+> 前端新增 `kind: "count"`（**集合规模，不是 JSON 类型**）：`parameter-catalog.ts` 暴露 `topology/devices`
+> （文案「设备数量（显卡数量）」）与 `runtime_trace/requests` 两条规模地址，`parameter-edit.ts` 用 `COLLECTION_RESIZERS`
+> 调既有 `setDeviceCount` 与新增 `setRequestCount` 增删集合；缩容时若有 link/domain 仍引用将消失的设备，抛
+> `StructuredInputError` 并点名该设备（不静默破坏拓扑）。一次方案的长度上限 `MAXIMUM_SETTINGS` 由 20 提到 **40**，
+> 且该条数随目录文本写进 SYSTEM_PROMPT；前端把被丢条数 `dropped` 写进方案理由（`App.vue` 透传给
+> `modelScenarioRecommendation`），用户在面板上能看到「还有几项没列进来」。
+> 门禁：桥接三文件 **257 passed**（`test_parameter_surface` 25、`test_assistant_model` 62、`test_server` 170），
+> 前端 Vitest **1056 passed / 8 skipped**；真机通道验证显示目录文本 78 行且命中所列四类地址，模型能给出 8 卡方案。
+> 详见 `docs/AI_HANDOFF.md` 的 2026-09-23 节。
+
+> **2026-10-13 当前复核补注**：配置页助手路由已限制为页面说明/配置模型路径；只有真实结果或只读结果页且 run、manifest、schema、artifact identity 均匹配时才进入结果分析。助手本地会话是有限期、可删除、受大小和长度限制的缓存，不是服务端 Conversation store。结果分析状态由真实 artifact 读取计数和模型流阶段驱动；S0–S5 package 的边界、provenance 和 unavailable/expected-absence 不能由助手推断或补造。下方较早的 Stage 0/2 进度数字保留为历史记录，当前门禁和审查状态以 `docs/AI_HANDOFF.md` 为准。
+
+> **2026-09-23 同批扩容修订（工作树，未部署）**：`parameter-catalog.ts` 对同一方案中合法的集合增长，按契约字段投影被明确提及的新设备/请求索引；`scenario-recommendation.ts` 在模型地址解析前使用该投影。`parameter-plan.ts` 只允许规模值仍与计划前值一致、且下标落在增长区间的未来地址通过 stale 守卫。`parameter-edit.ts` 先扩容再写元素，任何写入失败时原子回滚整批（表单与两个 JSON 文档）；被修改请求的显式 `participants` 若与新 TP 不匹配，同样拒绝整批并提示到结构化输入清空或重写。模型/Bridge 丢弃或前端拒绝的字段逐项展示并禁止应用；多节点分组缺漏或声称 TPn 但第 0 条请求没有对应并行度也禁止应用。Bridge 上限为 64 项，提示词明确组号不等于 links/domains；既有 `participants` 与真实连接关系不自动补造，用户仍需在结构化输入中核对。该改动不创建运行，不改变 Phase 2 的执行能力边界。
+
+> **2026-10-09 全页面参数路由修正（工作树，未部署）**：首轮自然语言配置请求即使点名 batch、KV、TP 或结构化字段，只要不是明确的 `路径 = 值`，也先交给现有配置模型和当前页面的完整 scalar `parameter_catalog`；冒号引出的字段列表不是赋值。模型方案逐项按页面目录、类型、范围和应用时的当前值校验；用户明确排除的设备数量、TP 或拓扑元素若仍在提案中，整份方案禁止应用。结构化输入尚未打开时不暗中生成其字段。无模型时，扩展字段请求提示用完整路径赋值或重试，不假称正式八字段 capability 已扩容。Phase 1 正式 `agent_exposed` 及其 execution closure 仍是八字段；页面可编辑能力不等于 Profile、物理 KV、硬件验证或运行执行能力。
+
+> **2026-09-23 对话身份修订（工作树，未部署）**：`AgentTypedBlockList.vue` 的用户/模型消息分别显示 `user-avatar.svg` 中性人物与 `atuo-avatar.svg` 阿拓头像，文字标识是「用户」与「阿拓 · 模型 ID」；头像为装饰，发言者文字仍供读屏识别。侧栏标题显示「阿拓 · TileSim 助手」，对话输入与提示文案不再用「你」指代用户。该 UI 修订不新增个人身份资料、会话权限或 Agent 执行能力。
+
+> **2026-09-23 小拓引导与结果教学（工作树，未部署）**：空会话呈现三项任务选择；「配置实验」导航到当前工作台的新建实验页，「分析实验结果」从身份匹配的当前 run 报告提供三段式速览、后端原文重点与证据边界；轻量工作台首页带 run 时会先进入结果页并在载入后自动整理。「学习怎么看结果」及对应自然语言提问提供指标教学。报告整理为前端只读显示级变换，不调用 Provider、不改报告、不创建运行；无报告、示例、旧 run、unsupported schema 时不作分析。报告字段路径只用于定位，不代表正式 citation。界面称呼由「阿拓」调整为「小拓」，原 SVG 文件名保留。
+
+> **2026-09-28 结果分析模型通道（工作树，未部署）**：结果分析在保留上述本地确定性回退的基础上，新增独立只读 `POST /api/agent/result-analysis`。调用前逐一读取当前 run manifest 中的 artifact，并复用 verified-artifact 查询的 run/schema/bytes/SHA-256 绑定；模型上下文携带完整 artifact identity、rejected artifact 和 `full`/`summary_only`/`unavailable`/`not_applicable` 覆盖状态。单文件超过 12,000 字符或总证据超过 150,000 字符时只发送结构摘要；因此 UI/模型不得声称无条件读完所有原始文件。模型通道不可用时仍回退到原有三段式本地整理，不创建运行、不改配置、不写报告。
+
+> **2026-09-24 视觉收口（工作树，未部署）**：小拓侧栏增加有限的开合和选择反馈；具体时长使用独立 `--motion-interaction`，不改动 e2e 依赖的颜色过渡时长。轻量工作台空状态增加三步流程说明、accent rule entrance 与状态反馈，均为表现层改动；`prefers-reduced-motion` 会关闭新增动画。
+
+> **2026-09-24 专业工作台状态组件视觉收口（工作树，未部署）**：侧栏 header、时间线、输入区和 welcome choice 保持窄桌面工作流的轻量密度；本轮补充输入区 focus、提交/停止和控件 hover 的细微反馈，并将状态组件视觉对齐到专业工作台的语义边轨体系。时间使用独立 `--motion-interaction`，沿用全局 reduced-motion 规则；不改变 typed block、context、model selection、草案应用或执行边界。专业工作台的证据范围提示、状态标签和 `AvailabilityBadge` 同步增强层级、边框和状态点，但不添加数据或装饰性插画。定向 dashboard motion/P99、L6 小拓引导/闭环 E2E 共 4 条通过。

@@ -3,6 +3,7 @@ import { parseJsonLossless } from "../../contracts/lossless-json";
 import type { ApiRun } from "../../contracts/bridge-api";
 import { BridgeApiError } from "./errors";
 import { t } from "../../i18n";
+import { parseSseFrame } from "./sse";
 import { apiRequest, apiRoots, isRecord, parseResponse } from "./transport";
 
 export interface WaitForRunOptions {
@@ -34,22 +35,6 @@ function terminalRun(run: ApiRun): ApiRun | null {
     throw new RunTerminalError(typeof run.error === "string" ? run.error : t("模拟任务没有完成。"));
   }
   return null;
-}
-
-function parseSseBlock(block: string): { id: string; event: string; data: string } | null {
-  let id = "";
-  let event = "message";
-  const data: string[] = [];
-  for (const line of block.split("\n")) {
-    if (!line || line.startsWith(":")) continue;
-    const separator = line.indexOf(":");
-    const field = separator >= 0 ? line.slice(0, separator) : line;
-    const value = separator >= 0 ? line.slice(separator + 1).replace(/^ /, "") : "";
-    if (field === "id") id = value;
-    else if (field === "event") event = value;
-    else if (field === "data") data.push(value);
-  }
-  return data.length || id ? { id, event, data: data.join("\n") } : null;
 }
 
 async function consumeRunEvents(
@@ -86,7 +71,7 @@ async function consumeRunEvents(
     buffer = buffer.replace(/\r\n/g, "\n");
     let boundary = buffer.indexOf("\n\n");
     while (boundary >= 0) {
-      const parsed = parseSseBlock(buffer.slice(0, boundary));
+      const parsed = parseSseFrame(buffer.slice(0, boundary));
       buffer = buffer.slice(boundary + 2);
       if (parsed?.id) onEventId(parsed.id);
       if (parsed?.event === "timeout") return { run: null, timedOut: true };

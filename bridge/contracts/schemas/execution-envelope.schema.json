@@ -8,6 +8,10 @@
   "properties": {
     "schema_version": { "const": "tilesim.s7_execution_envelope.v1" },
     "run_id": { "type": "string", "minLength": 1 },
+    "runtime_engine_type": { "type": "string" },
+    "runtime_engine_semantic_version": { "type": "string" },
+    "runtime_input_mode": { "enum": ["", "legacy_generic", "dynamic_request", "observed_replay"] },
+    "semantic_profile_applied": { "type": "boolean" },
     "evidence_refs": { "type": "array", "items": { "$ref": "f6b-common.schema.json#/$defs/evidenceRef" } },
     "stages": {
       "type": "array",

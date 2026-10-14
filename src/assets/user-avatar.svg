@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">用户头像</title>
+  <desc id="desc">浅色圆形背景中的中性人物剪影</desc>
+  <circle cx="64" cy="64" r="60" fill="#eaf3f5"/>
+  <circle cx="64" cy="52" r="17" fill="#53778f"/>
+  <path d="M30 96c2-17 16-28 34-28s32 11 34 28c-9 10-21 16-34 16S39 106 30 96z" fill="#53778f"/>
+</svg>

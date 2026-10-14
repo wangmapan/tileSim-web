@@ -138,8 +138,8 @@
     },
     "parameter_descriptors": {
       "type": "array",
-      "minItems": 8,
-      "maxItems": 8,
+      "minItems": 13,
+      "maxItems": 13,
       "items": { "$ref": "#/$defs/parameterDescriptor" }
     },
     "resolved_fidelity_source": { "const": "run_execution_envelope_and_validation_reports" }

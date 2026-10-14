@@ -8,6 +8,10 @@
 >
 > 前置阅读：[约束与术语](00_GUARDRAILS_AND_GLOSSARY.md)
 
+> 2026-10-09 当前工作树补注：受控实验输入现加入三种版本化推理引擎语义画像的最小动态／回放区分，默认仍为 legacy generic；小拓不发布引擎身份、请求阶段或特性数组标量地址。Bridge/前端 fixture 与定向测试已通过，后端 C++ 执行本轮未实测。详见 [AI_HANDOFF](../AI_HANDOFF.md) 当前条目；下文旧审计日期与数字作为历史基点保留，不能据此声称真实校准或 Profile records 已可用。
+
+> **2026-10-13 当前复核补注**：第十至第十二阶段已在本地 synthetic hosted execution 和临时 Bridge 中验证 S0 dense attribution、S1 runtime 四工件以及 S2 execution/kernel、S3 memory、S4 device、S5 collective 的 package 边界。前端与这些已实现后端能力的展示、identity、provenance、fidelity 和 `expected_absence` 语义已对齐；下文“运行期工件未采集”“S2–S5 未进入 Bridge”等表述属于 2026-09-17 历史审计快照。后端未实现的 Profile records、Run Intake v2 执行、真实 GPU、Provider、校准和 held-out validation 继续保持 `unavailable`，不由前端伪造。
+
 ## 1. 审计范围
 
 本基线来自：
@@ -112,6 +116,13 @@ Bridge 正式 create-run identity 是 `tilesim.bridge.create_run_request.v1`，�
 | 网络与硬件资源模块             | 纵向/横向扩展网络 bandwidth 和 latency              |
 
 执行语义、KV Cache 物理语义、设备性能和集合通信的更多参数保持 `not_exposed`。
+
+> 追加说明（2026-09-20）：上表口径成文于普通表单只暴露 8 个字段时。2026-09-20 起 Web 快捷控制
+> 由 8 个字段扩展为 13 个（新增 5 个 S1 运行时参数：`max_active_requests`、`initial_kv_tokens`、
+> `kv_admission_watermark`、`long_context_threshold_tokens`、`decode_penalty_per_threshold`）；
+> 本节原文保留不改，扩展后的口径见 `docs/AI_HANDOFF.md` 与
+> `D:\tileSim\docs\development\PHASE0_PARAMETER_TRACEABILITY_MATRIX.md` §8。
+> 注意：**Agent 侧**能力目录（`agent_exposed_field_ids`）当时仍为 8 项，未同步。
 
 ## 5. 参数能力状态
 
@@ -261,6 +272,22 @@ strict candidate 可执行字段：
   Bridge 为 105/105；Phase 0D 可复现性 oracle 以不可变后端 evidence revision 复跑并保持通过；
 - `GAP-COPILOT-UI-001` 已达到 `validated`；`GAP-DRAFT-001`、`GAP-VALIDATE-001`、
   `GAP-CLARIFY-001` 及 Conversation/Approval/Workflow Gap 仍为 open。
+
+> 追加说明（2026-09-20）：本节成文于正式参数面为 8 个字段时（2026-09-09 基线）。2026-09-20 起
+> 普通表单/快捷控制扩展为 13 个字段（新增 5 个 S1 运行时参数）；但**本节描述的 Agent 侧草案路径
+> 仍为 8 项**——能力目录 `bridge/contracts/agent_orchestration_capability/catalog-content.json`
+> 本阶段有意未改，`agent_exposed_field_ids` 仍为 8。本节原文（含 128/128、8/8 等历史数字）保留不改。
+
+> 追加说明（2026-09-23）：上面这条关于**能力目录**（`agent_exposed_field_ids` = 8）的说明**仍然成立，未改动**
+> —— 本次也没有修改 `bridge/contracts/agent_orchestration_capability/catalog-content.json`。
+> 需要区分的是**第三条轨道**：右侧助手面板「能写哪些参数」这一面，过去同样被桥接侧的 13 个 `overrides` 旋钮规则卡住
+> （`bridge/providers/assistant_model.py` 的 `_validated_plan()` 对表单字段一律按 `unknown_parameter` 丢弃），
+> 用户在面板上提「加显卡数量 / 改 GPU 参与模式」必然落空。2026-09-23 起该面改为从三份输入 schema
+> （`run-overrides` / `runtime-trace-input` / `topology-request-input`）＋描述符**推导**，共 **64 条**可写地址
+> （`bridge/contracts/parameter_surface.py` 的 `SURFACE_ADDRESSES`），与校验口径同源；「显卡数量」以集合规模地址
+> `topology/devices` 表达。**这三条轨道的关系是**：描述符面 13（`overrides` 旋钮）、能力目录/Agent 面 8（有意未同步）、
+> 助手可写参数面 64（本次新扩，读契约推导、不改契约）。细节见 `docs/AI_HANDOFF.md` 的 2026-09-23 节与
+> [右侧助手面板](16_RIGHT_SIDE_AGENT_COPILOT_PANEL.md) 末尾的 2026-09-23 修订。
 
 ### 9.6 Phase 2 Definition of Ready 审计（2026-09-11）
 

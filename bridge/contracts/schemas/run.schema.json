@@ -30,6 +30,11 @@
     "error": { "type": "string" },
     "failure_code": { "type": "string" },
     "exit_code": { "type": "integer" },
+    "stderr_summary": { "type": "string" },
+    "cli_error_code": { "type": "string" },
+    "cli_field_path": { "type": "string" },
+    "cli_cause": { "type": "string" },
+    "cli_next_action": { "type": "string" },
     "digest": {
       "type": "object",
       "properties": {

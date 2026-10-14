@@ -16,6 +16,7 @@ import {
   buildAttributionVisualization,
   causeSource,
   ExecutionVisualizationPanel,
+  RequestAttributionPanel,
   semanticFieldPresentation,
 } from "../features/execution-inspector";
 import { useEvidenceSelectionStore } from "../stores/evidence-selection";
@@ -24,6 +25,7 @@ const { state } = useDashboard();
 const { t, isEnglish } = useI18n();
 const evidenceSelection = useEvidenceSelectionStore();
 const selectedEvidenceRequestId = computed(() => evidenceSelection.requestForRun(state.runId));
+const selectedRunMetadata = computed(() => state.history.runs.find((run) => run.run_id === state.runId) || null);
 const activeSection = ref<"chain" | "attribution">("chain");
 const partitionedAttributions = computed(() =>
   partitionCausalAttributions(state.bundle.tail?.attribution_ranking || []),
@@ -100,15 +102,25 @@ function semanticField(field: string, value: unknown) {
       </button>
     </nav>
 
-    <RunBoundEvidencePanel
-      v-if="activeSection === 'chain'"
-      :run-id="state.runId"
-      :bundle="state.bundle"
-      :inputs="state.inputs"
-      :artifact-manifest="state.artifactManifest"
-      :selected-request-id="selectedEvidenceRequestId"
-      @request-selected="selectEvidenceRequest"
-    />
+    <template v-if="activeSection === 'chain'">
+      <RunBoundEvidencePanel
+        :run-id="state.runId"
+        :bundle="state.bundle"
+        :inputs="state.inputs"
+        :artifact-manifest="state.artifactManifest"
+        :selected-request-id="selectedEvidenceRequestId"
+        @request-selected="selectEvidenceRequest"
+      />
+      <RequestAttributionPanel
+        :run-id="state.runId"
+        :run="state.bundle.run"
+        :run-metadata="selectedRunMetadata"
+        :artifact-manifest="state.artifactManifest"
+        :backend-revision="state.bridge.identity?.source_revision || state.bridge.identity?.build_revision || 'unknown'"
+        :bridge-manifest="state.bridge.manifest"
+        :selected-request-id="selectedEvidenceRequestId"
+      />
+    </template>
 
     <template v-else>
       <EmptyState

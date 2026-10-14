@@ -287,14 +287,52 @@ def validate_custom_inputs(value: object) -> dict:
     trace = value["runtime_trace"]
     reject_unknown_fields(
         trace,
-        {"trace_name", "trace_provenance", "policy", "requests"},
+        {"trace_name", "trace_provenance", "policy", "requests", "engine_type", "engine_semantic_version", "requested_features"},
         "custom_inputs.runtime_trace",
     )
     validate_optional_strings(trace, "custom_inputs.runtime_trace", {"trace_name"})
+    engine_profiles = {
+        "vllm": ("vllm.0.6.semantic.v1", {"continuous_batching"}),
+        "sglang": ("sglang.0.4.semantic.v1", {"continuous_batching", "prefix_aware_scheduling"}),
+        "tensorrt_llm": ("tensorrt_llm.0.12.semantic.v1", {"inflight_batching", "paged_kv_cache", "capacity_aware_scheduling"}),
+    }
+    engine = trace.get("engine_type", "legacy_generic")
+    engine_path = "/custom_inputs/runtime_trace"
+    if "engine_type" not in trace:
+        for field in ("engine_semantic_version", "requested_features"):
+            if field in trace:
+                raise RequestValidationError(f"{field} requires engine_type.", f"{engine_path}/engine_type")
+    if not isinstance(engine, str) or engine not in {"legacy_generic", *engine_profiles}:
+        raise RequestValidationError("runtime trace engine_type is not published.", f"{engine_path}/engine_type")
+    if engine == "legacy_generic":
+        if trace.get("engine_semantic_version", "legacy_generic.v1") != "legacy_generic.v1":
+            raise RequestValidationError("legacy engine version mismatch.", f"{engine_path}/engine_semantic_version")
+        if trace.get("requested_features", []) != []:
+            raise RequestValidationError("legacy runtime has no engine features.", f"{engine_path}/requested_features")
+    else:
+        version, allowed_features = engine_profiles[engine]
+        if trace.get("engine_semantic_version") != version:
+            raise RequestValidationError("engine semantic version mismatch.", f"{engine_path}/engine_semantic_version")
+        features = trace.get("requested_features")
+        if not isinstance(features, list):
+            raise RequestValidationError("requested_features is required.", f"{engine_path}/requested_features")
+        if len(features) > 3:
+            raise RequestValidationError("too many requested features.", f"{engine_path}/requested_features")
+        for index, feature in enumerate(features):
+            if not isinstance(feature, str) or feature not in allowed_features or feature in features[:index]:
+                raise RequestValidationError("engine feature is unsupported or repeated.", f"{engine_path}/requested_features/{index}")
     require_synthetic_provenance(
         trace.get("trace_provenance"),
         "custom_inputs.runtime_trace.trace_provenance",
     )
+    provenance = trace.get("trace_provenance")
+    if provenance is not None:
+        for field, expected in (("calibration_level", "uncalibrated"), ("allowed_claim_scope", "exploratory")):
+            if provenance[field] != expected:
+                raise RequestValidationError(
+                    f"runtime trace synthetic provenance requires {field}={expected}.",
+                    f"/custom_inputs/runtime_trace/trace_provenance/{field}",
+                )
     if not isinstance(trace.get("policy"), dict) or not isinstance(trace.get("requests"), list):
         raise ValueError("runtime_trace requires policy and requests fields.")
     reject_unknown_fields(
@@ -325,10 +363,10 @@ def validate_custom_inputs(value: object) -> dict:
         trace["policy"],
         policy_label,
         {
-            "kv_capacity_tokens": (0, MAX_EXACT_JSON_INTEGER, True),
+            "kv_capacity_tokens": (1, MAX_EXACT_JSON_INTEGER, True),
             "initial_kv_tokens": (0, MAX_EXACT_JSON_INTEGER, True),
-            "max_active_requests": (0, 1_024, True),
-            "max_batch_size": (0, 1_024, True),
+            "max_active_requests": (1, 1_024, True),
+            "max_batch_size": (1, 1_024, True),
             "prefill_starvation_threshold_ps": (0, MAX_EXACT_JSON_INTEGER, True),
             "pd_handoff_delay_ps": (0, MAX_EXACT_JSON_INTEGER, True),
             "pd_handoff_queue_service_ps": (0, MAX_EXACT_JSON_INTEGER, True),
@@ -342,6 +380,11 @@ def validate_custom_inputs(value: object) -> dict:
             "decode_penalty_per_threshold": (0, MAX_EXACT_JSON_INTEGER, False),
         },
     )
+    if trace["policy"].get("kv_admission_watermark", 1) == 0:
+        raise RequestValidationError(
+            "runtime trace kv_admission_watermark must be in (0, 1].",
+            "/custom_inputs/runtime_trace/policy/kv_admission_watermark",
+        )
     if "batch_scheduler" in trace["policy"] and trace["policy"]["batch_scheduler"] not in SCHEDULERS:
         raise RequestValidationError(
             "runtime trace batch_scheduler is not allow-listed.",
@@ -358,6 +401,24 @@ def validate_custom_inputs(value: object) -> dict:
         raise ValueError("runtime_trace.requests must contain between 1 and 1024 requests.")
     if not all(isinstance(request, dict) for request in trace["requests"]):
         raise ValueError("runtime_trace.requests must contain JSON objects.")
+    phases = [request.get("phase", "prefill") for request in trace["requests"]]
+    dynamic = "request" in phases
+    if dynamic and engine == "legacy_generic":
+        raise RequestValidationError("dynamic requests require a versioned engine.", f"{engine_path}/engine_type")
+    if dynamic and any(phase != "request" for phase in phases):
+        raise RequestValidationError("dynamic requests cannot mix with observed replay phases.", f"{engine_path}/requests/{phases.index(next(p for p in phases if p != 'request'))}/phase")
+    if engine != "legacy_generic" and not dynamic:
+        previous_arrival = 0
+        for index, request in enumerate(trace["requests"]):
+            arrival = request.get("arrival_time_ps", 0)
+            if isinstance(arrival, (int, float)) and arrival < previous_arrival:
+                raise RequestValidationError("observed replay must retain nondecreasing arrival order.", f"{engine_path}/requests/{index}/arrival_time_ps")
+            if isinstance(arrival, (int, float)):
+                previous_arrival = arrival
+    if dynamic:
+        for key in ("kv_capacity_tokens", "max_active_requests", "max_batch_size"):
+            if trace["policy"].get(key, 0) == 0:
+                raise RequestValidationError(f"dynamic engine requires positive {key}.", f"{engine_path}/policy/{key}")
     runtime_request_fields = {
         "request_id",
         "model_id",
@@ -380,7 +441,7 @@ def validate_custom_inputs(value: object) -> dict:
         label = f"custom_inputs.runtime_trace.requests[{index}]"
         reject_unknown_fields(request, runtime_request_fields, label)
         request_id = request.get("request_id")
-        if not isinstance(request_id, str) or not request_id or request_id in request_ids:
+        if not isinstance(request_id, str) or not request_id or (request_id in request_ids and (engine == "legacy_generic" or dynamic)):
             raise RequestValidationError(
                 "runtime_trace request_id values must be nonempty and unique.",
                 pointer_for_label(f"{label}.request_id"),
@@ -412,13 +473,24 @@ def validate_custom_inputs(value: object) -> dict:
                 "message_size_bytes": (0, MAX_EXACT_JSON_INTEGER, True),
             },
         )
-        if "phase" in request and request["phase"] not in {"prefill", "decode"}:
+        if "phase" in request and (not isinstance(request["phase"], str) or request["phase"] not in {"prefill", "decode", "request"}):
             raise RequestValidationError(
                 f"{label}.phase is unsupported.",
                 pointer_for_label(f"{label}.phase"),
             )
         if "participants" in request:
             validate_string_array(request["participants"], f"{label}.participants")
+        if dynamic:
+            for key in ("prompt_tokens", "decode_tokens", "kv_tokens", "tp_degree", "participants"):
+                if key not in request:
+                    raise RequestValidationError(f"dynamic request requires {key}.", pointer_for_label(f"{label}.{key}"))
+            if request["prompt_tokens"] == 0 or request["kv_tokens"] == 0:
+                key = "prompt_tokens" if request["prompt_tokens"] == 0 else "kv_tokens"
+                raise RequestValidationError(f"dynamic {key} must be positive.", pointer_for_label(f"{label}.{key}"))
+            if request["kv_tokens"] < request["prompt_tokens"] + request["decode_tokens"]:
+                raise RequestValidationError("dynamic KV must reserve prompt and decode tokens.", pointer_for_label(f"{label}.kv_tokens"))
+            if len(request["participants"]) != request["tp_degree"] or len(set(request["participants"])) != len(request["participants"]):
+                raise RequestValidationError("dynamic participants must be distinct and match tp_degree.", pointer_for_label(f"{label}.participants"))
 
     topology = value["topology"]
     reject_unknown_fields(
@@ -485,6 +557,14 @@ def validate_custom_inputs(value: object) -> dict:
             {"device_id", "device_type", "group_id"},
             required_nonempty={"device_id"},
         )
+    if dynamic:
+        device_ids = {device.get("device_id") for device in topology_root["devices"]}
+        for index, request in enumerate(trace["requests"]):
+            if any(participant not in device_ids for participant in request["participants"]):
+                raise RequestValidationError(
+                    "dynamic participants must reference topology devices.",
+                    f"/custom_inputs/runtime_trace/requests/{index}/participants",
+                )
     for index, binding in enumerate(topology_root["module_bindings"]):
         if not isinstance(binding, dict):
             raise ValueError(f"topology.topology.module_bindings[{index}] must be an object.")
@@ -644,6 +724,11 @@ def validate_custom_inputs(value: object) -> dict:
                 f"custom_inputs.topology.workload.requests[{index}]",
             )
             request_label = f"custom_inputs.topology.workload.requests[{index}]"
+            if "message_size_bytes" in request and "message_size_mb" in request:
+                raise RequestValidationError(
+                    f"{request_label} must choose one message size unit (backend otherwise prioritizes bytes).",
+                    pointer_for_label(f"{request_label}.message_size_mb"),
+                )
             validate_optional_strings(
                 request,
                 request_label,

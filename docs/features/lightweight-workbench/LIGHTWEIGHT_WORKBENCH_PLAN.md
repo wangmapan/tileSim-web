@@ -141,7 +141,7 @@ TileSim 提供两个并列工作台：
 
 ## 4. Agent 与页面帮助边界
 
-专业版现有的同一个右侧 `TileSim 助手` 复用于轻量工作台。两个工作台共享 Agent 外壳、面板/会话状态、intent compiler 和公共 context adapter，不实现第二套轻量 Agent。轻量配置页可以向同一助手发布正式八字段及当前值，轻量运行页和结果页只从合法 run 路由或 query 恢复 run context；模式切换可以保留助手面板状态，但必须使旧页面 context 失效并替换为新页面上下文。
+专业版现有的同一个右侧 `TileSim 助手` 复用于轻量工作台。两个工作台共享 Agent 外壳、面板/会话状态、intent compiler 和公共 context adapter，不实现第二套轻量 Agent。轻量配置页可以向同一助手发布当前 descriptor/页面目录允许的字段及当前值；这只表示前端草案与结构化输入能力，后端尚未接入的 Profile、真实 GPU 或 Run Intake v2 不得被描述为可执行。轻量运行页和结果页只从合法 run 路由或 query 恢复 run context；模式切换可以保留助手面板状态，但必须使旧页面 context 失效并替换为新页面上下文。
 
 Agent 可以生成草案、解释字段、提示缺失项、帮助选择配置和解释结果；但不能写入表单、自行创建 run、绕过校验、调用 Provider、编造 capability、升级 provenance/fidelity 或替代配置页。
 
@@ -348,7 +348,7 @@ completed → incomplete   (报告或 artifact 校验不完整)
 - 状态：queued/running/completed/failed/unavailable/incomplete；
 - 结果 adapter：真实字段、missing、not covered、stale、uint64 无损；
 - 模式切换：run/artifact/schema/backend/from query 全部保留；
-- Agent：专业版与轻量版复用同一助手；只能生成草案/解释，不写表单、不触发 create run、不调用 Provider，跨模式后旧 context 失效；
+- Agent：专业版与轻量版复用同一助手；配置路径只能生成草案/解释，不写表单、不触发 create run；结果页可选地调用只读结果分析模型，跨模式后旧 context 失效，模型不可用时回退本地整理；
 - 页面帮助：轻量和专业 topic、搜索分组、相关页面及路由定位完全分域。
 
 ### 13.2 桌面 E2E

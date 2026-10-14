@@ -7,6 +7,12 @@ import type {
   ApiManifestResponse,
   ApiRun,
   ArtifactManifestResponse,
+  AssistantModelCatalogueResponse,
+  AssistantModelDescriptorResponse,
+  AssistantModelPlanRequest,
+  AssistantModelPlanResponse,
+  AssistantModelSelectionRequest,
+  AssistantModelSelectionResponse,
   CapabilitiesResponse,
   CatalogResponse,
   CreateRunRequest,
@@ -40,6 +46,12 @@ export const bridgePaths = {
   experimentSchema: () => "/experiment-schema",
   tracePackages: () => "/trace-packages",
   inspectTracePackage: (packageId: string) => `/trace-packages/${encodeURIComponent(packageId)}/inspect`,
+  assistantModelDescriptor: () => "/agent/assistant-model",
+  assistantModelCatalogue: () => "/agent/assistant-model-catalogue",
+  selectAssistantModel: () => "/agent/assistant-model-selection",
+  planAgentScenario: () => "/agent/scenario-plan",
+  streamAgentScenarioChat: () => "/agent/scenario-chat",
+  streamAgentResultAnalysis: () => "/agent/result-analysis",
   evidenceAgentCapabilities: () => "/agent/evidence-capabilities",
   agentOrchestrationCapabilities: () => "/agent/orchestration-capabilities",
   previewAgentRunIntake: () => "/agent/run-intake-preview",
@@ -89,6 +101,30 @@ export class GeneratedBridgeClient {
   inspectTracePackage(packageId: string): Promise<TracePackageInspectResponse> {
     return this.transport.request<TracePackageInspectResponse>(bridgePaths.inspectTracePackage(packageId), {
       method: "POST",
+    });
+  }
+
+  assistantModelDescriptor(): Promise<AssistantModelDescriptorResponse> {
+    return this.transport.request<AssistantModelDescriptorResponse>(bridgePaths.assistantModelDescriptor(), {});
+  }
+
+  assistantModelCatalogue(): Promise<AssistantModelCatalogueResponse> {
+    return this.transport.request<AssistantModelCatalogueResponse>(bridgePaths.assistantModelCatalogue(), {});
+  }
+
+  selectAssistantModel(body: AssistantModelSelectionRequest): Promise<AssistantModelSelectionResponse> {
+    return this.transport.request<AssistantModelSelectionResponse>(bridgePaths.selectAssistantModel(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  planAgentScenario(body: AssistantModelPlanRequest): Promise<AssistantModelPlanResponse> {
+    return this.transport.request<AssistantModelPlanResponse>(bridgePaths.planAgentScenario(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
     });
   }
 

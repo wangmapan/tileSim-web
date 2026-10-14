@@ -16,7 +16,7 @@
     "test:e2e": "playwright test",
     "typecheck": "vue-tsc --noEmit",
     "contracts:generate": "node scripts/generate-contract-types.mjs && node scripts/generate-bridge-client.mjs",
-    "contracts:check": "node scripts/generate-contract-types.mjs --check && node scripts/generate-bridge-client.mjs --check",
+    "contracts:check": "node scripts/generate-contract-types.mjs --check && node scripts/generate-bridge-client.mjs --check && python bridge/check_schema_set_revision.py",
     "docs:check": "node scripts/check-doc-links.mjs",
     "deps:check": "node scripts/check-frontend-dependencies.mjs",
     "perf:artifact-baseline": "node --expose-gc scripts/measure-artifact-baseline.mjs",
@@ -25,9 +25,16 @@
     "release:rehearse": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/rehearse-release.ps1",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "launcher:dev": "vite --config tools/workbench-launcher/vite.config.js",
+    "launcher:build:web": "vite build --config tools/workbench-launcher/vite.config.js",
+    "launcher:test": "vitest run --config tools/workbench-launcher/vite.config.js",
+    "launcher:typecheck": "vue-tsc --noEmit -p tools/workbench-launcher/tsconfig.json",
+    "launcher:test:e2e": "playwright test --config tools/workbench-launcher/playwright.config.js",
+    "launcher:tauri": "tauri"
   },
   "dependencies": {
+    "@tauri-apps/api": "2.11.1",
     "@lucide/vue": "^1.31.0",
     "@tanstack/vue-query": "5.87.1",
     "echarts": "6.1.0",
@@ -37,6 +44,7 @@
     "vue-router": "4.5.1"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "2.11.4",
     "@axe-core/playwright": "^4.13.0",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.62.1",

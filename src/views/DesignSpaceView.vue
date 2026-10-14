@@ -93,7 +93,6 @@ function displayedKnobValue(value: unknown, availability: string) {
     <article class="panel" data-help-anchor="design_space-ranking">
       <header class="panel-header panel-header--row">
         <div>
-          <p class="section-kicker">FIDELITY FUNNEL</p>
           <h2>{{ t("方案排名") }}</h2>
           <p>{{ t("排名直接来自后端报告；先比较 P95、P99，再按需查看进一步模拟和专业证据。") }}</p>
         </div>
@@ -177,7 +176,6 @@ function displayedKnobValue(value: unknown, availability: string) {
     <section v-if="formalAnalysis.navigationScope" class="panel f7-formal-summary">
       <header>
         <div>
-          <p class="section-kicker">DESIGN-SPACE EVIDENCE</p>
           <h2>{{ t("Pareto 与 artifact-record 证据") }}</h2>
           <p>{{ t("候选仅导航到当前 run 的 design-space artifact 记录；backend instance 不是 Bridge run。") }}</p>
         </div>
@@ -202,7 +200,6 @@ function displayedKnobValue(value: unknown, availability: string) {
     <details class="panel f7-capability-panel design-contract-disclosure">
       <summary class="panel-header">
         <div>
-          <p class="section-kicker">CONTRACT CAPABILITIES</p>
           <h2>{{ t("Fabric 与设计空间契约状态") }}</h2>
           <p>{{ t("按需查看后端能力与契约缺口；前端不会排序、计算或文本解析补齐。") }}</p>
         </div>

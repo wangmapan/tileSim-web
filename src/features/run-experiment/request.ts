@@ -6,6 +6,7 @@ import {
   designSpaceCandidatesV2 as validateDesignSpaceCandidatesV2,
 } from "../../contracts/generated/experiment-validators.js";
 import { expectedParameterPointers } from "./parameter-contract";
+import { dynamicEngineIssue, engineModeOf } from "./runtime-engine";
 import {
   ExperimentRequestError,
   type BuildExperimentRequestOptions,
@@ -187,6 +188,12 @@ export function buildExperimentRequest(options: BuildExperimentRequestOptions): 
   requireSupported(form.fidelity_policy, surface.fidelityPolicies, "/fidelity_policy");
   requireSupported(form.gpu_participation_mode, surface.gpuParticipationModes, "/gpu_participation_mode");
   requireSupported(mode, surface.inputModes, "/input_mode");
+  if (form.scenario_id === "dense_des_package" && mode !== "trace_package") {
+    throw new ExperimentRequestError("The dense DES topology is for Trace packages only.", "/trace_package_id");
+  }
+  if (form.scenario_id === "dense_des_package" && form.fidelity_policy !== "des") {
+    throw new ExperimentRequestError("Dense DES package attribution requires requested DES fidelity.", "/fidelity_policy");
+  }
   if (form.run_name.length > schemaProperties.run_name.maxLength) {
     throw new ExperimentRequestError(
       `Run name exceeds ${schemaProperties.run_name.maxLength} characters.`,
@@ -200,7 +207,18 @@ export function buildExperimentRequest(options: BuildExperimentRequestOptions): 
     gpu_participation_mode: form.gpu_participation_mode,
   };
   if (form.run_name.trim()) request.run_name = form.run_name.trim();
-  if (mode === "controls") {
+  if (mode === "controls" && options.structuredInput) {
+    // The structured editors sit behind the quick-control tab because that is
+    // where the knobs are, but request rows and device lists only travel on
+    // `custom_inputs`: `overrides` is scalar-only and the backend's overrides
+    // channel never reads them. The two channels are mutually exclusive in the
+    // contract (`create-run-request.schema.json:24-30`), so the presence of the
+    // structured editors — not the selected tab — decides which one is used.
+    request.custom_inputs = {
+      runtime_trace: parseJsonObject(options.runtimeJson, "/custom_inputs/runtime_trace", "Runtime trace"),
+      topology: parseJsonObject(options.topologyJson, "/custom_inputs/topology", "Fabric topology"),
+    };
+  } else if (mode === "controls") {
     for (const field of surface.controlGroups.flatMap((group) => group.fields)) {
       if (!field.applicableInputModes.includes(mode) || !field.applicableScenarios.includes(form.scenario_id)) continue;
       const value = controlValue(form, field);
@@ -257,6 +275,11 @@ export function buildExperimentRequest(options: BuildExperimentRequestOptions): 
       nestedIdentity === "tilesim.design_space.s6_candidates.v2",
     );
     request.design_space_candidates = designSpace;
+  }
+  const runtimeTrace = asRecord(asRecord(request.custom_inputs).runtime_trace);
+  if (request.custom_inputs && engineModeOf(runtimeTrace) === "dynamic") {
+    const issue = dynamicEngineIssue(runtimeTrace, asRecord(asRecord(request.custom_inputs).topology));
+    if (issue) throw new ExperimentRequestError(issue.message, issue.path);
   }
   if (!validateCreateRunRequest(request)) {
     throw new ExperimentRequestError(

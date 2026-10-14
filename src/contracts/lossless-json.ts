@@ -1,4 +1,4 @@
-import { parse } from "lossless-json";
+import { parse, stringify } from "lossless-json";
 
 const integerPattern = /^-?\d+$/;
 
@@ -15,6 +15,12 @@ export function parseJsonLossless(text: string): unknown {
       throw new SyntaxError(`JSON contains a duplicate key: ${key}`);
     },
   });
+}
+
+export function stringifyJsonLossless(value: unknown): string {
+  const text = stringify(value);
+  if (text === undefined) throw new TypeError("Expected a JSON value.");
+  return text;
 }
 
 export function isLosslessInteger(value: unknown): value is number | string | bigint {

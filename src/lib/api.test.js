@@ -269,6 +269,62 @@ describe("capability discovery API", () => {
     });
   });
 
+  it("preserves runtime evidence uint64 values and keeps an expected-absence descriptor distinct", async () => {
+    vi.stubGlobal("window", { location: { port: "4173" } });
+    const body =
+      '{"schema_version":"tilesim.s1_runtime_event_trace.v1","run_id":"run-1","trace_name":"fixture","events":[{"event_time_ps":9007199254740993}]}';
+    const entry = {
+      artifact_id: "runtime-events",
+      report_kind: null,
+      file_name: "runtime-events.json",
+      media_type: "application/json",
+      bytes: Buffer.byteLength(body),
+      sha256: createHash("sha256").update(body).digest("hex"),
+      schema_identity: "tilesim.s1_runtime_event_trace.v1",
+      contract_status: "supported",
+      content_status: "ready",
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(body, { status: 200, headers: { "Content-Type": "application/json" } })),
+    );
+    await expect(bridgeApi.getVerifiedArtifact("run-1", entry)).resolves.toMatchObject({
+      events: [{ event_time_ps: "9007199254740993" }],
+    });
+
+    const descriptor = {
+      schema_version: "tilesim.wind_tunnel_artifact_descriptor.v1",
+      run_id: "run-1",
+      artifact_id: "runtime_event_trace",
+      state: "expected_absence",
+      evidence_requirement: "runtime_event_evidence",
+      absence_reason: "not_expected_for_boundary",
+      detail: "S3 input",
+    };
+    const descriptorBody = JSON.stringify(descriptor);
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockImplementation(() =>
+          Promise.resolve(
+            new Response(descriptorBody, { status: 200, headers: { "Content-Type": "application/json" } }),
+          ),
+        ),
+    );
+    const descriptorEntry = {
+      ...entry,
+      bytes: Buffer.byteLength(descriptorBody),
+      sha256: createHash("sha256").update(descriptorBody).digest("hex"),
+      schema_identity: descriptor.schema_version,
+      content_status: "expected_absence",
+    };
+    await expect(bridgeApi.getVerifiedArtifact("run-1", descriptorEntry)).resolves.toEqual(descriptor);
+    await expect(bridgeApi.getVerifiedArtifact("run-other", descriptorEntry)).rejects.toMatchObject({
+      code: "artifact_descriptor_mismatch",
+    });
+  });
+
   it("verifies artifact bytes and schema identity before parsing", async () => {
     vi.stubGlobal("window", { location: { port: "4173" } });
     const body = JSON.stringify({

@@ -14,6 +14,7 @@
 
 - 不修改 Evidence Agent v1 request/response/citation/snapshot；
 - 不把浏览器 localStorage 当作正式 conversation store；
+- 前端可另有有限期、可删除的本地可见会话缓存；它不是此处定义的 Conversation/Turn，不恢复运行副作用，也不能替代服务端 consent、审计和权限契约；
 - 不持久化 hidden reasoning 或 Provider raw response；
 - 不用自然语言 transcript 直接恢复运行副作用；
 - 不在一个“message”对象里混装 draft、approval、tool result 和 artifact。

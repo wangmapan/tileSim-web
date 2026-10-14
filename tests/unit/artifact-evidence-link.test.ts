@@ -30,7 +30,8 @@ describe("artifact evidence links", () => {
       sha256: "A".repeat(64),
       pointer: "/summary/throughput_requests_per_second",
     };
-    const route = artifactEvidenceRoute(target) as { query: Record<string, string> };
+    const route = artifactEvidenceRoute(target) as { name: string; query: Record<string, string> };
+    expect(route.name).toBe("raw_evidence");
     expect(parseArtifactEvidenceQuery(route.query)).toEqual({ ...target, sha256: "a".repeat(64) });
     expect(parseArtifactEvidenceQuery({ ...route.query, evidence_sha: "not-a-hash" })).toBeNull();
     expect(parseArtifactEvidenceQuery({ ...route.query, evidence_pointer: "summary/value" })).toBeNull();

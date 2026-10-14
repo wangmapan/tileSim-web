@@ -8,6 +8,7 @@ export const routeViewIds = [
   "fabric",
   "attribution",
   "validation",
+  "raw_evidence",
   "evidence_agent",
   "evidence_lab",
   "design_space",
@@ -69,6 +70,16 @@ export const router = createRouter({
       path: "/execution",
       name: "execution",
       component: () => import("../views/ExecutionView.vue"),
+      meta: { workspace: "professional" },
+      beforeEnter: (to) =>
+        Object.keys(to.query).some((key) => key.startsWith("evidence_"))
+          ? { name: "raw_evidence", query: to.query, hash: to.hash, replace: true }
+          : true,
+    },
+    {
+      path: "/raw-evidence",
+      name: "raw_evidence",
+      component: () => import("../views/RawEvidenceView.vue"),
       meta: { workspace: "professional" },
     },
     {

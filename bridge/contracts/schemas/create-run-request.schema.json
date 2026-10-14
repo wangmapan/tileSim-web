@@ -7,7 +7,7 @@
   "additionalProperties": false,
   "required": ["scenario_id"],
   "properties": {
-    "scenario_id": { "enum": ["s1_des_example"] },
+    "scenario_id": { "enum": ["s1_des_example", "dense_des_package"] },
     "fidelity_policy": { "enum": ["default", "des"], "default": "des" },
     "gpu_participation_mode": { "const": "gpu_free", "default": "gpu_free" },
     "run_name": { "type": ["string", "null"], "maxLength": 80 },
@@ -22,6 +22,10 @@
     }
   },
   "allOf": [
+    {
+      "if": { "properties": { "scenario_id": { "const": "dense_des_package" } }, "required": ["scenario_id"] },
+      "then": { "required": ["trace_package_id"], "properties": { "fidelity_policy": { "const": "des" } } }
+    },
     {
       "not": {
         "properties": { "overrides": {}, "custom_inputs": {} },

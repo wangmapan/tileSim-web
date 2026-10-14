@@ -275,6 +275,9 @@ export const guidedHelpEnglishCatalog: Readonly<Record<string, string>> = {
   "原始工件包含已登记的输入和报告。复核时核对运行 ID、Schema identity、SHA-256 和 JSON Pointer，确认摘要与原始字段一致。":
     "Registered artifacts contain inputs and reports. Verify the run ID, schema identity, SHA-256, and JSON Pointer when checking a summary against its source.",
   原始证据: "Raw evidence",
+  核对报告原文: "Verify the source report",
+  收起: "Collapse",
+  检索与核对运行工件: "Inspect and verify run artifacts",
   "查看已登记工件的完整 JSON，通过搜索、字段定位和身份核对复核页面结论。":
     "Inspect complete JSON for registered artifacts and verify displayed conclusions through search, field navigation, and identity checks.",
   "查看器保留完整原始数据和复制内容。uint64 ps、bytes、count 不转换为有损 JavaScript number；搜索和定位不会改写字段。":
@@ -350,4 +353,7 @@ export const guidedHelpEnglishCatalog: Readonly<Record<string, string>> = {
   相关页面: "Related pages",
   使用说明: "Usage documentation",
   原始证据帮助: "Raw evidence help",
+  "按工件查看原始 JSON；使用搜索、Pointer 和身份信息复核页面结论。":
+    "Inspect source JSON by artifact; use search, Pointers, and identity details to verify page conclusions.",
+  "当前可查看 {count} 类工件": "{count} artifact types available",
 };

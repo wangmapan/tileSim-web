@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Braces, ChevronLeft, ChevronRight, Clipboard, ExternalLink, Search } from "@lucide/vue";
+import { ChevronLeft, ChevronRight, Clipboard, ExternalLink, Search } from "@lucide/vue";
 import { computed, inject, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { routeLocationKey } from "vue-router";
 import {
@@ -14,6 +14,7 @@ import {
   type ArtifactVirtualLine,
 } from "../features/inspect-artifact";
 import { formatNumber } from "../lib/format";
+import { stringifyJsonLossless } from "../contracts/lossless-json";
 import { useDashboard } from "../store/dashboard";
 import type { ReportKind } from "../contracts/report-model";
 import { useI18n } from "../i18n";
@@ -25,6 +26,8 @@ interface ArtifactDefinition {
   label: string;
   value: () => unknown;
 }
+
+withDefaults(defineProps<{ initiallyOpen?: boolean }>(), { initiallyOpen: false });
 
 const { state, notify } = useDashboard();
 const { t } = useI18n();
@@ -63,6 +66,10 @@ const definitions: ArtifactDefinition[] = [
   { id: "input-runtime-trace", label: "S1 输入 · Runtime trace", value: () => state.inputs?.runtime_trace },
   { id: "input-topology", label: "S6 输入 · Topology", value: () => state.inputs?.topology },
   { id: "run-result", kind: "run", label: "运行结果 · Run", value: () => state.bundle.run },
+  { id: "runtime-events", label: "运行期事件 · Runtime events", value: () => null },
+  { id: "runtime-summary", label: "运行期汇总 · Runtime summary", value: () => null },
+  { id: "runtime-requests", label: "逐请求记录 · Runtime requests", value: () => null },
+  { id: "runtime-analysis", label: "运行期分析 · Runtime analysis", value: () => null },
   { id: "metrics", kind: "metrics", label: "指标 · Metrics", value: () => state.bundle.metrics },
   { id: "validation", kind: "validation", label: "验证 · Validation", value: () => state.bundle.validation },
   { id: "tail-cause-chain", kind: "tail", label: "归因 · Tail cause", value: () => state.bundle.tail },
@@ -92,6 +99,9 @@ const currentDefinition = computed(
   () => definitions.find((definition) => definition.id === selectedArtifact.value) || definitions[0],
 );
 const currentValue = computed(() => definitionValue(currentDefinition.value) || null);
+const currentManifestEntry = computed(() =>
+  state.artifactManifest?.artifacts.find((entry) => entry.artifact_id === selectedArtifact.value),
+);
 const activeLine = computed(
   () => searchMatches.value[activeMatchIndex.value]?.lineNumber ?? evidenceLine.value ?? null,
 );
@@ -204,7 +214,7 @@ async function loadCurrent() {
         evidenceQueryContext(),
       );
     } else if (currentValue.value) {
-      text = JSON.stringify(currentValue.value);
+      text = stringifyJsonLossless(currentValue.value);
     }
     if (!text) return;
     if (revision !== loadRevision) return;
@@ -299,7 +309,10 @@ watch(
     }
     detailsOpen.value = true;
     if (entry.sha256.toLowerCase() !== target.sha256) {
-      resetIndexedView();
+      // The standalone page may have started its default load before the
+      // manifest-bound deep link resolved. Invalidate that in-flight read so
+      // it cannot paint unverified bytes after the mismatch is displayed.
+      releaseCurrentArtifact();
       indexError.value = t("证据链接的 SHA-256 与当前工件清单不一致。");
       return;
     }
@@ -354,18 +367,15 @@ onBeforeUnmount(releaseCurrentArtifact);
 </script>
 
 <template>
-  <details ref="detailsElement" class="panel json-artifact-panel" @toggle="onToggle">
+  <details ref="detailsElement" class="panel json-artifact-panel" :open="initiallyOpen" @toggle="onToggle">
     <summary data-help-anchor="raw_evidence-open">
-      <span
-        ><Braces :size="18" /><span
-          ><strong>{{ t("完整 JSON 证据") }}</strong
-          ><small>{{ t("8 类工件全部按原字段查看") }}</small></span
-        ></span
-      >
-      <span>{{ t("按需加载") }}</span>
+      <span>
+        <strong>{{ t("完整 JSON 证据") }}</strong>
+        <small>{{ t("当前可查看 {count} 类工件", { count: availableDefinitions.length }) }}</small>
+      </span>
+      <span>{{ detailsOpen ? t("收起") : t("按需加载") }}</span>
     </summary>
     <div class="json-artifact-body">
-      <GuidedHelpTrigger guide-id="raw_evidence" label="原始证据帮助" />
       <header>
         <label data-help-anchor="raw_evidence-artifact">
           <small>{{ t("选择工件") }}</small>
@@ -395,6 +405,16 @@ onBeforeUnmount(releaseCurrentArtifact);
         </a>
       </header>
       <div class="json-artifact-meta" data-help-anchor="raw_evidence-verify">
+        <span v-if="currentManifestEntry">
+          {{
+            currentManifestEntry.content_status === "expected_absence"
+              ? t("期望缺席描述符（不是事件数据）")
+              : t("已就绪数据")
+          }}
+          · {{ currentManifestEntry.contract_status }} ·
+          {{ currentManifestEntry.schema_identity || t("描述符无数据 Schema") }} ·
+          {{ currentManifestEntry.bytes }} bytes · SHA-256 {{ currentManifestEntry.sha256 }}
+        </span>
         <span>{{
           loading ? t("正在读取并建立索引…") : t("{count} 个字符", { count: formatNumber(rawText.length, 0) })
         }}</span>
@@ -410,6 +430,7 @@ onBeforeUnmount(releaseCurrentArtifact);
           query ? t("搜索会定位并高亮匹配行；复制与原始文件保持完整") : t("仅按视口加载行；复制与原始文件保持完整")
         }}</span>
         <span v-if="searchTruncated">{{ t("可导航前 200 条匹配，匹配总数保持准确") }}</span>
+        <GuidedHelpTrigger guide-id="raw_evidence" label="原始证据帮助" />
       </div>
       <div v-if="evidenceLine !== null" class="artifact-evidence-target" role="status">
         {{

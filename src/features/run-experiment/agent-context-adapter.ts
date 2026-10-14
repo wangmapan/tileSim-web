@@ -5,11 +5,19 @@ import {
   type PageContextEnvelope,
   type Phase1AgentExposedFieldId,
 } from "../../entities/agent-orchestration";
+import { buildParameterCatalog, type ParameterCatalogEntry } from "./parameter-catalog";
 import type { ExperimentFormState, ExperimentInputMode, ExperimentSurface, ParameterValue } from "./types";
 
 export interface ExperimentAgentContextPublication {
   context: PageContextEnvelope;
   current_values: Readonly<Record<Phase1AgentExposedFieldId, DraftFieldValue | null>>;
+  /**
+   * Every scalar this page can actually write, so the assistant is not limited
+   * to the frozen eight-field subset when the user asks it to set parameters.
+   * Empty while the page is not ready, which is what keeps the parameter-edit
+   * entry point off for pages that have no writable surface.
+   */
+  parameter_catalog: readonly ParameterCatalogEntry[];
 }
 
 export type ExperimentAgentContextPublisher = (publication: ExperimentAgentContextPublication) => void;
@@ -49,6 +57,12 @@ export function buildExperimentAgentContextPublication(input: {
   pageId?: string;
   routeName?: string;
   displayLabel?: string;
+  /**
+   * The two `custom_inputs` documents. They are optional so a caller that has
+   * no structured editors still publishes a valid (control-only) catalogue.
+   */
+  runtimeJson?: string;
+  topologyJson?: string;
 }): ExperimentAgentContextPublication {
   const surfaceFields = input.surface.controlGroups.flatMap((group) => group.fields);
   const pageReady =
@@ -80,6 +94,16 @@ export function buildExperimentAgentContextPublication(input: {
       serializeParameterValue(fieldId, input.form.parameterValues[fieldId], input.surface),
     ]),
   ) as Record<Phase1AgentExposedFieldId, DraftFieldValue | null>;
+  // The catalogue is descriptor-driven, so an unavailable field simply never
+  // appears in it; it is deliberately not gated on the frozen eight.
+  const parameterCatalog = pageReady
+    ? buildParameterCatalog({
+        form: input.form,
+        surface: input.surface,
+        runtimeJson: input.runtimeJson || "",
+        topologyJson: input.topologyJson || "",
+      })
+    : [];
   return {
     context: {
       contract_revision: PHASE1_LOCAL_CONTRACT_REVISION,
@@ -110,5 +134,6 @@ export function buildExperimentAgentContextPublication(input: {
       availability: pageReady ? "available" : "unavailable",
     },
     current_values: currentValues,
+    parameter_catalog: parameterCatalog,
   };
 }

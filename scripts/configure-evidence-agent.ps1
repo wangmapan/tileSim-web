@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("Set", "Show")]
+    [ValidateSet("Set", "Show", "ListModels")]
     [string]$Action = "Set",
     [string]$ConfigPath = (Join-Path $PSScriptRoot "..\runtime\evidence-agent.local.json"),
     [Alias("Endpoint")]
@@ -26,6 +26,86 @@ if ($Action -eq "Show") {
     }
     $settings = Read-EvidenceAgentSettings $ConfigPath
     Get-EvidenceAgentPublicSettings $settings | ConvertTo-Json -Compress
+    exit 0
+}
+
+if ($Action -eq "ListModels") {
+    # Read-only: ask the configured service which model identities it exposes so the
+    # launcher can offer them as a list instead of asking the operator to retype an
+    # identity from memory.  Nothing is written, and the key never leaves this process.
+    $listBaseUrl = $BaseUrl
+    $listSettings = $null
+    if (Test-Path -LiteralPath $ConfigPath) {
+        try {
+            $listSettings = Read-EvidenceAgentSettings $ConfigPath
+        } catch {
+            $listSettings = $null
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($listBaseUrl) -and $null -ne $listSettings) {
+        $listBaseUrl = $listSettings.BaseUrl
+    }
+
+    $listKey = ""
+    $listModels = @()
+    $listError = ""
+    $listResolved = ""
+    try {
+        $listResolved = Resolve-EvidenceAgentBaseUrl $listBaseUrl
+
+        if ($ApiKeyFromStdin) {
+            $listKey = [Console]::In.ReadLine()
+        } elseif ($null -ne $listSettings) {
+            $secureForList = ConvertFrom-EvidenceAgentProtectedApiKey $listSettings.ProtectedApiKey
+            try {
+                $listKey = (New-Object System.Net.NetworkCredential("", $secureForList)).Password
+            } finally {
+                $secureForList.Dispose()
+            }
+        }
+        if ([string]::IsNullOrWhiteSpace($listKey)) {
+            throw "No API key is available: enter one, or save the settings once and retry."
+        }
+
+        # The model catalogue lives beside the chat endpoint the Bridge derives from the
+        # same Base URL, so both agree on where the service keeps it.
+        $origin = [System.Uri]$listResolved
+        $modelsUri = "{0}://{1}/v1/models" -f $origin.Scheme, $origin.Authority
+        if ($origin.Scheme -eq "https") {
+            [System.Net.ServicePointManager]::SecurityProtocol =
+                [System.Net.ServicePointManager]::SecurityProtocol -bor
+                [System.Net.SecurityProtocolType]::Tls12
+        } else {
+            # Plain HTTP is only accepted for loopback, where a system proxy is always a
+            # wrong detour and the usual reason a local service looks unreachable.  This
+            # helper is a short-lived process, so clearing the proxy cannot leak.
+            [System.Net.WebRequest]::DefaultWebProxy = $null
+        }
+        $listResponse = Invoke-RestMethod -Uri $modelsUri -Method Get `
+            -Headers @{ Authorization = "Bearer $listKey" } -TimeoutSec 25
+        $listModels = @(
+            $listResponse.data |
+                ForEach-Object { [string]$_.id } |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+        )
+        if ($listModels.Count -eq 0) {
+            throw "The service returned no models (empty /v1/models)."
+        }
+    } catch {
+        $listError = $_.Exception.Message
+        $listModels = @()
+    } finally {
+        $listKey = ""
+    }
+
+    [ordered]@{
+        schema_version = "tilesim.evidence_agent_model_list.v1"
+        ok = ($listError -eq "")
+        base_url = $listResolved
+        count = $listModels.Count
+        models = $listModels
+        error = $listError
+    } | ConvertTo-Json -Compress
     exit 0
 }
 

@@ -10,10 +10,84 @@ export { parseTopologyDocument, topologyJson } from "./topology-graph";
 export type { TopologyDevice, TopologyDomain, TopologyDocument, TopologyLink } from "./topology-graph";
 export { default as ExperimentSubmitCard } from "./ExperimentSubmitCard.vue";
 export { default as TracePackageInputPanel } from "./TracePackageInputPanel.vue";
+export { default as DeviceInventoryForm } from "./DeviceInventoryForm.vue";
+export { default as RequestTableForm } from "./RequestTableForm.vue";
+export { default as RuntimePolicyForm } from "./RuntimePolicyForm.vue";
+export {
+  advancedRuntimePolicyKeys,
+  commonRuntimePolicyKeys,
+  moduleBindingOverrideFields,
+  policyField,
+  runtimePolicyFields,
+  runtimeRequestFields,
+  runtimeRequestMaxItems,
+  runtimeRequestMinItems,
+} from "./input-schema-meta";
+export type { SchemaFieldMeta } from "./input-schema-meta";
+export {
+  appendRequestRow,
+  clearParticipants,
+  duplicateRequestRow,
+  parseJsonDocument,
+  parseParticipantsText,
+  patchJsonDocument,
+  removeDevice,
+  removeRequestRow,
+  renameDevice,
+  rewriteParticipants,
+  rewriteParticipantsForExistingTp,
+  rewriteRequestParallelism,
+  runtimePolicyOf,
+  runtimeRequestsOf,
+  seedEntriesFromControls,
+  seedStructuredInput,
+  serializeJsonDocument,
+  setDeviceCount,
+  setRequestCount,
+  StructuredInputError,
+  topologyDevicesOf,
+  validateRuntimeRequests,
+  writeControlPointer,
+} from "./structured-input";
+export type {
+  ControlWriteResult,
+  DeviceCountChange,
+  DeviceReference,
+  RequestIssue,
+  SeedEntry,
+  SeedNote,
+  SeedResult,
+} from "./structured-input";
+export { enterStructuredInput } from "./structured-seed";
+export type { StructuredSeedResult } from "./structured-seed";
 export { fetchTracePackageCatalog, inspectTracePackage, tracePackageBackendIdentity } from "./trace-package-queries";
 export type { TracePackageQueryContext } from "./trace-package-queries";
 export { buildExperimentAgentContextPublication } from "./agent-context-adapter";
 export type { ExperimentAgentContextPublication, ExperimentAgentContextPublisher } from "./agent-context-adapter";
+export {
+  buildParameterCatalog,
+  describeAgentParameterCatalog,
+  describeCatalogEntry,
+  serializeParameterValue,
+} from "./parameter-catalog";
+export type {
+  ParameterCatalogEntry,
+  ParameterCatalogSource,
+  ParameterKind,
+  ParameterTarget,
+} from "./parameter-catalog";
+export { modelScenarioRecommendation, parameterKeyOf, resolveCatalogPath } from "./scenario-recommendation";
+export type { ModelPlanInput, ScenarioRecommendation } from "./scenario-recommendation";
+export { looksInterrogative } from "./instruction-questions";
+export { applyParameterEdits, planParameterEdits } from "./parameter-edit";
+export { readExperimentInputDraft, saveExperimentInputDraft } from "./input-draft-session";
+export type {
+  AppliedParameterEdit,
+  ParameterApplyOutcome,
+  ParameterEditItem,
+  ParameterEditPlan,
+  ParameterEditProblem,
+} from "./parameter-edit";
 export {
   ExperimentRequestError,
   buildExperimentRequest,

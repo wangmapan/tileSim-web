@@ -10,7 +10,7 @@ export const createRunRequestSchema = {
   required: ["scenario_id"],
   properties: {
     scenario_id: {
-      enum: ["s1_des_example"],
+      enum: ["s1_des_example", "dense_des_package"],
     },
     fidelity_policy: {
       enum: ["default", "des"],
@@ -46,6 +46,24 @@ export const createRunRequestSchema = {
     },
   },
   allOf: [
+    {
+      if: {
+        properties: {
+          scenario_id: {
+            const: "dense_des_package",
+          },
+        },
+        required: ["scenario_id"],
+      },
+      then: {
+        required: ["trace_package_id"],
+        properties: {
+          fidelity_policy: {
+            const: "des",
+          },
+        },
+      },
+    },
     {
       not: {
         properties: {
@@ -312,8 +330,8 @@ export const experimentDescriptorSchema = {
     },
     parameter_descriptors: {
       type: "array",
-      minItems: 8,
-      maxItems: 8,
+      minItems: 13,
+      maxItems: 13,
       items: {
         $ref: "#/$defs/parameterDescriptor",
       },

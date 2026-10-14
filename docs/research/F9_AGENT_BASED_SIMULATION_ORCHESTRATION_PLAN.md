@@ -614,6 +614,16 @@ Bridge/前端：
 
 目标：用户能用自然语言配置现有八个参数和受控 custom runtime/topology 子集，但 Agent 不能创建 run。
 
+> 追加说明（2026-09-20）：本目标成文于正式参数面为 8 个字段时。2026-09-20 起 Web 快捷控制
+> 扩展为 13 个字段（新增 5 个 S1 运行时参数）；**Agent 侧字段目录仍为 8 项**（能力目录本阶段有意未改），
+> 因此本段描述的「八个参数」对 Agent 路径依然准确。原文保留不改。
+>
+> 追加说明（2026-09-23）：**能力目录侧**（`agent_exposed_field_ids` = 8）与上文一致，本次未改。
+> 另有一条独立轨道已经放开：右侧助手面板「能写哪些参数」过去受桥接侧 13 个 `overrides` 旋钮规则限制，
+> 2026-09-23 起改为从三份输入 schema ＋描述符推导（**64 条**地址，`bridge/contracts/parameter_surface.py`），
+> 因而「显卡数量」（集合规模地址 `topology/devices`）与 `gpu_participation_mode` 等表单字段现在都能改。
+> 这只是**助手可写面**的扩容，不改变能力目录，也不改变 create-run 契约。细节见 `docs/AI_HANDOFF.md` 的 2026-09-23 节。
+
 交付：
 
 - structured goal 和 experiment draft 原型；

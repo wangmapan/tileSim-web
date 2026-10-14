@@ -106,6 +106,7 @@ async function routerPlugin() {
     routes: [
       { path: "/evidence-agent", name: "evidence_agent", component: { template: "<div />" } },
       { path: "/execution", name: "execution", component: { template: "<div />" } },
+      { path: "/raw-evidence", name: "raw_evidence", component: { template: "<div />" } },
       { path: "/experiment", name: "experiment", component: { template: "<div />" } },
     ],
   });

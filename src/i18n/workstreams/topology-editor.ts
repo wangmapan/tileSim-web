@@ -9,6 +9,8 @@ export const topologyEditorEnglishCatalog: Readonly<Record<string, string>> = {
   网络拓扑: "Network topology",
   "拖动节点调整布局；开启连接后，从一个设备拖到另一个设备即可写入 links。":
     "Drag nodes to adjust layout; enable connection mode to create links between devices.",
+  "只读预览：改下面的 JSON 文本，图会立刻跟着变。":
+    "Read-only preview: edit the JSON text below and the graph follows immediately.",
   连接设备: "Connect devices",
   退出连接: "Exit connection mode",
   "连接 domain": "Connection domain",

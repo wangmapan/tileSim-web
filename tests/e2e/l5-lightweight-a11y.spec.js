@@ -89,6 +89,9 @@ test.describe("L5 lightweight workbench visual and accessibility gate", () => {
       await page.setViewportSize(viewport);
       await page.goto("/lightweight/prepare", { waitUntil: "networkidle" });
       await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
+      // The dock is lazily imported on open, so the click only schedules the load.
+      // Wait for the shell to mount before measuring it.
+      await expect(page.locator(".agent-copilot-shell")).toBeVisible();
       const bounds = await page.evaluate(() => {
         const rect = (selector) => {
           const element = document.querySelector(selector);

@@ -5,6 +5,7 @@ import AgentCopilotErrorBoundary from "./AgentCopilotErrorBoundary.vue";
 import type {
   AgentCopilotPanelState,
   AgentCopilotSubmitPayload,
+  AgentSessionSummary,
   AgentTypedBlock,
 } from "../../entities/agent-orchestration";
 
@@ -20,6 +21,22 @@ const props = withDefaults(
     initialWidth?: number;
     focusOnOpen?: boolean;
     loader?: () => Promise<LazyAgentCopilotModule>;
+    /** Whether the current page can accept parameter edits (prototype). */
+    allowParameterEdit?: boolean;
+    /** True while a streamed assistant answer is still arriving. */
+    busy?: boolean;
+    /** Whether this Bridge publishes an assistant model channel at all. */
+    modelChannel?: boolean;
+    /** The model identities the channel publishes; empty means the list could not be read. */
+    modelCatalogue?: readonly string[];
+    /** The identity the next answer will use. */
+    modelSelected?: string;
+    /** True while the catalogue is being read or a switch is being applied. */
+    modelPending?: boolean;
+    sessions?: readonly AgentSessionSummary[];
+    activeSessionId?: string;
+    persistenceError?: boolean;
+    retentionNotice?: string;
   }>(),
   {
     modelValue: "closed",
@@ -28,6 +45,16 @@ const props = withDefaults(
     initialWidth: 420,
     focusOnOpen: false,
     loader: undefined,
+    allowParameterEdit: false,
+    busy: false,
+    modelChannel: false,
+    modelCatalogue: () => [],
+    modelSelected: "",
+    modelPending: false,
+    sessions: () => [],
+    activeSessionId: "",
+    persistenceError: false,
+    retentionNotice: "",
   },
 );
 
@@ -35,7 +62,18 @@ const emit = defineEmits<{
   "update:modelValue": [state: AgentCopilotPanelState];
   submit: [payload: AgentCopilotSubmitPayload];
   answer: [payload: { question_id: string; option_id: string; serialized_value: string }];
+  apply: [blockId: string];
+  cancel: [];
   resize: [width: number];
+  /** The user picked one of the published model identities. */
+  "select-model": [model: string];
+  /** The user asked for the model catalogue to be read again. */
+  "refresh-models": [];
+  "new-session": [];
+  "select-session": [sessionId: string];
+  "delete-session": [sessionId: string];
+  "clear-all-sessions": [];
+  start: [task: "configure" | "analyze" | "learn"];
 }>();
 
 const state = shallowRef<AgentCopilotPanelState>(props.modelValue);
@@ -167,10 +205,29 @@ onMounted(() => {
           :current-task="currentTask"
           :status-label="statusLabel"
           :initial-width="initialWidth"
+          :allow-parameter-edit="allowParameterEdit"
+          :busy="busy"
+          :model-channel="modelChannel"
+          :model-catalogue="modelCatalogue"
+          :model-selected="modelSelected"
+          :model-pending="modelPending"
+          :sessions="sessions"
+          :active-session-id="activeSessionId"
+          :persistence-error="persistenceError"
+          :retention-notice="retentionNotice"
           @update:model-value="setState"
           @submit="emit('submit', $event)"
           @answer="emit('answer', $event)"
+          @apply="emit('apply', $event)"
+          @cancel="emit('cancel')"
           @resize="emit('resize', $event)"
+          @select-model="emit('select-model', $event)"
+          @refresh-models="emit('refresh-models')"
+          @new-session="emit('new-session')"
+          @select-session="emit('select-session', $event)"
+          @delete-session="emit('delete-session', $event)"
+          @clear-all-sessions="emit('clear-all-sessions')"
+          @start="emit('start', $event)"
         />
       </AgentCopilotErrorBoundary>
     </div>
@@ -189,6 +246,7 @@ onMounted(() => {
      itself is collapsed to a narrow rail. Let clicks pass through that
      transparent host area so workspace controls underneath remain usable. */
   pointer-events: none;
+  overflow-x: hidden;
 }
 
 .agent-copilot-entry > * {
@@ -218,7 +276,9 @@ onMounted(() => {
 
 .agent-copilot-entry__panel-host {
   min-width: 0;
+  max-width: 100%;
   height: 100dvh;
+  overflow-x: hidden;
 }
 
 /* v-show keeps the shell mounted while it is collapsed. Constrain the flex

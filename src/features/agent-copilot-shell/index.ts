@@ -7,6 +7,7 @@ export { default as AgentTypedBlockList } from "./AgentTypedBlockList.vue";
 export type {
   AgentCopilotPanelState,
   AgentCopilotSubmitPayload,
+  AgentSessionSummary,
   AgentTypedBlock,
   ClarificationQuestion,
   CurrentSubsetExperimentDraft,

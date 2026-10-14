@@ -74,6 +74,7 @@ const selectedLabel = computed(() => {
 
 <style scoped>
 .agent-context-bar {
+  min-width: 0;
   padding: 10px 14px;
   border-bottom: 1px solid var(--line);
   background: var(--surface-subtle);
