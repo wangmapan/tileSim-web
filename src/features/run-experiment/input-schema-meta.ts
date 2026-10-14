@@ -11,8 +11,8 @@
  * `run-overrides.schema.json` is imported for ONE purpose only: to decide which
  * runtime policy keys belong to the "common" group (the keys the quick controls
  * also expose). Its ranges are deliberately NOT used, because they differ for
- * several keys — `kv_admission_watermark` is 0..1 in a policy and 0.05..1 in a
- * run override, and `max_batch_size` is 0..1024 versus 1..64.
+ * several keys — `kv_admission_watermark` is (0,1] in a policy and 0.05..1 in a
+ * run override, and `max_batch_size` is 1..1024 versus 1..64.
  */
 import runOverridesSchemaJson from "../../../bridge/contracts/schemas/run-overrides.schema.json";
 import runtimeTraceSchemaJson from "../../../bridge/contracts/schemas/runtime-trace-input.schema.json";

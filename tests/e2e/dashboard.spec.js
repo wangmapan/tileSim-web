@@ -137,7 +137,7 @@ test("Phase 1 Agent copilot drafts only the eight-field subset without writing a
 
   await panel.getByRole("textbox", { name: "描述要理解或调整的内容" }).fill("把 TP 改成 8");
   await panel.getByRole("button", { name: "提交", exact: true }).click();
-  await expect(panel).toContainText("当前能力不支持");
+  await expect(panel).toContainText("页面可编辑字段不局限于八字段草案");
 
   await panel.getByRole("button", { name: "关闭", exact: true }).click();
   await expect(panel).toHaveAttribute("data-state", "closed");
@@ -176,8 +176,75 @@ test("Phase 1 Agent copilot drafts only the eight-field subset without writing a
   await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
   await expect(composer).toHaveValue("保留这段尚未提交的中文输入");
 
-  expect(capabilityRequests).toBe(3);
+  // The extended TP request no longer asks the frozen eight-field capability
+  // snapshot to declare a page-editable structured field unsupported.
+  expect(capabilityRequests).toBe(2);
   expect(prohibitedRequests).toEqual([]);
+  expect(failures).toEqual([]);
+});
+
+test("Agent routes a named full-surface configuration request to a reviewable model plan", async ({ page }) => {
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  const failures = await openFixture(page, fixture, "experiment");
+  const modelRequests = [];
+  const runWrites = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/runs" && request.method() === "POST") runWrites.push(request.url());
+  });
+  await page.route("**/api/agent/assistant-model", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        protocol: "tilesim.assistant_model.v1",
+        configured: true,
+        provider: { model_id: "fixture-model" },
+      }),
+    }),
+  );
+  await page.route("**/api/agent/scenario-chat", (route) => {
+    modelRequests.push(route.request().postDataJSON());
+    const plan = {
+      schema_version: "tilesim.bridge.assistant_model_plan.v1",
+      protocol: "tilesim.assistant_model.v1",
+      applied: false,
+      executed: false,
+      answer_state: "settings",
+      title: "仅调整运行参数",
+      rationale: "保留设备和拓扑，调整四个现有旋钮。",
+      settings: [
+        { key: "max_batch_size", value: "64", why: "扩大批次。" },
+        { key: "max_active_requests", value: "512", why: "增加活动请求上限。" },
+        { key: "kv_capacity_tokens", value: "262144", why: "提高逻辑 KV 准入容量。" },
+        { key: "batch_scheduler", value: "fabric_backpressure_aware", why: "感知互联背压。" },
+      ],
+      dropped: [],
+    };
+    return route.fulfill({
+      status: 200,
+      contentType: "text/event-stream",
+      body: `event: prose\ndata: ${JSON.stringify({ schema_version: "tilesim.bridge.assistant_model_chat.v1", text: "仅调整当前四项。" })}\n\nevent: plan\ndata: ${JSON.stringify(plan)}\n\nevent: done\ndata: {}\n\n`,
+    });
+  });
+
+  await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
+  const panel = page.locator("#tilesim-agent-copilot");
+  const instruction =
+    "只调整当前页面已有且可编辑的运行参数：batch size、最大活动请求数、KV 容量和调度策略。不要修改设备数量、TP degree、topology/links 或 topology/domains。请生成完整且可直接应用的方案。";
+  await panel.getByRole("textbox", { name: "描述要理解或调整的内容" }).fill(instruction);
+  await panel.getByRole("button", { name: "提交", exact: true }).click();
+  await expect(panel.getByText("仅调整运行参数", { exact: true })).toBeVisible();
+  await expect(panel.locator('[data-block-type="parameter_edits"] .agent-block__diff-list li')).toHaveCount(4);
+  await expect(panel.getByRole("button", { name: "应用到面板" })).toBeVisible();
+  expect(modelRequests).toHaveLength(1);
+  expect(modelRequests[0].messages.at(-1).content).toBe(instruction);
+  expect(runWrites).toEqual([]);
+
+  await panel.getByRole("button", { name: "应用到面板" }).click();
+  await expect(panel).toContainText("已写入 4 项参数，没有创建运行。");
+  await expect(page.locator('.field[data-field-id="s1.runtime.max_batch_size"] input')).toHaveValue("64");
+  await expect(page.locator('.field[data-field-id="s1.runtime.max_active_requests"] input')).toHaveValue("512");
+  expect(runWrites).toEqual([]);
   expect(failures).toEqual([]);
 });
 
@@ -950,6 +1017,10 @@ function artifactFor(fixture, artifact) {
     "execution-envelope": fixture.reports.execution_envelope,
     "design-space": fixture.reports.design_space,
     "week8-run-evidence": fixture.reports.run_bound_des_evidence,
+    "runtime-events": fixture.runtimeEvidence?.events,
+    "runtime-summary": fixture.runtimeEvidence?.summary,
+    "runtime-requests": fixture.runtimeEvidence?.requests,
+    "runtime-analysis": fixture.runtimeEvidence?.analysis,
   }[artifact];
 }
 
@@ -964,6 +1035,10 @@ function artifactManifestEntries(fixture) {
     ["execution-envelope", "execution_envelope"],
     ["design-space", "design_space"],
     ["week8-run-evidence", "run_bound_des_evidence"],
+    ["runtime-events", null],
+    ["runtime-summary", null],
+    ["runtime-requests", null],
+    ["runtime-analysis", null],
   ];
   return definitions.flatMap(([artifactId, reportKind]) => {
     const value = artifactFor(fixture, artifactId);
@@ -988,6 +1063,10 @@ function artifactManifestEntries(fixture) {
           "tilesim.tail_cause_chain_report.v1",
           "tilesim.s7_execution_envelope.v1",
           "tilesim.s7_run_bound_des_evidence.v1",
+          "tilesim.s1_runtime_event_trace.v1",
+          "tilesim.s1_runtime_event_summary.v1",
+          "tilesim.s1_runtime_request_summaries.v1",
+          "tilesim.s1_runtime_analysis.v1",
         ].includes(value.contract_version || value.schema_version || "")
           ? "supported"
           : "legacy_compatibility",
@@ -1692,6 +1771,79 @@ async function expectNoUnexpectedTextOverflow(page) {
   );
   expect(offenders).toEqual([]);
 }
+
+test("runtime evidence fixture stays lazy, paged, run-bound, and deep-linkable", async ({ page }) => {
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  const events = Array.from({ length: 27 }, (_, index) => ({
+    kind: "arrival",
+    request_id: `fixture-request-${index}`,
+    batch_id: "",
+    batch_request_ids: [],
+    event_time_ps: index,
+    logical_step: index,
+    kv_tokens: 1,
+    active_requests: 1,
+  }));
+  fixture.runtimeEvidence = {
+    events: {
+      schema_version: "tilesim.s1_runtime_event_trace.v1",
+      run_id: runId,
+      trace_name: "fixture-runtime",
+      events,
+    },
+    summary: {
+      schema_version: "tilesim.s1_runtime_event_summary.v1",
+      run_id: runId,
+      has_events: true,
+      total_events: 27,
+      first_event_time_ps: 0,
+      last_event_time_ps: 26,
+      peak_active_requests: 1,
+      monotonic_time_order: true,
+      contiguous_logical_steps: true,
+    },
+    requests: { schema_version: "tilesim.s1_runtime_request_summaries.v1", run_id: runId, requests: [] },
+    analysis: {
+      schema_version: "tilesim.s1_runtime_analysis.v1",
+      run_id: runId,
+      trace_name: "fixture-runtime",
+      summary: {
+        has_events: true,
+        total_events: 27,
+        first_event_time_ps: 0,
+        last_event_time_ps: 26,
+        peak_active_requests: 1,
+        monotonic_time_order: true,
+        contiguous_logical_steps: true,
+      },
+      requests: [],
+      events,
+    },
+  };
+  let evidenceReads = 0;
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.endsWith("/files/runtime-events")) evidenceReads += 1;
+  });
+  const failures = await openFixture(page, fixture, "execution");
+  const panel = page.getByRole("region", { name: "后端运行期证据" });
+  await expect(panel.getByText("tilesim.s1_runtime_event_trace.v1")).toBeVisible();
+  expect(evidenceReads).toBe(0);
+  await panel.getByRole("button", { name: "按需读取" }).click();
+  await expect(panel.locator("tbody tr")).toHaveCount(25);
+  expect(evidenceReads).toBe(1);
+  await panel.getByRole("button", { name: "下一页" }).click();
+  await expect(panel.locator("tbody tr")).toHaveCount(2);
+  await panel.getByRole("combobox", { name: "工件" }).selectOption("runtime-requests");
+  await panel.getByRole("button", { name: "按需读取" }).click();
+  await expect(panel).toContainText("逐请求集合为空（后端已提供空数组）");
+  await panel.getByRole("combobox", { name: "工件" }).selectOption("runtime-events");
+  await panel.getByRole("link", { name: "查看原始证据" }).first().click();
+  await expect(page).toHaveURL(/evidence_artifact=runtime-events/);
+  await expect(page.getByText("Worker 已索引", { exact: false })).toBeVisible();
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(page.getByText("Worker 已索引", { exact: false })).toBeVisible();
+  expect(failures).toEqual([]);
+});
 
 test("synthetic evidence view is stable, accessible, and field-complete", async ({ page }, testInfo) => {
   const fixture = fixtureCase("synthetic-s1-s6-complete");

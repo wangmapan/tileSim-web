@@ -116,6 +116,7 @@ class SurfaceAddress:
     field_id: str | None = None
     enum_values: tuple[str, ...] = ()
     minimum: float | None = None
+    minimum_inclusive: bool = True
     maximum: float | None = None
     integer_only: bool = False
     max_length: int | None = None
@@ -137,9 +138,11 @@ class SurfaceAddress:
         elif self.kind == "string":
             constraint = "一段文本"
         elif self.minimum is not None and self.maximum is not None:
-            constraint = f"范围 {_format_number(self.minimum)} ~ {_format_number(self.maximum)}"
+            constraint = (f"范围 {_format_number(self.minimum)} ~ {_format_number(self.maximum)}"
+                          if self.minimum_inclusive else
+                          f"范围 ({_format_number(self.minimum)}, {_format_number(self.maximum)}]")
         elif self.minimum is not None:
-            constraint = f"不小于 {_format_number(self.minimum)}"
+            constraint = f"{'不小于' if self.minimum_inclusive else '大于'} {_format_number(self.minimum)}"
         elif self.maximum is not None:
             constraint = f"不大于 {_format_number(self.maximum)}"
         else:
@@ -216,6 +219,7 @@ def _address(
         field_id=field_id,
         enum_values=_enum_values(node),
         minimum=float(minimum) if isinstance(minimum, (int, float)) else None,
+        minimum_inclusive="exclusiveMinimum" not in node,
         maximum=float(node["maximum"]) if isinstance(node.get("maximum"), (int, float)) else None,
         integer_only=_kind_of(node) in {"integer", "count"},
         max_length=int(node["maxLength"]) if isinstance(node.get("maxLength"), int) else None,
@@ -315,7 +319,7 @@ def _form_addresses() -> list[SurfaceAddress]:
             kind="string",
             target="form",
             group="form",
-            max_length=200,
+            max_length=80,
         ),
     ]
 
@@ -334,6 +338,9 @@ def _runtime_trace_addresses() -> list[SurfaceAddress]:
     requests = root.get("requests") or {}
     request_items = (requests.get("items") or {}).get("properties") or {}
     for key, node in request_items.items():
+        if key == "phase":
+            # A replay record cannot become a dynamic request by one scalar edit.
+            continue
         if isinstance(node, dict):
             addresses.append(
                 _address(

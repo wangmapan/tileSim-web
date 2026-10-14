@@ -16,6 +16,7 @@
  * came from, so they are validated and reported identically.
  */
 import type { AgentParameterEdit } from "../../entities/agent-command";
+import { dynamicEngineIssue, engineModeOf } from "./runtime-engine";
 import {
   projectCollectionEntries,
   type ParameterCatalogEntry,
@@ -524,6 +525,26 @@ export function applyParameterEdits(options: {
 
   const documentItems = options.items.filter((item) => item.target === "runtime_trace" || item.target === "topology");
   const stateItems = options.items.filter((item) => item.target === "control" || item.target === "form");
+  if (options.runtimeJson.trim()) {
+    const runtime = JSON.parse(options.runtimeJson) as JsonObject;
+    if (
+      engineModeOf(runtime) !== "generic" &&
+      stateItems.some((item) => item.path === "overrides/runtime/batch_scheduler")
+    ) {
+      return {
+        applied: [],
+        rejected: [
+          {
+            raw: "overrides/runtime/batch_scheduler",
+            reason: "版本化引擎由画像调度；整份方案已回滚，其他改动也未写入。",
+          },
+        ],
+        runtimeJson: options.runtimeJson,
+        topologyJson: options.topologyJson,
+        requiresStructuredInput: false,
+      };
+    }
+  }
 
   // Resize before projected element leaves regardless of the model's order. Work
   // only on local strings; a single failure rolls back the entire plan, including
@@ -596,6 +617,17 @@ export function applyParameterEdits(options: {
           });
         }
       }
+    }
+  }
+
+  if (!rejected.length && runtimeJson.trim()) {
+    const runtime = JSON.parse(runtimeJson) as JsonObject;
+    if (engineModeOf(runtime) === "dynamic") {
+      const issue = dynamicEngineIssue(
+        runtime,
+        topologyJson.trim() ? (JSON.parse(topologyJson) as JsonObject) : undefined,
+      );
+      if (issue) rejected.push({ raw: issue.path, reason: issue.message });
     }
   }
 

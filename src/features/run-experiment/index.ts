@@ -35,6 +35,8 @@ export {
   removeRequestRow,
   renameDevice,
   rewriteParticipants,
+  rewriteParticipantsForExistingTp,
+  rewriteRequestParallelism,
   runtimePolicyOf,
   runtimeRequestsOf,
   seedEntriesFromControls,
@@ -62,25 +64,23 @@ export { fetchTracePackageCatalog, inspectTracePackage, tracePackageBackendIdent
 export type { TracePackageQueryContext } from "./trace-package-queries";
 export { buildExperimentAgentContextPublication } from "./agent-context-adapter";
 export type { ExperimentAgentContextPublication, ExperimentAgentContextPublisher } from "./agent-context-adapter";
-export { buildParameterCatalog, describeCatalogEntry, serializeParameterValue } from "./parameter-catalog";
+export {
+  buildParameterCatalog,
+  describeAgentParameterCatalog,
+  describeCatalogEntry,
+  serializeParameterValue,
+} from "./parameter-catalog";
 export type {
   ParameterCatalogEntry,
   ParameterCatalogSource,
   ParameterKind,
   ParameterTarget,
 } from "./parameter-catalog";
-export {
-  hasRecommendation,
-  modelScenarioInstruction,
-  modelScenarioRecommendation,
-  parameterKeyOf,
-  recommendScenarioPlan,
-  resolveCatalogPath,
-} from "./scenario-recommendation";
+export { modelScenarioRecommendation, parameterKeyOf, resolveCatalogPath } from "./scenario-recommendation";
 export type { ModelPlanInput, ScenarioRecommendation } from "./scenario-recommendation";
-export { looksInterrogative, matchScenarioProfiles, SCENARIO_PROFILES } from "./scenario-profiles";
-export type { ScenarioMatch, ScenarioProfile, ScenarioSetting } from "./scenario-profiles";
+export { looksInterrogative } from "./instruction-questions";
 export { applyParameterEdits, planParameterEdits } from "./parameter-edit";
+export { readExperimentInputDraft, saveExperimentInputDraft } from "./input-draft-session";
 export type {
   AppliedParameterEdit,
   ParameterApplyOutcome,

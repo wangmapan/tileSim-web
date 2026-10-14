@@ -196,3 +196,51 @@ test.describe("topology preview in the JSON tab", () => {
     await expect(editor.locator(".topology-link")).toHaveCount(0);
   });
 });
+
+test("versioned engine JSON preview keeps requested DES separate and invalid input never posts", async ({ page }) => {
+  await installTopologyApi(page);
+  let posts = 0;
+  await page.route("**/api/runs", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    posts += 1;
+    await route.fulfill({
+      status: 400,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: { field_path: "/custom_inputs/runtime_trace/requested_features/0", message: "Unsupported feature" },
+      }),
+    });
+  });
+  await page.goto("/experiment", { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "JSON 输入", exact: true }).click();
+  const runtime = {
+    engine_type: "sglang",
+    engine_semantic_version: "sglang.0.4.semantic.v1",
+    requested_features: [],
+    policy: { kv_capacity_tokens: 1024, max_active_requests: 2, max_batch_size: 2 },
+    requests: [
+      {
+        request_id: "r",
+        phase: "request",
+        prompt_tokens: 8,
+        decode_tokens: 2,
+        kv_tokens: 10,
+        tp_degree: 1,
+        participants: ["gpu-0"],
+      },
+    ],
+  };
+  await page.locator(".json-grid textarea").first().fill(JSON.stringify(runtime));
+  await page.locator(".topology-editor__json textarea").fill(JSON.stringify(topologyEnvelope));
+  await expect(page.locator(".experiment-request-preview pre")).toContainText('"engine_type": "sglang"');
+  await expect(page.getByText("请求 fidelity", { exact: true }).last()).toBeVisible();
+  await expect(page.locator(".experiment-request-preview pre")).not.toContainText("resolved_fidelity");
+  await page.reload({ waitUntil: "networkidle" });
+  await expect(page.locator(".experiment-request-preview pre")).toContainText('"engine_type": "sglang"');
+  await expect(page.locator(".experiment-request-preview pre")).toContainText('"phase": "request"');
+  runtime.requested_features = ["prefix_cache"];
+  await page.locator(".json-grid textarea").first().fill(JSON.stringify(runtime));
+  await expect(page.locator(".request-preview-error code")).toContainText("requested_features");
+  await expect(page.locator(".run-submit")).toBeDisabled();
+  expect(posts).toBe(0);
+});

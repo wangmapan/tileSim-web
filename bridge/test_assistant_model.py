@@ -353,6 +353,15 @@ class AssistantModelPlanTest(unittest.TestCase):
             ["value_above_maximum", "value_below_minimum", "value_not_integer", "value_above_maximum"],
         )
 
+    def test_policy_exclusive_watermark_and_run_name_limit_are_model_gated(self) -> None:
+        result = self.plan_with(build_reply(plan_document([
+            {"key": "runtime_trace/policy/kv_admission_watermark", "value": "0", "why": "无效水位"},
+            {"key": "run_name", "value": "x" * 81, "why": "超过创建运行上限"},
+        ])))
+        self.assertEqual(result["settings"], [])
+        self.assertEqual([entry["reason"] for entry in result["dropped"]],
+                         ["value_below_minimum", "value_too_long"])
+
     def test_enum_values_are_checked_against_the_published_values(self) -> None:
         result = self.plan_with(
             build_reply(
@@ -725,6 +734,110 @@ class AssistantModelStreamTest(unittest.TestCase):
             self.stream_with(assistant_model.ProviderTimeoutError("timed out"))
         with self.assertRaises(assistant_model.ProviderUnavailableError):
             self.stream_with(assistant_model.ProviderUnavailableError("unreachable"))
+
+
+class AssistantModelResultAnalysisTest(unittest.TestCase):
+    """The result-analysis stream is grounded, bounded and has no plan output."""
+
+    def setUp(self) -> None:
+        self.saved = {name: os.environ.pop(name, None) for name in ENVIRONMENT}
+        for name, value in ENVIRONMENT.items():
+            os.environ[name] = value
+        self.payloads: list[dict] = []
+
+    def tearDown(self) -> None:
+        for name, value in self.saved.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
+    def context(self) -> dict:
+        return {
+            "run_id": "run-result-1",
+            "sections": [{"title": "速览", "body": "吞吐 12 req/s（/metrics/summary/throughput_requests_per_second）。"}],
+            "evidence_paths": ["/metrics/summary/throughput_requests_per_second"],
+            "evidence": {
+                "manifest_status": "verified",
+                "artifact_count": 1,
+                "full_content_count": 1,
+                "summary_only_count": 0,
+                "unavailable_count": 0,
+                "rejected_count": 0,
+                "artifacts": [
+                    {
+                        "artifact_id": "metrics",
+                        "file_name": "metrics.json",
+                        "report_kind": "metrics",
+                        "schema_identity": "tilesim.metrics_report.v1",
+                        "sha256": "a" * 64,
+                        "bytes": "120",
+                        "contract_status": "supported",
+                        "content_status": "full",
+                        "content": {"summary": {"throughput_requests_per_second": 12}},
+                    }
+                ],
+                "rejected_artifacts": [],
+            },
+        }
+
+    def stream_with(self, chunks: object) -> list[tuple[str, dict]]:
+        def transport(config, payload):  # noqa: ANN001, ANN202
+            self.payloads.append(payload)
+            if isinstance(chunks, Exception):
+                raise chunks
+            return iter(chunks)
+
+        return list(
+            assistant_model.stream_result_analysis_events(
+                [{"role": "user", "content": "请指出重点"}], self.context(), transport=transport
+            )
+        )
+
+    def test_streams_only_grounded_prose_and_keeps_context_in_system_message(self) -> None:
+        events = self.stream_with([stream_chunk("重点是吞吐。"), stream_chunk(" 建议核对 P99。")])
+        self.assertEqual([event for event, _ in events], ["prose", "prose"])
+        self.assertEqual(events[-1][1]["schema_version"], assistant_model.RESULT_ANALYSIS_CHAT_SCHEMA_VERSION)
+        prompt = self.payloads[0]["messages"][0]["content"]
+        self.assertIn("run-result-1", prompt)
+        self.assertIn("/metrics/summary/throughput_requests_per_second", prompt)
+        self.assertIn("只输出可直接展示给用户的回答", prompt)
+        self.assertIn("证据覆盖", prompt)
+        self.assertNotIn("response_format", self.payloads[0])
+
+    def test_context_validation_rejects_unbounded_or_incomplete_projection(self) -> None:
+        with self.assertRaises(ValueError):
+            assistant_model.validate_result_analysis_context({"run_id": "run", "sections": []})
+        with self.assertRaises(ValueError):
+            assistant_model.validate_result_analysis_context(
+                {"run_id": "run", "sections": [{"title": "x", "body": "y"}], "evidence_paths": ["x" * 241]}
+            )
+
+    def test_not_applicable_artifact_may_omit_schema_identity(self) -> None:
+        context = self.context()
+        context["evidence"]["artifact_count"] = 1
+        context["evidence"]["full_content_count"] = 0
+        context["evidence"]["artifacts"] = [
+            {
+                "artifact_id": "input-runtime-trace",
+                "file_name": "input-runtime-trace.json",
+                "report_kind": None,
+                "schema_identity": "",
+                "sha256": "b" * 64,
+                "bytes": "0",
+                "contract_status": "not_applicable",
+                "content_status": "not_applicable",
+            }
+        ]
+        normalized = assistant_model.validate_result_analysis_context(context)
+        self.assertEqual(
+            normalized["evidence"]["artifacts"][0]["schema_identity"],
+            "not_applicable",
+        )
+
+    def test_empty_model_answer_is_rejected(self) -> None:
+        with self.assertRaises(assistant_model.ProviderStructuredOutputError):
+            self.stream_with([stream_chunk("")])
 
 
 class AssistantModelCatalogueTest(unittest.TestCase):

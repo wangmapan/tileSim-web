@@ -156,6 +156,7 @@ export interface RunReport extends Omit<RunReportContract, "summary"> {
   contract_version: "wind_tunnel.run.v1alpha1";
   status?: string;
   error_code?: string;
+  field_path?: string;
   cause?: string;
   /**
    * Authoritative backend remediation guidance written next to `cause`
@@ -163,6 +164,11 @@ export interface RunReport extends Omit<RunReportContract, "summary"> {
    * Display verbatim; never rewrite, summarize or soften it.
    */
   next_action?: string;
+  cli_error_code?: string;
+  cli_field_path?: string;
+  cli_cause?: string;
+  cli_next_action?: string;
+  stderr_summary?: string;
   completeness?: number;
   summary: ReportSummary;
   resolved_fidelity_profile?: ResolvedFidelityProfile;
@@ -581,6 +587,10 @@ export interface ExecutionEnvelopeReport extends Omit<ExecutionEnvelopeContract,
   end_time_ps?: LosslessInteger;
   end_to_end_latency_us?: number;
   runtime_event_count?: number;
+  runtime_engine_type?: string;
+  runtime_engine_semantic_version?: string;
+  runtime_input_mode?: "" | "legacy_generic" | "dynamic_request" | "observed_replay";
+  semantic_profile_applied?: boolean;
   fabric_record_count?: number;
   /** Boolean fact only: a `false` value must never be styled as "captured". */
   has_runtime_event_trace?: boolean;

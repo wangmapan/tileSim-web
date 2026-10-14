@@ -34,6 +34,17 @@ $required = @("source_revision", "tilesim_root_wsl", "tilesim_cli_wsl", "manifes
 foreach ($name in $required) {
     if (-not $manifest.$name) { throw "Deployment manifest is missing '$name'." }
 }
+if ($manifest.tilesim_cli_digest) {
+    if ($manifest.tilesim_cli_digest -notmatch '^[0-9a-f]{64}$') {
+        throw "Deployment manifest contains an invalid TileSimCLI digest."
+    }
+    $cliHashOutput = @(& wsl.exe -d $WslDistro --exec sha256sum -- $manifest.tilesim_cli_wsl)
+    if ($LASTEXITCODE -ne 0) { throw "Could not verify the deployed TileSimCLI digest." }
+    $cliHash = $cliHashOutput | Where-Object { $_ -match '^([0-9a-f]{64})\s' } | ForEach-Object { $matches[1] } | Select-Object -Last 1
+    if (-not $cliHash -or $cliHash.Trim() -ne $manifest.tilesim_cli_digest) {
+        throw "Deployed TileSimCLI digest does not match the deployment manifest."
+    }
+}
 
 if ($manifest.web_release_root_windows) {
     $releaseOutput = & $node (Join-Path $PSScriptRoot "release-snapshot.mjs") verify `

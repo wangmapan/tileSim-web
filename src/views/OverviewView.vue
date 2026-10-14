@@ -24,6 +24,8 @@ const { t } = useI18n();
 const networkSummary = computed(() => state.bundle.metrics?.system_summary);
 const previewDomains = computed(() => networkSummary.value?.fabric_domain_utilization?.slice(0, 6) || []);
 const runVerdict = computed(() => buildRunVerdict(state.bundle));
+const selectedRun = computed(() => state.history.runs.find((run) => run.run_id === state.runId));
+const failedRun = computed(() => (selectedRun.value?.status === "failed" ? selectedRun.value : null));
 
 /**
  * C0-7: the availability of a value is one of five distinct states, never
@@ -81,6 +83,14 @@ const primarySubsystemName = computed(() => {
 
 <template>
   <div class="view-stack overview-view">
+    <section v-if="failedRun" class="history-notice history-notice--error" role="alert">
+      <strong>{{ t("运行失败") }} · {{ failedRun.failure_code || t("错误码未提供") }}</strong>
+      <p>{{ failedRun.error || failedRun.stderr_summary || t("执行服务未提供错误详情。") }}</p>
+      <small>CLI exit_code: {{ failedRun.exit_code ?? t("未知") }} · {{ failedRun.finished_at }}</small>
+      <button class="button button--secondary" @click="setView('experiment')">
+        {{ t("返回实验配置并重试") }}
+      </button>
+    </section>
     <section v-if="state.isDemo" class="demo-notice">
       <div>
         <Braces :size="18" /><span
@@ -95,7 +105,7 @@ const primarySubsystemName = computed(() => {
       <div class="analysis-stage__primary">
         <div class="analysis-stage__heading">
           <h2>{{ t("运行摘要") }}</h2>
-          <StatusPill :value="dashboardView.overview.status.value || 'unknown'" />
+          <StatusPill :value="failedRun ? 'failed' : dashboardView.overview.status.value || 'unknown'" />
         </div>
         <div class="hero-measure">
           <span>{{ t("本次模拟总时长") }}</span>

@@ -8,6 +8,10 @@
 >
 > 前置阅读：[约束与术语](00_GUARDRAILS_AND_GLOSSARY.md)
 
+> 2026-10-09 当前工作树补注：受控实验输入现加入三种版本化推理引擎语义画像的最小动态／回放区分，默认仍为 legacy generic；小拓不发布引擎身份、请求阶段或特性数组标量地址。Bridge/前端 fixture 与定向测试已通过，后端 C++ 执行本轮未实测。详见 [AI_HANDOFF](../AI_HANDOFF.md) 当前条目；下文旧审计日期与数字作为历史基点保留，不能据此声称真实校准或 Profile records 已可用。
+
+> **2026-10-13 当前复核补注**：第十至第十二阶段已在本地 synthetic hosted execution 和临时 Bridge 中验证 S0 dense attribution、S1 runtime 四工件以及 S2 execution/kernel、S3 memory、S4 device、S5 collective 的 package 边界。前端与这些已实现后端能力的展示、identity、provenance、fidelity 和 `expected_absence` 语义已对齐；下文“运行期工件未采集”“S2–S5 未进入 Bridge”等表述属于 2026-09-17 历史审计快照。后端未实现的 Profile records、Run Intake v2 执行、真实 GPU、Provider、校准和 held-out validation 继续保持 `unavailable`，不由前端伪造。
+
 ## 1. 审计范围
 
 本基线来自：

@@ -73,6 +73,16 @@ def validate_run_request(
     has_overrides = "overrides" in request
     has_custom_inputs = "custom_inputs" in request
     has_trace_package = "trace_package_id" in request
+    if scenario_id == "dense_des_package" and not has_trace_package:
+        raise RequestValidationError(
+            "The dense DES topology scenario requires a validated Trace package.",
+            "/trace_package_id",
+        )
+    if scenario_id == "dense_des_package" and fidelity_policy != "des":
+        raise RequestValidationError(
+            "The dense DES topology scenario requires requested DES fidelity.",
+            "/fidelity_policy",
+        )
     if has_overrides and has_custom_inputs:
         raise RequestValidationError("Use either overrides or custom_inputs, not both.", "/custom_inputs")
     if has_trace_package and (has_overrides or has_custom_inputs):

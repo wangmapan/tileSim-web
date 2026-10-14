@@ -324,7 +324,9 @@ describe("Agent copilot shell interaction", () => {
     window.dispatchEvent(new MouseEvent("pointermove", { clientX: 80 }));
     window.dispatchEvent(new MouseEvent("pointerup"));
     expect(wrapper.emitted("resize")?.at(-1)).toEqual([360]);
-    expect(wrapper.get('[role="log"]').attributes("aria-live")).toBe("polite");
+    // The shell footer is the single polite live region for state changes. The
+    // transcript remains a navigable log but does not repeat every streamed delta.
+    expect(wrapper.get('[role="log"]').attributes("aria-live")).toBe("off");
   });
 
   it("keeps desktop zoom and motion safeguards in the feature-scoped layout", () => {
@@ -506,7 +508,7 @@ describe("composer, focus and lazy isolation", () => {
     expect(wrapper.text()).not.toContain("仅询问");
     expect(wrapper.text()).not.toContain("提出草案修改");
     expect(wrapper.text()).not.toContain("直接改参数");
-    expect(wrapper.text()).toContain("描述场景会先给一份推荐方案");
+    expect(wrapper.text()).toContain("描述场景会交给配置助手生成方案");
   });
 
   it("does not submit Enter before Chinese IME composition ends", async () => {

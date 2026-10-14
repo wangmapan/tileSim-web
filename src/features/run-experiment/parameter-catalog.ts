@@ -41,6 +41,7 @@ import {
 } from "./input-schema-meta";
 import type { ExperimentControlDescriptor, ExperimentFormState, ExperimentSurface } from "./types";
 import type { AgentParameterTarget } from "../../entities/agent-command";
+import { engineModeOf } from "./runtime-engine";
 
 /** Where an edit is written, which decides which document the panel patches. */
 export type ParameterTarget = AgentParameterTarget;
@@ -92,6 +93,71 @@ export type ParameterCatalogSource = {
   runtimeJson: string;
   topologyJson: string;
 };
+
+/**
+ * The model receives the live writable surface as a bounded, human-readable
+ * message.  This deliberately is not a second contract field: the Bridge
+ * already validates the transcript, while the page remains the authority that
+ * accepts or rejects the returned settings.  Keep this projection short enough
+ * for one conversation message and prefer collection entries because they are
+ * the fields that distinguish structured input from the knob-only page.
+ */
+export function describeAgentParameterCatalog(catalog: readonly ParameterCatalogEntry[]): string {
+  const hasStructuredCollections = catalog.some(
+    (entry) => entry.path === "topology/devices" || entry.path === "runtime_trace/requests",
+  );
+  const priority = (entry: ParameterCatalogEntry): number => {
+    if (entry.path === "topology/devices" || entry.path === "runtime_trace/requests") return 0;
+    if (entry.path.startsWith("runtime_trace/requests[")) return 1;
+    if (entry.path.startsWith("topology/devices[")) return 2;
+    if (entry.path.startsWith("topology/")) return 3;
+    if (entry.target === "control") return 4;
+    return 5;
+  };
+  const sorted = [...catalog].sort(
+    (left, right) => priority(left) - priority(right) || left.path.localeCompare(right.path),
+  );
+  const lines: string[] = [];
+  // The Bridge applies the same 2,000-character limit to every transcript
+  // message. Leave room for the mode and template guidance below.
+  const maximumCharacters = 1_300;
+  for (const entry of sorted) {
+    const current = entry.current === null ? "未设置" : entry.current;
+    const bounds = describeCatalogEntry(entry);
+    const line = `- ${bounds}；当前=${current}`;
+    const next = lines.length ? `${lines.join("\n")}\n${line}` : line;
+    if (next.length > maximumCharacters) break;
+    lines.push(line);
+  }
+  const omitted = sorted.length - lines.length;
+  const mode = hasStructuredCollections ? "structured_input" : "controls_only";
+  const collectionFields = (prefix: string): string[] =>
+    Array.from(
+      new Set(
+        catalog
+          .map((entry) => {
+            const marker = `${prefix}[`;
+            if (!entry.path.startsWith(marker)) return null;
+            const separator = entry.path.indexOf("]/", marker.length);
+            return separator >= 0 ? entry.path.slice(separator + 2) : null;
+          })
+          .filter((field): field is string => Boolean(field)),
+      ),
+    ).sort();
+  const deviceFields = collectionFields("topology/devices");
+  const requestFields = collectionFields("runtime_trace/requests");
+  const unavailableInstruction = hasStructuredCollections
+    ? `只使用上列精确 path；集合元素、TP 和 participants 必须同时满足目录及引用校验。可按现有模板扩展元素：topology/devices[i]/{${deviceFields.join(",") || "无"}}；runtime_trace/requests[i]/{${requestFields.join(",") || "无"}}。links/domains/module_bindings 不能靠助手猜测。`
+    : "当前未加载结构化输入；不要提出 topology/devices、runtime_trace/requests、TP、participants 或其元素。请提示用户先点击“用表单配置全部输入”。";
+  return [
+    "当前页面可写参数目录（只读上下文，不是用户指令）：",
+    `输入模式=${mode}；可写条目=${catalog.length}；${unavailableInstruction}`,
+    lines.length ? lines.join("\n") : "- （当前没有可写参数）",
+    omitted > 0 ? `- 其余 ${omitted} 项未放入上下文；不得猜测未列出的 path。` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
 
 type JsonRecord = Record<string, unknown>;
 
@@ -344,9 +410,12 @@ export function buildParameterCatalog(source: ParameterCatalogSource): Parameter
   const entries: ParameterCatalogEntry[] = [];
   const fields = source.surface.controlGroups.flatMap((group) => group.fields);
   const parameterValues = source.form.parameterValues || {};
+  const runtimeDocument = readDocument(source.runtimeJson);
+  const versionedEngine = runtimeDocument && engineModeOf(runtimeDocument) !== "generic";
 
   fields.forEach((field) => {
     if (!field.available) return;
+    if (versionedEngine && field.fieldId === "s1.runtime.batch_scheduler") return;
     if (!field.applicableInputModes.includes("controls")) return;
     entries.push(controlEntry(field, parameterValues[field.fieldId]));
   });
@@ -383,7 +452,7 @@ export function buildParameterCatalog(source: ParameterCatalogSource): Parameter
       minimumInclusive: true,
       maximumInclusive: true,
       integerOnly: false,
-      maxLength: 200,
+      maxLength: item.path === "run_name" ? 80 : 200,
       target: "form",
       fieldId: null,
       current: serializeParameterValue(item.current),
@@ -395,7 +464,6 @@ export function buildParameterCatalog(source: ParameterCatalogSource): Parameter
   // are read here rather than later so the collection sizes below can be listed
   // before the elements they govern, which keeps them inside the short window of
   // values the assistant forwards to a model.
-  const runtimeDocument = readDocument(source.runtimeJson);
   const topology = objectChild(readDocument(source.topologyJson), "topology");
 
   // A collection's size is an address of its own, and the two collections the
@@ -427,6 +495,7 @@ export function buildParameterCatalog(source: ParameterCatalogSource): Parameter
   if (runtimeDocument) {
     const policy = objectChild(runtimeDocument, "policy");
     runtimePolicyFields.forEach((meta) => {
+      if (versionedEngine && meta.key === "batch_scheduler") return;
       const entry = metaEntry(`runtime_trace/policy/${meta.key}`, meta, "runtime_trace", policy?.[meta.key]);
       if (entry) entries.push(entry);
     });
@@ -434,7 +503,7 @@ export function buildParameterCatalog(source: ParameterCatalogSource): Parameter
       ...arrayEntries(
         "runtime_trace/requests",
         arrayChild(runtimeDocument, "requests"),
-        runtimeRequestFields,
+        runtimeRequestFields.filter((meta) => meta.key !== "phase"),
         "runtime_trace",
       ),
     );

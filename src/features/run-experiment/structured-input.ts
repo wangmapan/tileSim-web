@@ -135,7 +135,10 @@ function integerIssue(
  * Immediate request-table checks. `arrival_time_ps` ordering mirrors the
  * loader's non-decreasing requirement (D:\tileSim\src\S0_Workload\WorkloadLoader.cpp:426-428).
  */
-export function validateRuntimeRequests(requests: unknown): { issues: RequestIssue[]; rows: number } {
+export function validateRuntimeRequests(
+  requests: unknown,
+  versionedReplay = false,
+): { issues: RequestIssue[]; rows: number } {
   if (!Array.isArray(requests))
     return { issues: [{ index: -1, field: "row", message: "requests 必须是数组。" }], rows: 0 };
   const issues: RequestIssue[] = [];
@@ -154,7 +157,7 @@ export function validateRuntimeRequests(requests: unknown): { issues: RequestIss
     const requestId = row.request_id;
     if (typeof requestId !== "string" || !requestId.length) {
       issues.push({ index, field: "request_id", message: `第 ${index + 1} 行：request_id 不能为空。` });
-    } else if (seen.has(requestId)) {
+    } else if (seen.has(requestId) && !versionedReplay) {
       issues.push({ index, field: "request_id", message: `第 ${index + 1} 行：request_id「${requestId}」重复。` });
     } else {
       seen.add(requestId);
@@ -198,8 +201,8 @@ export function validateRuntimeRequests(requests: unknown): { issues: RequestIss
         });
       }
     }
-    if (row.phase !== undefined && row.phase !== "prefill" && row.phase !== "decode") {
-      issues.push({ index, field: "phase", message: `第 ${index + 1} 行：phase 只能是 prefill 或 decode。` });
+    if (row.phase !== undefined && row.phase !== "prefill" && row.phase !== "decode" && row.phase !== "request") {
+      issues.push({ index, field: "phase", message: `第 ${index + 1} 行：phase 只能是 prefill、decode 或 request。` });
     }
   });
   return { issues, rows };
@@ -303,6 +306,53 @@ export function rewriteParticipants(document: JsonObject, deviceIds: readonly st
   let rewritten = 0;
   requests.forEach((row) => {
     if (!isJsonObject(row)) return;
+    row.participants = [...deviceIds];
+    rewritten += 1;
+  });
+  return rewritten;
+}
+
+/** Keeps the existing TP degree while selecting that many devices from the new inventory. */
+export function rewriteParticipantsForExistingTp(document: JsonObject, deviceIds: readonly string[]): number {
+  const requests = runtimeRequestsOf(document);
+  if (!requests) throw new StructuredInputError("runtime trace 缺少 requests 数组。");
+  if (!deviceIds.length) throw new StructuredInputError("至少需要一张设备才能设置请求参与设备。");
+  if (new Set(deviceIds).size !== deviceIds.length)
+    throw new StructuredInputError("设备清单包含重复 device_id，不能安全设置请求参与设备。");
+  let rewritten = 0;
+  requests.forEach((row, index) => {
+    if (!isJsonObject(row)) return;
+    const tp = row.tp_degree;
+    if (typeof tp !== "number" || !Number.isInteger(tp) || tp < 1 || tp > deviceIds.length) {
+      throw new StructuredInputError(
+        `第 ${index + 1} 条请求的 TP 必须在 1~${deviceIds.length} 之间，才能保留原并行度。`,
+      );
+    }
+    row.participants = deviceIds.slice(0, tp);
+    rewritten += 1;
+  });
+  return rewritten;
+}
+
+/**
+ * Couples a resized device inventory to every request in one explicit action.
+ *
+ * Device count and tensor parallelism are separate contract fields, so changing
+ * one must never silently rewrite the other.  The structured editor calls this
+ * helper only after the user chooses the "TP 与参与设备一起改" pairing action;
+ * the assistant can therefore offer the same safe, reviewable operation without
+ * inventing a participants array in its scalar parameter catalogue.
+ */
+export function rewriteRequestParallelism(document: JsonObject, deviceIds: readonly string[]): number {
+  const requests = runtimeRequestsOf(document);
+  if (!requests) throw new StructuredInputError("runtime trace 缺少 requests 数组。");
+  if (!deviceIds.length) throw new StructuredInputError("至少需要一张设备才能设置请求参与设备。");
+  if (new Set(deviceIds).size !== deviceIds.length)
+    throw new StructuredInputError("设备清单包含重复 device_id，不能安全设置请求参与设备。");
+  let rewritten = 0;
+  requests.forEach((row) => {
+    if (!isJsonObject(row)) return;
+    row.tp_degree = deviceIds.length;
     row.participants = [...deviceIds];
     rewritten += 1;
   });

@@ -51,6 +51,7 @@ export const bridgePaths = {
   selectAssistantModel: () => "/agent/assistant-model-selection",
   planAgentScenario: () => "/agent/scenario-plan",
   streamAgentScenarioChat: () => "/agent/scenario-chat",
+  streamAgentResultAnalysis: () => "/agent/result-analysis",
   evidenceAgentCapabilities: () => "/agent/evidence-capabilities",
   agentOrchestrationCapabilities: () => "/agent/orchestration-capabilities",
   previewAgentRunIntake: () => "/agent/run-intake-preview",

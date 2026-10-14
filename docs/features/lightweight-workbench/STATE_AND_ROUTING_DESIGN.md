@@ -2,15 +2,15 @@
 
 ## 1. 路由契约
 
-| 路由 | 责任 | 是否 run-bound |
-| --- | --- | --- |
-| `/` | 工作台选择/最近模式入口 | 否 |
-| `/lightweight` | 轻量任务首页 | 否，可读取当前内存草案 |
-| `/lightweight/learn` | 概念学习 | 否 |
-| `/lightweight/tasks` | 任务/模板 | 否 |
-| `/lightweight/prepare` | Agent 单轮草案 | 否 |
-| `/lightweight/results?run=run-*` | 轻量结果摘要 | 是（只读） |
-| `/overview` 及现有专业路由 | 专业工作台 | 依现有定义 |
+| 路由                             | 责任                    | 是否 run-bound         |
+| -------------------------------- | ----------------------- | ---------------------- |
+| `/`                              | 工作台选择/最近模式入口 | 否                     |
+| `/lightweight`                   | 轻量任务首页            | 否，可读取当前内存草案 |
+| `/lightweight/learn`             | 概念学习                | 否                     |
+| `/lightweight/tasks`             | 任务/模板               | 否                     |
+| `/lightweight/prepare`           | Agent 单轮草案          | 否                     |
+| `/lightweight/results?run=run-*` | 轻量结果摘要            | 是（只读）             |
+| `/overview` 及现有专业路由       | 专业工作台              | 依现有定义             |
 
 现有 `/lightweight-workbench` 兼容重定向保留。旧 `?view=`、`dashboard-state` 兼容逻辑不得被新模式状态覆盖。
 
@@ -22,7 +22,7 @@
 
 ### Pinia workspace/session 状态
 
-当前 run、run-bound report、bridge manifest、连接状态、当前轻量 section、单轮草案和 stale 标记。刷新后只按已有恢复策略恢复；不把完整会话写入 localStorage。
+当前 run、run-bound report、bridge manifest、连接状态、当前轻量 section、草案和 stale 标记。刷新后按已有恢复策略恢复；助手可见会话仅以有限期、可删除、经裁剪的本地缓存恢复，不保存无期限或未经裁剪的完整会话。
 
 ### 非敏感 UI preference
 
@@ -55,24 +55,24 @@ idle
 
 ## 6. 恢复矩阵
 
-| 事件 | 恢复来源 | 允许恢复 | 不允许 |
-| --- | --- | --- | --- |
-| 首次打开 `/` | 无 | 选择页 | 自动猜测模式 |
-| 再次打开 `/` | mode preference | 最近工作台入口 | 恢复完整草案/问题 |
-| 刷新 `/lightweight/prepare` | Pinia（若仍在同一页生命周期） | 当前 section、pending 取消 | 从 localStorage 拼回对话 |
-| 打开带 `run` 的结果 URL | URL + 现有 run store | 只读摘要/证据 | 创建或复制 run |
-| 后退/前进 | URL | 对应页面与 query | 清除专业 run |
-| Bridge 重连 | manifest/query | 重新取 snapshot | 自动重算旧结果 |
+| 事件                        | 恢复来源                     | 允许恢复                                     | 不允许                                              |
+| --------------------------- | ---------------------------- | -------------------------------------------- | --------------------------------------------------- |
+| 首次打开 `/`                | 无                           | 选择页                                       | 自动猜测模式                                        |
+| 再次打开 `/`                | mode preference              | 最近工作台入口                               | 恢复完整草案/问题                                   |
+| 刷新 `/lightweight/prepare` | Pinia + 受限本地助手会话缓存 | 当前 section、助手可见会话摘要、pending 取消 | 恢复完整草案正文、Provider/raw payload 或运行副作用 |
+| 打开带 `run` 的结果 URL     | URL + 现有 run store         | 只读摘要/证据                                | 创建或复制 run                                      |
+| 后退/前进                   | URL                          | 对应页面与 query                             | 清除专业 run                                        |
+| Bridge 重连                 | manifest/query               | 重新取 snapshot                              | 自动重算旧结果                                      |
 
 ## 7. 状态转换表
 
-| 当前状态 | 事件 | 目标状态 | 副作用 |
-| --- | --- | --- | --- |
-| idle | 选任务 | task_selected | 仅 UI 状态 |
-| task_selected | 输入有效 | instruction_ready | 不调用 Bridge |
-| instruction_ready | 提交 | submitting | 生成 request digest |
-| submitting | canonical draft | draft | 内存保存 typed blocks |
-| submitting | clarification | clarification | 不填充猜测值 |
-| submitting | unsupported/unavailable/error | terminal status | 显示 retry/next step |
-| 任意结果 | context/schema/run 变化 | stale | 锁定旧结果 |
-| stale | 显式丢弃 | idle | 清除当前内存草案，不删服务器数据 |
+| 当前状态          | 事件                          | 目标状态          | 副作用                           |
+| ----------------- | ----------------------------- | ----------------- | -------------------------------- |
+| idle              | 选任务                        | task_selected     | 仅 UI 状态                       |
+| task_selected     | 输入有效                      | instruction_ready | 不调用 Bridge                    |
+| instruction_ready | 提交                          | submitting        | 生成 request digest              |
+| submitting        | canonical draft               | draft             | 内存保存 typed blocks            |
+| submitting        | clarification                 | clarification     | 不填充猜测值                     |
+| submitting        | unsupported/unavailable/error | terminal status   | 显示 retry/next step             |
+| 任意结果          | context/schema/run 变化       | stale             | 锁定旧结果                       |
+| stale             | 显式丢弃                      | idle              | 清除当前内存草案，不删服务器数据 |

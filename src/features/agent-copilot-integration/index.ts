@@ -13,4 +13,17 @@ export {
   redactSingleTurnInstruction,
   unsupportedResultForUnavailableContext,
 } from "./copilot-session";
-export { summarizeRunResult, teachingForQuestion, wantsResultAnalysis, type GuidanceSection } from "./result-guidance";
+export {
+  buildCompleteResultAnalysisContext,
+  buildResultAnalysisContext,
+  canUseResultAnalysisRoute,
+  summarizeRunResult,
+  teachingForQuestion,
+  wantsResultAnalysis,
+  type GuidanceSection,
+  type ResultAnalysisEvidenceArtifact,
+  type ResultAnalysisEvidencePack,
+  type ResultAnalysisRejectedArtifact,
+  type ResultAnalysisContext,
+  type ResultAnalysisProgress,
+} from "./result-guidance";

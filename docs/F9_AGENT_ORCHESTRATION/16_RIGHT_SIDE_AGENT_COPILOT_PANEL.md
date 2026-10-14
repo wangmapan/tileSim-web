@@ -28,7 +28,7 @@ TileSim 应在桌面页面右侧提供一个跨页面常驻的 Agent 对话栏�
 - 不自动读取整个页面 DOM、所有 artifact 或用户未选择的数据；
 - 不因用户打开侧栏就调用 Provider；
 - 不允许模型直接修改表单、创建 run、取消任务或导航到敏感资源；
-- 不把侧栏 transcript 当作参数或运行真源；
+- 不把侧栏 transcript 当作参数或运行真源；本地恢复也不等于服务端 Conversation/Turn；
 - 不在浏览器持久化 credential、Provider raw response、hidden reasoning 或完整 artifact；
 - 不在没有正式 contract 时用本地消息数组冒充可恢复多轮会话。
 
@@ -138,8 +138,9 @@ Header 不长期展示模型名、SHA 或 contract 小字。模型/provider iden
 > 已写完**。断流或停止后正文保留，并在同一块内说明原因。
 >
 > 多轮上下文只由**面板已显示的内容**构成：前端保留最近若干轮 `{role, content}` 并在下一次请求里整体回放，Bridge
-> **不持久化** transcript（见本文 §12 状态所有权、§19 留存）。因此这条链路提供的是**有界的对话连续性**，
-> 不是 §5 矩阵里那行需要 Conversation/Turn/Goal contract 的“正式多轮”；刷新即失，也不假装已持久化。
+> **不持久化** transcript。当前 Web 端通过版本化 Pinia/localStorage 会话仓库恢复多个本机可见会话，恢复的是已展示的
+> typed blocks、受界定的 transcript 和 context revision，不是服务端 Conversation/Turn/Goal；因此仍不是 §5 矩阵里的“正式多轮”。
+> 用户可显式新建、切换或删除会话，跨页面/重启恢复后仍执行 stale 与权限守卫。
 >
 > 隐藏 reasoning（`delta.reasoning_content` / `delta.reasoning`）在 provider 适配层被丢弃：既不返回、也不落盘。
 
@@ -213,15 +214,15 @@ Envelope 不包含 credential、完整 artifact payload、未提交敏感表单�
 
 ## 12. 状态所有权
 
-| 状态                      | Owner                               | 前端保存方式                |
-| ------------------------- | ----------------------------------- | --------------------------- |
-| 侧栏开关、宽度、expanded  | Agent shell UI                      | Pinia/local UI preference   |
-| current page context      | 各 feature context adapter          | 内存、revisioned、只读      |
-| conversation/turn         | Bridge conversation service         | TanStack Query/server state |
-| draft/validation/approval | 各正式 domain service               | Query cache + object refs   |
-| operation/progress        | workflow service                    | Query/SSE snapshot          |
-| current run               | 既有 workspace/run state            | 只引用，不复制              |
-| Evidence response         | Evidence Agent query/store 既有边界 | 保持 lease/stale 规则       |
+| 状态                      | Owner                                          | 前端保存方式                                 |
+| ------------------------- | ---------------------------------------------- | -------------------------------------------- |
+| 侧栏开关、宽度、expanded  | Agent shell UI                                 | Pinia/local UI preference                    |
+| current page context      | 各 feature context adapter                     | 内存、revisioned、只读                       |
+| conversation/turn         | 当前 Web 本地会话仓库（非正式服务端 contract） | Pinia + 版本化 localStorage；Bridge 不持久化 |
+| draft/validation/approval | 各正式 domain service                          | Query cache + object refs                    |
+| operation/progress        | workflow service                               | Query/SSE snapshot                           |
+| current run               | 既有 workspace/run state                       | 只引用，不复制                               |
+| Evidence response         | Evidence Agent query/store 既有边界            | 保持 lease/stale 规则                        |
 
 侧栏 shell 不成为新的全局业务 store。它只编排子模块和展示当前 references。
 
@@ -244,7 +245,7 @@ Envelope 不包含 credential、完整 artifact payload、未提交敏感表单�
 - 打开 Agent 引用的页面时保留对话滚动和 pending task；
 - 切换 workspace/run 时必须提示上下文变化，未完成草案或 claims 按契约 stale；
 - 新建 conversation、切换 conversation 和清除 transcript 是显式动作；
-- 若 retention 未获同意，刷新后可以不恢复 transcript，但不得假装已持久化；
+- Web 端本地会话留存只保存用户可见、受界定的 transcript 与 typed blocks，用户可显式删除；不得保存 credential、hidden reasoning、Provider raw response 或未展示的完整 artifact。Bridge 不保存 transcript，不能将本地恢复描述成服务端留存；
 - 深链接只包含非敏感 object IDs，不包含问题、payload 或 credential。
 
 ## 15. 审批和高风险操作体验
@@ -455,11 +456,17 @@ Conversation/Turn/Goal、retention 和 approval contract 发布后，启用可�
 > 前端 Vitest **1056 passed / 8 skipped**；真机通道验证显示目录文本 78 行且命中所列四类地址，模型能给出 8 卡方案。
 > 详见 `docs/AI_HANDOFF.md` 的 2026-09-23 节。
 
+> **2026-10-13 当前复核补注**：配置页助手路由已限制为页面说明/配置模型路径；只有真实结果或只读结果页且 run、manifest、schema、artifact identity 均匹配时才进入结果分析。助手本地会话是有限期、可删除、受大小和长度限制的缓存，不是服务端 Conversation store。结果分析状态由真实 artifact 读取计数和模型流阶段驱动；S0–S5 package 的边界、provenance 和 unavailable/expected-absence 不能由助手推断或补造。下方较早的 Stage 0/2 进度数字保留为历史记录，当前门禁和审查状态以 `docs/AI_HANDOFF.md` 为准。
+
 > **2026-09-23 同批扩容修订（工作树，未部署）**：`parameter-catalog.ts` 对同一方案中合法的集合增长，按契约字段投影被明确提及的新设备/请求索引；`scenario-recommendation.ts` 在模型地址解析前使用该投影。`parameter-plan.ts` 只允许规模值仍与计划前值一致、且下标落在增长区间的未来地址通过 stale 守卫。`parameter-edit.ts` 先扩容再写元素，任何写入失败时原子回滚整批（表单与两个 JSON 文档）；被修改请求的显式 `participants` 若与新 TP 不匹配，同样拒绝整批并提示到结构化输入清空或重写。模型/Bridge 丢弃或前端拒绝的字段逐项展示并禁止应用；多节点分组缺漏或声称 TPn 但第 0 条请求没有对应并行度也禁止应用。Bridge 上限为 64 项，提示词明确组号不等于 links/domains；既有 `participants` 与真实连接关系不自动补造，用户仍需在结构化输入中核对。该改动不创建运行，不改变 Phase 2 的执行能力边界。
+
+> **2026-10-09 全页面参数路由修正（工作树，未部署）**：首轮自然语言配置请求即使点名 batch、KV、TP 或结构化字段，只要不是明确的 `路径 = 值`，也先交给现有配置模型和当前页面的完整 scalar `parameter_catalog`；冒号引出的字段列表不是赋值。模型方案逐项按页面目录、类型、范围和应用时的当前值校验；用户明确排除的设备数量、TP 或拓扑元素若仍在提案中，整份方案禁止应用。结构化输入尚未打开时不暗中生成其字段。无模型时，扩展字段请求提示用完整路径赋值或重试，不假称正式八字段 capability 已扩容。Phase 1 正式 `agent_exposed` 及其 execution closure 仍是八字段；页面可编辑能力不等于 Profile、物理 KV、硬件验证或运行执行能力。
 
 > **2026-09-23 对话身份修订（工作树，未部署）**：`AgentTypedBlockList.vue` 的用户/模型消息分别显示 `user-avatar.svg` 中性人物与 `atuo-avatar.svg` 阿拓头像，文字标识是「用户」与「阿拓 · 模型 ID」；头像为装饰，发言者文字仍供读屏识别。侧栏标题显示「阿拓 · TileSim 助手」，对话输入与提示文案不再用「你」指代用户。该 UI 修订不新增个人身份资料、会话权限或 Agent 执行能力。
 
 > **2026-09-23 小拓引导与结果教学（工作树，未部署）**：空会话呈现三项任务选择；「配置实验」导航到当前工作台的新建实验页，「分析实验结果」从身份匹配的当前 run 报告提供三段式速览、后端原文重点与证据边界；轻量工作台首页带 run 时会先进入结果页并在载入后自动整理。「学习怎么看结果」及对应自然语言提问提供指标教学。报告整理为前端只读显示级变换，不调用 Provider、不改报告、不创建运行；无报告、示例、旧 run、unsupported schema 时不作分析。报告字段路径只用于定位，不代表正式 citation。界面称呼由「阿拓」调整为「小拓」，原 SVG 文件名保留。
+
+> **2026-09-28 结果分析模型通道（工作树，未部署）**：结果分析在保留上述本地确定性回退的基础上，新增独立只读 `POST /api/agent/result-analysis`。调用前逐一读取当前 run manifest 中的 artifact，并复用 verified-artifact 查询的 run/schema/bytes/SHA-256 绑定；模型上下文携带完整 artifact identity、rejected artifact 和 `full`/`summary_only`/`unavailable`/`not_applicable` 覆盖状态。单文件超过 12,000 字符或总证据超过 150,000 字符时只发送结构摘要；因此 UI/模型不得声称无条件读完所有原始文件。模型通道不可用时仍回退到原有三段式本地整理，不创建运行、不改配置、不写报告。
 
 > **2026-09-24 视觉收口（工作树，未部署）**：小拓侧栏增加有限的开合和选择反馈；具体时长使用独立 `--motion-interaction`，不改动 e2e 依赖的颜色过渡时长。轻量工作台空状态增加三步流程说明、accent rule entrance 与状态反馈，均为表现层改动；`prefers-reduced-motion` 会关闭新增动画。
 

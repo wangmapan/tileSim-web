@@ -12,6 +12,13 @@
 > - [`getting-started/AI_DEPLOYMENT_AND_HANDOFF.md`](AI_DEPLOYMENT_AND_HANDOFF.md)：干净克隆、部署、启动器。
 > - [`F9_AGENT_ORCHESTRATION/15_MODULE_BOUNDARIES_AND_PARALLEL_DEVELOPMENT.md`](../F9_AGENT_ORCHESTRATION/15_MODULE_BOUNDARIES_AND_PARALLEL_DEVELOPMENT.md)：多 Agent 并行时的独占范围与合并顺序。
 
+## 当前复核覆盖（2026-10-13）
+
+- 本文中的路由、代码规模和 2026-09-23 门禁表是历史接手快照；当前事实以 [`docs/AI_HANDOFF.md`](../AI_HANDOFF.md) 的第十二阶段及 2026-10-13 文档复核为准。
+- 当前前端已对齐并展示后端已提供的 S0–S5 package 边界：S0 dense attribution、S1 四类 runtime 工件、S2 execution/kernel、S3 memory、S4 device、S5 collective。页面只展示 Bridge/CLI 返回的 boundary、provenance、fidelity、Fabric 和 artifact 状态，不推断未提供的指标。
+- 当前未完成的项目不等同于前端契约错位：全仓格式红、Bridge discovery 导入错误、后端 CTest 回归和全量 E2E snapshot drift 分别按门禁责任边界记录；S2–S5 完整深链/刷新/原始证据入口若未重新复跑，必须标为 `not-run`。
+- 轻量/专业配置页的“可编辑目录”与后端实际执行能力分开：前端可以为结构化输入提供安全的草案、集合规模和标量叶字段，但不得暗示后端尚未接入的 Profile、真实 GPU 或 Run Intake v2 已可执行。
+
 ## 0. 30 秒上手（本机实测）
 
 - **本机没有 pnpm**（`pnpm ABSENT`）。文档与 `package.json` 里的 `pnpm xxx` 要看懂，但**执行时用 `node` 直调**
@@ -207,6 +214,12 @@ git diff --check -- <你改的文件…>
 
 `8 skipped` 里含需要**已部署 Bridge** 的 deployed/live 用例——**skip 不得计作 passed**。
 
+### 最近阶段记录（2026-10-13 文档复核）
+
+- 最近工作树记录的 Web Vitest 为 `1123 passed / 8 skipped`；`typecheck`、`lint`（0 error、2 既有 warning）、`build`、`contracts:check`、`docs:check`、`deps:check` 和 `git diff --check` 通过。该数字来自第十二阶段之后的配置助手/结构化输入批次，不是本次文档复核重新执行的结果。
+- 最近记录的定向 CTest 为 `13/13 passed`，Bridge 定向套件为 `275 passed`；Bridge 全量 discovery 仍有 1 项既有 registry 导入错误，全仓 `format:check` 仍有 24 个既有文件失败。
+- 最近全量 E2E 记录为 `69 passed / 6 skipped / 4 failed / 1 not-run`；失败项是未更新的既有 desktop screenshot drift，`artifact-worker` 后续单独复跑通过。未将该结果写成全量门禁绿灯。
+
 ## 8. 本机特有的坑（会让人误判成代码问题）
 
 ### 8.1 PATH 顺序（最易误判）
@@ -218,7 +231,7 @@ git diff --check -- <你改的文件…>
 
 ### 8.2 prettier 全仓既有红
 
-全仓 `prettier --check .` 本就有约 20 个文件报红（phase2 schema、`bridge-api.schema.json`、
+全仓 `prettier --check .` 本就有约 24 个文件报红（phase2 schema、`bridge-api.schema.json`、
 `docs/features/lightweight-workbench/*.md`、`generate-bridge-client.mjs` 等），**不是你造成的**。
 自己新增的长行超 `printWidth: 120` 时用 `--write <单个文件>`，再 `git diff` 复核只有预期那几行变化。
 

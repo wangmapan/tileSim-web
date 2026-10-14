@@ -20,14 +20,17 @@
       "descriptor_endpoint": "GET /api/agent/assistant-model",
       "plan_endpoint": "POST /api/agent/scenario-plan",
       "chat_endpoint": "POST /api/agent/scenario-chat",
+      "result_analysis_endpoint": "POST /api/agent/result-analysis",
       "catalogue_endpoint": "GET /api/agent/assistant-model-catalogue",
       "selection_endpoint": "POST /api/agent/assistant-model-selection",
       "descriptor_schema_identity": "tilesim.bridge.assistant_model_descriptor.v1",
       "plan_schema_identity": "tilesim.bridge.assistant_model_plan.v1",
       "chat_schema_identity": "tilesim.bridge.assistant_model_chat.v1",
+      "result_analysis_schema_identity": "tilesim.bridge.result_analysis_chat.v1",
       "catalogue_schema_identity": "tilesim.bridge.assistant_model_catalogue.v1",
       "selection_schema_identity": "tilesim.bridge.assistant_model_selection.v1",
       "chat_events": ["prose", "plan", "error", "done"],
+      "result_analysis_events": ["prose", "error", "done"],
       "provider_id": "tilesim_assistant_openai_v1",
       "credential_storage": "process_environment_only",
       "conversation_storage": "client_session_only",
@@ -58,7 +61,12 @@
       "tail": "tail-cause-chain.json",
       "design_space": "design-space.json",
       "execution_envelope": "execution-envelope.json",
-      "run_bound_des_evidence": "week8-run-evidence.json"
+      "run_bound_des_evidence": "week8-run-evidence.json",
+      "runtime_events": "runtime-events.json",
+      "runtime_summary": "runtime-summary.json",
+      "runtime_requests": "runtime-requests.json",
+      "runtime_analysis": "runtime-analysis.json",
+      "request_attribution": "request-attribution.json"
     },
     "artifacts": {
       "input-runtime-trace": { "file_name": "input-runtime-trace.json", "report_kind": null },
@@ -82,7 +90,8 @@
         "schema_identities": ["tilesim.metrics_report.v1"],
         "run_id_pointer": "/run_id",
         "allow_legacy_unversioned": true,
-        "forbid_self_sha256": true
+        "forbid_self_sha256": true,
+        "descriptor_artifact_id": "metrics_report"
       },
       "validation": {
         "file_name": "validation.json",
@@ -96,7 +105,8 @@
         "report_kind": "tail",
         "schema_identities": ["tilesim.tail_cause_chain_report.v1"],
         "run_id_pointer": "/run_id",
-        "allow_legacy_unversioned": true
+        "allow_legacy_unversioned": true,
+        "descriptor_artifact_id": "tail_cause_chain_report"
       },
       "design-space": {
         "file_name": "design-space.json",
@@ -104,7 +114,8 @@
         "schema_identities": ["tilesim.design_space_report.v1"],
         "legacy_schema_identities": ["design_space.report.v1alpha1"],
         "run_id_pointer": "/run_id",
-        "forbid_self_sha256": true
+        "forbid_self_sha256": true,
+        "descriptor_artifact_id": "design_space_report"
       },
       "execution-envelope": {
         "file_name": "execution-envelope.json",
@@ -118,7 +129,44 @@
         "report_kind": "run_bound_des_evidence",
         "schema_identities": ["tilesim.s7_run_bound_des_evidence.v1"],
         "run_id_pointer": "/run_id",
-        "forbid_self_sha256": true
+        "forbid_self_sha256": true,
+        "descriptor_artifact_id": "run_bound_des_evidence"
+      },
+      "runtime-events": {
+        "file_name": "runtime-events.json",
+        "report_kind": null,
+        "schema_identities": ["tilesim.s1_runtime_event_trace.v1"],
+        "run_id_pointer": "/run_id",
+        "descriptor_artifact_id": "runtime_event_trace"
+      },
+      "runtime-summary": {
+        "file_name": "runtime-summary.json",
+        "report_kind": null,
+        "schema_identities": ["tilesim.s1_runtime_event_summary.v1"],
+        "run_id_pointer": "/run_id",
+        "descriptor_artifact_id": "runtime_event_summary"
+      },
+      "runtime-requests": {
+        "file_name": "runtime-requests.json",
+        "report_kind": null,
+        "schema_identities": ["tilesim.s1_runtime_request_summaries.v1"],
+        "run_id_pointer": "/run_id",
+        "descriptor_artifact_id": "runtime_request_summaries"
+      },
+      "runtime-analysis": {
+        "file_name": "runtime-analysis.json",
+        "report_kind": null,
+        "schema_identities": ["tilesim.s1_runtime_analysis.v1"],
+        "run_id_pointer": "/run_id",
+        "descriptor_artifact_id": "runtime_analysis"
+      },
+      "request-attribution": {
+        "file_name": "request-attribution.json",
+        "report_kind": null,
+        "schema_identities": ["tilesim.request_attribution.v1"],
+        "run_id_pointer": "/run_id",
+        "forbid_self_sha256": true,
+        "descriptor_artifact_id": "request_attribution"
       }
     },
     "run_creation": {
@@ -323,6 +371,26 @@
         "responses": {
           "200": {
             "description": "One streamed conversation turn: prose events while the answer is written, then one plan event",
+            "content": { "text/event-stream": { "schema": { "type": "string" } } }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "503": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/result-analysis": {
+      "post": {
+        "operationId": "streamAgentResultAnalysis",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/AssistantResultAnalysisRequest" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "One streamed, read-only result analysis: prose events while the answer is written, then done",
             "content": { "text/event-stream": { "schema": { "type": "string" } } }
           },
           "400": { "$ref": "#/components/responses/Error" },
@@ -754,6 +822,131 @@
             "maxProperties": 40,
             "description": "The current panel values, keyed by bare parameter name. Read-only context for the model; never executed or written.",
             "additionalProperties": { "type": "string", "maxLength": 120 }
+          }
+        },
+        "additionalProperties": false
+      },
+      "AssistantResultAnalysisRequest": {
+        "type": "object",
+        "required": ["messages", "context"],
+        "properties": {
+          "messages": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 12,
+            "description": "The client-side transcript, ending with the user's result question.",
+            "items": {
+              "type": "object",
+              "required": ["role", "content"],
+              "properties": {
+                "role": { "type": "string", "enum": ["user", "assistant"] },
+                "content": { "type": "string", "minLength": 1, "maxLength": 2000 }
+              },
+              "additionalProperties": false
+            }
+          },
+          "context": {
+            "type": "object",
+            "required": ["run_id", "sections", "evidence_paths", "evidence"],
+            "properties": {
+              "run_id": { "type": "string", "minLength": 1, "maxLength": 200 },
+              "sections": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 8,
+                "items": {
+                  "type": "object",
+                  "required": ["title", "body"],
+                  "properties": {
+                    "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+                    "body": { "type": "string", "minLength": 1, "maxLength": 5000 }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "evidence_paths": {
+                "type": "array",
+                "maxItems": 64,
+                "items": { "type": "string", "minLength": 1, "maxLength": 240 }
+              },
+              "evidence": {
+                "type": "object",
+                "required": [
+                  "manifest_status",
+                  "artifact_count",
+                  "full_content_count",
+                  "summary_only_count",
+                  "unavailable_count",
+                  "rejected_count",
+                  "artifacts",
+                  "rejected_artifacts"
+                ],
+                "properties": {
+                  "manifest_status": { "type": "string", "enum": ["verified", "unavailable", "run_mismatch"] },
+                  "artifact_count": { "type": "integer", "minimum": 0 },
+                  "full_content_count": { "type": "integer", "minimum": 0 },
+                  "summary_only_count": { "type": "integer", "minimum": 0 },
+                  "unavailable_count": { "type": "integer", "minimum": 0 },
+                  "rejected_count": { "type": "integer", "minimum": 0 },
+                  "artifacts": {
+                    "type": "array",
+                    "maxItems": 32,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "artifact_id",
+                        "file_name",
+                        "report_kind",
+                        "schema_identity",
+                        "sha256",
+                        "bytes",
+                        "contract_status",
+                        "content_status"
+                      ],
+                      "properties": {
+                        "artifact_id": { "type": "string", "minLength": 1, "maxLength": 200 },
+                        "file_name": { "type": "string", "minLength": 1, "maxLength": 240 },
+                        "report_kind": { "type": ["string", "null"], "maxLength": 120 },
+                        "schema_identity": { "type": "string", "minLength": 1, "maxLength": 240 },
+                        "sha256": { "type": "string", "minLength": 1, "maxLength": 80 },
+                        "bytes": { "type": "string", "maxLength": 80 },
+                        "contract_status": {
+                          "type": "string",
+                          "enum": ["supported", "legacy_compatibility", "not_applicable"]
+                        },
+                        "content_status": {
+                          "type": "string",
+                          "enum": ["full", "summary_only", "unavailable", "not_applicable", "expected_absence"]
+                        },
+                        "content": {},
+                        "omission_reason": {
+                          "type": "string",
+                          "enum": ["too_large_for_model_context", "verification_failed"]
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "rejected_artifacts": {
+                    "type": "array",
+                    "maxItems": 64,
+                    "items": {
+                      "type": "object",
+                      "required": ["artifact_id", "schema_identity", "reason", "json_pointer"],
+                      "properties": {
+                        "artifact_id": { "type": "string", "minLength": 1, "maxLength": 300 },
+                        "schema_identity": { "type": "string", "minLength": 1, "maxLength": 300 },
+                        "reason": { "type": "string", "minLength": 1, "maxLength": 300 },
+                        "json_pointer": { "type": "string", "minLength": 1, "maxLength": 300 }
+                      },
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
           }
         },
         "additionalProperties": false

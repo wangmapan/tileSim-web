@@ -115,6 +115,7 @@ function numericValue(field: SchemaFieldMeta, raw: string): number | null | "inv
   if (!Number.isFinite(value)) return "invalid";
   if (field.integerOnly && !Number.isInteger(value)) return "invalid";
   if (field.minimum !== null && value < field.minimum) return "invalid";
+  if (field.exclusiveMinimum !== null && value <= field.exclusiveMinimum) return "invalid";
   if (field.maximum !== null && value > field.maximum) return "invalid";
   return value;
 }

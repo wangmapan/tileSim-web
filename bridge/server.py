@@ -37,6 +37,7 @@ from providers import evidence_agent as evidence_agent_provider_contract
 from providers.evidence_agent import ProviderError, ProviderStructuredOutputError, ProviderTimeoutError
 
 from contracts import evidence_agent
+from contracts.schema_set import compute_schema_set_revision
 from contracts.agent_orchestration_capability import load_catalog
 from contracts.experiment_descriptor import (
     DESIGN_SPACE_MODES,
@@ -106,7 +107,14 @@ SCENARIOS = {
         "to": "S6",
         "trace": TILESIM_ROOT / "docs/examples/s1_runtime_trace.json",
         "topology": TILESIM_ROOT / "docs/examples/modular_fabric_scenario.json",
-    }
+    },
+    "dense_des_package": {
+        "label": next(option["label"] for option in SCENARIO_OPTIONS if option["scenario_id"] == "dense_des_package"),
+        "from": "S0",
+        "to": "S6",
+        "trace": TILESIM_ROOT / "docs/examples/dense_timing/workload.json",
+        "topology": TILESIM_ROOT / "docs/examples/dense_timing/topology.json",
+    },
 }
 ALLOWED_FIDELITY_POLICIES = {
     option["fidelity_policy"] for option in REQUESTED_FIDELITY_OPTIONS if option["available"]
@@ -134,16 +142,7 @@ AGENT_ORCHESTRATION_CAPABILITY_CONTRACT = CONTRACT_METADATA[
     "agent_orchestration_capability"
 ]
 TRACE_PACKAGE_CONTRACT = CONTRACT_METADATA["trace_packages"]
-SCHEMA_SET_REVISION = "sha256:" + hashlib.sha256(
-    json.dumps(
-        {
-            path.relative_to(CONTRACT_ROOT).as_posix(): load_contract_json(path)
-            for path in sorted(CONTRACT_ROOT.rglob("*.json"))
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-).hexdigest()
+SCHEMA_SET_REVISION = compute_schema_set_revision(CONTRACT_ROOT)
 runs: dict[str, dict] = {}
 runs_lock = threading.Lock()
 metadata_lock = threading.RLock()
@@ -483,6 +482,8 @@ def materialize_trace_package_inputs(
     manifest_path: Path,
     manifest_sha256: str,
     source_mode: str,
+    entry_boundary: str,
+    entry_trace_kind: str,
 ) -> dict:
     return execution.materialize_trace_package_inputs(
         run_dir,
@@ -490,6 +491,8 @@ def materialize_trace_package_inputs(
         manifest_path=manifest_path,
         manifest_sha256=manifest_sha256,
         source_mode=source_mode,
+        entry_boundary=entry_boundary,
+        entry_trace_kind=entry_trace_kind,
     )
 
 
@@ -700,6 +703,8 @@ class BridgeHandler(SimpleHTTPRequestHandler):
             return self.plan_agent_scenario()
         if path == "/api/agent/scenario-chat":
             return self.stream_agent_scenario_chat()
+        if path == "/api/agent/result-analysis":
+            return self.stream_agent_result_analysis()
         if path == "/api/agent/assistant-model-selection":
             return self.select_agent_assistant_model()
         if path == "/api/agent/run-intake-preview":
@@ -972,6 +977,8 @@ class BridgeHandler(SimpleHTTPRequestHandler):
                     manifest_path=trace_package_candidate.manifest_path,
                     manifest_sha256=trace_package_inspection["manifest_sha256"],
                     source_mode=trace_package_inspection["trace_provenance"]["source_mode"],
+                    entry_boundary=trace_package_inspection["entry_boundary"],
+                    entry_trace_kind=trace_package_inspection["entry_trace_kind"],
                 )
             elif custom_inputs is not None:
                 resolved_scenario = materialize_custom_inputs(
@@ -1167,6 +1174,107 @@ class BridgeHandler(SimpleHTTPRequestHandler):
                 event="error",
                 data={
                     "schema_version": assistant_model.CHAT_SCHEMA_VERSION,
+                    "code": "assistant_model_unavailable",
+                    "message": "模型通道暂时不可用。",
+                    "retryable": True,
+                },
+            )
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            return
+
+    def stream_agent_result_analysis(self) -> None:
+        """Stream a read-only answer grounded in the current run's report projection."""
+
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if length <= 0 or length > MAX_REQUEST_BYTES:
+                raise ValueError("Request body must be between 1 byte and 2.1 MB.")
+            request = json.loads(self.rfile.read(length), parse_constant=reject_nonfinite_json)
+            if not isinstance(request, dict):
+                raise ValueError("Request body must be a JSON object.")
+        except (ValueError, json.JSONDecodeError) as error:
+            return write_error(
+                self,
+                HTTPStatus.BAD_REQUEST,
+                "invalid_result_analysis_request",
+                str(error),
+                field_path="/messages",
+                retryable=False,
+            )
+        try:
+            conversation = assistant_model.validate_conversation(request.get("messages"))
+        except ValueError as error:
+            return write_error(
+                self,
+                HTTPStatus.BAD_REQUEST,
+                "invalid_result_analysis_request",
+                str(error),
+                field_path="/messages",
+                retryable=False,
+            )
+        try:
+            context = assistant_model.validate_result_analysis_context(request.get("context"))
+        except ValueError as error:
+            return write_error(
+                self,
+                HTTPStatus.BAD_REQUEST,
+                "invalid_result_analysis_request",
+                str(error),
+                field_path="/context",
+                retryable=False,
+            )
+        try:
+            assistant_model.require_channel()
+        except ProviderTimeoutError:
+            return write_error(
+                self,
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "assistant_model_timeout",
+                "The assistant model channel did not answer within its configured timeout.",
+                retryable=True,
+            )
+        except ProviderError:
+            return write_error(
+                self,
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "assistant_model_unavailable",
+                "The assistant model channel is unavailable.",
+                retryable=True,
+            )
+
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Connection", "close")
+        add_contract_headers(self)
+        add_cors_headers(self)
+        self.end_headers()
+
+        try:
+            for event, data in assistant_model.stream_result_analysis_events(conversation, context):
+                write_sse_event(self, event=event, data=data)
+            write_sse_event(
+                self,
+                event="done",
+                data={"schema_version": assistant_model.RESULT_ANALYSIS_CHAT_SCHEMA_VERSION},
+            )
+        except ProviderTimeoutError:
+            write_sse_event(
+                self,
+                event="error",
+                data={
+                    "schema_version": assistant_model.RESULT_ANALYSIS_CHAT_SCHEMA_VERSION,
+                    "code": "assistant_model_timeout",
+                    "message": "模型没有在限定时间内答完。",
+                    "retryable": True,
+                },
+            )
+        except ProviderError:
+            write_sse_event(
+                self,
+                event="error",
+                data={
+                    "schema_version": assistant_model.RESULT_ANALYSIS_CHAT_SCHEMA_VERSION,
                     "code": "assistant_model_unavailable",
                     "message": "模型通道暂时不可用。",
                     "retryable": True,

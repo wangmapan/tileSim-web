@@ -5,6 +5,7 @@ import AgentCopilotErrorBoundary from "./AgentCopilotErrorBoundary.vue";
 import type {
   AgentCopilotPanelState,
   AgentCopilotSubmitPayload,
+  AgentSessionSummary,
   AgentTypedBlock,
 } from "../../entities/agent-orchestration";
 
@@ -32,6 +33,10 @@ const props = withDefaults(
     modelSelected?: string;
     /** True while the catalogue is being read or a switch is being applied. */
     modelPending?: boolean;
+    sessions?: readonly AgentSessionSummary[];
+    activeSessionId?: string;
+    persistenceError?: boolean;
+    retentionNotice?: string;
   }>(),
   {
     modelValue: "closed",
@@ -46,6 +51,10 @@ const props = withDefaults(
     modelCatalogue: () => [],
     modelSelected: "",
     modelPending: false,
+    sessions: () => [],
+    activeSessionId: "",
+    persistenceError: false,
+    retentionNotice: "",
   },
 );
 
@@ -60,6 +69,10 @@ const emit = defineEmits<{
   "select-model": [model: string];
   /** The user asked for the model catalogue to be read again. */
   "refresh-models": [];
+  "new-session": [];
+  "select-session": [sessionId: string];
+  "delete-session": [sessionId: string];
+  "clear-all-sessions": [];
   start: [task: "configure" | "analyze" | "learn"];
 }>();
 
@@ -198,6 +211,10 @@ onMounted(() => {
           :model-catalogue="modelCatalogue"
           :model-selected="modelSelected"
           :model-pending="modelPending"
+          :sessions="sessions"
+          :active-session-id="activeSessionId"
+          :persistence-error="persistenceError"
+          :retention-notice="retentionNotice"
           @update:model-value="setState"
           @submit="emit('submit', $event)"
           @answer="emit('answer', $event)"
@@ -206,6 +223,10 @@ onMounted(() => {
           @resize="emit('resize', $event)"
           @select-model="emit('select-model', $event)"
           @refresh-models="emit('refresh-models')"
+          @new-session="emit('new-session')"
+          @select-session="emit('select-session', $event)"
+          @delete-session="emit('delete-session', $event)"
+          @clear-all-sessions="emit('clear-all-sessions')"
           @start="emit('start', $event)"
         />
       </AgentCopilotErrorBoundary>

@@ -70,6 +70,8 @@ pub enum OperationRequest {
     DeployLocal {
         backend_repository: String,
         wsl_distro: String,
+        #[serde(default)]
+        reuse_verified_artifacts: bool,
     },
     RepairWsl {
         wsl_distro: String,
@@ -285,19 +287,26 @@ fn prepare_operation(
         OperationRequest::DeployLocal {
             backend_repository,
             wsl_distro,
-        } => Ok(PreparedOperation {
-            script: scripts.join("deploy-local-backend.ps1"),
-            arguments: vec![
+            reuse_verified_artifacts,
+        } => {
+            let mut arguments = vec![
                 "-SourceRoot".into(),
                 validate_backend_repository(&backend_repository)?
                     .to_string_lossy()
                     .into_owned(),
                 "-WslDistro".into(),
                 validate_wsl_distro(&wsl_distro)?,
-            ],
-            secret_stdin: None,
-            initial_phase: OperationPhase::CheckingEnvironment,
-        }),
+            ];
+            if reuse_verified_artifacts {
+                arguments.push("-ReuseVerifiedArtifacts".into());
+            }
+            Ok(PreparedOperation {
+                script: scripts.join("deploy-local-backend.ps1"),
+                arguments,
+                secret_stdin: None,
+                initial_phase: OperationPhase::CheckingEnvironment,
+            })
+        }
         OperationRequest::SaveModel {
             base_url,
             model,
@@ -724,6 +733,7 @@ mod tests {
             OperationRequest::DeployLocal {
                 backend_repository: directory.to_string_lossy().into_owned(),
                 wsl_distro: "Ubuntu-24.04".into(),
+                reuse_verified_artifacts: false,
             },
         )
         .expect("prepare local deployment");
@@ -737,6 +747,19 @@ mod tests {
             .arguments
             .iter()
             .any(|argument| argument.contains("fetch")));
+        let fast = prepare_operation(
+            root,
+            OperationRequest::DeployLocal {
+                backend_repository: directory.to_string_lossy().into_owned(),
+                wsl_distro: "Ubuntu-24.04".into(),
+                reuse_verified_artifacts: true,
+            },
+        )
+        .expect("prepare fast local deployment");
+        assert!(fast
+            .arguments
+            .iter()
+            .any(|argument| argument == "-ReuseVerifiedArtifacts"));
         std::fs::remove_dir_all(directory).expect("remove test Git marker");
     }
 

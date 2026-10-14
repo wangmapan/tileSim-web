@@ -81,6 +81,18 @@ function reasonRows(block: {
 function hasAppliedReceipt(block: { receipts?: readonly { status: string }[] | null }): boolean {
   return Boolean(block.receipts?.some((receipt) => receipt.status === "applied"));
 }
+
+const blockTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+function formatBlockTime(value: string | undefined): string {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : blockTimeFormatter.format(date);
+}
 </script>
 
 <template>
@@ -92,10 +104,32 @@ function hasAppliedReceipt(block: { receipts?: readonly { status: string }[] | n
       :data-block-type="block.block_type"
       :role="block.block_type === 'formal_error' || !isKnownBlock(block) ? 'alert' : undefined"
     >
+      <div
+        v-if="block.block_type !== 'user_message' && block.block_type !== 'assistant_message'"
+        class="agent-block__assistant-mark"
+        aria-hidden="true"
+      >
+        <img :src="assistantAvatar" alt="" width="28" height="28" />
+      </div>
+      <div
+        v-if="
+          block.block_type !== 'user_message' &&
+          block.block_type !== 'assistant_message' &&
+          formatBlockTime(block.created_at)
+        "
+        class="agent-block__meta agent-block__meta--assistant"
+        aria-label="小拓回复时间"
+      >
+        <span class="agent-block__meta-name">小拓</span>
+        <time class="agent-block__time" :datetime="block.created_at">{{ formatBlockTime(block.created_at) }}</time>
+      </div>
       <template v-if="block.block_type === 'user_message'">
         <div class="agent-block__speaker">
           <img :src="userAvatar" alt="" aria-hidden="true" width="28" height="28" />
           <p class="agent-block__eyebrow">用户</p>
+          <time v-if="formatBlockTime(block.created_at)" class="agent-block__time" :datetime="block.created_at">
+            {{ formatBlockTime(block.created_at) }}
+          </time>
         </div>
         <p class="agent-block__body agent-block__utterance">{{ block.text }}</p>
       </template>
@@ -104,12 +138,15 @@ function hasAppliedReceipt(block: { receipts?: readonly { status: string }[] | n
         <div class="agent-block__speaker">
           <img :src="assistantAvatar" alt="" aria-hidden="true" width="28" height="28" />
           <p class="agent-block__eyebrow">{{ block.model_id ? `小拓 · ${block.model_id}` : "小拓" }}</p>
+          <time v-if="formatBlockTime(block.created_at)" class="agent-block__time" :datetime="block.created_at">
+            {{ formatBlockTime(block.created_at) }}
+          </time>
         </div>
         <p v-if="block.text" class="agent-block__body agent-block__answer">{{ block.text }}</p>
         <p v-else-if="block.streaming" class="agent-block__body agent-block__answer agent-block__answer--waiting">
           正在想…
         </p>
-        <p v-if="block.streaming" class="agent-block__streaming" role="status">正在写回答…</p>
+        <p v-if="block.streaming" class="agent-block__streaming" role="status" aria-live="off">正在写回答…</p>
         <p v-else-if="block.error" class="agent-block__body agent-block__answer-note">{{ block.error }}</p>
       </template>
 
@@ -423,20 +460,29 @@ function hasAppliedReceipt(block: { receipts?: readonly { status: string }[] | n
 <style scoped>
 .agent-block-list {
   display: grid;
+  gap: 14px;
   min-width: 0;
   max-width: 100%;
+  padding: 16px 14px 22px;
 }
 
 .agent-block {
   min-width: 0;
-  padding: 16px 14px;
-  border-bottom: 1px solid var(--line);
+  padding: 0 0 2px;
   color: var(--ink);
 }
 
-.agent-block[data-block-type="formal_error"],
-.agent-block:not([data-block-type="explanation"]):last-child {
+.agent-block:not([data-block-type="user_message"]):not([data-block-type="assistant_message"]) {
+  position: relative;
+  padding: 12px;
+  padding-left: 48px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
   background: color-mix(in srgb, var(--surface-subtle) 86%, var(--panel));
+}
+
+.agent-block[data-block-type="formal_error"] {
+  border-color: color-mix(in srgb, var(--danger) 42%, var(--line));
 }
 
 .agent-block__eyebrow {
@@ -465,6 +511,48 @@ function hasAppliedReceipt(block: { receipts?: readonly { status: string }[] | n
   min-width: 0;
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+.agent-block__time {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.agent-block__speaker .agent-block__time {
+  margin-left: auto;
+}
+
+.agent-block__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 92%;
+  margin: 0 0 7px;
+  color: var(--muted);
+  font-size: var(--text-micro);
+}
+
+.agent-block__assistant-mark {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 28px;
+  height: 28px;
+}
+
+.agent-block__assistant-mark img {
+  display: block;
+  width: 28px;
+  height: 28px;
+}
+
+.agent-block__meta-name {
+  color: var(--accent-ink);
+  font-weight: 700;
 }
 
 .agent-block-empty__choices {
@@ -531,17 +619,51 @@ function hasAppliedReceipt(block: { receipts?: readonly { status: string }[] | n
   white-space: pre-wrap;
 }
 
-/* The conversation. The user's own turn is marked so a long answer can still be attributed at a
-   glance, and the answer is pre-wrapped because the model writes it with its own line breaks. */
+/* Keep the conversation asymmetric: the user's turn ends at the right edge while the assistant
+   stays anchored to the left. This makes speaker changes legible without adding another card. */
 .agent-block[data-block-type="user_message"] {
-  border-left: 3px solid var(--accent);
-  background: color-mix(in srgb, var(--surface-muted) 62%, var(--panel));
+  display: flex;
+  align-items: flex-end;
+  flex-direction: column;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.agent-block[data-block-type="user_message"] .agent-block__speaker {
+  width: min(86%, 44rem);
+  flex-direction: row-reverse;
+  justify-content: flex-start;
+  margin: 0 0 4px;
+}
+
+.agent-block[data-block-type="user_message"] .agent-block__time {
+  color: color-mix(in srgb, var(--on-accent, #10201f) 86%, var(--accent));
 }
 
 .agent-block__utterance {
-  color: var(--ink);
+  max-width: min(86%, 44rem);
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--line-strong));
+  border-radius: 13px 13px 3px 13px;
+  color: var(--on-accent, #10201f);
+  background: var(--accent);
   font-weight: 600;
+  line-height: 1.55;
   overflow-wrap: anywhere;
+  box-shadow: var(--shadow-hairline);
+}
+
+.agent-block[data-block-type="assistant_message"] .agent-block__speaker {
+  width: min(92%, 44rem);
+}
+
+.agent-block[data-block-type="assistant_message"] .agent-block__answer,
+.agent-block[data-block-type="assistant_message"] .agent-block__answer-note,
+.agent-block[data-block-type="assistant_message"] .agent-block__streaming {
+  max-width: min(92%, 44rem);
+  margin-left: 36px;
 }
 
 .agent-block__answer {

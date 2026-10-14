@@ -24,6 +24,8 @@ import {
   renameDomain,
   renameModuleBinding,
   rewriteParticipants,
+  rewriteParticipantsForExistingTp,
+  rewriteRequestParallelism,
   runtimeRequestsOf,
   seedEntriesFromControls,
   seedStructuredInput,
@@ -254,6 +256,35 @@ describe("request row operations", () => {
     for (const row of runtimeRequestsOf(doc) as JsonObject[]) {
       expect(row.participants).toEqual(["gpu0", "gpu1", "gpu2", "gpu3"]);
     }
+  });
+
+  it("can explicitly synchronize TP and participants for a resized inventory", () => {
+    const doc = runtimeTrace();
+    expect(rewriteRequestParallelism(doc, ["gpu0", "gpu1", "gpu2", "gpu3"])).toBe(2);
+    for (const row of runtimeRequestsOf(doc) as JsonObject[]) {
+      expect(row.tp_degree).toBe(4);
+      expect(row.participants).toEqual(["gpu0", "gpu1", "gpu2", "gpu3"]);
+    }
+  });
+
+  it("keeps an existing TP valid by selecting a prefix of the new inventory", () => {
+    const doc = runtimeTrace();
+    expect(rewriteParticipantsForExistingTp(doc, ["gpu0", "gpu1", "gpu2", "gpu3"])).toBe(2);
+    for (const row of runtimeRequestsOf(doc) as JsonObject[]) {
+      expect(row.tp_degree).toBe(2);
+      expect(row.participants).toEqual(["gpu0", "gpu1"]);
+    }
+  });
+
+  it("refuses to preserve a TP larger than the new device set", () => {
+    const doc = runtimeTrace();
+    (runtimeRequestsOf(doc) as JsonObject[])[0].tp_degree = 4;
+    expect(() => rewriteParticipantsForExistingTp(doc, ["gpu0", "gpu1"])).toThrowError(/TP/);
+  });
+
+  it("refuses a duplicated device identity when rewriting request participants", () => {
+    const doc = runtimeTrace();
+    expect(() => rewriteRequestParallelism(doc, ["gpu0", "gpu0"])).toThrowError(/重复 device_id/);
   });
 
   it("clears participants and counts rows left without tp_degree", () => {

@@ -320,7 +320,7 @@ def valid_custom_inputs() -> dict:
             "trace_provenance": {
                 "source_mode": "synthetic_trace",
                 "calibration_level": "uncalibrated",
-                "allowed_claim_scope": "synthetic_consistency_only",
+                "allowed_claim_scope": "exploratory",
             },
             "policy": {"batch_scheduler": "decode_priority"},
             "requests": [{"request_id": "request-f8", "phase": "decode"}],
@@ -575,6 +575,41 @@ class DesignSpaceBridgeTest(unittest.TestCase):
             self.assertNotEqual(first, second)
             (root / "untracked.txt").write_text("three\n", encoding="utf-8")
             self.assertNotEqual(second, server.worktree_state_digest(root))
+
+    def test_worktree_digest_streams_large_untracked_files_without_changing_its_format(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            server.subprocess.run(["git", "init", str(root)], check=True, capture_output=True)
+            server.subprocess.run(["git", "-C", str(root), "config", "user.name", "TileSim Test"], check=True)
+            server.subprocess.run(
+                ["git", "-C", str(root), "config", "user.email", "tilesim-test@example.invalid"], check=True
+            )
+            (root / ".gitignore").write_text("/build-*/\n", encoding="utf-8")
+            server.subprocess.run(["git", "-C", str(root), "add", ".gitignore"], check=True)
+            server.subprocess.run(
+                ["git", "-C", str(root), "commit", "-m", "baseline"], check=True, capture_output=True
+            )
+            payload = b"a" * (2 * 1024 * 1024 + 7)
+            (root / "untracked.bin").write_bytes(payload)
+            revision = server.subprocess.run(
+                ["git", "-C", str(root), "rev-parse", "HEAD"], check=True, capture_output=True
+            ).stdout.strip()
+            expected = hashlib.sha256(
+                b"tilesim.worktree_state.v1\0"
+                + revision
+                + b"\0tracked-diff\0\0untracked\0"
+                + len(b"untracked.bin").to_bytes(8, "big")
+                + b"untracked.bin"
+                + b"file\0"
+                + len(payload).to_bytes(8, "big")
+                + payload
+            ).hexdigest()
+            with mock.patch.object(Path, "read_bytes", side_effect=AssertionError("untracked files must be streamed")):
+                self.assertEqual(server.worktree_state_digest(root), expected)
+            ignored = root / "build-cache"
+            ignored.mkdir()
+            (ignored / "large-output.bin").write_bytes(payload)
+            self.assertEqual(server.worktree_state_digest(root), expected)
 
     def test_windows_worktree_git_pointer_is_translated_for_wsl(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -983,6 +1018,85 @@ class F8ExperimentDescriptorContractTest(unittest.TestCase):
             raised.exception.field_path,
             "/custom_inputs/topology/topology/domains/0/cycle_window",
         )
+
+    def test_runtime_policy_boundary_and_synthetic_tuple_are_fail_closed(self) -> None:
+        for field in ("kv_capacity_tokens", "max_active_requests", "max_batch_size", "kv_admission_watermark"):
+            with self.subTest(field=field):
+                inputs = valid_custom_inputs()
+                inputs["runtime_trace"]["policy"][field] = 0
+                with self.assertRaises(server.RequestValidationError) as raised:
+                    server.validate_custom_inputs(inputs)
+                self.assertEqual(raised.exception.field_path, f"/custom_inputs/runtime_trace/policy/{field}")
+        for field, value in (("calibration_level", "partially_calibrated"),
+                             ("allowed_claim_scope", "synthetic_consistency_only")):
+            with self.subTest(field=field):
+                inputs = valid_custom_inputs()
+                inputs["runtime_trace"]["trace_provenance"][field] = value
+                with self.assertRaises(server.RequestValidationError) as raised:
+                    server.validate_custom_inputs(inputs)
+                self.assertEqual(raised.exception.field_path, f"/custom_inputs/runtime_trace/trace_provenance/{field}")
+
+    def test_topology_workload_requires_one_message_size_unit(self) -> None:
+        inputs = valid_custom_inputs()
+        inputs["topology"]["workload"] = {"requests": [{"request_id": "r", "message_size_bytes": 1024,
+                                                          "message_size_mb": 999}]}
+        with self.assertRaises(server.RequestValidationError) as raised:
+            server.validate_custom_inputs(inputs)
+        self.assertEqual(raised.exception.field_path, "/custom_inputs/topology/workload/requests/0/message_size_mb")
+
+    def test_three_versioned_dynamic_profiles_and_replay_are_separate(self) -> None:
+        profiles = (("vllm", "vllm.0.6.semantic.v1", ["continuous_batching"]),
+                    ("sglang", "sglang.0.4.semantic.v1", ["prefix_aware_scheduling"]),
+                    ("tensorrt_llm", "tensorrt_llm.0.12.semantic.v1", ["inflight_batching"]))
+        for engine, version, features in profiles:
+            with self.subTest(engine=engine):
+                inputs = valid_custom_inputs()
+                trace = inputs["runtime_trace"]
+                trace.update(engine_type=engine, engine_semantic_version=version, requested_features=features)
+                trace["policy"].update(kv_capacity_tokens=8192, max_active_requests=4, max_batch_size=4)
+                trace["requests"] = [{"request_id": "r", "phase": "request", "prompt_tokens": 8,
+                                      "decode_tokens": 2, "kv_tokens": 10, "tp_degree": 1,
+                                      "participants": ["gpu0"]}]
+                self.assertEqual(server.validate_custom_inputs(inputs), inputs)
+                invalid = json.loads(json.dumps(inputs))
+                invalid["runtime_trace"]["requests"].append({"request_id": "observed", "phase": "prefill"})
+                with self.assertRaises(server.RequestValidationError) as raised:
+                    server.validate_custom_inputs(invalid)
+                self.assertEqual(raised.exception.field_path, "/custom_inputs/runtime_trace/requests/1/phase")
+                trace["requests"][0]["phase"] = "prefill"
+                self.assertEqual(server.validate_custom_inputs(inputs), inputs)
+                trace["engine_semantic_version"] = "vllm.0.6.tilesim_pd.v1"
+                with self.assertRaises(server.RequestValidationError) as raised:
+                    server.validate_custom_inputs(inputs)
+                self.assertEqual(raised.exception.field_path, "/custom_inputs/runtime_trace/engine_semantic_version")
+        invalid = valid_custom_inputs()
+        invalid["runtime_trace"]["engine_type"] = {"not": "an engine"}
+        with self.assertRaises(server.RequestValidationError) as raised:
+            server.validate_custom_inputs(invalid)
+        self.assertEqual(raised.exception.field_path, "/custom_inputs/runtime_trace/engine_type")
+
+    def test_dynamic_kv_participants_and_features_fail_at_exact_fields(self) -> None:
+        inputs = valid_custom_inputs()
+        trace = inputs["runtime_trace"]
+        trace.update(engine_type="vllm", engine_semantic_version="vllm.0.6.semantic.v1",
+                     requested_features=["continuous_batching"])
+        trace["policy"].update(kv_capacity_tokens=1024, max_active_requests=2, max_batch_size=2)
+        trace["requests"] = [{"request_id": "r", "phase": "request", "prompt_tokens": 8,
+                              "decode_tokens": 2, "kv_tokens": 10, "tp_degree": 1,
+                              "participants": ["gpu0"]}]
+        for field, value, pointer in (("kv_tokens", 9, "kv_tokens"),
+                                      ("participants", [], "participants"),
+                                      ("tp_degree", 2, "participants")):
+            with self.subTest(field=field):
+                invalid = json.loads(json.dumps(inputs))
+                invalid["runtime_trace"]["requests"][0][field] = value
+                with self.assertRaises(server.RequestValidationError) as raised:
+                    server.validate_custom_inputs(invalid)
+                self.assertEqual(raised.exception.field_path, f"/custom_inputs/runtime_trace/requests/0/{pointer}")
+        trace["requested_features"] = ["chunked_prefill"]
+        with self.assertRaises(server.RequestValidationError) as raised:
+            server.validate_custom_inputs(inputs)
+        self.assertEqual(raised.exception.field_path, "/custom_inputs/runtime_trace/requested_features/0")
 
     def test_design_space_source_mode_fails_closed(self) -> None:
         manifest = valid_manifest()
@@ -1439,6 +1553,23 @@ class BridgeApiContractTest(unittest.TestCase):
         self.assertEqual(payload["error"]["field_path"], "/trace_package_id")
         self.assertNotIn("/private/trace-packages", json.dumps(payload))
 
+    def test_trace_package_intake_rejection_is_422_without_run_or_artifact(self) -> None:
+        error = server.trace_packages.TracePackageError(
+            "trace_package_inspect_nonzero_exit",
+            "TileSimCLI Trace-package inspection failed validation.",
+        )
+        with mock.patch.object(server, "inspect_trace_package", side_effect=error):
+            status, payload, _ = self.create_run(
+                {"scenario_id": "s1_des_example", "trace_package_id": "duplicate-package"},
+                "trace-package-intake-rejected",
+            )
+        self.assertEqual(status, 422)
+        self.assertEqual(payload["error"]["code"], "trace_package_inspect_nonzero_exit")
+        self.assertEqual(payload["error"]["field_path"], "/trace_package_id")
+        self.assertFalse(server.runs)
+        self.assertEqual(list(server.RUNS_ROOT.iterdir()), [])
+        self.assertNotIn("request-attribution", json.dumps(payload))
+
     def test_week7_allow_listed_endpoints_return_cli_reports(self) -> None:
         responses = {
             "evidence_map": {
@@ -1765,6 +1896,51 @@ class BridgeApiContractTest(unittest.TestCase):
         self.assertEqual(durable["status"], "failed")
         self.assertEqual(durable["failure_code"], "cli_timeout")
 
+    def test_cli_utf8_output_is_decoded_independently_of_windows_code_page(self) -> None:
+        run_id = "run-cli-utf8-code-page"
+        run_dir = server.RUNS_ROOT / run_id
+        run_dir.mkdir()
+        metadata = {"run_id": run_id, "status": "running"}
+        server.atomic_write_json(run_dir / "run-metadata.json", metadata)
+        server.runs[run_id] = metadata.copy()
+        scenario = {"from": "S1", "to": "S6", "trace": Path("trace.json"), "topology": Path("topology.json")}
+
+        def utf8_runner(command, **kwargs):
+            self.assertFalse(kwargs["text"])
+            report = {"report_kind": "wind_tunnel_run_result", "cause": "中文证据"}
+            return server.subprocess.CompletedProcess(
+                command, 0, stdout=json.dumps(report, ensure_ascii=False).encode("utf-8"), stderr=b""
+            )
+
+        with mock.patch.object(server.subprocess, "run", side_effect=utf8_runner):
+            server.execute_run(run_id, scenario, "des")
+
+        # The stdout artifact is valid UTF-8 even if the host's preferred code page is GBK.
+        self.assertEqual(server.read_json_file(run_dir / "run-result.json")["cause"], "中文证据")
+        self.assertEqual(server.runs[run_id]["status"], "completed")
+        self.assertEqual(server.read_json_file(run_dir / "run-metadata.json")["exit_code"], 0)
+
+    def test_cli_invalid_utf8_and_unavailable_output_reach_durable_failure(self) -> None:
+        scenario = {"from": "S1", "to": "S6", "trace": Path("trace.json"), "topology": Path("topology.json")}
+        for suffix, stdout, code in (("invalid", b"\xff", "cli_output_decode_error"),
+                                     ("missing", None, "cli_output_unavailable")):
+            with self.subTest(suffix=suffix):
+                run_id = f"run-cli-output-{suffix}"
+                run_dir = server.RUNS_ROOT / run_id
+                run_dir.mkdir()
+                metadata = {"run_id": run_id, "status": "running"}
+                server.atomic_write_json(run_dir / "run-metadata.json", metadata)
+                server.runs[run_id] = metadata.copy()
+                completed = server.subprocess.CompletedProcess([], 0, stdout=stdout, stderr=b"failure detail")
+                with mock.patch.object(server.subprocess, "run", return_value=completed):
+                    server.execute_run(run_id, scenario, "des")
+                durable = server.read_json_file(run_dir / "run-metadata.json")
+                self.assertEqual(durable["status"], "failed")
+                self.assertEqual(durable["failure_code"], code)
+                self.assertEqual(durable["exit_code"], 0)
+                self.assertEqual(durable["stderr_summary"], "failure detail")
+                self.assertTrue(durable["finished_at"])
+
     def test_cli_process_start_error_reaches_a_durable_failed_state(self) -> None:
         run_id = "run-cli-start-error"
         run_dir = server.RUNS_ROOT / run_id
@@ -1914,6 +2090,40 @@ class BridgeApiContractTest(unittest.TestCase):
         )
         self.assertEqual(status, 400)
         self.assertEqual(payload["error"]["field_path"], "/custom_inputs")
+
+    def test_invalid_dynamic_run_returns_field_pointer_without_creating_run(self) -> None:
+        inputs = valid_custom_inputs()
+        inputs["runtime_trace"].update(engine_type="sglang", engine_semantic_version="sglang.0.4.semantic.v1",
+                                       requested_features=["prefix_cache"])
+        inputs["runtime_trace"]["requests"] = [{"request_id": "r", "phase": "request", "prompt_tokens": 8,
+                                                 "decode_tokens": 2, "kv_tokens": 10, "tp_degree": 1,
+                                                 "participants": ["gpu0"]}]
+        inputs["runtime_trace"]["policy"].update(kv_capacity_tokens=1024, max_active_requests=2,
+                                                  max_batch_size=2)
+        status, payload, _ = self.create_run({"scenario_id": "s1_des_example", "fidelity_policy": "des",
+                                               "custom_inputs": inputs}, "invalid-dynamic-engine-key")
+        self.assertEqual(status, 400)
+        self.assertEqual(payload["error"]["field_path"], "/custom_inputs/runtime_trace/requested_features/0")
+        self.assertEqual(server.runs, {})
+        self.assertEqual(list(server.RUNS_ROOT.iterdir()), [])
+
+    def test_three_dynamic_profiles_are_accepted_by_run_intake_without_execution(self) -> None:
+        profiles = (("vllm", "vllm.0.6.semantic.v1"), ("sglang", "sglang.0.4.semantic.v1"),
+                    ("tensorrt_llm", "tensorrt_llm.0.12.semantic.v1"))
+        for engine, version in profiles:
+            with self.subTest(engine=engine):
+                inputs = valid_custom_inputs()
+                trace = inputs["runtime_trace"]
+                trace.update(engine_type=engine, engine_semantic_version=version, requested_features=[])
+                trace["policy"].update(kv_capacity_tokens=1024, max_active_requests=2, max_batch_size=2)
+                trace["requests"] = [{"request_id": "r", "phase": "request", "prompt_tokens": 8,
+                                      "decode_tokens": 2, "kv_tokens": 10, "tp_degree": 1,
+                                      "participants": ["gpu0"]}]
+                status, payload, _ = self.create_run({"scenario_id": "s1_des_example", "fidelity_policy": "des",
+                                                       "custom_inputs": inputs}, f"valid-{engine}-key")
+                self.assertEqual(status, 202, payload)
+                server.runs.clear()  # The test Bridge has one active-slot limit; no execution starts.
+        self.assertEqual(self.start_execution_mock.call_count, 3)
 
     def test_trace_package_run_creation_persists_validated_identity(self) -> None:
         manifest = write_trace_package_candidate(
@@ -4945,6 +5155,7 @@ class AssistantModelEndpointTest(unittest.TestCase):
     DESCRIPTOR_PATH = "/api/agent/assistant-model"
     PLAN_PATH = "/api/agent/scenario-plan"
     CHAT_PATH = "/api/agent/scenario-chat"
+    RESULT_ANALYSIS_PATH = "/api/agent/result-analysis"
 
     def setUp(self) -> None:
         self.httpd = server.ThreadingHTTPServer(("127.0.0.1", 0), server.BridgeHandler)
@@ -4996,6 +5207,19 @@ class AssistantModelEndpointTest(unittest.TestCase):
     def chat(self, payload: object) -> tuple[int, object, bytes]:
         request = urllib.request.Request(
             self.base_url + self.CHAT_PATH,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=5) as response:
+                return response.status, response.headers, response.read()
+        except urllib.error.HTTPError as error:
+            return error.code, error.headers, error.read()
+
+    def result_analysis(self, payload: object) -> tuple[int, object, bytes]:
+        request = urllib.request.Request(
+            self.base_url + self.RESULT_ANALYSIS_PATH,
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST",
@@ -5146,6 +5370,81 @@ class AssistantModelEndpointTest(unittest.TestCase):
         payload = {"messages": [{"role": "user", "content": "低延迟在线服务"}]}
         with self.unconfigured():
             status, headers, body = self.chat(payload)
+        self.assertEqual(status, 503)
+        self.assertEqual(json.loads(body)["error"]["code"], "assistant_model_unavailable")
+        self.assertNotIn("text/event-stream", headers.get("Content-Type", ""))
+
+    def test_the_result_analysis_route_is_read_only_and_streams_without_a_plan(self) -> None:
+        events = [
+            (
+                "prose",
+                {
+                    "schema_version": server.assistant_model.RESULT_ANALYSIS_CHAT_SCHEMA_VERSION,
+                    "text": "当前报告的重点是吞吐，仍需核对尾延迟。",
+                },
+            )
+        ]
+        payload = {
+            "messages": [{"role": "user", "content": "请分析当前结果"}],
+            "context": {
+                "run_id": "run-result-1",
+                "sections": [{"title": "速览", "body": "吞吐 12 req/s（/metrics/summary）。"}],
+                "evidence_paths": ["/metrics/summary"],
+                "evidence": {
+                    "manifest_status": "verified",
+                    "artifact_count": 1,
+                    "full_content_count": 1,
+                    "summary_only_count": 0,
+                    "unavailable_count": 0,
+                    "rejected_count": 0,
+                    "artifacts": [
+                        {
+                            "artifact_id": "metrics",
+                            "file_name": "metrics.json",
+                            "report_kind": "metrics",
+                            "schema_identity": "tilesim.metrics_report.v1",
+                            "sha256": "a" * 64,
+                            "bytes": "120",
+                            "contract_status": "supported",
+                            "content_status": "full",
+                            "content": {"summary": {"throughput_requests_per_second": 12}},
+                        }
+                    ],
+                    "rejected_artifacts": [],
+                },
+            },
+        }
+        before = dict(server.runs)
+        with self.channel_configured(), mock.patch.object(
+            server.assistant_model, "stream_result_analysis_events", return_value=iter(events)
+        ):
+            status, headers, body = self.result_analysis(payload)
+        self.assertEqual(status, 200)
+        self.assertIn("text/event-stream", headers.get("Content-Type", ""))
+        self.assertEqual([name for name, _ in self.read_frames(body)], ["prose", "done"])
+        self.assertEqual(server.runs, before)
+
+    def test_the_result_analysis_route_falls_back_when_channel_is_unconfigured(self) -> None:
+        payload = {
+            "messages": [{"role": "user", "content": "请分析当前结果"}],
+            "context": {
+                "run_id": "run-result-1",
+                "sections": [{"title": "速览", "body": "暂无。"}],
+                "evidence_paths": [],
+                "evidence": {
+                    "manifest_status": "verified",
+                    "artifact_count": 0,
+                    "full_content_count": 0,
+                    "summary_only_count": 0,
+                    "unavailable_count": 0,
+                    "rejected_count": 0,
+                    "artifacts": [],
+                    "rejected_artifacts": [],
+                },
+            },
+        }
+        with self.unconfigured():
+            status, headers, body = self.result_analysis(payload)
         self.assertEqual(status, 503)
         self.assertEqual(json.loads(body)["error"]["code"], "assistant_model_unavailable")
         self.assertNotIn("text/event-stream", headers.get("Content-Type", ""))

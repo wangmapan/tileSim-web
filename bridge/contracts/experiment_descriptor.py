@@ -22,6 +22,12 @@ SCENARIO_OPTIONS = (
         "available": True,
         "unavailable_reason": None,
     },
+    {
+        "scenario_id": "dense_des_package",
+        "label": "Dense DES Trace package topology (package input only)",
+        "available": True,
+        "unavailable_reason": None,
+    },
 )
 
 REQUESTED_FIDELITY_OPTIONS = (

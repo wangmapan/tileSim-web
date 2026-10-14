@@ -93,6 +93,8 @@ async function installApi(page, mode = "complete", options = {}) {
   let statusCalls = 0;
   let postCount = 0;
   let agentCapabilityRequests = 0;
+  let agentChatRequests = 0;
+  const agentChatBodies = [];
   let lastKey = null;
   await page.route(/^https?:\/\/[^/]+\/api(?:\/|$)/, async (route) => {
     const request = route.request();
@@ -190,9 +192,63 @@ async function installApi(page, mode = "complete", options = {}) {
         descriptor_revision: f8SchemaRevision,
         provider: { configured: false, available: false },
       };
+    else if (path === "/api/templates/s1_des_example")
+      body = {
+        scenario_id: "s1_des_example",
+        runtime_trace: {
+          trace_name: "l6-template",
+          policy: { batch_scheduler: "fifo", max_batch_size: 4 },
+          requests: [
+            { request_id: "req_a", arrival_time_ps: 0, phase: "prefill", tp_degree: 1, participants: ["gpu0"] },
+          ],
+        },
+        topology: {
+          topology: {
+            devices: [
+              { device_id: "gpu0", device_type: "GPU" },
+              { device_id: "gpu1", device_type: "GPU" },
+            ],
+            module_bindings: [],
+            domains: [],
+            links: [],
+          },
+        },
+      };
     else if (path === "/api/agent/orchestration-capabilities") {
       agentCapabilityRequests += 1;
       body = agentOrchestrationSnapshot();
+    } else if (path === "/api/agent/scenario-chat" && request.method() === "POST") {
+      agentChatRequests += 1;
+      agentChatBodies.push(request.postDataJSON());
+      const input = request.postDataJSON()?.messages?.at?.(-1)?.content || "";
+      const settings =
+        input.includes("高吞吐") || input.includes("8 卡") || input.includes("8卡")
+          ? [{ key: "topology/devices", value: "8", why: "按请求扩展设备清单；TP 与参与设备仍需在结构化输入中核对。" }]
+          : input.includes("topology/devices[15]")
+            ? [
+                { key: "run_name", value: "sixteen", why: "使用请求中的运行名称。" },
+                { key: "topology/devices[15]/group_id", value: "node3", why: "使用请求中的设备分组。" },
+              ]
+            : input.includes("run_name")
+              ? [{ key: "run_name", value: "avatar-check", why: "使用请求中的运行名称。" }]
+              : [{ key: "max_batch_size", value: "8", why: "按请求调整批大小。" }];
+      const plan = {
+        schema_version: "tilesim.bridge.assistant_model_plan.v1",
+        protocol: "tilesim.assistant_model.v1",
+        applied: false,
+        executed: false,
+        answer_state: "settings",
+        title: input.includes("高吞吐") ? "推荐方案：高吞吐 / 离线批量" : "模型参数方案",
+        rationale: "由配置助手根据当前页面目录生成；应用前仍需核对完整性。",
+        settings,
+        dropped: [],
+      };
+      await route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        body: `event: prose\ndata: ${JSON.stringify({ schema_version: "tilesim.bridge.assistant_model_chat.v1", text: "已根据当前页面目录生成方案。" })}\n\nevent: plan\ndata: ${JSON.stringify(plan)}\n\nevent: done\ndata: {}\n\n`,
+      });
+      return;
     } else if (path === "/api/runs" && request.method() === "POST") {
       postCount += 1;
       lastKey = request.headers()["idempotency-key"];
@@ -268,6 +324,8 @@ async function installApi(page, mode = "complete", options = {}) {
     getIdempotency: () => lastKey,
     getPostCount: () => postCount,
     getAgentCapabilityRequests: () => agentCapabilityRequests,
+    getAgentChatRequests: () => agentChatRequests,
+    getAgentChatBodies: () => agentChatBodies,
   };
 }
 
@@ -320,17 +378,20 @@ test.describe("L6 lightweight formal-run closure", () => {
     await expect(panel).toHaveCount(1);
     await expect(panel).toBeVisible();
     await expect(panel).toContainText("轻量实验配置");
-    // One input box, no mode to choose: the panel decides whether the sentence is
-    // a scenario, an explicit assignment or a question.
+    // One input box, no mode to choose: the configured assistant decides whether
+    // the sentence is a scenario, an explicit assignment or a question.
     await expect(panel.getByRole("radio")).toHaveCount(0);
     await expect(page.locator(".lightweight-conversation")).toHaveCount(0);
 
     await panel.getByRole("textbox", { name: "描述要理解或调整的内容" }).fill("把最大 batch 调整为 8");
     await panel.getByRole("button", { name: "提交", exact: true }).click();
 
-    await expect(panel).toContainText("这是草案，尚未创建运行。");
+    await expect(panel).toContainText("模型参数方案");
     await expect(panel).toContainText("4 → 8");
-    expect(api.getAgentCapabilityRequests()).toBe(1);
+    expect(api.getAgentCapabilityRequests()).toBe(0);
+    expect(api.getAgentChatRequests()).toBe(1);
+    expect(api.getAgentChatBodies()[0].messages.at(-2).content).toContain("输入模式=controls_only");
+    expect(api.getAgentChatBodies()[0].messages.at(-2).content).toContain("不要提出 topology/devices");
     expect(api.getPostCount()).toBe(0);
     expect(prohibitedRequests).toEqual([]);
 
@@ -348,7 +409,23 @@ test.describe("L6 lightweight formal-run closure", () => {
     expect(prohibitedRequests).toEqual([]);
   });
 
-  test("a described scenario becomes a one-click plan for the prepare panel", async ({ page }) => {
+  test("a structured-input request stays fail-closed on the knob-only page and explains the next step", async ({
+    page,
+  }) => {
+    const api = await installApi(page);
+    await page.goto("/lightweight/prepare", { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
+    const panel = page.locator("#tilesim-agent-copilot");
+    await panel.getByRole("textbox", { name: "描述要理解或调整的内容" }).fill("给我一份 8 卡试验方案");
+    await panel.getByRole("button", { name: "提交", exact: true }).click();
+
+    await expect(panel).toContainText("当前页面尚未发布设备、请求和拓扑字段");
+    await expect(panel.locator('[data-block-type="parameter_edits"]')).toHaveCount(0);
+    expect(api.getAgentChatRequests()).toBe(1);
+    expect(api.getPostCount()).toBe(0);
+  });
+
+  test("a described scenario is delegated to the assistant before a one-click plan", async ({ page }) => {
     const prohibitedRequests = [];
     page.on("request", (request) => {
       const url = new URL(request.url());
@@ -364,10 +441,12 @@ test.describe("L6 lightweight formal-run closure", () => {
     const batchInput = page.locator('.field[data-field-id="s1.runtime.max_batch_size"] input');
     await expect(batchInput).toBeVisible();
     await batchInput.fill("4");
+    await page.getByRole("button", { name: /用表单配置全部输入/ }).click();
+    await expect(page.locator(".structured-stack")).toBeVisible();
 
     await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
     const panel = page.locator("#tilesim-agent-copilot");
-    await panel.getByRole("textbox", { name: "描述要理解或调整的内容" }).fill("跑一个高吞吐离线批处理场景");
+    await panel.getByRole("textbox", { name: "描述要理解或调整的内容" }).fill("给我一份 8 卡试验方案");
     await panel.getByRole("button", { name: "提交", exact: true }).click();
 
     const userTurn = panel.locator('[data-block-type="user_message"]');
@@ -377,21 +456,23 @@ test.describe("L6 lightweight formal-run closure", () => {
       .toBe(true);
     await expect(panel.locator(".agent-copilot-shell__header")).toContainText("小拓 · TileSim 助手");
 
-    // The sentence was read as a scenario, so the panel shows a plan and writes
-    // nothing yet. Reading a scenario is local: it must not need the capability
-    // snapshot the frozen eight-field draft path fetches.
-    await expect(panel).toContainText("推荐方案：高吞吐 / 离线批量");
-    await expect(panel).toContainText("把每批塞满");
+    // The sentence is delegated to the assistant, so the panel shows a plan and
+    // writes nothing yet. The returned proposal is checked against the live
+    // catalogue before it can be applied.
+    await expect(panel).toContainText("模型参数方案");
+    await expect(panel).toContainText("topology/devices");
+    await expect(panel.locator('[data-block-type="parameter_edits"]')).toContainText("8");
     await expect(batchInput).toHaveValue("4");
     expect(api.getAgentCapabilityRequests()).toBe(0);
+    expect(api.getAgentChatRequests()).toBe(1);
+    const chatMessages = api.getAgentChatBodies()[0].messages;
+    expect(chatMessages.at(-2).content).toContain("输入模式=structured_input");
+    expect(chatMessages.at(-2).content).toContain("topology/devices");
+    expect(chatMessages.at(-1).content).toBe("给我一份 8 卡试验方案");
 
     await panel.getByRole("button", { name: "应用到面板", exact: true }).click();
-
-    await expect(panel).toContainText("已写入 4 项参数，没有创建运行。");
-    await expect(batchInput).toHaveValue("64");
-    // Every preset value is a quick-control knob, so the submission channel must
-    // not have moved to custom inputs behind the user's back.
-    await expect(panel).not.toContainText("自定义输入");
+    await expect(panel).toContainText("已写入 1 项参数，没有创建运行。");
+    await expect(panel).toContainText("设备数量");
     expect(api.getPostCount()).toBe(0);
     expect(prohibitedRequests).toEqual([]);
   });
@@ -487,6 +568,9 @@ test.describe("L6 lightweight formal-run closure", () => {
 
     await page.reload();
     await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
+    // Conversations now survive a reload. Start an explicit fresh session before
+    // exercising the first-session configuration entry point.
+    await panel.getByRole("button", { name: "新建会话", exact: true }).click();
     await panel.getByRole("button", { name: "配置实验", exact: true }).click();
     await expect(page).toHaveURL(/\/lightweight\/prepare/);
     expect(api.getPostCount()).toBe(0);
@@ -535,7 +619,9 @@ test.describe("L6 lightweight formal-run closure", () => {
     await page.reload();
     await expect(page).toHaveURL((url) => url.pathname === "/lightweight");
     await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
-    await page.locator("#tilesim-agent-copilot").getByRole("button", { name: "分析实验结果", exact: true }).click();
+    const resumedPanel = page.locator("#tilesim-agent-copilot");
+    await resumedPanel.getByRole("button", { name: "新建会话", exact: true }).click();
+    await resumedPanel.getByRole("button", { name: "分析实验结果", exact: true }).click();
     await expect(page).toHaveURL(/\/lightweight\/results/);
     await expect(page.locator("#tilesim-agent-copilot")).toContainText(`运行 ${runId}`);
     await page.locator("#tilesim-agent-copilot").getByRole("button", { name: "关闭", exact: true }).click();

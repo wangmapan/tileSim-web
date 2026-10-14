@@ -68,7 +68,12 @@ export type OperationRequest =
       backendDeployment: string;
       wslDistro: string;
     }
-  | { kind: "deploy_local"; backendRepository: string; wslDistro: string }
+  | {
+      kind: "deploy_local";
+      backendRepository: string;
+      wslDistro: string;
+      reuseVerifiedArtifacts?: boolean;
+    }
   | { kind: "repair_wsl"; wslDistro: string }
   | {
       kind: "save_model";

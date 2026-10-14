@@ -1,10 +1,90 @@
 import type { ReportBundle } from "../../contracts/report-model";
+import type { ArtifactManifestResponse } from "../../contracts/bridge-api";
+import { fetchVerifiedArtifact, type EvidenceQueryContext } from "../run-evidence";
 import { formatNumber, formatPercent, formatPicoseconds, statusLabel } from "../../lib/format";
+import { losslessIntegerToBigInt } from "../../contracts/lossless-json";
 
 export interface GuidanceSection {
   title: string;
   body: string;
 }
+
+/**
+ * Result analysis is a read-only projection of a result/report surface. Keep
+ * this allow-list explicit so a report left in a global store can never make a
+ * configuration page look like a result page.
+ */
+const RESULT_ANALYSIS_ROUTE_NAMES = new Set([
+  "overview",
+  "execution",
+  "raw_evidence",
+  "metrics",
+  "fabric",
+  "attribution",
+  "validation",
+  "evidence_agent",
+  "evidence_lab",
+  "lightweight_results",
+]);
+
+export function canUseResultAnalysisRoute(routeName: unknown): boolean {
+  return typeof routeName === "string" && RESULT_ANALYSIS_ROUTE_NAMES.has(routeName);
+}
+
+export type ResultAnalysisProgress =
+  | { stage: "reading_evidence"; completed: number; total: number }
+  | { stage: "assembling_context"; completed: number; total: number }
+  | { stage: "waiting_model"; completed: number; total: number }
+  | { stage: "model_output"; completed: number; total: number }
+  | { stage: "fallback"; completed: number; total: number; retryable: boolean }
+  | { stage: "failed"; completed: number; total: number; retryable: boolean };
+
+/** The only report projection sent to the read-only result-analysis model. */
+export interface ResultAnalysisContext {
+  run_id: string;
+  sections: GuidanceSection[];
+  evidence_paths: string[];
+  evidence: ResultAnalysisEvidencePack;
+}
+
+export interface ResultAnalysisEvidenceArtifact {
+  artifact_id: string;
+  file_name: string;
+  report_kind: string | null;
+  schema_identity: string;
+  sha256: string;
+  bytes: string;
+  contract_status: "supported" | "legacy_compatibility" | "not_applicable";
+  content_status: "full" | "summary_only" | "unavailable" | "not_applicable" | "expected_absence";
+  content?: unknown;
+  omission_reason?: "too_large_for_model_context" | "verification_failed";
+}
+
+export interface ResultAnalysisRejectedArtifact {
+  artifact_id: string;
+  schema_identity: string;
+  reason: string;
+  json_pointer: string;
+}
+
+export interface ResultAnalysisEvidencePack {
+  manifest_status: "verified" | "unavailable" | "run_mismatch";
+  artifact_count: number;
+  full_content_count: number;
+  summary_only_count: number;
+  unavailable_count: number;
+  rejected_count: number;
+  artifacts: ResultAnalysisEvidenceArtifact[];
+  rejected_artifacts: ResultAnalysisRejectedArtifact[];
+}
+
+const MAX_ARTIFACT_CONTEXT_CHARACTERS = 12_000;
+/** Keep the artifact portion below the Bridge's request bound, leaving room for sections and metadata. */
+const MAX_TOTAL_ARTIFACT_CONTEXT_CHARACTERS = 150_000;
+/** A result page can contain many artifacts; a small worker pool keeps the Bridge responsive. */
+const ARTIFACT_FETCH_CONCURRENCY = 4;
+/** Above this verified manifest byte size, keep identity but do not download an unbounded payload. */
+const MAX_ARTIFACT_READ_BYTES = 8_000_000n;
 
 /** Only reorganizes values the current, verified report already contains. No metric is inferred. */
 export function summarizeRunResult(bundle: ReportBundle, runId: string): GuidanceSection[] {
@@ -78,6 +158,270 @@ export function summarizeRunResult(bundle: ReportBundle, runId: string): Guidanc
       body: `${limits.join("；")}。\n可继续问“小拓，TTFT 和 TPOT 有什么区别？”或到结果可信度页核对原始证据。`,
     },
   ];
+}
+
+/**
+ * Build a bounded, presentation-shaped model context from the same deterministic
+ * sections shown when the model channel is unavailable.  It deliberately carries
+ * no raw artifact, configuration, credential or write-capable capability.
+ */
+export function buildResultAnalysisContext(bundle: ReportBundle, runId: string): ResultAnalysisContext {
+  const sections = summarizeRunResult(bundle, runId);
+  const evidence_paths = new Set<string>();
+  for (const section of sections) {
+    for (const match of section.body.matchAll(/\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+/gu)) {
+      evidence_paths.add(match[0]);
+    }
+  }
+  return {
+    run_id: runId,
+    sections,
+    evidence_paths: [...evidence_paths].slice(0, 64),
+    evidence: {
+      manifest_status: "unavailable",
+      artifact_count: 0,
+      full_content_count: 0,
+      summary_only_count: 0,
+      unavailable_count: 0,
+      rejected_count: 0,
+      artifacts: [],
+      rejected_artifacts: [],
+    },
+  };
+}
+
+function jsonSafe(value: unknown): unknown {
+  if (typeof value === "bigint") return value.toString();
+  if (Array.isArray(value)) return value.map(jsonSafe);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, jsonSafe(child)]));
+  }
+  return value;
+}
+
+function compactEvidence(value: unknown, depth = 0): unknown {
+  if (typeof value === "string" && value.length > 256) {
+    return { value_type: "string", character_count: value.length, preview: value.slice(0, 128) };
+  }
+  if (Array.isArray(value) && value.length > 64) {
+    return {
+      value_type: "array",
+      item_count: value.length,
+      sample: value.slice(0, 8).map((entry) => compactEvidence(entry, depth + 1)),
+    };
+  }
+  if (depth >= 2) {
+    if (Array.isArray(value)) return { value_type: "array", item_count: value.length };
+    if (value && typeof value === "object") {
+      const keys = Object.keys(value as Record<string, unknown>);
+      return { value_type: "object", field_count: keys.length, fields: keys.slice(0, 64) };
+    }
+    return value;
+  }
+  if (Array.isArray(value)) return value.map((entry) => compactEvidence(entry, depth + 1));
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value);
+    if (entries.length > 64) {
+      return {
+        value_type: "object",
+        field_count: entries.length,
+        fields: entries.slice(0, 64).map(([key]) => key),
+      };
+    }
+    return Object.fromEntries(entries.map(([key, child]) => [key, compactEvidence(child, depth + 1)]));
+  }
+  return value;
+}
+
+function evidenceArtifact(
+  entry: ArtifactManifestResponse["artifacts"][number],
+  content: unknown,
+): ResultAnalysisEvidenceArtifact {
+  const base = {
+    artifact_id: entry.artifact_id,
+    file_name: entry.file_name,
+    report_kind: entry.report_kind,
+    // Not-applicable inputs are valid manifest entries without a report schema.
+    // Preserve that absence explicitly for the model contract instead of turning
+    // it into an invalid empty identity.
+    schema_identity: entry.schema_identity || "not_applicable",
+    sha256: entry.sha256,
+    bytes: String(entry.bytes),
+    contract_status: entry.contract_status,
+  } as const;
+  if (entry.content_status === "expected_absence") {
+    return { ...base, content_status: "expected_absence" };
+  }
+  if (entry.contract_status === "not_applicable") {
+    return { ...base, content_status: "not_applicable" };
+  }
+  const safe = jsonSafe(content);
+  const serialized = JSON.stringify(safe);
+  if (serialized.length <= MAX_ARTIFACT_CONTEXT_CHARACTERS) {
+    return { ...base, content_status: "full", content: safe };
+  }
+  return {
+    ...base,
+    content_status: "summary_only",
+    content: compactEvidence(safe),
+    omission_reason: "too_large_for_model_context",
+  };
+}
+
+function unavailableEvidenceArtifact(
+  entry: ArtifactManifestResponse["artifacts"][number],
+): ResultAnalysisEvidenceArtifact {
+  return {
+    artifact_id: entry.artifact_id,
+    file_name: entry.file_name,
+    report_kind: entry.report_kind,
+    schema_identity: entry.schema_identity || "not_applicable",
+    sha256: entry.sha256,
+    bytes: String(entry.bytes),
+    contract_status: entry.contract_status,
+    content_status: "unavailable",
+    omission_reason: "verification_failed",
+  };
+}
+
+function contentCharacters(entry: ResultAnalysisEvidenceArtifact): number {
+  return entry.content === undefined ? 0 : JSON.stringify(entry.content).length;
+}
+
+/**
+ * Preserve every artifact identity while fitting the model request into a bounded context.
+ * Full content is downgraded to a structural summary before any content is dropped entirely.
+ */
+function boundEvidenceArtifacts(artifacts: ResultAnalysisEvidenceArtifact[]): ResultAnalysisEvidenceArtifact[] {
+  const bounded = artifacts.map((entry) => ({ ...entry }));
+  const total = () => bounded.reduce((sum, entry) => sum + contentCharacters(entry), 0);
+  if (total() <= MAX_TOTAL_ARTIFACT_CONTEXT_CHARACTERS) return bounded;
+
+  const fullEntries = bounded
+    .map((entry, index) => ({ entry, index, size: contentCharacters(entry) }))
+    .filter(({ entry }) => entry.content_status === "full")
+    .sort((left, right) => right.size - left.size);
+  for (const { entry, index } of fullEntries) {
+    if (total() <= MAX_TOTAL_ARTIFACT_CONTEXT_CHARACTERS) break;
+    bounded[index] = {
+      ...entry,
+      content_status: "summary_only",
+      content: compactEvidence(entry.content),
+      omission_reason: "too_large_for_model_context",
+    };
+  }
+
+  // A pathological top-level array/object can still produce a large summary. Keep its identity and
+  // status, but omit the summary rather than allowing the Bridge to reject the whole analysis.
+  if (total() > MAX_TOTAL_ARTIFACT_CONTEXT_CHARACTERS) {
+    const summaryEntries = bounded
+      .map((entry, index) => ({ entry, index, size: contentCharacters(entry) }))
+      .filter(({ entry }) => entry.content_status === "summary_only" && entry.content !== undefined)
+      .sort((left, right) => right.size - left.size);
+    for (const { entry, index } of summaryEntries) {
+      if (total() <= MAX_TOTAL_ARTIFACT_CONTEXT_CHARACTERS) break;
+      const withoutContent = { ...entry };
+      delete withoutContent.content;
+      bounded[index] = withoutContent;
+    }
+  }
+  return bounded;
+}
+
+async function fetchAllArtifactEvidence(
+  runId: string,
+  entries: ArtifactManifestResponse["artifacts"],
+  queryContext: EvidenceQueryContext,
+  onProgress?: (progress: ResultAnalysisProgress) => void,
+): Promise<ResultAnalysisEvidenceArtifact[]> {
+  const results: ResultAnalysisEvidenceArtifact[] = Array.from({ length: entries.length });
+  let nextIndex = 0;
+  let completed = 0;
+  onProgress?.({ stage: "reading_evidence", completed, total: entries.length });
+  async function worker(): Promise<void> {
+    while (true) {
+      const index = nextIndex++;
+      const entry = entries[index];
+      if (!entry) return;
+      if (entry.content_status === "expected_absence" || entry.contract_status === "not_applicable") {
+        results[index] = evidenceArtifact(entry, null);
+        completed += 1;
+        onProgress?.({ stage: "reading_evidence", completed, total: entries.length });
+        continue;
+      }
+      if (losslessIntegerToBigInt(entry.bytes) > MAX_ARTIFACT_READ_BYTES) {
+        results[index] = {
+          ...unavailableEvidenceArtifact(entry),
+          omission_reason: "too_large_for_model_context",
+        };
+        completed += 1;
+        onProgress?.({ stage: "reading_evidence", completed, total: entries.length });
+        continue;
+      }
+      try {
+        const content = await fetchVerifiedArtifact(runId, entry, queryContext);
+        results[index] = evidenceArtifact(entry, content);
+      } catch {
+        results[index] = unavailableEvidenceArtifact(entry);
+      }
+      completed += 1;
+      onProgress?.({ stage: "reading_evidence", completed, total: entries.length });
+    }
+  }
+  const workerCount = Math.min(ARTIFACT_FETCH_CONCURRENCY, entries.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return results;
+}
+
+/**
+ * Fetch every manifest artifact through the existing verified-artifact query
+ * path and package it for the read-only model. Files above the read budget
+ * retain identity and an explicit omission reason without reading their body;
+ * smaller files may be reduced to structural summaries under the context budget.
+ */
+export async function buildCompleteResultAnalysisContext(
+  bundle: ReportBundle,
+  runId: string,
+  manifest: ArtifactManifestResponse | null,
+  queryContext: EvidenceQueryContext | null,
+  onProgress?: (progress: ResultAnalysisProgress) => void,
+): Promise<ResultAnalysisContext> {
+  const base = buildResultAnalysisContext(bundle, runId);
+  if (!manifest) return base;
+  if (manifest.run_id !== runId) {
+    return { ...base, evidence: { ...base.evidence, manifest_status: "run_mismatch" } };
+  }
+  const evidence_paths = new Set(base.evidence_paths);
+  for (const entry of manifest.artifacts) evidence_paths.add(`${entry.artifact_id}:/`);
+  const artifacts = queryContext
+    ? await fetchAllArtifactEvidence(runId, manifest.artifacts, queryContext, onProgress)
+    : manifest.artifacts.map((entry) =>
+        entry.content_status === "expected_absence" || entry.contract_status === "not_applicable"
+          ? evidenceArtifact(entry, null)
+          : unavailableEvidenceArtifact(entry),
+      );
+  onProgress?.({ stage: "assembling_context", completed: manifest.artifacts.length, total: manifest.artifacts.length });
+  const boundedArtifacts = boundEvidenceArtifacts(artifacts);
+  const rejected_artifacts = manifest.rejected_artifacts.map((entry) => ({
+    artifact_id: entry.artifact_id,
+    schema_identity: entry.schema_identity,
+    reason: entry.reason,
+    json_pointer: entry.json_pointer,
+  }));
+  return {
+    ...base,
+    evidence_paths: [...evidence_paths].slice(0, 64),
+    evidence: {
+      manifest_status: "verified",
+      artifact_count: boundedArtifacts.length,
+      full_content_count: boundedArtifacts.filter((entry) => entry.content_status === "full").length,
+      summary_only_count: boundedArtifacts.filter((entry) => entry.content_status === "summary_only").length,
+      unavailable_count: boundedArtifacts.filter((entry) => entry.content_status === "unavailable").length,
+      rejected_count: rejected_artifacts.length,
+      artifacts: boundedArtifacts,
+      rejected_artifacts,
+    },
+  };
 }
 
 export function teachingForQuestion(instruction: string, bundle: ReportBundle | null): GuidanceSection | null {

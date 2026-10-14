@@ -3,6 +3,10 @@
 **范围**：电脑网页端 `ExecutionView`、`MetricsView`、`FabricView`、`DesignSpaceView`、`AttributionView`
 **原则**：图表只做可追溯的显示级整理，不生成模拟事实或提升证据等级。
 
+**2026-10-10 当前基线**：`ExecutionView` 的运行期证据面从已验证 manifest 按需读取四种直接 S1 CLI 工件，显示后端事件、汇总和逐请求记录；每页 25 条，超过 8 MB 转原始证据查看器。`AttributionView` 对满足 dense DES、设备/网络证据和唯一 request metrics 的 S0/S1 runtime package 展示后端逐请求原因链；其他路径显示 `expected_absence`、`unavailable` 或校验拒绝原因，不把 runtime summary 冒充 attribution。事件时间、bytes 和计数保持无损整数文本；不把旧显示级关联算作事件、不对共享批次成本求和。大工件不在普通页面全文解析，原始证据 Worker 按需索引和 Pointer 深链；Trace package 按 CLI 检查到的 entry boundary 决定是否请求工件。
+
+**2026-10-13 复核补充**：S2 execution/kernel、S3 memory、S4 device、S5 collective 的当前 canonical package 已由临时 Bridge 真实执行并在页面检查 `entry boundary`、provenance、fidelity、Fabric 数量和 `expected_absence`。这些入口不显示 runtime “已分析”或空事件；没有后端提供的字段时显示受控缺失态。完整深链、刷新恢复和全部原始证据入口未在同一轮逐项复跑，不能用历史 fixture 结果替代。
+
 ## 1. 统一阅读协议
 
 每张图仍需在模型与设计记录中回答四件事：
@@ -64,6 +68,13 @@ F6B run-bound panel 使用节点卡和证据表而不是因果图：S3/S4/S5 固
 图表下方始终保留类型选择依据、字段表和 JSON 路径。图表是摘要入口，原始 JSON artifact 仍是最终查看面。
 
 字段位置统一写成 `artifact-id:/json/pointer`；包含 `*` 或 `{field,...}` 的位置是多记录字段模式，不冒充单一 evidence pointer。当前精确记录已使用可刷新恢复的 `{runId, artifactId, sha256, pointer}`；聚合来源和通配路径仍只显示字段模式，不伪造单点链接。
+
+2026-10-10 引擎身份展示边界：执行页从已绑定的 `execution-envelope:/runtime_engine_type`、
+`/runtime_engine_semantic_version`、`/runtime_input_mode`、`/semantic_profile_applied` 显示结构化身份和动态/观测回放语义；
+只有 `has_runtime_event_trace` 且引擎类型存在时展示，不解析 stage 的字符串 detail，也不在主 run-result/metrics 顶层补造同名字段。
+回放显示“保留原顺序、未重排调度”，不能把它称为画像调度。请求 DES 是提交策略，S1 等层的 `actual_fidelity` 来自 resolved
+profile，两者不相互替代；synthetic validation 仍只支持一致性/探索性结论。后续若要将引擎身份加入主报告，必须另立契约与迁移计划，
+不能从本次可选 envelope 字段推定已经发布。
 
 ## 4. 实现边界
 

@@ -34,7 +34,8 @@
           "bytes": { "type": "integer", "minimum": 0 },
           "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
           "schema_identity": { "type": "string" },
-          "contract_status": { "enum": ["supported", "legacy_compatibility", "not_applicable"] }
+          "contract_status": { "enum": ["supported", "legacy_compatibility", "not_applicable"] },
+          "content_status": { "enum": ["ready", "expected_absence"] }
         }
       }
     },

@@ -121,6 +121,7 @@
             "type": "object",
             "additionalProperties": false,
             "required": ["request_id"],
+            "not": { "required": ["message_size_bytes", "message_size_mb"] },
             "properties": {
               "request_id": { "type": "string", "minLength": 1, "maxLength": 256 },
               "batch_id": { "type": "string", "maxLength": 256 },

@@ -4,6 +4,7 @@ import { defineComponent, h, nextTick, reactive, ref } from "vue";
 import { afterEach, describe, expect, it } from "vitest";
 import { setLocale } from "../../src/i18n";
 import ExperimentInputPanel from "../../src/features/run-experiment/ExperimentInputPanel.vue";
+import RuntimeEngineForm from "../../src/features/run-experiment/RuntimeEngineForm.vue";
 
 /**
  * These cover what the pure helpers cannot: the wiring between the panel and its
@@ -12,7 +13,7 @@ import ExperimentInputPanel from "../../src/features/run-experiment/ExperimentIn
  *  - The JSON input tab is untouched. It still shows exactly two textareas in
  *    the order runtime-then-topology, it never gains the structured blocks, and
  *    the shipped end-to-end specs keep typing straight into its textarea.
- *  - Growing the device inventory raises an explicit two-option prompt instead of
+ *  - Growing the device inventory raises an explicit three-choice prompt instead of
  *    silently rewriting (or silently ignoring) the request participants.
  */
 
@@ -92,6 +93,9 @@ function mountPanel(
     runtime?: string;
     topology?: string;
     withKnobs?: boolean;
+    withScheduler?: boolean;
+    fieldPath?: string;
+    errorMessage?: string;
   } = {},
 ) {
   const form = reactive({ parameterValues: {} as Record<string, unknown> });
@@ -99,6 +103,7 @@ function mountPanel(
     setup() {
       const mode = ref(options.mode ?? "controls");
       const structuredInput = ref(options.structuredInput ?? true);
+      const pairingPending = ref(false);
       const runtimeJson = ref(options.runtime ?? JSON.stringify(runtimeTrace, null, 2));
       const topologyJson = ref(options.topology ?? JSON.stringify(topology, null, 2));
       const state = { mode, structuredInput, runtimeJson, topologyJson, form };
@@ -108,13 +113,34 @@ function mountPanel(
           "onUpdate:mode": (value: string) => (state.mode.value = value),
           structuredInput: state.structuredInput.value,
           "onUpdate:structuredInput": (value: boolean) => (state.structuredInput.value = value),
+          pairingPending: pairingPending.value,
+          "onUpdate:pairingPending": (value: boolean) => (pairingPending.value = value),
           runtimeJson: state.runtimeJson.value,
           "onUpdate:runtimeJson": (value: string) => (state.runtimeJson.value = value),
           topologyJson: state.topologyJson.value,
           "onUpdate:topologyJson": (value: string) => (state.topologyJson.value = value),
           form: state.form,
           surface,
-          controlGroups: options.withKnobs ? knobGroups : [],
+          fieldPath: options.fieldPath,
+          errorMessage: options.errorMessage,
+          controlGroups: options.withScheduler
+            ? [
+                {
+                  subsystem: "S1",
+                  title: "Runtime",
+                  detail: "",
+                  fields: [
+                    {
+                      ...controlField("s1.runtime.batch_scheduler", "/overrides/runtime/batch_scheduler"),
+                      kind: "select",
+                      options: ["fifo", "decode_priority"],
+                    },
+                  ],
+                },
+              ]
+            : options.withKnobs
+              ? knobGroups
+              : [],
         });
     },
   });
@@ -124,6 +150,48 @@ function mountPanel(
 
 describe("structured input panel", () => {
   afterEach(() => setLocale("zh-CN"));
+
+  it("clears the dynamic engine's KV warning when the current draft is corrected", async () => {
+    const trace = {
+      engine_type: "vllm",
+      engine_semantic_version: "vllm.0.6.semantic.v1",
+      requested_features: [],
+      policy: { kv_capacity_tokens: 1024, max_active_requests: 1, max_batch_size: 1 },
+      requests: [
+        {
+          request_id: "r",
+          phase: "request",
+          prompt_tokens: 8,
+          decode_tokens: 2,
+          kv_tokens: 9,
+          tp_degree: 1,
+          participants: ["gpu0"],
+        },
+      ],
+    };
+    const wrapper = mount(RuntimeEngineForm, { props: { modelValue: JSON.stringify(trace) } });
+    expect(wrapper.get('[role="alert"]').text()).toContain("/custom_inputs/runtime_trace/requests/0/kv_tokens");
+    trace.requests[0].kv_tokens = 10;
+    await wrapper.setProps({ modelValue: JSON.stringify(trace) });
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+  });
+
+  it("locates an invalid KV field accessibly in both structured and JSON modes", () => {
+    const path = "/custom_inputs/runtime_trace/requests/0/kv_tokens";
+    const options = { fieldPath: path, errorMessage: "KV 预留须覆盖 prompt + decode。" };
+    const structured = mountPanel(options).wrapper;
+    const input = structured.get(`[data-input-path="${path}"] input`);
+    expect(input.attributes("aria-invalid")).toBe("true");
+    const errorId = input.attributes("aria-describedby");
+    expect(structured.get(`#${errorId}`).text()).toContain(path);
+    expect(structured.get(`#${errorId}`).text()).toContain("KV 预留");
+
+    const json = mountPanel({ ...options, mode: "json" }).wrapper;
+    const textarea = json.get(".json-grid textarea");
+    expect(textarea.attributes("aria-invalid")).toBe("true");
+    expect(textarea.attributes("aria-describedby")).toBe("runtime-json-error");
+    expect(json.get("#runtime-json-error").text()).toContain(path);
+  });
 
   it("leaves the JSON tab with exactly two textareas in order and no structured blocks", () => {
     const { wrapper } = mountPanel({ mode: "json" });
@@ -136,6 +204,32 @@ describe("structured input panel", () => {
     expect(textareas[1].element.closest(".topology-editor__json")).not.toBeNull();
     expect(wrapper.find(".structured-area").exists()).toBe(false);
     expect(wrapper.find(".structured-stack").exists()).toBe(false);
+  });
+
+  it("disables the generic scheduler control for a versioned dynamic engine and explains profile scheduling", () => {
+    const runtime = JSON.stringify({
+      engine_type: "vllm",
+      engine_semantic_version: "vllm.0.6.semantic.v1",
+      requested_features: [],
+      policy: { kv_capacity_tokens: 1024, max_active_requests: 2, max_batch_size: 2 },
+      requests: [
+        {
+          request_id: "r",
+          phase: "request",
+          prompt_tokens: 8,
+          decode_tokens: 2,
+          kv_tokens: 10,
+          tp_degree: 1,
+          participants: ["gpu0"],
+        },
+      ],
+    });
+    const { wrapper } = mountPanel({ runtime, withScheduler: true });
+    expect(
+      (wrapper.get('[data-field-id="s1.runtime.batch_scheduler"] select').element as HTMLSelectElement).disabled,
+    ).toBe(true);
+    expect(wrapper.text()).toContain("policy.batch_scheduler 不覆盖画像");
+    wrapper.unmount();
   });
 
   it("shows the JSON tab's topology as a preview: graph plus JSON, no editing chrome", () => {
@@ -310,7 +404,7 @@ describe("structured input panel", () => {
 
     const prompt = wrapper.get('.structured-note--warning[role="alert"]');
     expect(prompt.text()).toContain("8 张卡");
-    expect(prompt.text()).toContain("把每条请求的参与设备改成新集合");
+    expect(prompt.text()).toContain("同步 TP 与参与设备到新集合");
     expect(prompt.text()).toContain("清空参与设备，保留并行卡数");
     // Nothing changed on its own.
     expect(panel().emitted("update:runtimeJson")).toBeUndefined();
@@ -321,7 +415,7 @@ describe("structured input panel", () => {
     await editNumber(wrapper.get(".device-inventory__count input"), "8");
     await wrapper
       .findAll('.structured-note--warning[role="alert"] button')
-      .find((button) => button.text().includes("把每条请求的参与设备改成新集合"))
+      .find((button) => button.text().includes("同步 TP 与参与设备到新集合"))
       ?.trigger("click");
 
     const runtimeJson = panel().emitted("update:runtimeJson")?.at(-1)?.[0] as string;
@@ -329,9 +423,43 @@ describe("structured input panel", () => {
     expect(requests).toHaveLength(2);
     for (const row of requests) {
       expect(row.participants).toEqual(["gpu0", "gpu1", "gpu2", "gpu3", "gpu4", "gpu5", "gpu6", "gpu7"]);
-      expect(row.tp_degree).toBe(2);
+      expect(row.tp_degree).toBe(8);
     }
     expect(wrapper.find('.structured-note--warning[role="alert"]').exists()).toBe(false);
+  });
+
+  it("can preserve the previous TP while keeping participants valid", async () => {
+    const runtime = JSON.stringify(
+      {
+        ...runtimeTrace,
+        requests: runtimeTrace.requests.map((request) => ({ ...request, participants: ["gpu3", "gpu2"] })),
+      },
+      null,
+      2,
+    );
+    const { wrapper, panel } = mountPanel({ structuredInput: true, runtime });
+    await editNumber(wrapper.get(".device-inventory__count input"), "8");
+    await wrapper.findAll('.structured-note--warning[role="alert"] button').at(1)?.trigger("click");
+
+    const requests = JSON.parse(panel().emitted("update:runtimeJson")?.at(-1)?.[0] as string).requests;
+    for (const row of requests) {
+      expect(row.tp_degree).toBe(2);
+      expect(row.participants).toEqual(["gpu0", "gpu1"]);
+    }
+  });
+
+  it("keeps the pairing prompt open when preserving TP cannot fit the smaller inventory", async () => {
+    const runtime = JSON.stringify({
+      ...runtimeTrace,
+      requests: runtimeTrace.requests.map((request) => ({ ...request, tp_degree: 4 })),
+    });
+    const { wrapper } = mountPanel({ structuredInput: true, runtime });
+    await editNumber(wrapper.get(".device-inventory__count input"), "2");
+    const prompt = wrapper.get('.structured-note--warning[role="alert"]');
+    await prompt.findAll("button").at(1)?.trigger("click");
+
+    expect(wrapper.find('.structured-note--warning[role="alert"]').exists()).toBe(true);
+    expect(wrapper.text()).toContain("TP 必须在 1~2 之间");
   });
 
   it("clears participants when the second pairing option is chosen", async () => {

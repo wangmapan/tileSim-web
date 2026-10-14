@@ -44,6 +44,7 @@ const modelForm = ref<HTMLFormElement>();
 const backendRepository = ref("");
 const backendDeployment = ref("");
 const wslDistro = ref("Ubuntu-24.04");
+const forceFullValidation = ref(false);
 const baseUrl = ref("");
 const modelName = ref("gpt-5.6-sol");
 const timeoutMs = ref(30_000);
@@ -253,10 +254,13 @@ async function deployLocal(event: Event) {
       kind: "deploy_local",
       backendRepository: backendRepository.value.trim(),
       wslDistro: wslDistro.value.trim() || "Ubuntu-24.04",
+      reuseVerifiedArtifacts: !forceFullValidation.value,
     },
     "部署当前本地工作树？",
     `后端：${backendRepository.value.trim()}；Web：${snapshot.value?.paths.webRoot ?? "当前 checkout"}。` +
-      "将使用两处当前文件（包括未提交改动）构建和验证，不 fetch、不 push、不切换分支；发布后重启 127.0.0.1:5173。" +
+      (forceFullValidation.value
+        ? "将使用两处当前文件（包括未提交改动）完整构建和验证，不 fetch、不 push、不切换分支；发布后重启 127.0.0.1:5173。"
+        : "将使用两处当前文件（包括未提交改动）；后端和 Web 若与上一份已验证身份完全一致则复用构建结果，否则对变化部分执行快速契约/编译检查并完整重建必要产物；不 fetch、不 push、不切换分支；发布后重启 127.0.0.1:5173。") +
       "请先确认没有其他任务持续改写源码；启动器不会强制结束开发进程。",
     event,
   );
@@ -604,10 +608,15 @@ onBeforeUnmount(() => {
             <aside class="notice notice--warning">
               <strong>部署会重启本地服务</strong>
               <span
-                >本地部署使用当前后端与 Web 文件（含未提交改动），不拉取远端；确认后构建、测试、发布并重启
-                127.0.0.1:5173。运行期间不提供强制取消。</span
+                >本地部署使用当前后端与 Web 文件（含未提交改动），不拉取远端；默认会复用源码 digest、CLI 和 immutable
+                release
+                均匹配的已验证结果，对发生变化的部分执行快速契约/编译检查并重建必要产物。无法证明一致时自动回退完整流程；需要每项测试时勾选“强制完整验证”。运行期间不提供强制取消。</span
               >
             </aside>
+            <label class="check-field">
+              <input v-model="forceFullValidation" type="checkbox" :disabled="active" />
+              <span>强制完整验证（重新运行后端构建、CTest、Bridge/Web 测试和 Web 构建）</span>
+            </label>
             <details class="surface details-block">
               <summary>高级操作：远端更新与停止服务</summary>
               <div class="button-row">

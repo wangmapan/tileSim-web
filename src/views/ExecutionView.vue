@@ -25,6 +25,7 @@ import {
   executionStageSource,
   ExecutionVisualizationPanel,
   LayerRecordTable,
+  RuntimeEvidencePanel,
   semanticFieldPresentation,
   validationCheckSource,
 } from "../features/execution-inspector";
@@ -151,6 +152,12 @@ async function exportStructuredReport() {
     action-to="/experiment"
   />
   <div v-else class="view-stack execution-view">
+    <RuntimeEvidencePanel
+      :run-id="state.runId"
+      :artifact-manifest="state.artifactManifest"
+      :backend-revision="state.bridge.identity?.source_revision || state.bridge.identity?.build_revision || 'unknown'"
+      :bridge-manifest="state.bridge.manifest"
+    />
     <section class="panel execution-map-panel">
       <header class="panel-header panel-header--row">
         <div>
@@ -165,6 +172,25 @@ async function exportStructuredReport() {
           </button>
         </div>
       </header>
+
+      <p
+        v-if="
+          state.bundle.execution_envelope?.has_runtime_event_trace &&
+          state.bundle.execution_envelope.runtime_engine_type
+        "
+        class="structured-note"
+      >
+        {{ t("运行时引擎") }}：<code>{{ state.bundle.execution_envelope.runtime_engine_type }}</code> ·
+        <code>{{ state.bundle.execution_envelope.runtime_engine_semantic_version }}</code> ·
+        {{
+          state.bundle.execution_envelope.runtime_input_mode === "observed_replay"
+            ? t("已观测阶段回放（保留原顺序，未重排调度）")
+            : state.bundle.execution_envelope.runtime_input_mode === "dynamic_request"
+              ? t("版本化动态请求画像调度")
+              : t("通用运行时")
+        }}
+        · {{ state.bundle.execution_envelope.semantic_profile_applied ? t("画像已应用") : t("画像未应用") }}
+      </p>
 
       <div class="execution-flow" :aria-label="t('TileSim 分层执行链路')" data-help-anchor="execution-flow">
         <button
@@ -249,7 +275,17 @@ async function exportStructuredReport() {
 
         <div class="layer-metric-grid" :aria-label="t('本层关键指标')">
           <div v-for="metric in selected.stats" :key="metric.label" class="layer-metric">
-            <small>{{ executionMetricLabel(metric.label) }}</small>
+            <small>{{
+              selected.id === "S1" &&
+              metric.label === "调度器" &&
+              state.bundle.execution_envelope?.runtime_input_mode === "dynamic_request"
+                ? t("输入 batch_scheduler（不覆盖引擎画像）")
+                : selected.id === "S1" &&
+                    metric.label === "调度器" &&
+                    state.bundle.execution_envelope?.runtime_input_mode === "observed_replay"
+                  ? t("输入 batch_scheduler（回放未重排）")
+                  : executionMetricLabel(metric.label)
+            }}</small>
             <strong :title="String(metric.value ?? '')">{{
               metricSemantic(metric)?.valueLabel || displayValue(metric.value, metric.unit)
             }}</strong>

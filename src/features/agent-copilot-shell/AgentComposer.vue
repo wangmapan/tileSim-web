@@ -2,8 +2,9 @@
 import { computed, nextTick, ref } from "vue";
 
 /**
- * One box, one behaviour: the sentence is read as a scenario description, an
- * explicit `参数 = 值`, or a question, and the panel decides what that means.
+ * One box, one behaviour: the sentence is handed to the configured assistant
+ * model, which decides whether it is a scenario description, an explicit
+ * `参数 = 值`, or a question. The browser does not infer a plan from keywords.
  * The old "仅询问 / 提出草案修改 / 直接改参数" switch is gone on purpose — a user
  * should not have to know which internal path answers their sentence.
  *
@@ -68,13 +69,13 @@ defineExpose({ focus, value: instruction });
       ></textarea>
     </label>
     <div class="agent-composer__footer">
-      <p aria-live="polite">
+      <p>
         {{
           disabled
             ? disabledReason
             : busy
               ? "模型正在回答；可以直接停止，也可以先写下一句"
-              : "Enter 提交 · 描述场景会先给一份推荐方案，确认后才写入面板"
+              : "Enter 提交 · 描述场景会交给配置助手生成方案，确认后才写入面板"
         }}
       </p>
       <button v-if="busy" type="button" class="agent-composer__stop" @click="emit('cancel')">停止</button>

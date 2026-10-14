@@ -8,6 +8,154 @@
 Run Intake Lowering 已落地，Bridge 侧 Run Intake v2 **只读预览**端点（WP-2C-01a/01b，工作树未提交）已注册但仍未与 lowering
 接线；五类 Profile 真实记录仍为 `0/unavailable`，因此 Phase 2 的执行与数据侧仍被阻塞；未部署 5173
 
+## 2026-10-12 S2–S5 Bridge 矩阵与发布门禁剩余问题（第十二阶段，当前工作树）
+
+- 未修改后端仿真计算、S1 attribution 能力或 Bridge 契约。使用仓外当前源码 CLI、临时 Bridge `18372` 和临时 runs，真实验证了 canonical `s2-execution`、`s2-kernel`、`s3-memory`、`s4-device`、`s5-collective` package：均由 CLI inspect 返回 `tilesim.trace_package.v1alpha1`、`synthetic_trace`、`uncalibrated` 后进入 Bridge，HTTP `202`，终态 `completed`。执行包边界分别为 `S2→S6`（execution/kernel）、`S3→S6`、`S4→S6`、`S5→S6`；S2/S5 保留真实 Fabric records（12/5/10 条），S3/S4 无 Fabric records。所有 manifest 为 `tilesim.bridge.artifact_manifest.v2`，run/schema/SHA-256/bytes 身份一致；没有 attribution artifact。
+- Bridge 未按 package ID 猜测工件适用性。五个 package 均未请求 runtime 工件；S2/S5 的 metrics、tail-cause-chain、design-space 以带身份的 `expected_absence` descriptor 表达，S3/S4 的后端实际生成 metrics/design-space 保持 `ready`，tail 仍为带原因的 `expected_absence`；受控读取返回 descriptor 而非空事件数组。S2 显式缺少 `trace-kind` 的失败边界由 CLI/Bridge 契约保留，未新增猜测性注册。
+- 独立 `4173`（代理临时 Bridge）真实浏览器检查了 1440px 浅色与 1024px 深色的 package 列表、S2/S3/S4/S5 执行页、entry boundary、provenance、fidelity、expected-absence 文案、Fabric 数量及无横向溢出。完整深链/刷新和全部原始证据入口未在本轮逐项复跑，不能写成完全通过；仍需后续浏览器工作包补齐。
+- 自动化门禁：Bridge 定向 `python -m unittest test_server.py test_assistant_model.py test_parameter_surface.py` 为 275 tests 通过；全量 discovery 300 tests 中 1 项既有 `contracts.agent_orchestration_phase2.tests.test_registry` 导入 `bridge` 失败，其余通过。Web Vitest `1114 passed / 8 skipped`、contracts、typecheck、lint（0 error/2 既有 warning）、build、docs、deps、diff check 通过；`format:check` 仍被 24 个既有未修改文件阻塞。仓外 Release CTest 定向矩阵在 `PYTHONUTF8=1` 下 `13/13` 通过；默认 Windows 代码页有 3 项 Python 解码失败。全量 CTest 在 `PYTHONUTF8=1` 下 `92%`，剩余为未构建目标、既有资源路径及 RuntimeSwap/NetworkWait/PrefixCache/DenseRank/DevicePlacements 回归，未改仿真逻辑。
+- 全量 Playwright 单独运行 `69 passed / 6 skipped / 4 failed / 1 not-run`；4 项均为既有 desktop screenshot drift（synthetic evidence、request evidence、dark evidence、unknown schema），未更新快照；`large-artifact-worker` 的 not-reached 未在本轮出现。结果仍仅属于本地 synthetic hosted、临时 Bridge 和前端集成证据，不代表真实 GPU、Provider、校准、held-out validation 或生产批准。未触碰 `5173`、credential、Provider、用户 run，未提交、推送或部署。
+
+## 2026-10-13 Agent 配置助手与 8 卡扩容安全起点（当前工作树）
+
+### 模型配置上下文补强（当前工作树）
+
+- 配置助手请求现在把实时参数目录作为有界的只读对话上下文发送给已配置 Agent：包含精确 path、当前值、范围/枚举、结构化输入模式和集合字段模板；原始用户句子仍是最后一条消息。该上下文不改变 Bridge 契约，也不构成前端写入授权。
+- 普通旋钮页会明确告知模型 `topology/devices`、`runtime_trace/requests`、TP、participants 及其元素尚未发布，并引导用户先启用“用表单配置全部输入”；结构化输入页才暴露实时集合目录。模型返回后仍必须通过 live catalog、引用完整性、范围和原子应用校验。
+- 目录上下文按 Bridge 单消息上限裁剪，不发送完整大拓扑；目录外字段继续 fail closed。新增定向单测和 L6 浏览器断言覆盖上下文模式、最后用户消息和不创建 run 的边界。
+
+### 2026-10-13 配置请求统一委托 Agent（当前工作树）
+
+- 配置页的自然语言请求不再经过本地场景关键词或字段名匹配：8 卡、吞吐/延迟描述和显式参数赋值均统一发送给已配置的 Agent 模型。
+- 浏览器只对模型返回的结构化方案执行实时参数目录、范围、引用/集合完整性和原子应用校验；模型不可用或方案无法验证时 fail closed，不生成本地 fallback 方案、不写入配置、不创建 run。
+- 保留模型返回后的 key 到 live catalog 解析，因为这是拒绝未知字段和保持 JSON Pointer/当前页面边界的校验步骤，不是自然语言兜底。`scenario-profiles.ts` 及本地场景推荐路径已移除。
+- schema-set revision、Bridge 契约、后端核心、5173、Provider、credential、用户 run、提交和部署均未触碰。
+
+- 先前登记的 `eight_card_trial` 确定性场景目录已从运行路径移除；“8 卡／8 GPU／八卡”现在由 Agent 根据当前页面目录生成方案。页面仍不会猜测 domains、links、module bindings 或设备分组，方案必须经实时目录和结构化输入约束验证后才能应用。
+- 结构化输入面板在设备清单变化后显示明确的 TP/participants 配对选择：同步 TP 与参与设备到新集合、保留原 TP 并从新集合选择参与设备、清空 participants 保留 TP，或稍后处理。配对提示未处理时运行按钮保持禁用，用户明确选择“稍后再说”后才解除；失败的配对编辑不会清除阻塞状态。TP 大于新设备集合时拒绝静默降低，domains/links 仍由真实拓扑编辑器维护。
+- Agent 应用拓扑设备数量方案后会切换到结构化输入，并通过同一配对提示继续配置；参数目录仍只发布可验证的集合大小和标量叶字段，不新增 Bridge 字段、不放宽 Schema、不生成虚构拓扑引用。版本化引擎的通用 `batch_scheduler` 继续由画像调度，页面禁用该通用控件并显示提示。
+- 本阶段改动集中在 `src/features/run-experiment/`、`src/views/ExperimentView.vue`、结构化输入英文目录及对应单元/组件测试。定向测试 198 passed；全量 Vitest 1123 passed / 8 skipped；`vue-tsc --noEmit`、`pnpm lint`（0 error、2 既有 warning）、`pnpm build`、`contracts:check`、`docs:check`、`deps:check` 和 `git diff --check` 通过。未运行或修改后端核心，未触碰 5173、Provider、credential、用户 run、提交、推送或部署。
+- 全仓 `pnpm format:check` 仍报告 24 个既有文件（含历史契约/文档、`scripts/generate-bridge-client.mjs`、预先存在的运行实验文件）；本阶段实际修改文件的 Prettier 检查通过，未进行无关全仓格式化。
+- 该能力仍是本地参数草案与结构化输入辅助，不代表 8 卡物理拓扑、真实 GPU、Provider、校准、held-out validation 或生产发布已验证；domains/links、设备能力和后端契约校验仍是最终门槛。
+
+## 2026-10-13 文档整体审查复核（当前工作树）
+
+- 本次复核只更新文档口径，没有修改前端实现、Bridge 契约、生成物或后端仿真。结论范围限定为“前端是否正确暴露和解释当前后端已经提供的能力”；后端尚未实现的 Profile、Run Intake v2 执行、真实 GPU、Provider、校准和 held-out validation 不计为前端对齐缺口。
+- 当前已验证的 S0–S5 前后端边界：S0 dense package 可生成并展示 `request_attribution`；S1 runtime package 可展示四类 runtime 工件但在 dense DES 前置不足时不生成 attribution；S2 execution/kernel、S3 memory、S4 device、S5 collective 可通过当前 canonical Bridge package 进入 `completed`，页面展示 CLI 返回的 entry boundary、provenance、fidelity、Fabric 数量和带身份的 `expected_absence`，不把不适用工件解析为空数据。S2–S5 的完整深链、刷新恢复和全部原始证据入口仍属于浏览器复验项，不能写成已完全覆盖。
+- 当前身份口径保持不变：canonical schema-set revision 由 `bridge/contracts/schema_set.py` 计算，当前值为 `sha256:5ccd91c7457235b67ee9bc6731c887ca580bdf8bb74e171f9ef5fc56a8614b55`；manifest、run、artifact schema、SHA-256 和 bytes 必须绑定校验；query/cache key 继续包含 run ID、backend identity、schema revision 和 artifact SHA-256。
+
+### 2026-09-28 审查项当前状态
+
+下表是对下方历史登记的当前复核，不改写原始复现记录和当时门禁数字：
+
+| ID                   | 当前状态                             | 当前依据                                                                                                                                                                                                                          |
+| -------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AUDIT-20260928-001` | **已关闭**                           | `currentGuidanceBundle()` 对配置/准备路由拒绝结果分析授权；`tests/e2e/dashboard.spec.js` 与相关 Agent 测试覆盖配置页说明路径。全局 `runId` 或旧报告不能单独授权结果分析。                                                         |
+| `AUDIT-20260928-002` | **已关闭**                           | `src/stores/agent-sessions.ts` 已实现 7 天过期、最多 8 个会话、约 200 KB 总上限、长度限制/redaction、当前会话删除和全部本地会话清理；不保存 credential、hidden reasoning、Provider raw response 或未展示的完整 evidence payload。 |
+| `AUDIT-20260928-003` | **环境/部署项开放**                  | 5173 的执行身份一致性仍属于部署验收，不是前端功能对齐项；本轮未停止、重启或替换用户服务。                                                                                                                                         |
+| `AUDIT-20260928-004` | **既有 Bridge 测试基础设施问题开放** | 全量 discovery 的 `contracts.agent_orchestration_phase2.tests.test_registry` 导入失败；定向 Bridge 套件通过，未通过排除测试掩盖。                                                                                                 |
+| `AUDIT-20260928-005` | **既有格式门禁问题开放**             | 全仓 `format:check` 仍有历史未修改文件失败；本阶段实际改动文件单独检查通过，未进行无关全仓重写。                                                                                                                                  |
+| `AUDIT-20260928-006` | **已关闭**                           | `AgentCopilotShell.vue` 使用无 `role="status"` 的单一 `aria-live="polite"` 状态区域；辅助功能测试确认无重复 live region，加载、模型、错误和持久化失败文案可读。                                                                   |
+| `AUDIT-20260928-007` | **已关闭**                           | 结果分析进度来自真实 artifact 读取和流式阶段：读取证据及 `X/Y`、整理上下文、等待模型、模型输出、本地证据兜底和失败可重试；相关测试覆盖计数与失败回退。                                                                            |
+
+### 当前发布判断
+
+- 在“只负责前端，后端未实现能力不计入缺口”的范围内，已发布并已验证的前后端能力对齐；S2–S5 的 Bridge package 也已完成本地 synthetic hosted 矩阵。
+- 当前不能写成“全部门禁通过”：全仓格式检查仍有既有失败，Bridge 全量 discovery 仍有既有导入错误，全量 CTest 仍有后端/环境回归，全量 E2E 仍有既有截图漂移；这些不应被归因于新的前端参数或证据契约错位。
+- 真实 GPU、Provider、校准、held-out validation 和生产部署不属于本地前端对齐结论。临时 Bridge、4173 和仓外 synthetic run 均已按阶段结束后停止；5173、credential、Provider 和用户 run 未操作。
+
+## 2026-10-12 发布门禁分类与 S2–S5 边界复验（第十一阶段，当前工作树）
+
+- 本阶段未改实现、契约或后端仿真。第十阶段的 24 个 `format:check` 失败仍在既有未修改文件；Bridge 全量 discovery 的 `contracts.agent_orchestration_phase2.tests.test_registry` 导入 `FAMILIES` 失败，经检查还依赖当前 registry 已不存在的旧 API，属于 Bridge 内部测试／实现漂移，未通过排除测试或兼容注入掩盖。定向 Bridge 套件 275 tests 通过，全量 300 tests 中仍有 1 个导入错误。
+- 全量 CTest 本轮为 86/100 通过；其余分别涉及 Windows 默认代码页的 Python 解码、未构建目标、`docs/examples/dense_timing/topology.json` 资源路径及既有 RuntimeSwap、AutomaticPrefixCache、DenseRankExecution、DevicePlacements 回归。关键定向 11 项通过；Trace package 三项在默认代码页失败、`PYTHONUTF8=1` 下通过。上述后端／测试基础设施问题仍开放，未改仿真计算。
+- 当前核心源码提供可执行的 `s2_execution_trace.json`、`s3_memory_trace.json`、`s4_device_trace.json`、`s5_collective_trace.json`：S2 必须显式指定 `--trace-kind execution` 才能成功；S3/S4/S5 CLI 成功并保留 `expected_absence`、`not_covered` 和各自 provenance，不生成运行期工件。独立临时 Bridge `18371` 再次验证 dense S0 attribution `ready`（23,550,124 bytes）、S1 runtime 四工件 `ready` 且无 attribution、重复 request ID intake `422` 且无 run；manifest revision 仍为 `sha256:5ccd91c7457235b67ee9bc6731c887ca580bdf8bb74e171f9ef5fc56a8614b55`。S2–S5 的 Bridge 创建 run／manifest 矩阵本轮未完成，不能以 CLI 成功代替。
+- Web 全量 Vitest 1114 passed／8 skipped，contracts、typecheck、lint（0 error／2 既有 warning）、build、docs、deps、diff check 通过。全量 E2E 单独运行 69 passed／6 skipped／4 既有截图差异／1 not-reached；未更新快照，`large-artifact-worker` 单独复跑 1 passed。独立 4173 真实 Bridge 浏览器只检查了 package 列表、dense S0 package 和执行页；完整 1440/1024 浅深主题及 S2–S5 浏览器矩阵未完成，不能算通过。以上仍仅是本地 synthetic hosted 与临时集成证据，不代表 GPU、Provider、校准、held-out 或生产批准；未触碰 5173、credential、用户 run，未提交、推送或部署。
+
+## 2026-10-12 全量门禁与发布候选收口（第十阶段，当前工作树）
+
+- 未修改实现、契约或后端核心。使用仓外 MSVC Release 构建（现有 `tilesim-stage8-build`，CLI 目标构建成功）和临时 Bridge `18370`：`/api/manifest` 返回 canonical `sha256:5ccd91c7457235b67ee9bc6731c887ca580bdf8bb74e171f9ef5fc56a8614b55`，backend identity 与 `24f14ca1b9985e7a1651092d4c472c057ba16c2b` 绑定一致。
+- 真实临时 Bridge：dense S0 run 完成并生成 `tilesim.request_attribution.v1`（23,550,124 bytes，manifest/受控读取 SHA、bytes、run/schema/Pointer 一致）；S1 package 返回 202→completed，仅生成适用 runtime 工件且无 attribution；重复 package 保持 intake 阶段 `422 trace_package_inspect_nonzero_exit`、`/trace_package_id`，不创建 run/manifest/artifact；legacy controls run 完成。synthetic 结论仍限 consistency/exploratory。
+- 独立 4173（代理 18370）真实浏览器已检查 1440 浅色、1024 深色、S0 attribution、23 MB 工件原始证据虚拟索引、`/requests/0` 深链刷新、S1 package 适用性和不可提交的 invalid package。未触碰 5173、Provider、credential 或用户 run。
+- 门禁：Web Vitest `101 files / 1114 passed / 8 skipped`、typecheck、lint（0 error、既有 2 warning）、build、contracts/docs/deps/diff check 通过；`python -m py_compile` 通过。Bridge 全量 discovery `300` 项中 1 项既有 `contracts.agent_orchestration_phase2.tests.test_registry` 导入错误；`format:check` 被既有 24 个文件阻塞。全量 CTest `86/100` 通过，其余为仓外 Windows 默认 GBK 子进程解码、未构建目标、既有资源路径/仿真回归；定向关键 9 项 CTest 通过。全量 E2E 单独运行 `69 passed / 6 skipped / 4 failed / 1 not-run`，4 项均为既有 desktop screenshot drift（未更新快照）。
+- 以上仍是本地 synthetic hosted execution、临时 Bridge 和前端验收，不代表真实 GPU、Provider、校准、held-out validation 或生产发布批准。历史阶段数字保持不变。
+
+## 2026-10-11 Bridge intake 失败语义与 S1 归因边界（第九阶段，当前工作树）
+
+- Trace package 在 `POST /api/runs` 创建 run 前必须由当前 `TileSimCLI inspect-trace-package` 重新检查。检查非零是 **intake 阶段拒绝**，canonical HTTP 语义为 `422 trace_package_inspect_nonzero_exit`、字段路径 `/trace_package_id`；不创建 run 目录、不写 run manifest，也不产生逐请求归因工件。该语义与已有 inspect endpoint/OpenAPI 错误信封和回归测试一致，不能改写成 `202 → failed`。
+- 实验页将该 422 明确显示为“输入在 intake 阶段被拒绝，尚未创建 run”，保留结构化错误 code/path 和可重试入口；它不显示为运行失败或部分成功。普通运行的 `range_execution_failed` 与执行期归因的 `REQUEST_ATTRIBUTION_REQUEST_ID_DUPLICATED` 不受影响。
+- S1 runtime package 仍只生成运行期工件；逐请求归因继续要求后端真实 DES、dense profile、物理设备/网络/Fabric 证据及唯一 request metric identity。缺少任一前置时保持 `REQUEST_ATTRIBUTION_REQUIRES_DENSE_DES_EVIDENCE`（例如 `/dense_execution/schema_version`）fail-closed，不从 package ID、设备分组或 synthetic trace 推断归因。
+- 本阶段只补齐 intake 422 的前端状态与 Bridge 无 run 回归；没有放宽 schema、降低归因前置、修改 Schema revision、触碰 5173、Provider、credential、用户 run、提交、推送或部署。验收仍属于本地 synthetic hosted/临时 Bridge 与前端测试，不是 GPU、Provider、校准、held-out 或生产批准。
+
+## 2026-10-10 运行期证据第五阶段（当前工作树，未提交／未部署）
+
+- 仅对已发布、无 Trace package 的 S1 输入，Bridge 在**同一次**真实 CLI hosted run 中请求 runtime events、summary、request summaries 和 analysis。后端四工件增加各自的 `schema_version` 与 `run_id`，非运行时入口的 `expected_absence` 文件是带身份的描述符而不是空事件数组；manifest 和受控读取分别核对 schema、run、SHA-256、bytes、contract/content 状态。文件未请求、缺失、校验拒绝、未知 schema、正常空数组和执行失败互不代换。Trace package 的入口边界由 CLI 检查，Bridge 不预判并不请求四工件。
+- 执行页只在用户点击时读取四工件，每页 25 条后端事件／请求记录；超过 8 MB 改走原始证据查看器的按需索引/虚拟行，不在执行页解析。归因页将逐请求运行记录与真正的逐请求原因链分开；`--request-attribution-out` 在这些轻量 S1 输入上要求 dense DES host，真实 CLI 返回 `REQUEST_ATTRIBUTION_REQUIRES_DENSE_DES_EVIDENCE`，故第五工件**未开放采集**，不伪造原因链。显示级输入/指标关联仍不是事件流，不对共享批次时间做独立资源合计。
+- 结果分析证据包仍以当前 run manifest 的验证身份为准，保留读取数量、字节、schema、SHA、contract/content 状态和裁剪说明；超过 8 MB 的单文件不下载进模型上下文，标为 `too_large_for_model_context`，原有全文／结构摘要预算不增加。未调用 Provider。
+- 当时 schema-set revision 是 `sha256:41c9f630a5792f136700b8c469f92e8b5961f4ee55d7e652b70d84708d1aa647`，相较第四阶段的 `sha256:3538337ea5dcc9fb88ed213fa9eb177246023d1209b15d625af8f1593d8a72be` 已变化；OpenAPI、Schema 与生成类型/校验器同步，`contracts:check` 通过。当前 revision 以第六阶段条目为准。
+- 仓库外 MSVC `/utf-8` 构建及七项定向 CTest 通过；五种 S1 输入的 CLI 原/新采集对照中 metrics、validation、execution envelope 完全一致，主报告只增加四条工件清单记录；合法 S3 对四开关返回 `expected_absence`。独立 18351 Bridge 与 4173 浏览器验证了五种 S1 run、受控文件读取、深链和刷新恢复；定向 fixture E2E 独立通过。均属本地 synthetic consistency/exploratory，不是 GPU、真实推理服务、真实校准、held-out 或生产批准。全量 CTest/E2E 未运行；门禁数字和命令见最终交付报告。
+
+## 2026-10-10 逐请求归因、Trace package 与大工件第六阶段（当前工作树，未提交／未部署）
+
+- 后端在当前执行路径闭合了逐请求归因的 dense DES 前置：请求 DES、dense profile、物理设备拓扑、网络 domains/links、非空且唯一 request metric identity，以及设备/KV、网络/Fabric 完成证据。真实 CLI 对 dense S0 package 生成 `tilesim.request_attribution.v1`；Bridge 仅在 hash-bound S0/S1 runtime entry 且检测到 dense DES 条件时请求该工件。归因 payload 保留后端 request/report/cause identity、subject/evidence refs、JSON Pointer、run/schema 绑定；Bridge 校验 run、外部 metrics identity、唯一引用和 SHA/bytes。非 dense、缺设备/网络、非 DES 均在生成前以稳定错误码和字段路径失败。重复请求目前由 S0 loader 以 `range_execution_failed` 拒绝，尚未提供 attribution 专用字段路径，不能把该项写成已闭合。
+- 真实临时 Bridge 18361 已验证：S0/S1 runtime package 请求四类运行期工件；S2/S3/S4/S5 package 不请求不适用工件；dense S0 package 的 attribution `ready`，小工件可控读取；S1 synthetic 输入生成了 9,689,193-byte runtime event trace，manifest bytes/SHA 与受控读取一致。大于 8 MB 的真实事件文件原始证据页建立 Worker 索引（409,601 行、378,092 Pointer）并在刷新后恢复 `/events/0` 深链；执行页不首屏读取大文件。大于 8 MB 的归因页只展示身份和原始证据入口。
+- 独立 4173 真实浏览器验证了归因按需读取、请求原因链分页、事件/归因大工件边界，以及浅色/深色 1024/1440 桌面视口；执行页运行期工件按钮只在用户点击时发起读取。结果分析单元验证大工件不调用读取、仅保留 schema/run 外的 artifact 身份、bytes、SHA、`unavailable` 与 `too_large_for_model_context`，未调用 Provider。当前 manifest revision 实测为 `sha256:77cf2fd41db5291e6f4f169cfac37564ad9d4b36a5553ff243fe2b8823ba20e6`；相对第五阶段记录存在漂移，未修改 revision 以掩盖漂移。
+- 仓库外 MSVC `/utf-8` 重建并通过 11 项 CTest（第五阶段七项 + attribution/Trace package/WindTunnel）；Bridge `py_compile` 与 189 tests、定向 Vitest、contracts/typecheck/lint/docs/deps/build/diff check 通过。所有证据仍是本地 synthetic hosted execution、临时 Bridge 和前端证据链路；不是真实 GPU、Provider、校准、held-out 或生产批准。全量 CTest、全量 Vitest、全量 E2E 未运行。暂未修改 5173、Provider、credential、用户 run，也未提交、推送或部署。
+
+## 2026-10-10 参数与推理引擎第四阶段（当前工作树，未提交／未部署）
+
+- 仓库外 MSVC `/utf-8` 构建的 `TileSimCLI` 完成七项定向 CTest；本地 synthetic S1 hosted CLI 的 legacy、vLLM、SGLang、TensorRT-LLM 动态请求及显式 vLLM 阶段回放均 exit 0。回放 collective 保留逻辑 request 身份和输入顺序，execution envelope 结构化记录 `runtime_engine_type`、`runtime_engine_semantic_version`、`runtime_input_mode`、`semantic_profile_applied`；Web 在执行页直接从已绑定 envelope 展示，不在主 run-result 或 metrics 顶层补造字段。requested DES 与 resolved fidelity 仍独立。`vllm.0.6.tilesim_pd.v1` 缺分离、特性、dense host、放置、多 rank handoff 或必要 dense profile 时在 Fabric 前以 code/path 失败；Web 仍不发布该版本。
+- `CLIHostValidationTest` 的 held-out baseline 断言保留；Windows 测试 CLI cwd 原先是临时 artifact 目录，导致相对默认 baseline 包无法读取，现从后端源根运行并继续将 artifact 放在临时目录。Bridge 真实子进程输出改为 UTF-8 严格解码，异常/缺失输出均收敛到持久化失败终态。独立 4191 默认 cp936 与 4192 `PYTHONUTF8=1` Bridge 的真实 CLI 成功运行已验证；4191 的后端失败 run 记录 exit 1、错误码、stderr 摘要与结束时间。4173 浏览器链路创建、刷新恢复动态及回放 run，非法 KV 的字段路径和辅助技术文本已验证，失败 run 概览显示原因并提供返回配置入口。所有临时 runs 均在仓库外，未触碰 5173。
+- 以上只是本地 synthetic hosted execution 与临时 Bridge/浏览器集成，不是 GPU、真实推理服务、Provider、真实校准、独立 held-out 验证或生产发布批准。尚未执行全量 CTest 与全量 E2E；完整验收命令和门禁结果以本阶段最终报告为准。
+
+## 2026-10-09 前后端参数对齐第二阶段（当前工作树，未提交／未部署）
+
+- 受控 `custom_inputs` 修正三项正数运行 policy、`kv_admission_watermark` 的开区间下界、小拓 `run_name` 80 字符上限。后端运行入口对 synthetic runtime provenance 只支持 `synthetic_trace/uncalibrated/exploratory`，该 tuple 在 runtime Schema 与 Bridge 校验收紧；拓扑 workload 同时提供 bytes/MB 时后端优先 bytes，为避免歧义输入现要求只选一项。独立的 design-space v1、拓扑 provenance 口径未据此升级或改动。
+- 受控 S1 runtime trace 可选择 `legacy_generic/legacy_generic.v1`（省略字段仍是默认）、`vllm.0.6.semantic.v1`、`sglang.0.4.semantic.v1`、`tensorrt_llm.0.12.semantic.v1`。仅发布无高级前置的调度特性子集；`phase=request` 必须显式填请求、正数容量、足额 KV、有效 TP/参与设备且设备存在于拓扑；版本化 prefill/decode 为按序回放，不与动态请求混用。表单不隐式转换阶段；小拓不提供引擎版本、特性数组或 phase 标量编辑，动态模式错误整批回滚。通用调度提示与版本化画像调度提示分离；请求 DES 与报告 resolved fidelity 仍分别显示。
+- `vllm.0.6.tilesim_pd.v1`、service-time、swap、chunk、PD 分离、prefix、MoE、逐阶段通信、GPU-in-loop、真实 Trace、Cycle、Run Intake v2 均**未开放**。PD 需要完整放置、handoff 和 dense host；其余须单独闭合来源、引用、物理 host 与失败语义。版本化画像只是仿真语义，不启动真实推理服务；本轮只有 fixture／单元级合成一致性，非真实 Provider、校准或留出验证。
+- 测试：定向 Vitest 110 passed；Bridge 相关套件与 400／不创建 run 检查通过；定向 fixture E2E 2 passed；contracts check、typecheck、lint（0 error、既有 2 warning）、build 通过。后端 C++ 未构建／CTest 未运行，Web 的 `/api/runs` 三画像测试只证实 Bridge intake，执行由 mock 截断，不能声称后端真实执行验收。5173、核心仓库、用户 runs 和 credential 均未操作。
+
+## 2026-10-09 小拓全页面参数方案路由（工作树，未部署）
+
+- 配置页首轮点名字段、但没有明确 `路径 = 值` 的方案请求，现在优先走已有的完整页面参数目录与配置模型；“运行参数：batch size、最大活动请求数、KV 容量、调度策略”中的冒号不再被误认成确定性赋值。只问页面用途/指标的句子仍走页面说明，明确赋值仍由本地目录确定性校验；冻结的八字段 Phase 1 compiler 与正式 `agent_exposed` 发布集合未更改。
+- 模型方案继续按当前页面目录逐项验证，用户明确排除的设备数量、TP 或现有拓扑元素若仍出现在模型提案中，整份方案禁止应用；用户确认前不写表单。页面没有打开结构化输入时，未发布的元素路径不能凭模型建议被写入。模型不可用时，涉及扩展字段的自然语言请求给出重试或完整路径赋值提示，不再把页面可编辑字段误报为正式能力不支持。TP 与参与设备、拓扑引用和缺失 links/domains 仍按现有原子回滚/不完整方案规则阻止误用。
+- 定向单元与浏览器夹具覆盖四个运行旋钮的一次方案生成及确认写入；5173 正在使用，本批不替换、不部署，真实 Provider 的新路由行为仍待用户通过正常部署流程验证。
+
+## 2026-09-28 小拓结果分析模型接入（工作树，未部署）
+
+- 结果分析新增独立只读模型通道 `POST /api/agent/result-analysis`，与配置/方案通道分离；模型不可用、超时或响应不完整时，前端继续使用确定性的本地结果整理，不创建运行、不修改配置、不写回报告。
+- 发送给模型的不是单独三段摘要：当前 run 的 artifact manifest 会逐一经过既有 run、schema、bytes、SHA-256 校验路径读取。每个 artifact 都保留 `artifact_id`、schema、SHA-256、字节数、contract 状态和内容覆盖状态；rejected artifact 也会显式保留。
+- 小文件全文进入上下文；单文件超过 12,000 字符或总证据超过 150,000 字符时降为结构摘要，验证失败标记为 `unavailable`，`not_applicable` 与 rejected 不会被伪装成已读全文。模型提示词必须报告这些覆盖事实，不能声称分析了所有证据文件。
+- 已补充前端 evidence-pack、Bridge 校验、OpenAPI/生成类型、流式 API 与单元/端点测试。当前验证：Vitest **1077 passed / 8 skipped（96 files）**、Bridge **262 passed**、`contracts:check`、`docs:check`、`deps:check`、`vue-tsc --noEmit`、ESLint、`vite build`、`git diff --check` 通过；未部署 5173、未执行真实 Provider 调用。
+
+## 2026-09-28 小拓本地会话管理（工作树，未部署）
+
+- 助手对话已从 `App.vue` 的临时 ref 移入独立 Pinia store `src/stores/agent-sessions.ts`，使用版本化 `localStorage` 恢复多个会话；侧栏提供新建、切换和删除，会话标题从第一条用户消息生成。
+- 每个会话独立保存已展示的用户/助手 transcript、typed blocks、创建/更新时间、页面 context revision，以及澄清重算所需的最近指令和 capability projection。切换会话不会执行方案或修改页面；context revision 不匹配时继续按既有 stale 规则拒绝旧草案/标记旧内容。
+- 本地持久化是明确标注的有限期、可删除会话缓存：最多 8 个会话、7 天无活动后过期、总大小约 200 KB，超限按最近更新时间清理。只接受经过长度限制的可见 typed block 和 redacted 可见消息，不保存 credential、hidden reasoning、Provider raw response、未展示的完整 evidence payload 或任何运行操作；Bridge 仍不持久化 transcript。这是前端重启恢复能力，不冒充正式的服务端 Conversation/Turn store，侧栏提供当前会话删除与清理全部本地会话入口。
+- 本批补充 `tests/unit/agent-sessions.test.ts`，覆盖跨 Pinia 实例恢复、会话隔离和删除最后会话后的兜底会话。当前工作树尚未部署 5173、提交或推送。
+
+## 2026-09-28 整体审查登记（历史登记；当前状态见 2026-10-13 复核）
+
+本轮只读审查覆盖：当前未提交工作树、前端静态门禁、Bridge Python 门禁、5173 健康状态、4173 真实浏览器路由/主题/窄桌面、助手模型结果分析、localStorage 会话恢复和 Axe 检查。除本节文档登记外未修改实现、未重启或替换 5173、未提交。
+
+| ID                   | 优先级 | 状态         | 复现与证据                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | 影响                                                                                                                                                   |
+| -------------------- | ------ | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `AUDIT-20260928-001` | P1     | **开放**     | `tests/e2e/dashboard.spec.js:54-79` 在当前工作树失败：进入 `/experiment` 且工作区已有一个真实 run 后，提交“说明当前页面能做什么”，期望页面说明“这里可以核对当前实验参数”，实际被 `src/App.vue:1056-1057` 的 `resultQuestion` 路由到结果分析，展示运行结果摘要并调用/回退结果分析模型。根因迹象是 `currentGuidanceBundle()`（`src/App.vue:699`）只校验 run/report 身份，没有限制结果分析只能发生在结果/只读页面。                                                                                                                            | 实验配置页的解释问题会污染为结果分析；模型不可用时仍显示当前 run 的结果，导致配置页行为和既有 Phase 1 合同回归。                                       |
+| `AUDIT-20260928-002` | P1     | **开放**     | `src/stores/agent-sessions.ts:147-217` 将完整可见用户消息、助手消息和 typed blocks 长期写入 `localStorage`；没有 retention/expiry/consent/redaction/export 记录或时间边界，只有删除当前会话。与 `docs/features/lightweight-workbench/SECURITY_RETENTION_AND_FAILURE_SEMANTICS.md:12-16,39-41`、`docs/F9_AGENT_ORCHESTRATION/00_GUARDRAILS_AND_GLOSSARY.md:145-156`、`docs/F9_AGENT_ORCHESTRATION/05_CONVERSATION_AND_DRAFT_CONTRACTS.md:16,199-230` 的“不得保存完整对话/不得把 localStorage 当正式 conversation store/先发布留存契约”冲突。 | 用户问题和模型整理结果可能在本机浏览器永久留存；多会话数量和 block 体积也没有总上限。现有 2026-09-28 会话说明中“不会保存完整对话”的表述与实现不一致。  |
+| `AUDIT-20260928-003` | P1     | **环境阻塞** | 当前 `http://127.0.0.1:5173/api/health` 返回 `execution_ready=false`、`state_digests_match=false`、`versions_match=false`，`deployment_mode=local_worktree_snapshot`；实测 `source_revision=cb2cd0bdef2a88e9ac5756ac5e739dc1495fb18d`，`build_revision=ba11e6fdb69af046dc7597e5ef5732cce029cfbe`。                                                                                                                                                                                                                                          | 当前 5173 服务不能作为可执行实验后端；页面可浏览、模型 descriptor/catalogue 可读，但提交运行应继续被阻止。需要通过既有部署流程恢复一致性，本轮未执行。 |
+| `AUDIT-20260928-004` | P2     | **开放**     | 在 `D:\tileSim-web\bridge` 执行 `python -m unittest`，共发现 278 项但 `contracts.agent_orchestration_phase2.tests.test_registry` 导入失败：`ModuleNotFoundError: No module named 'bridge'`；其余测试完成。按仓库规定的定向 `python -m unittest test_server.py` 门禁可通过，故这是 discovery/包路径问题，不等同于 Bridge 业务失败。                                                                                                                                                                                                          | 全量 Bridge discovery 不能作为可靠绿灯；不同入口会得到不同结果。                                                                                       |
+| `AUDIT-20260928-005` | P2     | **开放**     | `pnpm format:check` 失败，报告 26 个文件不符合 Prettier；其中包含当前改动涉及的 `src/App.vue`、`scripts/generate-bridge-client.mjs`、`docs/F9_AGENT_ORCHESTRATION/16_RIGHT_SIDE_AGENT_COPILOT_PANEL.md`、`docs/features/lightweight-workbench/AGENT_INTEGRATION_BOUNDARY.md`，以及多份契约/文档 JSON。`pnpm lint` 无 error，但有 2 条既有 `vue/one-component-per-file` warning。                                                                                                                                                            | 当前工作树不能通过完整格式门禁；是否全部由本批引入尚未拆分。                                                                                           |
+| `AUDIT-20260928-006` | P2     | **开放**     | 对已打开的 `#tilesim-agent-copilot` 执行 Axe 4.13，发现 `aria-allowed-role` minor violation：`src/features/agent-copilot-shell/AgentCopilotShell.vue:413` 的 `<footer role="status" aria-live="polite">` 被判定为该元素不允许使用 `status` role。概览页面本身 Axe 无 violation。                                                                                                                                                                                                                                                            | 助手状态播报的语义角色不符合当前无障碍检查规则，可能影响辅助技术识别；不阻塞普通鼠标操作。                                                             |
+| `AUDIT-20260928-007` | P2     | **待优化**   | 真实 run `run-20260923-164653-94a0e483` 的结果分析会先并发读取 manifest 中 9 个 artifact（包含约 1.2 MB 的 `metrics.json`），证据打包完成后才开始 SSE；期间只显示空的流式回答/“正在分析”状态，没有已读取数量、等待阶段或超时进度。当前一次浏览器调用最终返回 200，模型回答正确，未判定为功能失败。                                                                                                                                                                                                                                          | 大 artifact 或 Provider 较慢时用户无法区分“仍在读取证据”“等待模型”和“已卡住”，会误以为助手没有调用模型。                                               |
+
+### 审查门禁摘要
+
+- 前端 Vitest：**1081 passed / 8 skipped（97 files）**；`vue-tsc --noEmit`、`pnpm build`、`contracts:check`、`docs:check`、`deps:check`、`git diff --check` 通过。
+- `pnpm lint`：0 error、2 warning；`pnpm format:check`：失败（26 files，见 `AUDIT-20260928-005`）。
+- 全量 Playwright（本轮实际报告）：**69 passed / 6 skipped / 1 failed / 1 not run（77 tests）**；唯一失败是 `AUDIT-20260928-001`，其依赖项目导致 large-artifact-worker 本轮未覆盖。6 条 live Week 8 用例按环境条件跳过。
+- 4173 浏览器只读巡检：专业与轻量主要路由均返回 200；1440/1024 宽度未发现横向溢出；概览 Axe 无 violation；助手侧栏有 `AUDIT-20260928-006`。
+- `api.yhchj.com/ip` 在仓库源码中无引用，本轮登记为外部浏览器请求，未归因于 TileSim。
+
 ## 2026-09-24 专业原始证据入口（工作树，未部署）
 
 - 专业导航以「原始证据」替代独立「AI 解释」入口；小拓仍是常用的结果分析与教学入口。旧 `/evidence-agent` 页面暂保留为深链兼容，不再出现在主导航，原 Evidence Agent 契约与历史记录未删除或改写。
@@ -145,7 +293,7 @@ L6R 后续 UI remediation 已完成 P0/P1/P2/P3：`/lightweight` 负责开始/�
 
 轻量 run/results 深链统一等待共享 Bridge manifest/schema bootstrap；bootstrap 失败时 fail closed，不在缺少 manifest/schema 上下文时走 legacy evidence 读取路径。共享 readiness promise 会去重 App shell 与页面自身的并发 bootstrap 请求。
 
-专业版现有的同一个右侧 `TileSim 助手` 现复用于轻量工作台，不新增第二套 Agent UI、会话或请求链。轻量配置页通过 `run-experiment` 公共 adapter 发布同一组正式八字段和当前页面上下文，轻量运行/结果页只从合法 run 路由或 query 建立 run context；模式切换时保留同一助手状态，但旧页面 context 必须失效并替换。该助手仍是单轮、确定性的本地草案 Copilot：可以解释和生成草案，但不写入表单、不自行创建 run、不调用 Provider，也不把 synthetic/fixture 证据升级为 live、calibration 或 held-out。
+专业版现有的同一个右侧 `TileSim 助手` 现复用于轻量工作台，不新增第二套 Agent UI、会话或请求链。轻量配置页通过 `run-experiment` 公共 adapter 发布当前 descriptor/页面目录允许的字段和当前页面上下文，轻量运行/结果页只从合法 run 路由或 query 建立 run context；模式切换时保留同一助手状态，但旧页面 context 必须失效并替换。配置草案仍不写入表单、不自行创建 run；结果页只读分析可使用独立模型通道并在失败时回退本地证据整理。助手本地会话是有限期、可删除的可见缓存，不是服务端 Conversation store；不把 synthetic/fixture 证据升级为 live、calibration 或 held-out。
 
 本轮在专业版和轻量版的 JSON 输入模式中加入 canonical topology request 可视化编辑器：设备节点可拖动调整前端布局，连接模式支持点选或拖拽创建显式 `links`，边属性可编辑/删除，domain 成员关系以只读虚线展示；`links` 按当前后端 `LinkSpec` 语义表示无向物理连接，前端不绘制方向箭头，也不允许同一 domain 的反向重复边；布局坐标不会写入提交 JSON，未实现设备/domain CRUD，也未修改 Bridge、schema、Profile registry 或 API surface。拓扑专项单元/组件测试为 29/29 passed，新增 desktop pointer E2E 通过（含拖动、建边、反向重复保护、属性编辑、删除和无 `x/y` 断言）。
 
@@ -263,8 +411,7 @@ scripts bridge` / `vite build` / `contracts:check` / `docs:check`（43 篇）/ `
   接收与呈现。
 - Phase 0D 已发布 Capability Catalog/Profile Schema v1；八个 `agent_exposed` 字段有 execution closure，五类真实 Profile
   仍为 `0/unavailable`，没有 calibration 或 held-out validation。
-- Phase 1 右侧 Agent 栏是单轮、确定性的本地草案 Copilot，不连接模型、不创建 run、不持久化对话。它只接受正式八字段，
-  对模型、设备、卡数、TP/PP/EP、placement、物理 KV、集合通信算法和 SLO 失败关闭。
+- Phase 1 正式 capability projection 仍是八字段本地草案边界；当前工作树另有受页面目录约束的模型配置建议和只读结果分析通道。两者都不创建 run、不绕过页面/Bridge 校验；模型、设备、卡数、TP/PP/EP、placement、物理 KV、集合通信算法和 SLO 在没有后端正式能力时继续 fail closed。
 - Phase 2A 的隔离候选已由 Phase 2B 正式发布并提交。契约包位于 `bridge/contracts/agent_orchestration_phase2/`，含
   五类 Profile v2、Profile Binding v1、Run Intake v2、Validation Report v1、Calculator Receipt Envelope v1、七类 typed
   receipt identity 与幂等/留存 policy；`package_revision` 为
@@ -585,3 +732,21 @@ docs/archive/                    历史记录
   为空而 fail closed。**Bridge 侧尚未与 lowering 接线**（只读预览端点不触达 lowering）。
 - 阶段记录已归档：Phase 1 验收、Phase 2 DoR 审计、Phase 2A 候选、Phase 2B 发布见
   `docs/archive/agent-orchestration/phase-records/`。
+
+## 10. 第七阶段逐请求归因错误契约与 Schema identity（工作树）
+
+- 重复 `request_id` 在请求归因路径返回稳定的
+  `REQUEST_ATTRIBUTION_REQUEST_ID_DUPLICATED`，并携带 `/requests/<n>/request_id` 与原因中的相关元素指针；普通运行仍使用
+  `range_execution_failed`。CLI 失败不写入归因 payload，Bridge 持久化 `cli_error_code`、`cli_field_path`、`cli_cause`、
+  `cli_next_action`，前端归因入口显示失败事实、修复动作与重试入口。
+- Schema-set revision 唯一由 `bridge/contracts/schema_set.py` 对当前 JSON 契约集合计算；Bridge manifest 与
+  `contracts:check` 均复用并校验该 canonical 值。当前工作树 revision 为
+  `sha256:5ccd91c7457235b67ee9bc6731c887ca580bdf8bb74e171f9ef5fc56a8614b55`；历史阶段报告中的 revision 保留为历史记录。
+- 本阶段只覆盖本地 synthetic hosted execution、临时 Bridge 和前端测试；不开放真实 GPU、Provider、校准或 held-out validation，
+  也未操作 5173、提交或部署。
+
+### 2026-10-13 启动器本地部署增量复用（当前工作树，未部署）
+
+- `scripts/deploy-local-backend.ps1` 新增显式 `-ReuseVerifiedArtifacts` 快速路径和 `-ForceFullValidation` 安全回退开关。启动器的“重新部署当前代码”默认请求快速路径：只有当前后端 revision、后端源码 digest、build digest、WSL 发行版、CLI 路径及 SHA-256、已记录 CTest 结果，以及 Web immutable release 的源码 digest、schema revision、受控 release 路径和 release/Bridge/static 校验全部一致时才复用；证明不足即回退原完整构建/测试流程。
+- 后端未变化时复用已验证 CLI 与 CTest；Web 未变化时通过 `release-snapshot.mjs verify` 复用 immutable release；Web 有变化时仍执行契约生成物 drift check、schema-set check、Bridge `py_compile` 和生产构建。勾选“强制完整验证”或直接调用脚本不带快速开关会重新运行原有后端构建、CTest、Bridge/Web 测试和 Web 构建。
+- 快速路径不改变 manifest identity、source/build digest、schema-set revision、immutable release、rollback 或 5173 重启语义；manifest 记录复用状态，后续启动也会复核 CLI SHA-256。启动器 fixture、Rust 单测/Clippy、组件和 fixture E2E 已复验；本轮未完成真实部署、未读取 credential、未调用 Provider、未操作用户 run、未提交或推送。一次误触发的脚本检查在进入 manifest/重启阶段前被中断，仅留下仓外增量构建缓存；检查开始时 5173 曾由既有 PID 监听，随后在清理该检查产生的 WSL 子进程后观察为未监听，未执行启动或重启操作，需由用户决定是否恢复服务。

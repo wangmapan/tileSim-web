@@ -46,6 +46,10 @@ class SurfaceCoverageTest(unittest.TestCase):
         for definition in PARAMETER_DEFINITIONS:
             self.assertIn(definition.request_json_pointer.lstrip("/"), paths)
 
+    def test_run_name_catalogue_uses_create_run_limit(self) -> None:
+        address = next(address for address in surface.SURFACE_ADDRESSES if address.path == "run_name")
+        self.assertEqual(address.max_length, 80)
+
     def test_a_knob_keeps_the_field_id_that_names_it_on_the_page(self) -> None:
         by_path = {address.path: address for address in surface.SURFACE_ADDRESSES}
         for definition in PARAMETER_DEFINITIONS:
@@ -62,6 +66,9 @@ class SurfaceCoverageTest(unittest.TestCase):
         for key in policy:
             self.assertIn(f"runtime_trace/policy/{key}", paths)
         for key in requests:
+            if key == "phase":
+                self.assertNotIn("runtime_trace/requests[i]/phase", paths)
+                continue  # Dynamic/replay mode changes need an atomic document edit.
             self.assertIn(f"runtime_trace/requests[i]/{key}", paths)
 
     def test_every_scalar_leaf_of_the_four_topology_collections_is_an_address(self) -> None:

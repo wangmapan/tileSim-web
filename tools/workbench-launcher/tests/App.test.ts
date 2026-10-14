@@ -99,4 +99,15 @@ describe("TileSim workbench launcher", () => {
     expect(wrapper.findAll("details").some((item) => item.text().includes("更新并部署最新 main"))).toBe(true);
     wrapper.unmount();
   });
+
+  it("explains safe artifact reuse and exposes an explicit full-validation switch", async () => {
+    const wrapper = await mountApp();
+    await button(wrapper, "部署设置").trigger("click");
+    expect(wrapper.text()).toContain("复用源码 digest、CLI 和 immutable release");
+    const fullValidation = wrapper.get('input[type="checkbox"]');
+    await fullValidation.setValue(true);
+    expect((fullValidation.element as HTMLInputElement).checked).toBe(true);
+    expect(wrapper.text()).toContain("强制完整验证");
+    wrapper.unmount();
+  });
 });

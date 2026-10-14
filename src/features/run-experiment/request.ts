@@ -6,6 +6,7 @@ import {
   designSpaceCandidatesV2 as validateDesignSpaceCandidatesV2,
 } from "../../contracts/generated/experiment-validators.js";
 import { expectedParameterPointers } from "./parameter-contract";
+import { dynamicEngineIssue, engineModeOf } from "./runtime-engine";
 import {
   ExperimentRequestError,
   type BuildExperimentRequestOptions,
@@ -187,6 +188,12 @@ export function buildExperimentRequest(options: BuildExperimentRequestOptions): 
   requireSupported(form.fidelity_policy, surface.fidelityPolicies, "/fidelity_policy");
   requireSupported(form.gpu_participation_mode, surface.gpuParticipationModes, "/gpu_participation_mode");
   requireSupported(mode, surface.inputModes, "/input_mode");
+  if (form.scenario_id === "dense_des_package" && mode !== "trace_package") {
+    throw new ExperimentRequestError("The dense DES topology is for Trace packages only.", "/trace_package_id");
+  }
+  if (form.scenario_id === "dense_des_package" && form.fidelity_policy !== "des") {
+    throw new ExperimentRequestError("Dense DES package attribution requires requested DES fidelity.", "/fidelity_policy");
+  }
   if (form.run_name.length > schemaProperties.run_name.maxLength) {
     throw new ExperimentRequestError(
       `Run name exceeds ${schemaProperties.run_name.maxLength} characters.`,
@@ -268,6 +275,11 @@ export function buildExperimentRequest(options: BuildExperimentRequestOptions): 
       nestedIdentity === "tilesim.design_space.s6_candidates.v2",
     );
     request.design_space_candidates = designSpace;
+  }
+  const runtimeTrace = asRecord(asRecord(request.custom_inputs).runtime_trace);
+  if (request.custom_inputs && engineModeOf(runtimeTrace) === "dynamic") {
+    const issue = dynamicEngineIssue(runtimeTrace, asRecord(asRecord(request.custom_inputs).topology));
+    if (issue) throw new ExperimentRequestError(issue.message, issue.path);
   }
   if (!validateCreateRunRequest(request)) {
     throw new ExperimentRequestError(

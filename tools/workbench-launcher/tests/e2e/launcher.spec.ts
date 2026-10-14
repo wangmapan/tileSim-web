@@ -90,19 +90,31 @@ test("启动显示持续计时、当前阶段和不伪造百分比的进度条",
   await expect(progress.getByRole("progressbar")).toHaveCount(0);
 });
 
-test("重新部署显示构建和验证阶段，完整日志可达", async ({ page }) => {
+test("重新部署默认显示快速复用路径，完整日志可达", async ({ page }) => {
   await page.goto("/?fixture=slow");
   await page.getByRole("button", { name: "重新部署当前代码" }).click();
   await page.getByRole("button", { name: "确认继续" }).click();
   const progress = page.getByRole("region", { name: "操作进度" });
   await expect(progress).toContainText("部署当前代码");
   await expect(progress.getByRole("progressbar")).toBeVisible();
-  await expect(progress).toContainText("构建后端");
-  await expect(progress).toContainText("验证 Web");
+  await expect(progress).toContainText("构建 Web");
   await expect(progress).toContainText("操作完成");
   await progress.getByRole("button", { name: "查看完整日志" }).click();
   await expect(page.getByRole("heading", { name: "操作日志", level: 2 })).toBeVisible();
-  await expect(page.getByRole("main")).toContainText("[fixture] building_backend");
+  await expect(page.getByRole("main")).toContainText("[fixture] building_web");
+});
+
+test("可显式要求本地部署完整验证", async ({ page }) => {
+  await page.goto("/?fixture=slow");
+  await page.getByRole("button", { name: "部署设置", exact: true }).click();
+  await page.getByLabel("强制完整验证").check();
+  await page.getByRole("button", { name: "概览" }).click();
+  await page.getByRole("button", { name: "重新部署当前代码" }).click();
+  await page.getByRole("button", { name: "确认继续" }).click();
+  const progress = page.getByRole("region", { name: "操作进度" });
+  await expect(progress).toContainText("构建后端");
+  await expect(progress).toContainText("验证 Web");
+  await expect(progress).toContainText("操作完成");
 });
 
 test("从部署设置底部发起远端更新时进度条回到可见区域", async ({ page }) => {

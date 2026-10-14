@@ -26,6 +26,15 @@ export type AgentTaskRoute = "configure" | "capability_check" | "unsupported";
 
 export type AgentCopilotPanelState = "closed" | "collapsed" | "open" | "expanded";
 
+/** The safe, visible portion of one locally persisted assistant session. */
+export interface AgentSessionSummary {
+  id: string;
+  title: string;
+  updated_at: string;
+  message_count: number;
+  block_count: number;
+}
+
 /**
  * What the sidebar hands to the page owner for one submitted sentence.
  *
@@ -238,7 +247,7 @@ export type IntentCompilerOutput =
     }
   | { kind: "no_op"; route: "configure" | "capability_check"; reason_code: string };
 
-export type AgentTypedBlock =
+type AgentTypedBlockBody =
   /**
    * The user's own turn of the panel conversation, kept in the transcript so the
    * answer below it can be read - and replayed to the assistant model - with the
@@ -308,3 +317,5 @@ export type AgentTypedBlock =
       plan_revision: string | null;
     }
   | { block_type: "formal_error"; block_id: string; code: string; message: string; safe_next_action: string };
+
+export type AgentTypedBlock = AgentTypedBlockBody & { created_at?: string };

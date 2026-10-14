@@ -12,6 +12,7 @@ import AgentTypedBlockList from "./AgentTypedBlockList.vue";
 import type {
   AgentCopilotPanelState,
   AgentCopilotSubmitPayload,
+  AgentSessionSummary,
   AgentTypedBlock,
 } from "../../entities/agent-orchestration";
 
@@ -37,6 +38,14 @@ const props = withDefaults(
     modelSelected?: string;
     /** True while the catalogue is being read or a switch is being applied. */
     modelPending?: boolean;
+    /** Locally persisted conversations available to this assistant panel. */
+    sessions?: readonly AgentSessionSummary[];
+    /** The conversation whose messages and blocks are currently displayed. */
+    activeSessionId?: string;
+    /** True when this browser rejected the local persistence write. */
+    persistenceError?: boolean;
+    /** Human-readable local retention policy for the visible session cache. */
+    retentionNotice?: string;
   }>(),
   {
     currentTask: "当前页面助手",
@@ -50,6 +59,10 @@ const props = withDefaults(
     modelCatalogue: () => [],
     modelSelected: "",
     modelPending: false,
+    sessions: () => [],
+    activeSessionId: "",
+    persistenceError: false,
+    retentionNotice: "",
   },
 );
 
@@ -66,11 +79,16 @@ const emit = defineEmits<{
   "select-model": [model: string];
   /** The user asked for the model catalogue to be read again. */
   "refresh-models": [];
+  "new-session": [];
+  "select-session": [sessionId: string];
+  "delete-session": [sessionId: string];
+  "clear-all-sessions": [];
   start: [task: "configure" | "analyze" | "learn"];
 }>();
 
 /** The one id the model label points at; the panel is a single instance in this app. */
 const modelSelectId = "tilesim-agent-model-select";
+const sessionSelectId = "tilesim-agent-session-select";
 
 const composer = ref<InstanceType<typeof AgentComposer> | null>(null);
 const panel = ref<HTMLElement | null>(null);
@@ -143,6 +161,11 @@ const modelUnavailableText = computed(() =>
 function onModelChange(event: Event): void {
   const target = event.target;
   if (target instanceof HTMLSelectElement && target.value) emit("select-model", target.value);
+}
+
+function onSessionChange(event: Event): void {
+  const target = event.target;
+  if (target instanceof HTMLSelectElement && target.value) emit("select-session", target.value);
 }
 
 watch(
@@ -319,6 +342,33 @@ onBeforeUnmount(() => {
       </div>
     </header>
 
+    <div
+      v-if="sessions.length"
+      v-show="modelValue !== 'collapsed'"
+      class="agent-copilot-shell__sessions"
+      data-agent-sessions
+    >
+      <label :for="sessionSelectId">会话</label>
+      <select :id="sessionSelectId" :value="activeSessionId" title="切换已保存的助手会话" @change="onSessionChange">
+        <option v-for="session in sessions" :key="session.id" :value="session.id">
+          {{ session.title }}{{ session.message_count ? ` · ${session.message_count} 条消息` : "" }}
+        </option>
+      </select>
+      <button type="button" aria-label="新建会话" title="新建会话" @click="emit('new-session')">新建</button>
+      <button
+        type="button"
+        aria-label="删除当前会话"
+        title="删除当前会话"
+        @click="emit('delete-session', activeSessionId)"
+      >
+        删除
+      </button>
+      <button type="button" aria-label="清理全部本地会话" title="清理全部本地会话" @click="emit('clear-all-sessions')">
+        清理全部
+      </button>
+      <p v-if="retentionNotice" class="agent-copilot-shell__retention">{{ retentionNotice }}</p>
+    </div>
+
     <div v-if="modelChannel && modelValue !== 'collapsed'" class="agent-copilot-shell__model" data-agent-model-bar>
       <label :for="modelSelectId">模型</label>
       <template v-if="modelOptions.length">
@@ -346,8 +396,8 @@ onBeforeUnmount(() => {
       ref="timeline"
       class="agent-copilot-shell__timeline"
       role="log"
-      aria-live="polite"
-      aria-relevant="additions text"
+      aria-live="off"
+      aria-label="助手对话记录"
     >
       <AgentTypedBlockList
         :blocks="blocks"
@@ -367,11 +417,14 @@ onBeforeUnmount(() => {
       @cancel="emit('cancel')"
     />
 
-    <footer v-show="modelValue !== 'collapsed'" class="agent-copilot-shell__footer" role="status" aria-live="polite">
+    <div v-show="modelValue !== 'collapsed'" class="agent-copilot-shell__footer" aria-live="polite" aria-atomic="true">
       <span>{{ statusText }}</span>
+      <span v-if="persistenceError" class="agent-copilot-shell__persistence-warning">
+        本机存储不可用，本次对话只保留到页面关闭
+      </span>
       <span v-if="allowParameterEdit">描述场景或接着追问 · 仅在确认后写入，不会创建运行</span>
       <span v-else>{{ canDraft ? "仅生成草案 · 不会开始运行" : "仅解释当前页面 · 不会修改实验或开始运行" }}</span>
-    </footer>
+    </div>
   </aside>
 </template>
 
@@ -384,7 +437,7 @@ onBeforeUnmount(() => {
   max-width: calc(100vw - 48px);
   height: 100dvh;
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto auto;
   border-left: 1px solid var(--line-strong);
   color: var(--ink);
   background: var(--panel);
@@ -521,6 +574,52 @@ onBeforeUnmount(() => {
   font-size: var(--text-micro);
 }
 
+.agent-copilot-shell__sessions {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  background: var(--panel);
+  font-size: var(--text-micro);
+}
+
+.agent-copilot-shell__sessions label {
+  flex: 0 0 auto;
+}
+
+.agent-copilot-shell__sessions select {
+  min-width: 0;
+  flex: 1 1 auto;
+  padding: 4px 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  color: var(--ink);
+  background: var(--panel);
+  font: inherit;
+  text-overflow: ellipsis;
+}
+
+.agent-copilot-shell__sessions button {
+  flex: 0 0 auto;
+  min-height: 27px;
+  padding: 3px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  color: var(--ink-soft);
+  background: var(--panel);
+  cursor: pointer;
+  font: inherit;
+}
+
+.agent-copilot-shell__sessions button:hover {
+  border-color: var(--accent);
+  color: var(--ink);
+  background: var(--surface-muted);
+}
+
 .agent-copilot-shell__model label {
   flex: 0 0 auto;
 }
@@ -545,6 +644,14 @@ onBeforeUnmount(() => {
   flex: 0 0 auto;
   overflow-wrap: anywhere;
   text-align: right;
+}
+
+.agent-copilot-shell__retention {
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
 }
 
 .agent-copilot-shell__model button {
@@ -604,6 +711,10 @@ onBeforeUnmount(() => {
 
 .agent-copilot-shell__footer span {
   overflow-wrap: anywhere;
+}
+
+.agent-copilot-shell__persistence-warning {
+  color: var(--warning);
 }
 
 .agent-copilot-shell__rail {

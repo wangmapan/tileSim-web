@@ -74,7 +74,7 @@ describe("runtime policy metadata", () => {
       "fabric_backpressure_aware",
       "starvation_aware",
     ]);
-    expect(policyField("max_active_requests").minimum).toBe(0);
+    expect(policyField("max_active_requests").minimum).toBe(1);
     expect(policyField("max_active_requests").maximum).toBe(1024);
     expect(policyField("long_context_threshold_tokens").kind).toBe("integer");
     expect(policyField("decode_penalty_per_threshold").kind).toBe("number");
@@ -85,18 +85,19 @@ describe("runtime policy metadata", () => {
 describe("policy metadata never borrows run-override ranges", () => {
   const overrideRuntime = (runOverridesSchema.properties.runtime as RawNode).properties as Record<string, RawNode>;
 
-  it("keeps kv_admission_watermark at the 0..1 policy range, not the 0.05..1 override range", () => {
+  it("keeps kv_admission_watermark at the positive..1 policy range, not the 0.05..1 override range", () => {
     expect(overrideRuntime.kv_admission_watermark.minimum).toBe(0.05);
     expect(overrideRuntime.kv_admission_watermark.maximum).toBe(1.0);
-    expect(policyField("kv_admission_watermark").minimum).toBe(0);
+    expect(policyField("kv_admission_watermark").minimum).toBeNull();
+    expect(policyField("kv_admission_watermark").exclusiveMinimum).toBe(0);
     expect(policyField("kv_admission_watermark").maximum).toBe(1);
     expect(policyField("kv_admission_watermark").minimum).not.toBe(overrideRuntime.kv_admission_watermark.minimum);
   });
 
-  it("keeps max_batch_size at the 0..1024 policy range, not the 1..64 override range", () => {
+  it("keeps max_batch_size at the 1..1024 policy range, not the 1..64 override range", () => {
     expect(overrideRuntime.max_batch_size.minimum).toBe(1);
     expect(overrideRuntime.max_batch_size.maximum).toBe(64);
-    expect(policyField("max_batch_size").minimum).toBe(0);
+    expect(policyField("max_batch_size").minimum).toBe(1);
     expect(policyField("max_batch_size").maximum).toBe(1024);
   });
 });
@@ -133,7 +134,11 @@ describe("runtime request metadata", () => {
     const tpDegree = runtimeRequestFields.find((field) => field.key === "tp_degree");
     expect(tpDegree?.minimum).toBe(1);
     expect(tpDegree?.maximum).toBe(1024);
-    expect(runtimeRequestFields.find((field) => field.key === "phase")?.enumValues).toEqual(["prefill", "decode"]);
+    expect(runtimeRequestFields.find((field) => field.key === "phase")?.enumValues).toEqual([
+      "prefill",
+      "decode",
+      "request",
+    ]);
     const participants = runtimeRequestFields.find((field) => field.key === "participants");
     expect(participants?.kind).toBe("stringArray");
     expect(participants?.maxItems).toBe(requestParticipantsMaxItems);

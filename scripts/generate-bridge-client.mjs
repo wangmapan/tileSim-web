@@ -40,6 +40,10 @@ const compileOptions = {
 };
 
 const coreTypes = await compileFromFile(schemaPath, compileOptions);
+const requestAttributionTypes = await compileFromFile(
+  resolve(schemaDirectory, "request-attribution.schema.json"),
+  compileOptions,
+);
 const inlineTypeNames = [
   "HealthResponse",
   "CatalogResponse",
@@ -51,6 +55,7 @@ const inlineTypeNames = [
   "Week7CalibrationResponse",
   "Week7OrchestrationResponse",
   "AssistantModelChatRequest",
+  "AssistantResultAnalysisRequest",
   "AssistantModelDescriptorResponse",
   "AssistantModelPlanRequest",
   "AssistantModelPlanResponse",
@@ -86,7 +91,7 @@ for (const name of inlineTypeNames) {
 }
 const typesBanner = "// Generated from bridge/contracts OpenAPI and JSON Schema. Do not edit by hand.\n\n";
 const createRunResponse = "export type CreateRunResponse = ApiRun & { idempotent_replay: boolean };\n";
-const nextTypes = await format(`${typesBanner}${coreTypes}\n${inlineTypes.join("\n")}\n${createRunResponse}`, {
+const nextTypes = await format(`${typesBanner}${coreTypes}\n${requestAttributionTypes}\n${inlineTypes.join("\n")}\n${createRunResponse}`, {
   ...prettierConfig,
   filepath: typesOutputPath,
 });

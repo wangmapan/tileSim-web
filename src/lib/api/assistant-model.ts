@@ -13,6 +13,7 @@ import { readSseFrames } from "./sse";
 const ASSISTANT_MODEL_PROTOCOL = "tilesim.assistant_model.v1";
 /** The chat envelope identity the Bridge writes on its prose, error and done events. */
 const ASSISTANT_CHAT_SCHEMA_VERSION = "tilesim.bridge.assistant_model_chat.v1";
+const RESULT_ANALYSIS_CHAT_SCHEMA_VERSION = "tilesim.bridge.result_analysis_chat.v1";
 
 /** One replayed conversation turn. Only these two roles are accepted by the Bridge. */
 export interface AssistantChatMessage {
@@ -20,15 +21,47 @@ export interface AssistantChatMessage {
   content: string;
 }
 
+export interface AssistantResultAnalysisContext {
+  run_id: string;
+  sections: readonly { title: string; body: string }[];
+  evidence_paths: readonly string[];
+  evidence: {
+    manifest_status: "verified" | "unavailable" | "run_mismatch";
+    artifact_count: number;
+    full_content_count: number;
+    summary_only_count: number;
+    unavailable_count: number;
+    rejected_count: number;
+    artifacts: readonly {
+      artifact_id: string;
+      file_name: string;
+      report_kind: string | null;
+      schema_identity: string;
+      sha256: string;
+      bytes: string;
+      contract_status: "supported" | "legacy_compatibility" | "not_applicable";
+      content_status: "full" | "summary_only" | "unavailable" | "not_applicable" | "expected_absence";
+      content?: unknown;
+      omission_reason?: "too_large_for_model_context" | "verification_failed";
+    }[];
+    rejected_artifacts: readonly {
+      artifact_id: string;
+      schema_identity: string;
+      reason: string;
+      json_pointer: string;
+    }[];
+  };
+}
+
 /**
  * Asks the Bridge's assistant model channel for one scenario plan.
  *
  * The channel is optional on purpose. Every failure - no channel configured on
  * this Bridge (503), a Bridge that does not publish the route yet (404), a
- * transport error, a payload that is not one plan - comes back as `null`, so the
- * caller keeps its local deterministic answer and the panel never depends on a
- * model being reachable. Nothing here writes a document or creates a run: the
- * response is a proposal, and applying it stays a user action.
+ * transport error, a payload that is not one plan - comes back as `null`, so a
+ * caller can fail closed without applying anything. Nothing here writes a
+ * document or creates a run: the response is a proposal, and applying it stays
+ * a user action.
  */
 export async function requestAssistantPlan(
   instruction: string,
@@ -177,7 +210,7 @@ export interface AssistantChatOutcome {
  * render the text while it is still being written, and the turn ends with one validated `plan` event.
  * The Bridge refuses an unusable request and an unconfigured channel with an ordinary JSON response
  * before the stream starts, and those - plus any transport failure before the first event - come back
- * as `null`, which is what lets the caller fall back to its local rules exactly as before.
+ * as `null`, which lets a configuration caller fail closed without inventing a plan.
  *
  * Nothing here writes a document or creates a run, and the transcript is not persisted by the Bridge:
  * it is replayed by the caller from what the panel already shows.
@@ -247,6 +280,92 @@ export async function streamAssistantChat(
   } catch {
     // A stream cut mid-answer still leaves the caller with whatever prose already arrived. A stop the
     // user asked for is reported as cancelled rather than as a failure, because it is not one.
+    if (options.signal?.aborted) outcome.cancelled = true;
+    else if (!outcome.failure) outcome.failure = "模型回答的连接中断了。";
+  }
+  return outcome;
+}
+
+export interface AssistantResultAnalysisOutcome {
+  answer: string;
+  failure: string;
+  cancelled: boolean;
+}
+
+/**
+ * Streams one read-only answer about the currently verified run.  This is a
+ * separate route from scenario chat because it cannot produce a parameter plan
+ * and its system prompt is grounded in a bounded report projection.
+ */
+export async function streamAssistantResultAnalysis(
+  request: {
+    messages: readonly AssistantChatMessage[];
+    context: AssistantResultAnalysisContext;
+  },
+  callbacks: { onAnswer: (text: string) => void },
+  options: { signal?: AbortSignal } = {},
+): Promise<AssistantResultAnalysisOutcome | null> {
+  let response: Response;
+  try {
+    response = await fetch(`${apiRoots()[0]}${bridgePaths.streamAgentResultAnalysis()}`, {
+      method: "POST",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      body: JSON.stringify({ messages: request.messages, context: request.context }),
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
+  } catch {
+    return options.signal?.aborted ? { answer: "", failure: "", cancelled: true } : null;
+  }
+  if (!response.ok) {
+    // A malformed evidence projection is a client/Bridge contract problem, not
+    // an unavailable provider. Keep the optional-channel fallback, but retain
+    // a safe diagnostic so the shell can distinguish a 400 from a network/503
+    // failure without exposing the response body or any provider details.
+    if (response.status === 400) {
+      let code = "";
+      try {
+        const payload = parseJsonLossless(await response.text());
+        if (isRecord(payload) && isRecord(payload.error) && typeof payload.error.code === "string") {
+          code = payload.error.code;
+        }
+      } catch {
+        // The status itself is enough when the Bridge did not return JSON.
+      }
+      return {
+        answer: "",
+        failure: `模型请求未通过校验（${code || "HTTP 400"}）。`,
+        cancelled: false,
+      };
+    }
+    return null;
+  }
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("text/event-stream") || !response.body) return null;
+
+  const outcome: AssistantResultAnalysisOutcome = { answer: "", failure: "", cancelled: false };
+  try {
+    for await (const frame of readSseFrames(response)) {
+      if (frame.event === "prose") {
+        const payload = parseFrameData(frame.data);
+        if (isRecord(payload) && payload.schema_version === RESULT_ANALYSIS_CHAT_SCHEMA_VERSION) {
+          const text = payload.text;
+          if (typeof text === "string") {
+            outcome.answer = text;
+            callbacks.onAnswer(text);
+          }
+        }
+        continue;
+      }
+      if (frame.event === "error") {
+        const payload = parseFrameData(frame.data);
+        outcome.failure =
+          isRecord(payload) && typeof payload.message === "string" && payload.message
+            ? payload.message
+            : "模型没有答完这次结果分析。";
+      }
+    }
+  } catch {
     if (options.signal?.aborted) outcome.cancelled = true;
     else if (!outcome.failure) outcome.failure = "模型回答的连接中断了。";
   }

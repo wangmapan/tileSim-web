@@ -3,7 +3,7 @@
 export type CreateRunRequest = {
   [k: string]: unknown;
 } & {
-  scenario_id: "s1_des_example";
+  scenario_id: "s1_des_example" | "dense_des_package";
   fidelity_policy?: "default" | "des";
   gpu_participation_mode?: "gpu_free";
   run_name?: string | null;
@@ -11,6 +11,144 @@ export type CreateRunRequest = {
   custom_inputs?: ControlledCustomInputsForTheHostedS1ToS6Path;
   design_space_candidates?: StrictS6OnlyDesignSpaceCandidateManifest | StrictS6OnlyDesignSpaceCandidateManifestV2;
   trace_package_id?: string;
+};
+export type ControlledS1RuntimeTraceRequestInput = {
+  [k: string]: unknown;
+} & {
+  trace_name?: string;
+  engine_type?: "legacy_generic" | "vllm" | "sglang" | "tensorrt_llm";
+  engine_semantic_version?:
+    "legacy_generic.v1" | "vllm.0.6.semantic.v1" | "sglang.0.4.semantic.v1" | "tensorrt_llm.0.12.semantic.v1";
+  /**
+   * @maxItems 3
+   */
+  requested_features?:
+    | []
+    | [
+        | "continuous_batching"
+        | "prefix_aware_scheduling"
+        | "inflight_batching"
+        | "paged_kv_cache"
+        | "capacity_aware_scheduling",
+      ]
+    | [
+        (
+          | "continuous_batching"
+          | "prefix_aware_scheduling"
+          | "inflight_batching"
+          | "paged_kv_cache"
+          | "capacity_aware_scheduling"
+        ),
+        (
+          | "continuous_batching"
+          | "prefix_aware_scheduling"
+          | "inflight_batching"
+          | "paged_kv_cache"
+          | "capacity_aware_scheduling"
+        ),
+      ]
+    | [
+        (
+          | "continuous_batching"
+          | "prefix_aware_scheduling"
+          | "inflight_batching"
+          | "paged_kv_cache"
+          | "capacity_aware_scheduling"
+        ),
+        (
+          | "continuous_batching"
+          | "prefix_aware_scheduling"
+          | "inflight_batching"
+          | "paged_kv_cache"
+          | "capacity_aware_scheduling"
+        ),
+        (
+          | "continuous_batching"
+          | "prefix_aware_scheduling"
+          | "inflight_batching"
+          | "paged_kv_cache"
+          | "capacity_aware_scheduling"
+        ),
+      ];
+  trace_provenance?: {
+    source_mode: "synthetic_trace";
+    calibration_level: "uncalibrated";
+    allowed_claim_scope: "exploratory";
+    source_id?: string;
+    generation_path?: string;
+    capture_or_generation_time?: string;
+    upstream_tooling?: string;
+    trace_kind?: string;
+    /**
+     * @maxItems 64
+     */
+    notes?: string[];
+  };
+  policy: {
+    kv_capacity_tokens?: number;
+    initial_kv_tokens?: number;
+    max_active_requests?: number;
+    max_batch_size?: number;
+    batch_scheduler?: "fifo" | "decode_priority" | "fabric_backpressure_aware" | "starvation_aware";
+    prefill_starvation_threshold_ps?: number;
+    pd_handoff_delay_ps?: number;
+    pd_handoff_queue_service_ps?: number;
+    kv_page_size_tokens?: number;
+    kv_fragmentation_overhead?: number;
+    kv_admission_watermark?: number;
+    fabric_backpressure_active?: boolean;
+    fabric_backpressure_delay_us?: number;
+    fabric_backpressure_throttle_threshold_us?: number;
+    fabric_backpressure_prefill_batch_limit?: number;
+    long_context_threshold_tokens?: number;
+    decode_penalty_per_threshold?: number;
+  };
+  /**
+   * @minItems 1
+   * @maxItems 1024
+   */
+  requests: [
+    {
+      request_id: string;
+      model_id?: string;
+      arrival_time_ps?: number;
+      phase?: "prefill" | "decode" | "request";
+      prompt_tokens?: number;
+      decode_tokens?: number;
+      kv_tokens?: number;
+      priority_class?: number;
+      tp_degree?: number;
+      /**
+       * @maxItems 1024
+       */
+      participants?: string[];
+      collective_type?: string;
+      message_size_bytes?: number;
+      placement_group_id?: string;
+      disaggregation_group_id?: string;
+      kv_handoff_id?: string;
+    },
+    ...{
+      request_id: string;
+      model_id?: string;
+      arrival_time_ps?: number;
+      phase?: "prefill" | "decode" | "request";
+      prompt_tokens?: number;
+      decode_tokens?: number;
+      kv_tokens?: number;
+      priority_class?: number;
+      tp_degree?: number;
+      /**
+       * @maxItems 1024
+       */
+      participants?: string[];
+      collective_type?: string;
+      message_size_bytes?: number;
+      placement_group_id?: string;
+      disaggregation_group_id?: string;
+      kv_handoff_id?: string;
+    }[],
+  ];
 };
 export type GpuOptions = {
   gpu_participation_mode: "gpu_free";
@@ -505,6 +643,7 @@ export interface BridgeApiContracts {
   manifest?: ApiManifestResponse;
   error?: ErrorResponse;
   artifactManifest?: ArtifactManifestResponse;
+  expectedAbsenceDescriptor?: ExpectedAbsenceArtifactDescriptor;
   createRunRequest?: CreateRunRequest;
   runOverrides?: TileSimControlledS0S1S6RunOverrides;
   customRunInputs?: ControlledCustomInputsForTheHostedS1ToS6Path;
@@ -522,6 +661,10 @@ export interface BridgeApiContracts {
   topologyInput?: S6TopologyInputV1;
   tailCauseChainReport?: TailCauseChainReportV1;
   executionEnvelope?: S7ExecutionEnvelopeV1;
+  runtimeEventTrace?: RuntimeEventTrace;
+  runtimeEventSummary?: RuntimeEventSummary;
+  runtimeRequestSummaries?: RuntimeRequestSummaries;
+  runtimeAnalysis?: RuntimeAnalysis;
   validationReport?: ValidationReportV1;
   week8RunEvidence?: S7RunBoundDesEvidenceV1;
   evidenceAgentDescriptor?: EvidenceAgentDescriptor;
@@ -677,6 +820,7 @@ export interface ArtifactManifestEntry {
   sha256: string;
   schema_identity: string;
   contract_status: "supported" | "legacy_compatibility" | "not_applicable";
+  content_status?: "ready" | "expected_absence";
 }
 export interface RejectedArtifactManifestEntry {
   artifact_id: string;
@@ -684,6 +828,15 @@ export interface RejectedArtifactManifestEntry {
   reason: "invalid_json" | "unsupported_schema" | "run_binding_mismatch" | "self_hash_cycle" | "contract_violation";
   schema_identity: string;
   json_pointer: string;
+}
+export interface ExpectedAbsenceArtifactDescriptor {
+  schema_version: "tilesim.wind_tunnel_artifact_descriptor.v1";
+  run_id: string;
+  artifact_id: string;
+  state: "expected_absence";
+  evidence_requirement: string;
+  absence_reason: "not_expected_for_boundary";
+  detail: string;
 }
 export interface TileSimControlledS0S1S6RunOverrides {
   runtime?: {
@@ -709,93 +862,6 @@ export interface TileSimControlledS0S1S6RunOverrides {
 export interface ControlledCustomInputsForTheHostedS1ToS6Path {
   runtime_trace: ControlledS1RuntimeTraceRequestInput;
   topology: ControlledPreMaterializationS6TopologyRequestInput;
-}
-export interface ControlledS1RuntimeTraceRequestInput {
-  trace_name?: string;
-  trace_provenance?: {
-    source_mode: "synthetic_trace";
-    calibration_level: "uncalibrated" | "partially_calibrated";
-    allowed_claim_scope:
-      | "exploratory"
-      | "exploratory_s6_only"
-      | "synthetic_consistency"
-      | "synthetic_consistency_only"
-      | "workflow_consistency_only";
-    source_id?: string;
-    generation_path?: string;
-    capture_or_generation_time?: string;
-    upstream_tooling?: string;
-    trace_kind?: string;
-    /**
-     * @maxItems 64
-     */
-    notes?: string[];
-  };
-  policy: {
-    kv_capacity_tokens?: number;
-    initial_kv_tokens?: number;
-    max_active_requests?: number;
-    max_batch_size?: number;
-    batch_scheduler?: "fifo" | "decode_priority" | "fabric_backpressure_aware" | "starvation_aware";
-    prefill_starvation_threshold_ps?: number;
-    pd_handoff_delay_ps?: number;
-    pd_handoff_queue_service_ps?: number;
-    kv_page_size_tokens?: number;
-    kv_fragmentation_overhead?: number;
-    kv_admission_watermark?: number;
-    fabric_backpressure_active?: boolean;
-    fabric_backpressure_delay_us?: number;
-    fabric_backpressure_throttle_threshold_us?: number;
-    fabric_backpressure_prefill_batch_limit?: number;
-    long_context_threshold_tokens?: number;
-    decode_penalty_per_threshold?: number;
-  };
-  /**
-   * @minItems 1
-   * @maxItems 1024
-   */
-  requests: [
-    {
-      request_id: string;
-      model_id?: string;
-      arrival_time_ps?: number;
-      phase?: "prefill" | "decode";
-      prompt_tokens?: number;
-      decode_tokens?: number;
-      kv_tokens?: number;
-      priority_class?: number;
-      tp_degree?: number;
-      /**
-       * @maxItems 1024
-       */
-      participants?: string[];
-      collective_type?: string;
-      message_size_bytes?: number;
-      placement_group_id?: string;
-      disaggregation_group_id?: string;
-      kv_handoff_id?: string;
-    },
-    ...{
-      request_id: string;
-      model_id?: string;
-      arrival_time_ps?: number;
-      phase?: "prefill" | "decode";
-      prompt_tokens?: number;
-      decode_tokens?: number;
-      kv_tokens?: number;
-      priority_class?: number;
-      tp_degree?: number;
-      /**
-       * @maxItems 1024
-       */
-      participants?: string[];
-      collective_type?: string;
-      message_size_bytes?: number;
-      placement_group_id?: string;
-      disaggregation_group_id?: string;
-      kv_handoff_id?: string;
-    }[],
-  ];
 }
 export interface ControlledPreMaterializationS6TopologyRequestInput {
   scenario_name?: string;
@@ -1245,6 +1311,11 @@ export interface ApiRun {
   error?: string;
   failure_code?: string;
   exit_code?: number;
+  stderr_summary?: string;
+  cli_error_code?: string;
+  cli_field_path?: string;
+  cli_cause?: string;
+  cli_next_action?: string;
   digest?: {
     end_to_end_latency_us?: number | null;
     throughput_requests_per_second?: number | null;
@@ -1486,6 +1557,10 @@ export interface TailCauseChainReportV1 {
 export interface S7ExecutionEnvelopeV1 {
   schema_version: "tilesim.s7_execution_envelope.v1";
   run_id: string;
+  runtime_engine_type?: string;
+  runtime_engine_semantic_version?: string;
+  runtime_input_mode?: "" | "legacy_generic" | "dynamic_request" | "observed_replay";
+  semantic_profile_applied?: boolean;
   evidence_refs: EvidenceRef[];
   stages: {
     stage_id: string;
@@ -1493,6 +1568,71 @@ export interface S7ExecutionEnvelopeV1 {
     evidence_refs: EvidenceRef[];
     [k: string]: unknown;
   }[];
+  [k: string]: unknown;
+}
+export interface RuntimeEventTrace {
+  schema_version: "tilesim.s1_runtime_event_trace.v1";
+  run_id: string;
+  trace_name: string;
+  events: Event[];
+  [k: string]: unknown;
+}
+export interface Event {
+  kind: string;
+  request_id: string;
+  batch_id: string;
+  batch_request_ids: string[];
+  event_time_ps: number;
+  logical_step: number;
+  kv_tokens: number;
+  active_requests: number;
+  [k: string]: unknown;
+}
+export interface RuntimeEventSummary {
+  schema_version: "tilesim.s1_runtime_event_summary.v1";
+  run_id: string;
+  has_events: boolean;
+  total_events: number;
+  first_event_time_ps: number;
+  last_event_time_ps: number;
+  peak_active_requests: number;
+  monotonic_time_order: boolean;
+  contiguous_logical_steps: boolean;
+  [k: string]: unknown;
+}
+export interface RuntimeRequestSummaries {
+  schema_version: "tilesim.s1_runtime_request_summaries.v1";
+  run_id: string;
+  requests: Request[];
+  [k: string]: unknown;
+}
+export interface Request {
+  request_id: string;
+  arrival_time_ps: number;
+  admit_time_ps: number;
+  first_batch_issue_time_ps: number;
+  first_token_time_ps: number;
+  completion_time_ps: number;
+  final_kv_tokens: number;
+  [k: string]: unknown;
+}
+export interface RuntimeAnalysis {
+  schema_version: "tilesim.s1_runtime_analysis.v1";
+  run_id: string;
+  trace_name: string;
+  summary: Summary;
+  requests: Request[];
+  events: Event[];
+  [k: string]: unknown;
+}
+export interface Summary {
+  has_events: boolean;
+  total_events: number;
+  first_event_time_ps: number;
+  last_event_time_ps: number;
+  peak_active_requests: number;
+  monotonic_time_order: boolean;
+  contiguous_logical_steps: boolean;
   [k: string]: unknown;
 }
 export interface ValidationReportV1 {
@@ -2732,6 +2872,104 @@ export interface FieldProvenance {
     | "real_calibrated_validation";
 }
 
+export interface RequestAttributionArtifact {
+  schema_version: "tilesim.request_attribution.v1";
+  run_id: string;
+  /**
+   * @minItems 1
+   */
+  requests: [
+    {
+      schema_version: "tilesim.tail_cause_chain_report.v1";
+      run_id: string;
+      report_id: string;
+      explained_entity: {
+        kind: "request";
+        id: string;
+        [k: string]: unknown;
+      };
+      /**
+       * @minItems 1
+       */
+      cause_chain: [AttributionRow, ...AttributionRow[]];
+      /**
+       * @minItems 1
+       */
+      attribution_ranking: [AttributionRow, ...AttributionRow[]];
+      [k: string]: unknown;
+    },
+    ...{
+      schema_version: "tilesim.tail_cause_chain_report.v1";
+      run_id: string;
+      report_id: string;
+      explained_entity: {
+        kind: "request";
+        id: string;
+        [k: string]: unknown;
+      };
+      /**
+       * @minItems 1
+       */
+      cause_chain: [AttributionRow, ...AttributionRow[]];
+      /**
+       * @minItems 1
+       */
+      attribution_ranking: [AttributionRow, ...AttributionRow[]];
+      [k: string]: unknown;
+    }[],
+  ];
+  metrics: {
+    schema_version: "tilesim.metrics_report.v1";
+    run_id: string;
+    /**
+     * @minItems 1
+     */
+    request_metrics: [
+      {
+        request_id: string;
+        [k: string]: unknown;
+      },
+      ...{
+        request_id: string;
+        [k: string]: unknown;
+      }[],
+    ];
+    [k: string]: unknown;
+  };
+  evidence: {
+    run_id: string;
+    des_committed_event_digest: string;
+    des_events: unknown[];
+    resource_operations: unknown[];
+    network_demands: unknown[];
+    fabric: {
+      [k: string]: unknown;
+    };
+    [k: string]: unknown;
+  };
+}
+export interface AttributionRow {
+  subject_refs: {
+    [k: string]: unknown;
+  }[];
+  /**
+   * @minItems 1
+   */
+  evidence_refs: [RequestAttributionEvidenceRef, ...RequestAttributionEvidenceRef[]];
+  [k: string]: unknown;
+}
+export interface RequestAttributionEvidenceRef {
+  run_id: string;
+  artifact_id: "request_attribution";
+  schema_identity: "tilesim.request_attribution.v1";
+  json_pointer: string;
+  availability: "available";
+  subject: {
+    [k: string]: unknown;
+  };
+  [k: string]: unknown;
+}
+
 export interface HealthResponse {
   versions_match?: boolean;
   execution_ready?: boolean;
@@ -3241,6 +3479,556 @@ export interface AssistantModelChatRequest {
    */
   panel_values?: {
     [k: string]: string;
+  };
+}
+
+export interface AssistantResultAnalysisRequest {
+  /**
+   * The client-side transcript, ending with the user's result question.
+   *
+   * @minItems 1
+   * @maxItems 12
+   */
+  messages:
+    | [
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+      ]
+    | [
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+      ]
+    | [
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+      ]
+    | [
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+      ]
+    | [
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+      ]
+    | [
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+      ]
+    | [
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+      ]
+    | [
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+      ]
+    | [
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+      ]
+    | [
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+      ]
+    | [
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+      ]
+    | [
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+        {
+          role: "user" | "assistant";
+          content: string;
+        },
+      ];
+  context: {
+    run_id: string;
+    /**
+     * @minItems 1
+     * @maxItems 8
+     */
+    sections:
+      | [
+          {
+            title: string;
+            body: string;
+          },
+        ]
+      | [
+          {
+            title: string;
+            body: string;
+          },
+          {
+            title: string;
+            body: string;
+          },
+        ]
+      | [
+          {
+            title: string;
+            body: string;
+          },
+          {
+            title: string;
+            body: string;
+          },
+          {
+            title: string;
+            body: string;
+          },
+        ]
+      | [
+          {
+            title: string;
+            body: string;
+          },
+          {
+            title: string;
+            body: string;
+          },
+          {
+            title: string;
+            body: string;
+          },
+          {
+            title: string;
+            body: string;
+          },
+        ]
+      | [
+          {
+            title: string;
+            body: string;
+          },
+          {
+            title: string;
+            body: string;
+          },
+          {
+            title: string;
+            body: string;
+          },
+          {
+            title: string;
+            body: string;
+          },
+          {
+            title: string;
+            body: string;
+          },
+        ]
+      | [
+          {
+            title: string;
+            body: string;
+          },
+          {
+            title: string;
+            body: string;
+          },
+          {
+            title: string;
+            body: string;
+          },
+          {
+            title: string;
+            body: string;
+          },
+          {
+            title: string;
+            body: string;
+          },
+          {
+            title: string;
+            body: string;
+          },
+        ]
+      | [
+          {
+            title: string;
+            body: string;
+          },
+          {
+            title: string;
+            body: string;
+          },
+          {
+            title: string;
+            body: string;
+          },
+          {
+            title: string;
+            body: string;
+          },
+          {
+            title: string;
+            body: string;
+          },
+          {
+            title: string;
+            body: string;
+          },
+          {
+            title: string;
+            body: string;
+          },
+        ]
+      | [
+          {
+            title: string;
+            body: string;
+          },
+          {
+            title: string;
+            body: string;
+          },
+          {
+            title: string;
+            body: string;
+          },
+          {
+            title: string;
+            body: string;
+          },
+          {
+            title: string;
+            body: string;
+          },
+          {
+            title: string;
+            body: string;
+          },
+          {
+            title: string;
+            body: string;
+          },
+          {
+            title: string;
+            body: string;
+          },
+        ];
+    /**
+     * @maxItems 64
+     */
+    evidence_paths: string[];
+    evidence: {
+      manifest_status: "verified" | "unavailable" | "run_mismatch";
+      artifact_count: number;
+      full_content_count: number;
+      summary_only_count: number;
+      unavailable_count: number;
+      rejected_count: number;
+      /**
+       * @maxItems 32
+       */
+      artifacts: {
+        artifact_id: string;
+        file_name: string;
+        report_kind: string | null;
+        schema_identity: string;
+        sha256: string;
+        bytes: string;
+        contract_status: "supported" | "legacy_compatibility" | "not_applicable";
+        content_status: "full" | "summary_only" | "unavailable" | "not_applicable" | "expected_absence";
+        content?: unknown;
+        omission_reason?: "too_large_for_model_context" | "verification_failed";
+      }[];
+      /**
+       * @maxItems 64
+       */
+      rejected_artifacts: {
+        artifact_id: string;
+        schema_identity: string;
+        reason: string;
+        json_pointer: string;
+      }[];
+    };
   };
 }
 

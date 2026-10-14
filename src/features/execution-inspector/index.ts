@@ -22,6 +22,8 @@ export {
 } from "./model/evidence-pointers";
 export { default as ExecutionVisualizationPanel } from "./components/ExecutionVisualizationPanel.vue";
 export { default as LayerRecordTable } from "./components/LayerRecordTable.vue";
+export { default as RuntimeEvidencePanel } from "./components/RuntimeEvidencePanel.vue";
+export { default as RequestAttributionPanel } from "./components/RequestAttributionPanel.vue";
 export {
   backendExplanationPresentation,
   executionLayerDetail,

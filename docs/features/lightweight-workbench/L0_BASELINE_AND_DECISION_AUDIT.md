@@ -1,5 +1,7 @@
 # Phase L0：双工作台基线与决策审计
 
+> 本文是 L0 的历史产品输入，不是当前实现状态。当前轻量工作台、有限本地会话缓存、S0–S5 前后端对齐和门禁状态以 [`README.md`](README.md)、[`SECURITY_RETENTION_AND_FAILURE_SEMANTICS.md`](SECURITY_RETENTION_AND_FAILURE_SEMANTICS.md) 和 [`docs/AI_HANDOFF.md`](../../AI_HANDOFF.md) 为准。
+
 **审计日期**：2026-09-12
 **工作目录**：`D:\tileSim-web`
 **L0 状态**：`L1b complete`（产品负责人于 2026-09-12 确认 Q-01–Q-06；L1a/L1b 已完成，L2 尚未开始）

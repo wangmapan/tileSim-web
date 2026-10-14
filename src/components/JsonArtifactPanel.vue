@@ -66,6 +66,10 @@ const definitions: ArtifactDefinition[] = [
   { id: "input-runtime-trace", label: "S1 输入 · Runtime trace", value: () => state.inputs?.runtime_trace },
   { id: "input-topology", label: "S6 输入 · Topology", value: () => state.inputs?.topology },
   { id: "run-result", kind: "run", label: "运行结果 · Run", value: () => state.bundle.run },
+  { id: "runtime-events", label: "运行期事件 · Runtime events", value: () => null },
+  { id: "runtime-summary", label: "运行期汇总 · Runtime summary", value: () => null },
+  { id: "runtime-requests", label: "逐请求记录 · Runtime requests", value: () => null },
+  { id: "runtime-analysis", label: "运行期分析 · Runtime analysis", value: () => null },
   { id: "metrics", kind: "metrics", label: "指标 · Metrics", value: () => state.bundle.metrics },
   { id: "validation", kind: "validation", label: "验证 · Validation", value: () => state.bundle.validation },
   { id: "tail-cause-chain", kind: "tail", label: "归因 · Tail cause", value: () => state.bundle.tail },
@@ -95,6 +99,9 @@ const currentDefinition = computed(
   () => definitions.find((definition) => definition.id === selectedArtifact.value) || definitions[0],
 );
 const currentValue = computed(() => definitionValue(currentDefinition.value) || null);
+const currentManifestEntry = computed(() =>
+  state.artifactManifest?.artifacts.find((entry) => entry.artifact_id === selectedArtifact.value),
+);
 const activeLine = computed(
   () => searchMatches.value[activeMatchIndex.value]?.lineNumber ?? evidenceLine.value ?? null,
 );
@@ -398,6 +405,16 @@ onBeforeUnmount(releaseCurrentArtifact);
         </a>
       </header>
       <div class="json-artifact-meta" data-help-anchor="raw_evidence-verify">
+        <span v-if="currentManifestEntry">
+          {{
+            currentManifestEntry.content_status === "expected_absence"
+              ? t("期望缺席描述符（不是事件数据）")
+              : t("已就绪数据")
+          }}
+          · {{ currentManifestEntry.contract_status }} ·
+          {{ currentManifestEntry.schema_identity || t("描述符无数据 Schema") }} ·
+          {{ currentManifestEntry.bytes }} bytes · SHA-256 {{ currentManifestEntry.sha256 }}
+        </span>
         <span>{{
           loading ? t("正在读取并建立索引…") : t("{count} 个字符", { count: formatNumber(rawText.length, 0) })
         }}</span>

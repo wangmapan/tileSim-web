@@ -23,7 +23,10 @@ import {
   type JsonObject,
 } from "./structured-input";
 
-const props = withDefaults(defineProps<{ modelValue: string; fieldPath?: string }>(), { fieldPath: "" });
+const props = withDefaults(defineProps<{ modelValue: string; fieldPath?: string; errorMessage?: string }>(), {
+  fieldPath: "",
+  errorMessage: "",
+});
 const emit = defineEmits<{ (event: "update:modelValue", value: string): void }>();
 const { t } = useI18n();
 
@@ -73,7 +76,16 @@ const documentValue = computed<JsonObject | null>(() => (parsed.value.ok ? parse
 const requests = computed<unknown[] | null>(() =>
   documentValue.value ? runtimeRequestsOf(documentValue.value) : null,
 );
-const validation = computed(() => validateRuntimeRequests(requests.value));
+const validation = computed(() =>
+  validateRuntimeRequests(
+    requests.value,
+    Boolean(
+      documentValue.value?.engine_type &&
+      documentValue.value.engine_type !== "legacy_generic" &&
+      requests.value?.every((row) => row && typeof row === "object" && (row as JsonObject).phase !== "request"),
+    ),
+  ),
+);
 const rowCount = computed(() => requests.value?.length ?? 0);
 const rowIndexes = computed(() => (requests.value || []).map((_, index) => index));
 const exposedKeys = new Set<string>(REQUEST_COLUMN_KEYS);
@@ -190,6 +202,10 @@ function cellInvalid(index: number, key: string): boolean {
   );
 }
 
+function cellErrorId(index: number, key: string): string {
+  return `request-error-${index}-${key}`;
+}
+
 /**
  * Keys rows carry but the table does not render. Reported once for the whole
  * table rather than inside each `request_id` cell: the per-row badge wrapped to
@@ -268,6 +284,7 @@ const hiddenKeys = computed(() => {
                   :value="cellValue(field, index)"
                   :aria-label="`${columnLabel(field)} ${index + 1}`"
                   :aria-invalid="cellInvalid(index, field.key)"
+                  :aria-describedby="cellInvalid(index, field.key) ? cellErrorId(index, field.key) : undefined"
                   @change="updateEnum(field, index, $event)"
                 >
                   <option value="">{{ t("未设置") }}</option>
@@ -280,6 +297,7 @@ const hiddenKeys = computed(() => {
                   spellcheck="false"
                   :aria-label="`${columnLabel(field)} ${index + 1}`"
                   :aria-invalid="cellInvalid(index, field.key)"
+                  :aria-describedby="cellInvalid(index, field.key) ? cellErrorId(index, field.key) : undefined"
                   :placeholder="t('留空＝不写这个字段，由引擎按并行卡数挑设备')"
                   @change="updateParticipants(index, $event)"
                 />
@@ -290,6 +308,7 @@ const hiddenKeys = computed(() => {
                   :value="cellValue(field, index)"
                   :aria-label="`${columnLabel(field)} ${index + 1}`"
                   :aria-invalid="cellInvalid(index, field.key)"
+                  :aria-describedby="cellInvalid(index, field.key) ? cellErrorId(index, field.key) : undefined"
                   @change="updateNumeric(field, index, $event)"
                 />
                 <input
@@ -299,8 +318,17 @@ const hiddenKeys = computed(() => {
                   spellcheck="false"
                   :aria-label="`${columnLabel(field)} ${index + 1}`"
                   :aria-invalid="cellInvalid(index, field.key)"
+                  :aria-describedby="cellInvalid(index, field.key) ? cellErrorId(index, field.key) : undefined"
                   @change="updateText(field, index, $event, field.required)"
                 />
+                <small
+                  v-if="cellInvalid(index, field.key)"
+                  :id="cellErrorId(index, field.key)"
+                  class="field-error"
+                  role="alert"
+                >
+                  <code>{{ cellPath(index, field.key) }}</code> · {{ errorMessage }}
+                </small>
               </td>
               <td class="request-table__actions">
                 <button
