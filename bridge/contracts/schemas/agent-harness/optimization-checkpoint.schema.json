@@ -1,0 +1,24 @@
+{
+  "$id": "tilesim.agent_harness.optimization_checkpoint.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_identity",
+    "contract_revision",
+    "checkpoint_id",
+    "session_id",
+    "state_digest",
+    "last_event_sequence",
+    "provenance"
+  ],
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.optimization_checkpoint.v1" },
+    "contract_revision": { "const": "2026-10-19.wpd.v1" },
+    "checkpoint_id": { "type": "string" },
+    "session_id": { "type": "string" },
+    "state_digest": { "type": "string" },
+    "last_event_sequence": { "type": "integer", "minimum": 0 },
+    "provenance": { "type": "object" }
+  }
+}

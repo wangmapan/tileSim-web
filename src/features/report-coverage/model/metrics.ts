@@ -14,6 +14,7 @@ import {
   ratio,
   record,
   referenceText,
+  jsonText,
   stringList,
   withUnit,
   type Scope,
@@ -47,6 +48,25 @@ export function buildMetricsCoverage(bundle: ReportBundle): CoverageGroup[] {
   const control = metrics.resolution_control;
   const fidelityControl = metrics.fidelity_control;
   const desContract = metrics.des_contract;
+  const traceProvenance = metrics.trace_provenance;
+
+  const traceProvenanceFields = [
+    field(scope, "trace_provenance.source_mode", traceProvenance?.source_mode, "/metrics/trace_provenance/source_mode"),
+    field(
+      scope,
+      "trace_provenance.calibration_level",
+      traceProvenance?.calibration_level,
+      "/metrics/trace_provenance/calibration_level",
+    ),
+    field(
+      scope,
+      "trace_provenance.allowed_claim_scope",
+      traceProvenance?.allowed_claim_scope,
+      "/metrics/trace_provenance/allowed_claim_scope",
+    ),
+    field(scope, "trace_provenance.trace_kind", traceProvenance?.trace_kind, "/metrics/trace_provenance/trace_kind"),
+    field(scope, "trace_provenance.source_id", traceProvenance?.source_id, "/metrics/trace_provenance/source_id"),
+  ];
 
   const distributionFieldsList = [
     ...distributionFields(scope, "ttft_ps", "/metrics/tail_latency_summary/ttft_ps", tail?.ttft_ps),
@@ -551,6 +571,9 @@ export function buildMetricsCoverage(bundle: ReportBundle): CoverageGroup[] {
     ),
   ];
 
+  const deviceMetrics = system?.device_metrics;
+  const requestNetworkWaitIntervals = system?.request_network_wait_intervals;
+
   return [
     group(
       "metric-distributions",
@@ -558,6 +581,13 @@ export function buildMetricsCoverage(bundle: ReportBundle): CoverageGroup[] {
       distributionFieldsList,
       [],
       "三个分布摘要各自独立展示 p50、p95、p99 与 max；不把某一分位数当作整体结论。",
+    ),
+    group(
+      "metric-trace-provenance",
+      "指标 Trace provenance",
+      traceProvenanceFields,
+      [],
+      "来源模式、校准级别、声明范围和 Trace 类型由后端提供；缺失时保持 unknown，不由前端推断。",
     ),
     group(
       "metric-observation-window",
@@ -689,6 +719,36 @@ export function buildMetricsCoverage(bundle: ReportBundle): CoverageGroup[] {
             { key: "has_end_to_end_latency_sample", label: "has_end_to_end_latency_sample" },
             { key: "decode_step_count", label: "decode_step_count", numeric: true },
             { key: "batch_issue_count", label: "batch_issue_count", numeric: true },
+            { key: "ttft_ps_source", label: "ttft_ps_source" },
+            { key: "tpot_ps_source", label: "tpot_ps_source" },
+            { key: "end_to_end_latency_ps_source", label: "end_to_end_latency_ps_source" },
+            { key: "network_wait_ps", label: "network_wait_ps", numeric: true },
+            { key: "network_backpressure_ps", label: "network_backpressure_ps", numeric: true },
+            { key: "kv_wait_ps", label: "kv_wait_ps", numeric: true },
+            { key: "kv_allocation_wait_ps", label: "kv_allocation_wait_ps", numeric: true },
+            { key: "kv_pressure_wait_ps", label: "kv_pressure_wait_ps", numeric: true },
+            { key: "kv_remote_read_wait_ps", label: "kv_remote_read_wait_ps", numeric: true },
+            { key: "kv_migration_wait_ps", label: "kv_migration_wait_ps", numeric: true },
+            { key: "kv_pd_handoff_wait_ps", label: "kv_pd_handoff_wait_ps", numeric: true },
+            { key: "device_wait_ps", label: "device_wait_ps", numeric: true },
+            { key: "collective_wait_ps", label: "collective_wait_ps", numeric: true },
+            { key: "kv_bytes_read", label: "kv_bytes_read", numeric: true },
+            { key: "kv_bytes_migrated", label: "kv_bytes_migrated", numeric: true },
+            { key: "kv_eviction_bytes", label: "kv_eviction_bytes", numeric: true },
+            { key: "kv_source_identity", label: "kv_source_identity", mono: true },
+            { key: "kv_destination_identity", label: "kv_destination_identity", mono: true },
+            { key: "dominant_kv_wait_reason", label: "dominant_kv_wait_reason" },
+            { key: "dominant_wait_reason", label: "dominant_wait_reason" },
+            { key: "device_profile", label: "device_profile" },
+            { key: "device_profile_selection", label: "device_profile_selection" },
+            { key: "device_profile_asset_id", label: "device_profile_asset_id", mono: true },
+            { key: "device_profile_claim_scope", label: "device_profile_claim_scope" },
+            { key: "network_profile", label: "network_profile" },
+            { key: "network_profile_selection", label: "network_profile_selection" },
+            { key: "network_profile_asset_id", label: "network_profile_asset_id", mono: true },
+            { key: "network_profile_claim_scope", label: "network_profile_claim_scope" },
+            { key: "provenance", label: "provenance" },
+            { key: "metric_provenance", label: "metric_provenance" },
           ],
           (item, index) => {
             const entry = record(item);
@@ -709,6 +769,36 @@ export function buildMetricsCoverage(bundle: ReportBundle): CoverageGroup[] {
                 cell(scope, "has_end_to_end_latency_sample", entry.has_end_to_end_latency_sample, bool),
                 cell(scope, "decode_step_count", entry.decode_step_count, count, { numeric: true }),
                 cell(scope, "batch_issue_count", entry.batch_issue_count, count, { numeric: true }),
+                cell(scope, "ttft_ps_source", entry.ttft_ps_source),
+                cell(scope, "tpot_ps_source", entry.tpot_ps_source),
+                cell(scope, "end_to_end_latency_ps_source", entry.end_to_end_latency_ps_source),
+                cell(scope, "network_wait_ps", entry.network_wait_ps, picoseconds, { numeric: true }),
+                cell(scope, "network_backpressure_ps", entry.network_backpressure_ps, picoseconds, { numeric: true }),
+                cell(scope, "kv_wait_ps", entry.kv_wait_ps, picoseconds, { numeric: true }),
+                cell(scope, "kv_allocation_wait_ps", entry.kv_allocation_wait_ps, picoseconds, { numeric: true }),
+                cell(scope, "kv_pressure_wait_ps", entry.kv_pressure_wait_ps, picoseconds, { numeric: true }),
+                cell(scope, "kv_remote_read_wait_ps", entry.kv_remote_read_wait_ps, picoseconds, { numeric: true }),
+                cell(scope, "kv_migration_wait_ps", entry.kv_migration_wait_ps, picoseconds, { numeric: true }),
+                cell(scope, "kv_pd_handoff_wait_ps", entry.kv_pd_handoff_wait_ps, picoseconds, { numeric: true }),
+                cell(scope, "device_wait_ps", entry.device_wait_ps, picoseconds, { numeric: true }),
+                cell(scope, "collective_wait_ps", entry.collective_wait_ps, picoseconds, { numeric: true }),
+                cell(scope, "kv_bytes_read", entry.kv_bytes_read, bytes, { numeric: true }),
+                cell(scope, "kv_bytes_migrated", entry.kv_bytes_migrated, bytes, { numeric: true }),
+                cell(scope, "kv_eviction_bytes", entry.kv_eviction_bytes, bytes, { numeric: true }),
+                cell(scope, "kv_source_identity", entry.kv_source_identity, undefined, { mono: true }),
+                cell(scope, "kv_destination_identity", entry.kv_destination_identity, undefined, { mono: true }),
+                cell(scope, "dominant_kv_wait_reason", entry.dominant_kv_wait_reason),
+                cell(scope, "dominant_wait_reason", entry.dominant_wait_reason),
+                cell(scope, "device_profile", entry.device_profile),
+                cell(scope, "device_profile_selection", entry.device_profile_selection),
+                cell(scope, "device_profile_asset_id", entry.device_profile_asset_id, undefined, { mono: true }),
+                cell(scope, "device_profile_claim_scope", entry.device_profile_claim_scope),
+                cell(scope, "network_profile", entry.network_profile),
+                cell(scope, "network_profile_selection", entry.network_profile_selection),
+                cell(scope, "network_profile_asset_id", entry.network_profile_asset_id, undefined, { mono: true }),
+                cell(scope, "network_profile_claim_scope", entry.network_profile_claim_scope),
+                cell(scope, "provenance", entry.provenance, jsonText),
+                cell(scope, "metric_provenance", entry.metric_provenance, jsonText),
               ],
             };
           },
@@ -716,6 +806,92 @@ export function buildMetricsCoverage(bundle: ReportBundle): CoverageGroup[] {
             description:
               "时间戳与 ps 值走无损 JSON 路径，显示换算保留原始整数；has_*_sample 为 false 表示后端没有把该请求纳入对应分位数样本。",
           },
+        ),
+      ],
+    ),
+    group(
+      "metric-device-metrics",
+      "设备级汇总",
+      [],
+      [
+        buildList(
+          fabricScope,
+          "device_metrics",
+          "device_metrics",
+          deviceMetrics,
+          "metrics:/system_summary/device_metrics",
+          [
+            { key: "device_id", label: "device_id", mono: true },
+            { key: "device_type", label: "device_type" },
+            { key: "group_id", label: "group_id", mono: true },
+            { key: "evidence_state", label: "evidence_state" },
+            { key: "task_count", label: "task_count", numeric: true },
+            { key: "prefill_task_count", label: "prefill_task_count", numeric: true },
+            { key: "decode_task_count", label: "decode_task_count", numeric: true },
+            { key: "modeled_memory_bytes", label: "modeled_memory_bytes", numeric: true },
+            { key: "service_time_ps", label: "service_time_ps", numeric: true },
+            { key: "active_time_ps", label: "active_time_ps", numeric: true },
+            { key: "observation_window_ps", label: "observation_window_ps", numeric: true },
+            { key: "active_time_ratio", label: "active_time_ratio", numeric: true },
+            { key: "hardware_counter_state", label: "hardware_counter_state" },
+          ],
+          (item, index) => {
+            const entry = record(item);
+            return {
+              key: `${String(entry.device_id ?? index)}`,
+              cells: [
+                cell(fabricScope, "device_id", entry.device_id, undefined, { mono: true }),
+                cell(fabricScope, "device_type", entry.device_type),
+                cell(fabricScope, "group_id", entry.group_id, undefined, { mono: true }),
+                cell(fabricScope, "evidence_state", entry.evidence_state),
+                cell(fabricScope, "task_count", entry.task_count, count, { numeric: true }),
+                cell(fabricScope, "prefill_task_count", entry.prefill_task_count, count, { numeric: true }),
+                cell(fabricScope, "decode_task_count", entry.decode_task_count, count, { numeric: true }),
+                cell(fabricScope, "modeled_memory_bytes", entry.modeled_memory_bytes, bytes, { numeric: true }),
+                cell(fabricScope, "service_time_ps", entry.service_time_ps, picoseconds, { numeric: true }),
+                cell(fabricScope, "active_time_ps", entry.active_time_ps, picoseconds, { numeric: true }),
+                cell(fabricScope, "observation_window_ps", entry.observation_window_ps, picoseconds, {
+                  numeric: true,
+                }),
+                cell(fabricScope, "active_time_ratio", entry.active_time_ratio, ratio, { numeric: true }),
+                cell(fabricScope, "hardware_counter_state", entry.hardware_counter_state),
+              ],
+            };
+          },
+          { description: "设备级记录由后端直接提供；观测、模型估算和推断状态保持原样。" },
+        ),
+      ],
+    ),
+    group(
+      "metric-request-network-wait-intervals",
+      "请求级网络等待解释区间",
+      [],
+      [
+        buildList(
+          fabricScope,
+          "request_network_wait_intervals",
+          "request_network_wait_intervals",
+          requestNetworkWaitIntervals,
+          "metrics:/system_summary/request_network_wait_intervals",
+          [
+            { key: "request_id", label: "request_id", mono: true },
+            { key: "start_time_ps", label: "start_time_ps", numeric: true },
+            { key: "end_time_ps", label: "end_time_ps", numeric: true },
+            { key: "collective", label: "collective" },
+          ],
+          (item, index) => {
+            const entry = record(item);
+            return {
+              key: `${String(entry.request_id ?? index)}-${index}`,
+              cells: [
+                cell(fabricScope, "request_id", entry.request_id, undefined, { mono: true }),
+                cell(fabricScope, "start_time_ps", entry.start_time_ps, picoseconds, { numeric: true }),
+                cell(fabricScope, "end_time_ps", entry.end_time_ps, picoseconds, { numeric: true }),
+                cell(fabricScope, "collective", entry.collective, bool),
+              ],
+            };
+          },
+          { description: "这些区间解释父级网络等待，不是额外延迟，不能与父级等待重复计费。" },
         ),
       ],
     ),

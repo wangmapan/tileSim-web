@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tilesim.agent_harness.execution_event.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_identity",
+    "contract_revision",
+    "event_id",
+    "sequence",
+    "operation_id",
+    "execution_id",
+    "draft_id",
+    "approval_id",
+    "run_id",
+    "node",
+    "state",
+    "created_at",
+    "payload_digest",
+    "terminal",
+    "retryable"
+  ],
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.execution_event.v1" },
+    "contract_revision": { "const": "2026-10-18.wpc.v1" },
+    "event_id": { "type": "string" },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "operation_id": { "type": "string" },
+    "execution_id": { "type": "string" },
+    "draft_id": { "type": "string" },
+    "approval_id": { "type": "string" },
+    "run_id": { "type": ["string", "null"] },
+    "node": { "type": "string" },
+    "state": { "type": "string" },
+    "created_at": { "type": "string" },
+    "payload_digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "terminal": { "type": "boolean" },
+    "retryable": { "type": "boolean" }
+  }
+}

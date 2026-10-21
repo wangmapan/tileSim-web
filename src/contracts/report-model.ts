@@ -8,6 +8,7 @@ import type {
 } from "./generated/report-identities";
 import type {
   EvidenceRef as F6BEvidenceRef,
+  FieldProvenance,
   Provenance,
   S7RunBoundDesEvidenceV1,
   SubjectRef as F6BSubjectRef,
@@ -44,8 +45,8 @@ export interface ReportSummary {
   execution_path?: string;
   preferred_entrypoint?: string;
   end_to_end_latency_us?: number;
-  runtime_event_count?: number;
-  fabric_record_count?: number;
+  runtime_event_count?: LosslessInteger;
+  fabric_record_count?: LosslessInteger;
   validation_completeness?: number;
   has_tail_attribution?: boolean;
 }
@@ -114,8 +115,8 @@ export interface MultiGranularityProfile {
   unsupported_reason?: string;
   des_completion_state?: string;
   des_contract_state?: string;
-  des_required_subsystem_count?: number;
-  des_satisfied_subsystem_count?: number;
+  des_required_subsystem_count?: LosslessInteger;
+  des_satisfied_subsystem_count?: LosslessInteger;
   des_contract_gaps?: string[];
   has_des_gap?: boolean;
   has_cycle_gap?: boolean;
@@ -207,9 +208,77 @@ export interface RequestMetric {
   has_ttft_sample?: boolean;
   has_tpot_sample?: boolean;
   has_end_to_end_latency_sample?: boolean;
-  decode_step_count?: number;
-  batch_issue_count?: number;
+  ttft_ps_source?: "observed" | "inferred" | "synthetic" | "fallback" | string;
+  tpot_ps_source?: "observed" | "inferred" | "synthetic" | "fallback" | string;
+  end_to_end_latency_ps_source?: "observed" | "inferred" | "synthetic" | "fallback" | string;
+  decode_step_count?: LosslessInteger;
+  batch_issue_count?: LosslessInteger;
+  network_wait_ps?: LosslessInteger;
+  network_backpressure_ps?: LosslessInteger;
+  kv_wait_ps?: LosslessInteger;
+  kv_allocation_wait_ps?: LosslessInteger;
+  kv_pressure_wait_ps?: LosslessInteger;
+  kv_remote_read_wait_ps?: LosslessInteger;
+  kv_migration_wait_ps?: LosslessInteger;
+  kv_pd_handoff_wait_ps?: LosslessInteger;
+  kv_bytes_read?: LosslessInteger;
+  kv_bytes_migrated?: LosslessInteger;
+  kv_eviction_bytes?: LosslessInteger;
+  kv_source_identity?: string;
+  kv_destination_identity?: string;
+  dominant_kv_wait_reason?: string;
+  device_wait_ps?: LosslessInteger;
+  collective_wait_ps?: LosslessInteger;
+  dominant_wait_reason?: string;
+  device_profile?: string;
+  device_profile_selection?: ProfileSelection;
+  device_profile_asset_id?: string;
+  device_profile_claim_scope?: string;
+  network_profile?: string;
+  network_profile_selection?: ProfileSelection;
+  network_profile_asset_id?: string;
+  network_profile_claim_scope?: string;
+  provenance?: FieldProvenance;
+  metric_provenance?: Partial<Record<"ttft_ps" | "tpot_ps" | "end_to_end_latency_ps", FieldProvenance>>;
   [key: string]: unknown;
+}
+
+export type ProfileSelection = "exact" | "interpolated" | "portable_fallback" | "mixed" | string;
+
+export interface NetworkWaitInterval {
+  component_code?: string;
+  demand_id?: string;
+  link_id?: string;
+  attempt?: LosslessInteger;
+  start_time_ps?: LosslessInteger;
+  end_time_ps?: LosslessInteger;
+  evidence?: string;
+  unresolved_reason?: string;
+  evidence_refs?: EvidenceRef[];
+}
+
+export interface DeviceMetricsRecord {
+  device_id?: string;
+  device_type?: string;
+  group_id?: string;
+  evidence_state?: string;
+  task_count?: LosslessInteger;
+  prefill_task_count?: LosslessInteger;
+  decode_task_count?: LosslessInteger;
+  modeled_memory_bytes?: LosslessInteger;
+  service_time_ps?: LosslessInteger;
+  active_time_ps?: LosslessInteger;
+  observation_window_ps?: LosslessInteger;
+  active_time_ratio?: number;
+  hardware_counter_state?: string;
+  [key: string]: unknown;
+}
+
+export interface RequestNetworkWaitInterval {
+  request_id?: string;
+  start_time_ps?: LosslessInteger;
+  end_time_ps?: LosslessInteger;
+  collective?: boolean;
 }
 
 export interface PercentileSubject {
@@ -237,20 +306,34 @@ export interface PhaseFabricContribution {
   memory_match_status?: string;
   memory_latency_us?: number;
   device_task_id?: string;
+  record_count?: LosslessInteger;
+  busy_time_ps?: LosslessInteger;
   device_profile?: string;
+  device_profile_selection?: ProfileSelection;
+  device_profile_asset_id?: string;
+  device_profile_claim_scope?: string;
   device_stream_id?: string;
   device_match_status?: string;
   device_latency_us?: number;
   device_occupancy_ratio?: number;
   device_contention_delay_us?: number;
+  network_profile?: string;
+  network_profile_selection?: ProfileSelection;
+  network_profile_asset_id?: string;
+  network_profile_claim_scope?: string;
   resource_convergence_status?: string;
   not_s5_collective?: boolean;
+  pd_handoff_id?: string;
+  pd_disaggregation_group_id?: string;
+  pd_source_placement_group_id?: string;
+  pd_destination_placement_group_id?: string;
   [key: string]: unknown;
 }
 
 export interface RequestFabricContribution {
   request_id?: string;
-  record_count?: number;
+  record_count?: LosslessInteger;
+  busy_time_ps?: LosslessInteger;
   runtime_us?: number;
   queue_delay_us?: number;
   congestion_delay_us?: number;
@@ -260,6 +343,10 @@ export interface RequestFabricContribution {
   dominant_delay_kind?: string;
   dominant_collective_id?: string;
   dominant_phase_id?: string;
+  network_profile?: string;
+  network_profile_selection?: ProfileSelection;
+  network_profile_asset_id?: string;
+  network_profile_claim_scope?: string;
   [key: string]: unknown;
 }
 
@@ -279,10 +366,10 @@ export interface FabricDomainUtilization {
 export interface ResourceConvergence {
   has_evidence?: boolean;
   summary?: string;
-  collective_phase_count?: number;
-  converged_request_count?: number;
-  missing_memory_event_count?: number;
-  missing_device_task_count?: number;
+  collective_phase_count?: LosslessInteger;
+  converged_request_count?: LosslessInteger;
+  missing_memory_event_count?: LosslessInteger;
+  missing_device_task_count?: LosslessInteger;
   [key: string]: unknown;
 }
 
@@ -393,9 +480,9 @@ export interface MetricsReport extends Omit<MetricsReportContract, "summary" | "
   claim_scope_summary?: string;
   summary?: {
     throughput_requests_per_second?: number;
-    request_count?: number;
-    completed_request_count?: number;
-    rejected_request_count?: number;
+    request_count?: LosslessInteger;
+    completed_request_count?: LosslessInteger;
+    rejected_request_count?: LosslessInteger;
   };
   tail_latency_summary?: {
     ttft_ps?: MetricDistributionSummary;
@@ -418,13 +505,13 @@ export interface MetricsReport extends Omit<MetricsReportContract, "summary" | "
   metric_scope?: string;
   system_summary?: {
     has_fabric_timeline?: boolean;
-    fabric_record_count?: number;
-    active_fabric_domain_count?: number;
+    fabric_record_count?: LosslessInteger;
+    active_fabric_domain_count?: LosslessInteger;
     fabric_busy_time_ps?: LosslessInteger;
     fabric_observation_window_ps?: LosslessInteger;
     fabric_utilization_ratio?: number;
     has_fabric_backpressure_signal?: boolean;
-    fabric_backpressure_event_count?: number;
+    fabric_backpressure_event_count?: LosslessInteger;
     max_fabric_backpressure_delay_us?: number;
     dominant_fabric_backpressure_domain_id?: string;
     dominant_fabric_backpressure_kind?: string;
@@ -432,6 +519,10 @@ export interface MetricsReport extends Omit<MetricsReportContract, "summary" | "
     request_fabric_contributions?: RequestFabricContribution[];
     fabric_domain_utilization?: FabricDomainUtilization[];
     pd_disaggregation?: PdDisaggregationSummary;
+    representative_device_task_count?: LosslessInteger;
+    unmapped_device_task_count?: LosslessInteger;
+    device_metrics?: DeviceMetricsRecord[];
+    request_network_wait_intervals?: RequestNetworkWaitInterval[];
   };
   [key: string]: unknown;
 }
@@ -496,13 +587,14 @@ export interface ValidationReport extends Omit<ValidationReportContract, "checks
 }
 
 export interface AttributionItem {
-  rank?: number;
+  rank?: LosslessInteger;
   subsystem?: string;
   component_code?: string;
   detail?: string;
   evidence_link?: string;
   share?: number;
-  score_ps?: LosslessInteger;
+  /** Canonical backend type is double; legacy JSON adapters may preserve it as a decimal string. */
+  score_ps?: number | string;
   attribution_id?: string;
   subject_refs?: SubjectRef[];
   evidence_refs?: EvidenceRef[];
@@ -510,6 +602,8 @@ export interface AttributionItem {
 }
 
 export interface CauseItem {
+  start_time_ps?: LosslessInteger;
+  end_time_ps?: LosslessInteger;
   subsystem?: string;
   cause_code?: string;
   title?: string;
@@ -517,13 +611,25 @@ export interface CauseItem {
   cause_id?: string;
   subject_refs?: SubjectRef[];
   evidence_refs?: EvidenceRef[];
+  network_intervals?: NetworkWaitInterval[];
+  model_execution_call_id?: string;
+  execution_id?: string;
+  kv_operation_id?: string;
+  network_demand_id?: string;
+  device_task_id?: string;
+  collective_id?: string;
+  pd_handoff_id?: string;
+  pd_disaggregation_group_id?: string;
+  pd_source_placement_group_id?: string;
+  pd_destination_placement_group_id?: string;
   [key: string]: unknown;
 }
 
 export interface AttributionAudit {
   status?: string;
   evidence_tier?: string;
-  score_total_ps?: LosslessInteger;
+  /** Canonical backend type is double; legacy JSON adapters may preserve it as a decimal string. */
+  score_total_ps?: number | string;
   share_sum?: number;
   conserved?: boolean;
   propagation_complete?: boolean;
@@ -586,12 +692,12 @@ export interface ExecutionEnvelopeReport extends Omit<ExecutionEnvelopeContract,
   start_time_ps?: LosslessInteger;
   end_time_ps?: LosslessInteger;
   end_to_end_latency_us?: number;
-  runtime_event_count?: number;
+  runtime_event_count?: LosslessInteger;
   runtime_engine_type?: string;
   runtime_engine_semantic_version?: string;
   runtime_input_mode?: "" | "legacy_generic" | "dynamic_request" | "observed_replay";
   semantic_profile_applied?: boolean;
-  fabric_record_count?: number;
+  fabric_record_count?: LosslessInteger;
   /** Boolean fact only: a `false` value must never be styled as "captured". */
   has_runtime_event_trace?: boolean;
   has_tail_cause_chain_report?: boolean;
@@ -620,21 +726,21 @@ export interface DesignCandidate {
   metric_availability?: { ttft?: boolean; tpot?: boolean };
   analytical_run_instance_id?: string;
   des_run_instance_id?: string;
-  analytical_rank?: number;
-  final_rank?: number;
+  analytical_rank?: LosslessInteger;
+  final_rank?: LosslessInteger;
   deterministic_bounds_us?: {
     method?: string;
     p95?: { lower?: number; upper?: number };
     p99?: { lower?: number; upper?: number };
   };
-  first_state_divergence?: { present?: boolean; index?: number; state_schema?: string };
+  first_state_divergence?: { present?: boolean; index?: LosslessInteger; state_schema?: string };
   stop_reason?: string;
   candidate_knobs?: Record<string, string | number | boolean | null | undefined>;
   runtime_scheduler?: string;
   kv_policy?: string;
   device_profile?: string;
   topology_scale?: string;
-  moe_expert_count?: number;
+  moe_expert_count?: LosslessInteger;
   moe_placement?: string;
   candidate_provenance?: string;
   validation_lane?: string;
@@ -648,7 +754,8 @@ export interface DesignCandidate {
     subsystem?: string;
     reason?: string;
     detail?: string;
-    score_ps?: number;
+    /** Canonical backend type is double; legacy JSON adapters may preserve it as a decimal string. */
+    score_ps?: number | string;
   }>;
   subject_refs?: SubjectRef[];
   evidence_refs?: EvidenceRef[];
@@ -709,7 +816,7 @@ export interface DesignSpaceReport extends Omit<
   resolved_fidelity_dominant_resolution?: string;
   resolved_fidelity_dominant_subsystem?: string;
   candidate_count?: LosslessInteger;
-  promoted_candidate_count?: number;
+  promoted_candidate_count?: LosslessInteger;
   validation_lane?: string;
   evidence_tier?: string;
   claim_scope_summary?: string;
@@ -728,8 +835,8 @@ export interface DesignSpaceReport extends Omit<
   candidates?: DesignCandidate[];
   analytical_vs_des_disagreements?: Array<{
     candidate_id: string;
-    analytical_rank?: number;
-    des_rank?: number;
+    analytical_rank?: LosslessInteger;
+    des_rank?: LosslessInteger;
     detail?: string;
   }>;
   [key: string]: unknown;

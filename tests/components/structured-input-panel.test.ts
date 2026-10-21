@@ -232,15 +232,12 @@ describe("structured input panel", () => {
     wrapper.unmount();
   });
 
-  it("shows the JSON tab's topology as a preview: graph plus JSON, no editing chrome", () => {
+  it("shows the JSON tab's topology as a direct read-only GPU canvas", async () => {
     const { wrapper } = mountPanel({ mode: "json" });
     expect(wrapper.find(".topology-editor--readonly").exists()).toBe(true);
-    expect(wrapper.find(".topology-canvas").exists()).toBe(true);
-    // The graph follows whatever the textarea says, so every editing affordance
-    // is gone: no connect mode, no link properties, no domain chips, no module
-    // bindings list — those live in the quick-control tab.
-    expect(wrapper.text()).not.toContain("连接设备");
-    expect(wrapper.find(".topology-domain-picker").exists()).toBe(false);
+    expect(wrapper.find(".topology-canvas--direct").exists()).toBe(true);
+    expect(wrapper.find(".topology-view-more").exists()).toBe(false);
+    // The preview follows JSON, so every editing affordance is gone.
     expect(wrapper.find(".topology-module-bindings").exists()).toBe(false);
     expect(wrapper.find(".topology-domains").exists()).toBe(false);
     expect(wrapper.find(".topology-link-panel").exists()).toBe(false);
@@ -265,7 +262,7 @@ describe("structured input panel", () => {
     expect(panel().emitted("disable-structured-input")).toHaveLength(1);
   });
 
-  it("shows the four blocks in the quick-control tab without adding a textarea", () => {
+  it("shows the four blocks in the quick-control tab without adding a textarea", async () => {
     const { wrapper } = mountPanel({ structuredInput: true });
     expect(wrapper.find(".structured-block--policy").exists()).toBe(true);
     expect(wrapper.find(".structured-block--requests").exists()).toBe(true);
@@ -273,9 +270,70 @@ describe("structured input panel", () => {
     // topology editor is mounted without its own textarea and stays editable.
     expect(wrapper.findAll(".structured-stack textarea")).toHaveLength(0);
     expect(wrapper.find(".json-grid").exists()).toBe(false);
-    expect(wrapper.find(".topology-editor .topology-canvas").exists()).toBe(true);
+    expect(wrapper.find(".topology-editor .topology-module-bindings").exists()).toBe(false);
+    expect(wrapper.find(".topology-editor .topology-canvas--direct").exists()).toBe(true);
     expect(wrapper.find(".topology-editor--readonly").exists()).toBe(false);
-    expect(wrapper.find(".topology-editor .topology-module-bindings").exists()).toBe(true);
+  });
+
+  it("exposes the complete request contract, including model identity and advanced routing fields", async () => {
+    const runtime = JSON.stringify({
+      policy: {},
+      requests: [
+        {
+          request_id: "r0",
+          model_id: "llama3-8b",
+          priority_class: 2,
+          collective_type: "AllReduce",
+          message_size_bytes: 1024,
+          placement_group_id: "pg0",
+          disaggregation_group_id: "pd0",
+          kv_handoff_id: "handoff0",
+        },
+      ],
+    });
+    const { wrapper, panel } = mountPanel({ runtime, structuredInput: true });
+    for (const key of [
+      "model_id",
+      "priority_class",
+      "collective_type",
+      "message_size_bytes",
+      "placement_group_id",
+      "disaggregation_group_id",
+      "kv_handoff_id",
+    ]) {
+      expect(wrapper.find(`[data-input-path="/custom_inputs/runtime_trace/requests/0/${key}"]`).exists()).toBe(true);
+    }
+    expect(wrapper.find(".request-model-summary").text()).toContain("llama3-8b");
+
+    const model = wrapper.get<HTMLInputElement>(
+      '[data-input-path="/custom_inputs/runtime_trace/requests/0/model_id"] input',
+    );
+    model.element.value = "mixtral";
+    await model.trigger("change");
+    const updated = JSON.parse(panel().emitted("update:runtimeJson")?.at(-1)?.[0] as string);
+    expect(updated.requests[0].model_id).toBe("mixtral");
+  });
+
+  it("offers topology-backed dropdowns for TP and request participants", async () => {
+    const { wrapper, panel } = mountPanel({ structuredInput: true });
+    const tp = wrapper.get('[data-input-path="/custom_inputs/runtime_trace/requests/0/tp_degree"] select');
+    expect(tp.findAll("option").map((option) => option.text())).toContain("4 GPU");
+    (tp.element as HTMLSelectElement).value = "4";
+    await tp.trigger("change");
+    const participants = wrapper.get(
+      '[data-input-path="/custom_inputs/runtime_trace/requests/0/participants"] .request-participants-picker',
+    );
+    await participants.get("summary").trigger("click");
+    expect(participants.findAll('input[type="checkbox"]')).toHaveLength(5);
+    expect(participants.find('[aria-label="gpu0"]').exists()).toBe(true);
+    expect(participants.find('[aria-label="gpu3"]').exists()).toBe(true);
+    expect(participants.text()).toContain("gpu3");
+    const gpu2 = participants.findAll('input[type="checkbox"]')[3];
+    (gpu2.element as HTMLInputElement).checked = true;
+    await gpu2.trigger("change");
+    const updated = JSON.parse(panel().emitted("update:runtimeJson")?.at(-1)?.[0] as string);
+    expect(updated.requests[0].tp_degree).toBe(4);
+    expect(updated.requests[0].participants).toEqual(["gpu0", "gpu1", "gpu2"]);
   });
 
   it("paints the run-policy block with the advanced keys only, never the knobs' own", () => {
@@ -530,5 +588,16 @@ describe("structured input panel", () => {
     // sibling so it never nests inside a list block.
     expect(stack.find(".domain-inventory").element.parentElement).toBe(stack.element);
     expect(wrapper.findAll(".domain-inventory-row")).toHaveLength(1);
+  });
+
+  it("keeps device and domain editors collapsed until advanced topology settings are requested", async () => {
+    const { wrapper } = mountPanel({ structuredInput: true });
+    expect(wrapper.get(".topology-advanced-toggle").attributes("aria-expanded")).toBe("false");
+    expect(wrapper.get(".device-inventory").attributes("style")).toContain("display: none");
+    expect(wrapper.get(".domain-inventory").attributes("style")).toContain("display: none");
+    await wrapper.get(".topology-advanced-toggle").trigger("click");
+    expect(wrapper.get(".topology-advanced-toggle").attributes("aria-expanded")).toBe("true");
+    expect(wrapper.get(".device-inventory").attributes("style")).not.toContain("display: none");
+    expect(wrapper.get(".domain-inventory").attributes("style")).not.toContain("display: none");
   });
 });

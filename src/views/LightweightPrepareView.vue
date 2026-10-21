@@ -8,6 +8,7 @@ import {
   ExperimentInputPanel,
   ExperimentRequestError,
   applyParameterEdits,
+  previewParameterEdits,
   buildExperimentAgentContextPublication,
   buildExperimentRequestPreview,
   buildExperimentSurface,
@@ -23,6 +24,7 @@ import type {
   AgentParameterApplyResult,
   AgentParameterEdit,
   AgentParameterReceipt,
+  AgentParameterStructuredInputs,
 } from "../entities/agent-command";
 import { UNPUBLISHED_CONTEXT_REVISION, createPageContextRevisionKeeper } from "../entities/agent-context";
 import { useDashboard } from "../store/dashboard";
@@ -123,6 +125,61 @@ watch([form, mode], () => lightweight.setDraft(form, mode.value), { deep: true }
 
 const AGENT_COMMAND_PROVIDER_ID = "lightweight-prepare";
 
+let agentTemplateLoadKey = "";
+let agentTemplateLoadPromise: Promise<void> | null = null;
+
+/**
+ * Hydrate the Agent's read-only context with the canonical scenario template
+ * on first entry. Existing JSON always wins; this does not open structured
+ * editing, alter the selected mode, or create a run.
+ */
+async function ensureAgentStructuredContext(): Promise<void> {
+  const manifest = state.bridge.manifest;
+  if (
+    !state.bridge.connected ||
+    !state.bridge.available ||
+    state.bridge.checking ||
+    !manifest ||
+    (mode.value !== "controls" && mode.value !== "json") ||
+    runtimeJson.value.trim() ||
+    topologyJson.value.trim()
+  ) {
+    return;
+  }
+  const key = `${form.scenario_id}:${manifest.schema_set_revision}`;
+  if (agentTemplateLoadKey === key) return;
+  if (agentTemplateLoadPromise) return agentTemplateLoadPromise;
+  agentTemplateLoadKey = key;
+  const requestedScenarioId = form.scenario_id;
+  const requestedSchemaRevision = manifest.schema_set_revision;
+  agentTemplateLoadPromise = (async () => {
+    try {
+      const template = await runExperiment.getTemplate(requestedScenarioId);
+      // Do not replace a document entered while the request was in flight.
+      if (
+        template?.runtime_trace === undefined ||
+        template.topology === undefined ||
+        runtimeJson.value.trim() ||
+        topologyJson.value.trim() ||
+        form.scenario_id !== requestedScenarioId ||
+        state.bridge.manifest?.schema_set_revision !== requestedSchemaRevision
+      ) {
+        return;
+      }
+      runtimeJson.value = JSON.stringify(template.runtime_trace, null, 2);
+      topologyJson.value = JSON.stringify(template.topology, null, 2);
+    } catch {
+      // Best effort only. The explicit template action remains available.
+    } finally {
+      agentTemplateLoadPromise = null;
+      if (agentTemplateLoadKey !== `${form.scenario_id}:${state.bridge.manifest?.schema_set_revision || ""}`) {
+        void ensureAgentStructuredContext();
+      }
+    }
+  })();
+  return agentTemplateLoadPromise;
+}
+
 function publishAgentContext(): void {
   if (!props.agentContextPublisher) return;
   // Declaring the live page belongs here rather than in the registration below:
@@ -159,6 +216,7 @@ function publishAgentContext(): void {
     build(UNPUBLISHED_CONTEXT_REVISION),
   );
   props.agentContextPublisher(build(revision));
+  void ensureAgentStructuredContext();
 }
 
 watch(
@@ -187,11 +245,15 @@ watch(
  * that lands there also has to open the structured channel — the scalar
  * `overrides` channel never carries requests, devices or topology.
  */
-function applyAgentParameterEdits(edits: readonly AgentParameterEdit[]): AgentParameterApplyResult {
+function applyAgentParameterEdits(
+  edits: readonly AgentParameterEdit[],
+  structuredInputs?: AgentParameterStructuredInputs,
+): AgentParameterApplyResult {
   const outcome = applyParameterEdits({
     items: edits,
     runtimeJson: runtimeJson.value,
     topologyJson: topologyJson.value,
+    structuredInputs,
   });
   const receipts: AgentParameterReceipt[] = [];
   outcome.applied.forEach((item) => {
@@ -222,6 +284,16 @@ function applyAgentParameterEdits(edits: readonly AgentParameterEdit[]): AgentPa
       reason: item.reason,
     });
   });
+  if (structuredInputs && outcome.rejected.length === 0) {
+    receipts.push({
+      path: "custom_inputs",
+      label: "完整 synthetic runtime_trace + topology",
+      previous: "当前输入",
+      next: "助手生成的 JSON",
+      status: "applied",
+      reason: "仅写入草案，没有创建运行。",
+    });
+  }
   runtimeJson.value = outcome.runtimeJson;
   topologyJson.value = outcome.topologyJson;
   const channelMoved = outcome.requiresStructuredInput && !structuredInput.value;
@@ -234,9 +306,22 @@ function applyAgentParameterEdits(edits: readonly AgentParameterEdit[]): AgentPa
   };
 }
 
+function previewAgentParameterEdits(
+  edits: readonly AgentParameterEdit[],
+  structuredInputs?: AgentParameterStructuredInputs,
+) {
+  return previewParameterEdits({
+    items: edits,
+    runtimeJson: runtimeJson.value,
+    topologyJson: topologyJson.value,
+    structuredInputs,
+  });
+}
+
 const unregisterAgentCommands = props.agentCommandRegistry?.register(
   AGENT_COMMAND_PROVIDER_ID,
   applyAgentParameterEdits,
+  previewAgentParameterEdits,
 );
 onUnmounted(() => unregisterAgentCommands?.());
 

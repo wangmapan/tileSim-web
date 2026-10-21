@@ -1,5 +1,38 @@
 # 基于 Agent 的仿真编排模块文档集
 
+## 2026-10-19 阶段 4 Local-Dev 受控优化（当前工作树）
+
+阶段 4 已在本地个人使用范围接入 `2026-10-19.wpd.v1` 优化 contract、独立 SQLite WAL store、allowlist tool registry、人工审批
+和正式 WPC execution endpoint。session/candidate/approval/iteration/evaluation/checkpoint/event/summary 均绑定 principal、workspace、
+snapshot、backend、schema-set 和 digest；候选生成有父候选/diff/约束/预算/重复检测，结果只接受 verified metric 的身份、SHA、bytes、
+JSON Pointer 和 synthetic provenance。`unknown_outcome` 进入 `recovery_required`，失败只能显式 retry，取消有 terminal fence，Bridge
+重启会对 in-flight session fail closed；`recovery_required` 只能由显式 acknowledgement 创建新的候选和批准栅栏，绝不复用未知副作用。
+前端 Optimization Panel 支持创建本地 session、批准、暂停、恢复、取消、显式重试和刷新恢复；创建表单只提交正式 run request JSON，服务端再做参数校验。
+
+本阶段仅输出 `LOCAL_PHASE4_PASS`（若本地门禁完整）或 `LOCAL_PHASE4_NO-GO`，永不输出生产 GO；所有结果固定为
+`local_dev` / `synthetic_trace` / `exploratory` / `not_for_production`。生产 Provider acceptance、真实硬件、独立 review 和 held-out
+validation 仍为 `production_acceptance_pending`，阶段 4 不开放外部 MCP/A2A、shell、任意路径/URL或无人值守生产执行。
+
+## 2026-10-19 阶段 3 local-dev / 3B 当前事实
+
+本地个人使用路径已完成 `LOCAL_ONLY_PASS`：新的 `local_dev` deployment manifest 由当前源码、Bridge
+schema-set、生成客户端和 Windows MSVC CLI 自动生成并通过 identity matching；AH3-F01–AH3-F26 为 26/26，
+并完成 draft → validation → approval → execution → run → result、artifact identity、幂等 replay/conflict、
+SSE/polling replay。前端已接入正式 WPC execution adapter、Task Center、显式 submit/status/cancel/retry/resume、
+事件时间线、`Last-Event-ID` 恢复和 polling fallback。结果边界固定为 `local_dev` / `synthetic_trace` /
+`exploratory` / `not_for_production`，Provider 为 `provider_unavailable_for_local_dev`，生产 acceptance 与独立
+生产 review 仍为 pending。正式 3A release-gate 54/54 pass 但结论仍是 `NO-GO`；不得把本地结果升级为生产 GO。
+生产阶段 4 多工具自主循环、无人值守执行和外部 MCP/A2A 保持关闭；本地受控优化仅在显式 local-dev、逐候选人工审批和 bounded
+budget 下可用。
+
+## 2026-10-18 阶段 2 Bridge 后端增量
+
+Bridge 已发布 `2026-10-18.wpb.v1` draft/validation/approval successor；正式 API、身份绑定和零 run 副作用边界见
+`docs/AI_HANDOFF.md` 与 `bridge/README.md`。这不改变此前 Phase 2 数据侧 `blocked` 状态，也不开放执行入口。
+当前 canonical schema-set revision：`sha256:c7a23b668d29415315e1eca4fd8dc0a5ebdff908b8420a6e187f33cc710efb42`。
+
+Web WP-B 接入位于 `src/lib/api/agent-harness.ts` 与 `src/features/agent-harness/`：draft/validation/approval 使用正式 successor contract；阶段 3 local-dev 运行提交和受控控制已接入正式 WPC endpoint，生产 Provider acceptance 仍未完成。
+
 > 文档集 ID：`tilesim.docs.agent_orchestration.v1alpha1`
 >
 > 状态：Phase 1 右侧只读草案侧栏已集成 `main`；Phase 2A/2B 契约已正式发布（`4d7f9fa`）；后端 Phase 2C Run Intake
@@ -21,6 +54,14 @@
 
 总览见 [基于 Agent 的仿真编排模块完整开发方案](../research/F9_AGENT_BASED_SIMULATION_ORCHESTRATION_PLAN.md)。
 当前 Evidence Agent 的实际使用方式见 [Evidence Agent 使用指南](../features/evidence-agent/F9_EVIDENCE_AGENT_USER_GUIDE.md)。
+
+阶段 0/WP-A 的 proposal-only 契约登记见 [contracts/proposals/agent-harness/README.md](../contracts/proposals/agent-harness/README.md)，
+当前基线与后续正式 v1 只读接入见 [26_AGENT_HARNESS_PHASE0_WP_A_CURRENT_BASELINE.md](26_AGENT_HARNESS_PHASE0_WP_A_CURRENT_BASELINE.md)
+第 0、8–11 节。proposal fixture 不代表写工具或自主运行能力；正式 v1 目前也只开放 operation/event 和四个只读工具的观察面。
+
+WP-D durable runtime bake-off 的当前决策与边界见
+[27_AGENT_HARNESS_WP_D_RUNTIME_BAKEOFF.md](27_AGENT_HARNESS_WP_D_RUNTIME_BAKEOFF.md)。当前仅保留 Bridge 自有
+SQLite WAL 单机 runtime 作为只读 operation source，不引入第二个 workflow runtime。
 
 ## 0. 当前状态快照（2026-09-17 实测）
 
@@ -103,29 +144,30 @@
 
 ### 3.1 活跃文档
 
-| 顺序 | 文档                                                                   | 何时必读                           | 核心输出                                   |
-| ---- | ---------------------------------------------------------------------- | ---------------------------------- | ------------------------------------------ |
-| 00   | [约束与术语](00_GUARDRAILS_AND_GLOSSARY.md)                            | 所有任务                           | 不可破坏边界、中文模块词汇、证据等级       |
-| 01   | [当前基线与缺口](01_CURRENT_BASELINE_AND_GAPS.md)                      | 所有任务                           | 代码事实、参数能力矩阵、gap register 入口  |
-| 02   | [产品与用户体验](02_PRODUCT_AND_USER_EXPERIENCE.md)                    | 产品、前端、交互、Demo             | 用户任务、信息架构、状态与文案规则         |
-| 03   | [目标架构与职责](03_TARGET_ARCHITECTURE_AND_OWNERSHIP.md)              | 架构、服务拆分、跨模块改动         | 组件、所有权、数据流和依赖方向             |
-| 04   | [能力与 Profile 目录](04_CAPABILITY_AND_PROFILE_CATALOG.md)            | 参数、模型、硬件、模板任务         | Profile 模型、支持状态、发布与失效规则     |
-| 05   | [会话与草案契约](05_CONVERSATION_AND_DRAFT_CONTRACTS.md)               | Schema、Bridge、generated client   | contract family、状态、identity、retention |
-| 06   | [意图编译与主动澄清](06_INTENT_COMPILER_AND_CLARIFICATION.md)          | LLM、prompt、compiler、对话        | 编译流水线、slot、歧义和澄清策略           |
-| 07   | [确定性校验与实验规划](07_DETERMINISTIC_VALIDATION_AND_PLANNING.md)    | 约束、计算器、候选规划             | validators、calculators、SLO 和候选边界    |
-| 08   | [工作流、审批与执行](08_WORKFLOW_APPROVAL_AND_EXECUTION.md)            | 异步、恢复、取消、写工具           | workflow state、HITL、幂等和故障语义       |
-| 09   | [RAG、证据与记忆](09_RAG_EVIDENCE_AND_MEMORY.md)                       | 检索、引用、会话记忆               | 四类索引、retrieval ladder、retention      |
-| 10   | [工具、安全与互操作](10_TOOLS_SECURITY_AND_INTEROPERABILITY.md)        | tool calling、MCP、A2A、多 Agent   | 权限矩阵、威胁模型、协议边界               |
-| 11   | [评测、可观测性与验收](11_EVALUATION_OBSERVABILITY_AND_ACCEPTANCE.md)  | 测试、上线、模型切换               | dataset、metrics、hard gates、trace        |
-| 12   | [交付路线图与工作包](12_DELIVERY_ROADMAP_AND_BACKLOG.md)               | 排期、拆任务、并行协作             | phase、依赖、DoR/DoD、backlog              |
-| 13   | [面试 Demo 与 ADR](13_INTERVIEW_DEMO_AND_ADRS.md)                      | 作品包装、技术选型                 | 演示脚本、ADR 清单、简历证据               |
-| 14   | [契约缺口登记表](14_CONTRACT_GAP_REGISTER.md)                          | 任何新增能力前                     | 稳定 gap ID、owner、阻塞与退出条件         |
-| 15   | [模块边界与并行开发](15_MODULE_BOUNDARIES_AND_PARALLEL_DEVELOPMENT.md) | 拆任务、多 Agent、集成             | 独占范围、接口、共享文件和合并顺序         |
-| 16   | [全局右侧 Agent 对话栏](16_RIGHT_SIDE_AGENT_COPILOT_PANEL.md)          | App Shell、跨页面助手、对话交互    | 侧栏、页面上下文、typed blocks 和分期接入  |
-| 17   | [开发者指导 AI 实施手册](17_DEVELOPER_AI_EXECUTION_PLAYBOOK.md)        | 启动阶段、多 Agent、调试和验收     | 必读路由、提示词模板、分工和门禁           |
-| 18   | [Phase 0–7 可复制提示词包](18_COPY_READY_MULTI_AGENT_PROMPTS.md)       | 实际启动一个并行开发阶段           | 八个完整总控提示词和三路子 Agent 分工      |
-| 23   | [Phase 2C Web 集成计划](23_PHASE2C_WEB_INTEGRATION_PLAN.md)            | 下一步实施、拆工作包、写任务提示词 | 现状缺口、工作包、写入边界、门禁和退出条件 |
-| 24   | [Phase 2C 派发提示词与验收协议](24_PHASE2C_WORK_PACKAGE_PROMPTS.md)    | 派发工作包、审查执行方回传         | 批次划分、可复制提示词、回传格式、验收清单 |
+| 顺序 | 文档                                                                      | 何时必读                           | 核心输出                                   |
+| ---- | ------------------------------------------------------------------------- | ---------------------------------- | ------------------------------------------ |
+| 00   | [约束与术语](00_GUARDRAILS_AND_GLOSSARY.md)                               | 所有任务                           | 不可破坏边界、中文模块词汇、证据等级       |
+| 01   | [当前基线与缺口](01_CURRENT_BASELINE_AND_GAPS.md)                         | 所有任务                           | 代码事实、参数能力矩阵、gap register 入口  |
+| 02   | [产品与用户体验](02_PRODUCT_AND_USER_EXPERIENCE.md)                       | 产品、前端、交互、Demo             | 用户任务、信息架构、状态与文案规则         |
+| 03   | [目标架构与职责](03_TARGET_ARCHITECTURE_AND_OWNERSHIP.md)                 | 架构、服务拆分、跨模块改动         | 组件、所有权、数据流和依赖方向             |
+| 04   | [能力与 Profile 目录](04_CAPABILITY_AND_PROFILE_CATALOG.md)               | 参数、模型、硬件、模板任务         | Profile 模型、支持状态、发布与失效规则     |
+| 05   | [会话与草案契约](05_CONVERSATION_AND_DRAFT_CONTRACTS.md)                  | Schema、Bridge、generated client   | contract family、状态、identity、retention |
+| 06   | [意图编译与主动澄清](06_INTENT_COMPILER_AND_CLARIFICATION.md)             | LLM、prompt、compiler、对话        | 编译流水线、slot、歧义和澄清策略           |
+| 07   | [确定性校验与实验规划](07_DETERMINISTIC_VALIDATION_AND_PLANNING.md)       | 约束、计算器、候选规划             | validators、calculators、SLO 和候选边界    |
+| 08   | [工作流、审批与执行](08_WORKFLOW_APPROVAL_AND_EXECUTION.md)               | 异步、恢复、取消、写工具           | workflow state、HITL、幂等和故障语义       |
+| 09   | [RAG、证据与记忆](09_RAG_EVIDENCE_AND_MEMORY.md)                          | 检索、引用、会话记忆               | 四类索引、retrieval ladder、retention      |
+| 10   | [工具、安全与互操作](10_TOOLS_SECURITY_AND_INTEROPERABILITY.md)           | tool calling、MCP、A2A、多 Agent   | 权限矩阵、威胁模型、协议边界               |
+| 11   | [评测、可观测性与验收](11_EVALUATION_OBSERVABILITY_AND_ACCEPTANCE.md)     | 测试、上线、模型切换               | dataset、metrics、hard gates、trace        |
+| 12   | [交付路线图与工作包](12_DELIVERY_ROADMAP_AND_BACKLOG.md)                  | 排期、拆任务、并行协作             | phase、依赖、DoR/DoD、backlog              |
+| 13   | [面试 Demo 与 ADR](13_INTERVIEW_DEMO_AND_ADRS.md)                         | 作品包装、技术选型                 | 演示脚本、ADR 清单、简历证据               |
+| 14   | [契约缺口登记表](14_CONTRACT_GAP_REGISTER.md)                             | 任何新增能力前                     | 稳定 gap ID、owner、阻塞与退出条件         |
+| 15   | [模块边界与并行开发](15_MODULE_BOUNDARIES_AND_PARALLEL_DEVELOPMENT.md)    | 拆任务、多 Agent、集成             | 独占范围、接口、共享文件和合并顺序         |
+| 16   | [全局右侧 Agent 对话栏](16_RIGHT_SIDE_AGENT_COPILOT_PANEL.md)             | App Shell、跨页面助手、对话交互    | 侧栏、页面上下文、typed blocks 和分期接入  |
+| 17   | [开发者指导 AI 实施手册](17_DEVELOPER_AI_EXECUTION_PLAYBOOK.md)           | 启动阶段、多 Agent、调试和验收     | 必读路由、提示词模板、分工和门禁           |
+| 18   | [Phase 0–7 可复制提示词包](18_COPY_READY_MULTI_AGENT_PROMPTS.md)          | 实际启动一个并行开发阶段           | 八个完整总控提示词和三路子 Agent 分工      |
+| 23   | [Phase 2C Web 集成计划](23_PHASE2C_WEB_INTEGRATION_PLAN.md)               | 下一步实施、拆工作包、写任务提示词 | 现状缺口、工作包、写入边界、门禁和退出条件 |
+| 24   | [Phase 2C 派发提示词与验收协议](24_PHASE2C_WORK_PACKAGE_PROMPTS.md)       | 派发工作包、审查执行方回传         | 批次划分、可复制提示词、回传格式、验收清单 |
+| 27   | [WP-D Durable Runtime Bake-off](27_AGENT_HARNESS_WP_D_RUNTIME_BAKEOFF.md) | 当前 runtime 选型与阶段门禁        | 比较矩阵、故障证据、runtime 引入 go/no-go  |
 
 ### 3.2 已归档的阶段记录
 
@@ -211,3 +253,65 @@
 
 `GAP-CAP-001`、`GAP-PROFILE-001`、`GAP-CONTRACT-DRIFT-001`、`GAP-COPILOT-UI-001` 为 `validated`。其中 Profile 状态只
 表示五类 Schema 已发布且正确表达 0/unavailable；真实 Profile source/licensing/calibration 仍是独立数据 Gap。
+
+# 2026-10-18 Agent Harness 阶段 2 后端增量
+
+阶段 2 在 Bridge 侧正式发布 draft/validation/approval successor contract（`2026-10-18.wpb.v1`），新增
+`experiment_draft.v2`、`draft_validation_report.v1`、`approval.v2` 和对应 API。此增量不改变历史 Phase 0/1 数字，
+也不把 proposal v0 当作运行时契约。所有写操作均受 Idempotency-Key、principal/workspace、snapshot、schema-set、
+backend/policy identity 和 digest 约束；持久化只保存最小身份摘要。
+
+本阶段是零 run 副作用的记录闭环：`would_create_run=false`，没有 submit gateway、TileSimCLI、run repository create、
+execution queue 或 artifact materializer。approval 支持 reject/revoke/expiry/stale/replay fence；Provider acceptance 仍 pending。
+
+# 阶段 3A execution contract（2026-10-18）
+
+阶段 3A 仅开放人工批准后的单次受控执行。正式 successor revision 为
+`2026-10-18.wpc.v1`，execution schemas 为 `execution_request`、`execution_operation`、
+`execution_event`、`execution_result_reference` 和 `execution_mutation_request`。提交入口是
+`POST /api/agent/executions`，唯一真实 run 入口仍为 `POST /api/runs`。
+
+submit gateway 在消费 approval 前重新验证 draft/validation/approval 状态、digest、snapshot、principal/workspace、
+schema-set、backend、policy 和参数面。approval 是单次消费；同 key 同 payload 精确重放，冲突稳定返回 409，
+replay 不创建第二个 run。create-run 结果未知时进入 `recovery_required`，retry/resume 都不会盲目重复副作用；
+取消通过 cancellation fence 隔离迟到 run/artifact 事件。结果只引用已通过现有 artifact manifest 的 run、SHA、bytes、
+schema 和 provenance，synthetic 结果保持 exploratory claim scope。
+
+取消、重试、恢复端点分别为 `POST /api/agent/executions/{operation_id}/cancel|retry|resume`；状态、事件、SSE
+和结果分别由对应 GET 端点提供；三种 mutation 都要求 schema identity、path action、operation identity 与独立
+`Idempotency-Key` 一致。Provider acceptance 仍为 `live_acceptance_pending`，阶段 3A 不开放自主优化、
+自动候选生成和无人值守批量实验。
+
+## 2026-10-18 阶段 3A 故障注入与 hosted smoke 收口（当前工作树）
+
+`bridge/test_agent_harness_stage3_matrix.py` 登记并通过 `AH3-F01`–`AH3-F26`：admission/digest/revision/identity、
+幂等、队列、worker/Bridge restart、create-run timeout/non-zero/unknown、event dedupe/sequence、取消迟到结果、
+retry/resume、artifact manifest binding、retention/delete 和 terminal fence。现有 Stage 3 HTTP 测试继续覆盖正式
+submit/status/events/SSE/result endpoint、唯一 `/api/runs` 入口、run count 与 ledger。失败输出保持 bounded error code、
+JSON Pointer、retryable/unknown_outcome；unknown outcome 进入 `recovery_required`，禁止盲目重提。
+
+仓外临时端口 `59123` 使用当前源码 synthetic TileSimCLI 完成一次 draft → validation → approval → execution → run →
+result hosted smoke：只产生一个 run，事件 sequence `1..5`，manifest 的 run/schema/SHA/bytes/provenance/fidelity 可回溯，
+同 key replay 不增加 run、不同 payload 返回 409。该证据仅属 synthetic exploratory，Provider acceptance 不计入其中。
+
+执行边界新增 fail-closed manifest 再校验、失败 retry fence、recovery resume/cancel fence 和 retention payload redaction。
+阶段 3A 仍为 **NO-GO**，因为 Provider live acceptance 尚为 `live_acceptance_pending` 且正式发布门禁仍需独立审查；
+自主优化、自动候选、多工具自主循环和无人值守实验未开放。
+
+## 2026-10-18 阶段 3A 独立发布审查
+
+正式 release-gate 入口为 `bridge/run_agent_harness_stage3_release_gate.py`，机器可校验 contract 为
+`tilesim.agent_harness.stage3a_release_gate.v1`（`2026-10-18.3a.v1`），完整清单见
+[`28_AGENT_HARNESS_STAGE3A_RELEASE_GATE.md`](28_AGENT_HARNESS_STAGE3A_RELEASE_GATE.md)。AH3-F01–F26 为 26/26 pass；
+hosted synthetic smoke 已复跑并校验 polling/SSE、单 run、同 key replay、409 payload conflict、manifest SHA/bytes/run/schema
+绑定。Provider acceptance 仍 `live_acceptance_pending`，人工 citation/evidence review `not_run`，故独立审查结论为
+**NO-GO**，不允许进入前端 execution UI。前端、自主优化、自动候选、多工具自主循环和无人值守实验保持关闭。
+
+## 2026-10-18 阶段 3A acceptance / review 准备
+
+`bridge/run_agent_harness_stage3_acceptance_prep.py` 生成仓外 redacted Provider acceptance manifest 与人工
+evidence/citation review package；契约身份、revision、敏感字段拒绝和 accepted/completed hard gate 由
+`bridge/agent_harness/acceptance_prep.py` 及定向测试校验。当前 Provider 仍为 `live_acceptance_pending`，probe 为
+`not_run`/`not_configured`，review 为 `not_run`，因此不构成 live acceptance 或人工审查结论。准备清单见
+[`29_AGENT_HARNESS_STAGE3A_ACCEPTANCE_PREFLIGHT.md`](29_AGENT_HARNESS_STAGE3A_ACCEPTANCE_PREFLIGHT.md)；阶段 3A
+继续 **NO-GO**，阶段 3B execution UI 和阶段 4 仍不得启动。

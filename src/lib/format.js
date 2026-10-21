@@ -3,7 +3,12 @@ import { currentLocale, t } from "../i18n";
 export function formatNumber(value, digits = 2) {
   if (typeof value === "bigint") return value.toLocaleString(currentLocale());
   if (typeof value === "string" && /^-?\d+$/.test(value)) return BigInt(value).toLocaleString(currentLocale());
-  if (typeof value !== "number" || !Number.isFinite(value)) return "—";
+  if (typeof value === "string" && /^-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(value)) {
+    const decimal = Number(value);
+    if (Number.isFinite(decimal)) return decimal.toLocaleString(currentLocale(), { maximumFractionDigits: digits });
+  }
+  if (typeof value !== "number" || !Number.isFinite(value) || (Number.isInteger(value) && !Number.isSafeInteger(value)))
+    return "—";
   return value.toLocaleString(currentLocale(), { maximumFractionDigits: digits });
 }
 
@@ -68,6 +73,10 @@ export function statusLabel(value) {
     reported: "有报告记录",
     declaration_only: "仅解析声明",
     matched: "已匹配",
+    exact: "精确匹配",
+    interpolated: "插值匹配",
+    portable_fallback: "可移植回退",
+    mixed: "混合选择",
     synthetic_consistency: "合成一致性",
     synthetic_consistency_with_resource_convergence: "合成一致性 · 含资源汇合",
     synthetic_trace: "合成数据",
@@ -82,6 +91,12 @@ export function statusLabel(value) {
     queue_delay: "排队等待",
     congestion_delay: "拥塞等待",
     runtime: "实际执行",
+    observed: "观测值",
+    inferred: "推断值",
+    modelled: "模型估算",
+    fallback: "fallback 结果",
+    externally_specified: "外部指定值",
+    user_supplied: "用户提供值",
     unknown: "未知",
   };
   return labels[value] ? t(labels[value]) : String(value || t("未知")).replaceAll("_", " ");

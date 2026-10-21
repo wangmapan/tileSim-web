@@ -4,6 +4,7 @@ import { ArrowDownRight, ArrowRight, ArrowUpRight, Minus } from "@lucide/vue";
 import { formatNumber, statusLabel } from "../lib/format";
 import { useDashboard } from "../store/dashboard";
 import type { LosslessInteger, ReportBundle, RequestMetric, RuntimeTraceInput } from "../contracts/report-model";
+import { compareLosslessValues, losslessDeltaText, losslessPercentDeltaText } from "./comparison-math";
 import { useI18n } from "../i18n";
 
 interface ComparisonItem {
@@ -44,18 +45,17 @@ function metric(item: ComparisonItem, key: MetricKey): number | LosslessInteger 
 }
 
 function outcome(a: unknown, b: unknown, lower = true) {
-  if (typeof a !== "number" || typeof b !== "number" || a === b) return "neutral";
-  return b < a === lower ? "improved" : "worsened";
+  const comparison = compareLosslessValues(a, b);
+  if (comparison === null || comparison === 0) return "neutral";
+  return comparison < 0 === lower ? "improved" : "worsened";
 }
 
 function delta(a: unknown, b: unknown) {
-  if (typeof a !== "number" || typeof b !== "number") return "—";
-  return `${b - a >= 0 ? "+" : ""}${formatNumber(b - a)}`;
+  return losslessDeltaText(a, b);
 }
 
 function percentDelta(a: unknown, b: unknown) {
-  if (typeof a !== "number" || !a || typeof b !== "number") return "—";
-  return `${formatNumber(Math.abs(((b - a) / a) * 100))}%`;
+  return losslessPercentDeltaText(a, b);
 }
 
 const measurements: Array<[string, MetricKey, string, boolean]> = [

@@ -547,6 +547,93 @@ describe("composer, focus and lazy isolation", () => {
     wrapper.unmount();
   });
 
+  it("forwards the complete optimization session and candidate ids through the lazy entry", async () => {
+    const provenance = {
+      deployment_mode: "local_dev",
+      source_mode: "synthetic_trace",
+      claim_scope: "exploratory",
+      production_status: "not_for_production",
+    };
+    const sessionId = "opt-session-long-id";
+    const candidateId = "candidate-long-id";
+    const session = {
+      schema_identity: "tilesim.agent_harness.optimization_session.v1",
+      contract_revision: "2026-10-19.wpd.v1",
+      session_id: sessionId,
+      principal: "local-user",
+      workspace_id: "local",
+      input_snapshot_digest: sha("a"),
+      schema_set_revision: sha("b"),
+      backend_identity: { backend_revision: "local" },
+      policy_revision: "tilesim.agent_harness.local_optimization.policy.v1",
+      objective: { metric_path: "/tail_latency_summary/ttft_ps/p95_ps", direction: "minimize" },
+      constraints: [],
+      budget: { max_iterations: 2 },
+      base_config: { scenario_id: "s1_des_example" },
+      local_dev: true,
+      automatic_submission: false,
+      state: "waiting_approval",
+      current_iteration: 0,
+      provenance,
+    };
+    const candidate = {
+      schema_identity: "tilesim.agent_harness.optimization_candidate.v1",
+      contract_revision: "2026-10-19.wpd.v1",
+      candidate_id: candidateId,
+      session_id: sessionId,
+      candidate_digest: sha("c"),
+      config: { scenario_id: "s1_des_example" },
+      diff: { changed_fields: ["scenario_id"] },
+      expected_side_effects: ["one bounded Stage-3 execution"],
+      status: "waiting_approval",
+      provenance,
+    };
+    const entry = mount(AgentCopilotEntry, {
+      props: {
+        modelValue: "open",
+        context: pageContext(),
+        blocks: [],
+        optimizationSessions: [session] as never,
+        optimizationDetail: {
+          session,
+          candidate,
+          candidates: [candidate],
+          iterations: [],
+          events: [],
+          checkpoint: null,
+          approval: null,
+          tool_invocations: [],
+        } as never,
+      },
+    });
+    await flushPromises();
+
+    const approve = entry.findAll("button").find((button) => button.text().includes("批准候选并提交"));
+    expect(approve).toBeDefined();
+    await approve!.trigger("click");
+    expect(entry.emitted("optimization-approve")?.at(-1)).toEqual([sessionId, candidateId]);
+  });
+
+  it("forwards optimization creation payloads through the lazy entry", async () => {
+    const entry = mount(AgentCopilotEntry, {
+      props: { modelValue: "open", context: pageContext(), blocks: [] },
+    });
+    await flushPromises();
+    const createButton = entry.findAll("button").find((button) => button.text().includes("创建本地优化 session"));
+    expect(createButton).toBeDefined();
+    await createButton!.trigger("click");
+    const createForm = entry.findAll("form").find((form) => form.text().includes("候选基础配置"));
+    expect(createForm).toBeDefined();
+    await createForm!.trigger("submit");
+    expect(entry.emitted("optimization-create")?.at(-1)).toEqual([
+      {
+        objectivePath: "/tail_latency_summary/ttft_ps/p95_ps",
+        direction: "minimize",
+        baseConfigText: '{"scenario_id":"s1_des_example","fidelity_policy":"des","gpu_participation_mode":"gpu_free"}',
+      },
+    ]);
+  });
+
   it("isolates lazy-load and descendant render failures from the host workspace", async () => {
     const loader = vi
       .fn<() => Promise<{ default: object }>>()

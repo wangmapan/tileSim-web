@@ -162,8 +162,8 @@ const primarySubsystemName = computed(() => {
           stateHint(
             dashboardView.overview.requestCount,
             t('{done}/{total} 请求完成', {
-              done: dashboardView.overview.completedRequestCount.value ?? '—',
-              total: dashboardView.overview.requestCount.value ?? '—',
+              done: formatNumber(dashboardView.overview.completedRequestCount.value, 0),
+              total: formatNumber(dashboardView.overview.requestCount.value, 0),
             }),
           )
         "

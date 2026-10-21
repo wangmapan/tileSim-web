@@ -1,6 +1,18 @@
 import type { ReportBundle } from "../../../contracts/report-model";
 import type { CoverageGroup } from "../types";
-import { buildList, cell, field, group, numberText, picoseconds, record, stringList, type Scope } from "./shared";
+import {
+  buildList,
+  cell,
+  count,
+  field,
+  group,
+  numberText,
+  picoseconds,
+  record,
+  referenceText,
+  stringList,
+  type Scope,
+} from "./shared";
 
 export function buildTailCoverage(bundle: ReportBundle): CoverageGroup[] {
   const tail = bundle.tail;
@@ -28,6 +40,14 @@ export function buildTailCoverage(bundle: ReportBundle): CoverageGroup[] {
       { mono: true },
     ),
   ];
+
+  const causeChain = tail.cause_chain;
+  const networkIntervals = (causeChain || []).flatMap((cause, causeIndex) =>
+    Array.isArray(cause.network_intervals)
+      ? cause.network_intervals.map((interval, intervalIndex) => ({ cause, interval, causeIndex, intervalIndex }))
+      : [],
+  );
+  const networkIntervalsReported = (causeChain || []).some((cause) => Array.isArray(cause.network_intervals));
 
   return [
     group(
@@ -90,6 +110,55 @@ export function buildTailCoverage(bundle: ReportBundle): CoverageGroup[] {
       "未解决缺口",
       [],
       [stringList(scope, "unresolved_gaps", tail.unresolved_gaps, "tail:/unresolved_gaps")],
+    ),
+    group(
+      "tail-network-intervals",
+      "网络等待解释区间",
+      [],
+      [
+        buildList(
+          scope,
+          "cause_chain.network_intervals",
+          "cause_chain.network_intervals",
+          networkIntervalsReported ? networkIntervals : undefined,
+          "tail:/cause_chain/*/network_intervals",
+          [
+            { key: "cause_id", label: "cause_id", mono: true },
+            { key: "component_code", label: "component_code" },
+            { key: "demand_id", label: "demand_id", mono: true },
+            { key: "link_id", label: "link_id", mono: true },
+            { key: "attempt", label: "attempt", numeric: true },
+            { key: "start_time_ps", label: "start_time_ps", numeric: true },
+            { key: "end_time_ps", label: "end_time_ps", numeric: true },
+            { key: "evidence", label: "evidence" },
+            { key: "unresolved_reason", label: "unresolved_reason" },
+            { key: "evidence_refs", label: "evidence_refs" },
+          ],
+          (item) => {
+            const { cause, interval, causeIndex, intervalIndex } = item as (typeof networkIntervals)[number];
+            return {
+              key: `${String(cause.cause_id ?? causeIndex)}-${intervalIndex}`,
+              cells: [
+                cell(scope, "cause_id", cause.cause_id, undefined, { mono: true }),
+                cell(scope, "component_code", interval.component_code),
+                cell(scope, "demand_id", interval.demand_id, undefined, { mono: true }),
+                cell(scope, "link_id", interval.link_id, undefined, { mono: true }),
+                cell(scope, "attempt", interval.attempt, count, { numeric: true }),
+                cell(scope, "start_time_ps", interval.start_time_ps, picoseconds, { numeric: true }),
+                cell(scope, "end_time_ps", interval.end_time_ps, picoseconds, { numeric: true }),
+                cell(scope, "evidence", interval.evidence),
+                cell(scope, "unresolved_reason", interval.unresolved_reason),
+                cell(scope, "evidence_refs", interval.evidence_refs, referenceText),
+              ],
+            };
+          },
+          {
+            description:
+              "network_intervals 是 cause_chain 中父级网络等待的解释区间；重叠、重复和子区间不与父级等待重复计费。",
+          },
+        ),
+      ],
+      "这些区间只解释父级网络等待，不是额外延迟；前端不按区间求和。",
     ),
   ];
 }

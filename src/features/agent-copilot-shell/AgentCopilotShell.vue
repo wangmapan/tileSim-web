@@ -9,6 +9,26 @@ import {
 import AgentComposer from "./AgentComposer.vue";
 import AgentContextBar from "./AgentContextBar.vue";
 import AgentTypedBlockList from "./AgentTypedBlockList.vue";
+import {
+  AgentHarnessOperationCard,
+  AgentHarnessTaskCenter,
+  AgentHarnessToolTimeline,
+  AgentHarnessOptimizationPanel,
+  AgentHarnessBatchPanel,
+} from "../agent-harness";
+import type {
+  AgentHarnessBatchDetail,
+  AgentHarnessBatchSession,
+  AgentHarnessOptimizationDetail,
+  AgentHarnessOptimizationSession,
+} from "../../lib/api/agent-harness";
+import type {
+  AgentHarnessDraftTaskCenterItem,
+  AgentHarnessTaskCenterItem,
+  AgentHarnessExecutionTaskCenterItem,
+  AgentHarnessToolTimelineItem,
+} from "../agent-harness";
+import type { AgentHarnessOperationProjection } from "../../lib/api/agent-harness";
 import type {
   AgentCopilotPanelState,
   AgentCopilotSubmitPayload,
@@ -46,6 +66,22 @@ const props = withDefaults(
     persistenceError?: boolean;
     /** Human-readable local retention policy for the visible session cache. */
     retentionNotice?: string;
+    /** Whether the Bridge published the Harness surface for this session. */
+    harnessAvailable?: boolean;
+    /** Optional formal v1 read-only Harness observation; null keeps the sidebar proposal-only. */
+    harnessProjection?: AgentHarnessOperationProjection | null;
+    harnessToolTimeline?: readonly AgentHarnessToolTimelineItem[];
+    harnessTaskCenter?: readonly AgentHarnessTaskCenterItem[];
+    harnessDrafts?: readonly AgentHarnessDraftTaskCenterItem[];
+    harnessExecutions?: readonly AgentHarnessExecutionTaskCenterItem[];
+    optimizationSessions?: readonly AgentHarnessOptimizationSession[];
+    optimizationDetail?: AgentHarnessOptimizationDetail | null;
+    optimizationPending?: boolean;
+    optimizationCreatePending?: boolean;
+    batchSessions?: readonly AgentHarnessBatchSession[];
+    batchDetail?: AgentHarnessBatchDetail | null;
+    batchPending?: boolean;
+    batchCreatePending?: boolean;
   }>(),
   {
     currentTask: "当前页面助手",
@@ -63,6 +99,20 @@ const props = withDefaults(
     activeSessionId: "",
     persistenceError: false,
     retentionNotice: "",
+    harnessAvailable: true,
+    harnessProjection: null,
+    harnessToolTimeline: () => [],
+    harnessTaskCenter: () => [],
+    harnessDrafts: () => [],
+    harnessExecutions: () => [],
+    optimizationSessions: () => [],
+    optimizationDetail: null,
+    optimizationPending: false,
+    optimizationCreatePending: false,
+    batchSessions: () => [],
+    batchDetail: null,
+    batchPending: false,
+    batchCreatePending: false,
   },
 );
 
@@ -84,6 +134,24 @@ const emit = defineEmits<{
   "delete-session": [sessionId: string];
   "clear-all-sessions": [];
   start: [task: "configure" | "analyze" | "learn"];
+  "execution-cancel": [operationId: string];
+  "execution-retry": [operationId: string];
+  "execution-resume": [operationId: string];
+  "optimization-approve": [sessionId: string, candidateId: string];
+  "optimization-pause": [sessionId: string];
+  "optimization-resume": [sessionId: string];
+  "optimization-retry": [sessionId: string];
+  "optimization-cancel": [sessionId: string];
+  "optimization-create": [
+    payload: { objectivePath: string; direction: "minimize" | "maximize"; baseConfigText: string },
+  ];
+  "batch-approve": [batchId: string];
+  "batch-start": [batchId: string];
+  "batch-pause": [batchId: string];
+  "batch-resume": [batchId: string];
+  "batch-retry": [batchId: string];
+  "batch-cancel": [batchId: string];
+  "batch-create": [payload: { candidateSetText: string; objectivePath: string; direction: "minimize" | "maximize" }];
 }>();
 
 /** The one id the model label points at; the panel is a single instance in this app. */
@@ -161,6 +229,29 @@ const modelUnavailableText = computed(() =>
 function onModelChange(event: Event): void {
   const target = event.target;
   if (target instanceof HTMLSelectElement && target.value) emit("select-model", target.value);
+}
+
+function onOptimizationApprove(sessionId: string, candidateId: string): void {
+  emit("optimization-approve", sessionId, candidateId);
+}
+function onOptimizationPause(sessionId: string): void {
+  emit("optimization-pause", sessionId);
+}
+function onOptimizationResume(sessionId: string): void {
+  emit("optimization-resume", sessionId);
+}
+function onOptimizationRetry(sessionId: string): void {
+  emit("optimization-retry", sessionId);
+}
+function onOptimizationCancel(sessionId: string): void {
+  emit("optimization-cancel", sessionId);
+}
+function onBatchCreate(payload: {
+  candidateSetText: string;
+  objectivePath: string;
+  direction: "minimize" | "maximize";
+}): void {
+  emit("batch-create", payload);
 }
 
 function onSessionChange(event: Event): void {
@@ -391,6 +482,45 @@ onBeforeUnmount(() => {
 
     <AgentContextBar v-show="modelValue !== 'collapsed'" :context="context" :attachment-status="attachmentStatus" />
 
+    <div v-if="harnessAvailable" v-show="modelValue !== 'collapsed'" class="agent-copilot-shell__harness">
+      <AgentHarnessOperationCard v-if="harnessProjection" :projection="harnessProjection" />
+      <AgentHarnessToolTimeline :items="harnessToolTimeline" />
+      <AgentHarnessTaskCenter
+        v-if="harnessTaskCenter.length || harnessDrafts.length || harnessExecutions.length"
+        :items="harnessTaskCenter"
+        :drafts="harnessDrafts"
+        :executions="harnessExecutions"
+        @cancel="emit('execution-cancel', $event)"
+        @retry="emit('execution-retry', $event)"
+        @resume="emit('execution-resume', $event)"
+      />
+      <AgentHarnessOptimizationPanel
+        :sessions="optimizationSessions"
+        :detail="optimizationDetail"
+        :pending="optimizationPending"
+        :create-pending="optimizationCreatePending"
+        @approve="onOptimizationApprove"
+        @pause="onOptimizationPause"
+        @resume="onOptimizationResume"
+        @retry="onOptimizationRetry"
+        @cancel="onOptimizationCancel"
+        @create="emit('optimization-create', $event)"
+      />
+      <AgentHarnessBatchPanel
+        :batches="batchSessions"
+        :detail="batchDetail"
+        :pending="batchPending"
+        :create-pending="batchCreatePending"
+        @create="onBatchCreate"
+        @approve="emit('batch-approve', $event)"
+        @start="emit('batch-start', $event)"
+        @pause="emit('batch-pause', $event)"
+        @resume="emit('batch-resume', $event)"
+        @retry="emit('batch-retry', $event)"
+        @cancel="emit('batch-cancel', $event)"
+      />
+    </div>
+
     <div
       v-show="modelValue !== 'collapsed'"
       ref="timeline"
@@ -436,8 +566,8 @@ onBeforeUnmount(() => {
   min-width: 0;
   max-width: calc(100vw - 48px);
   height: 100dvh;
-  display: grid;
-  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto auto;
+  display: flex;
+  flex-direction: column;
   border-left: 1px solid var(--line-strong);
   color: var(--ink);
   background: var(--panel);
@@ -452,7 +582,6 @@ onBeforeUnmount(() => {
 
 .agent-copilot-shell--collapsed {
   width: 52px;
-  grid-template-rows: 1fr;
 }
 
 .agent-copilot-shell__resize {
@@ -654,6 +783,22 @@ onBeforeUnmount(() => {
   line-height: 1.45;
 }
 
+.agent-copilot-shell__harness {
+  flex: 0 1 min(34dvh, 420px);
+  min-width: 0;
+  min-height: 0;
+  max-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.agent-copilot-shell__harness > :deep(*) {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .agent-copilot-shell__model button {
   flex: 0 0 auto;
   min-height: 26px;
@@ -672,7 +817,9 @@ onBeforeUnmount(() => {
 }
 
 .agent-copilot-shell__timeline {
+  flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;

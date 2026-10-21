@@ -78,6 +78,9 @@ export const reportCoverageEnglishCatalog: Readonly<Record<string, string>> = {
   "分布摘要（sample_count / p50 / p95 / p99 / max）": "Distribution summaries (sample_count / p50 / p95 / p99 / max)",
   "三个分布摘要各自独立展示 p50、p95、p99 与 max；不把某一分位数当作整体结论。":
     "Each of the three distribution summaries shows p50, p95, p99 and max independently; no single percentile is presented as the overall conclusion.",
+  "指标 Trace provenance": "Metrics Trace provenance",
+  "来源模式、校准级别、声明范围和 Trace 类型由后端提供；缺失时保持 unknown，不由前端推断。":
+    "Source mode, calibration level, claim scope and Trace kind come from the backend; missing values remain unknown and are never inferred by the front end.",
   "观测窗口为 0 表示该边界没有产生可观测样本；后端会另行写出 boundary_notes。":
     "An observation window of 0 means this boundary produced no observable sample; the backend writes boundary_notes separately.",
   后端边界说明: "Backend boundary notes",
@@ -153,6 +156,11 @@ export const reportCoverageEnglishCatalog: Readonly<Record<string, string>> = {
   "三类链接分别是验证、指标与资源证据的引用；列出不代表这些证据已被前端读取或复核。":
     "The three link lists reference validation, metric and resource evidence respectively; listing them does not mean the front end read or reviewed that evidence.",
   未解决缺口: "Unresolved gaps",
+  网络等待解释区间: "Network wait explanation intervals",
+  "network_intervals 是 cause_chain 中父级网络等待的解释区间；重叠、重复和子区间不与父级等待重复计费。":
+    "network_intervals explain the parent network wait in cause_chain; overlapping, duplicate, and child intervals are never charged again.",
+  "这些区间只解释父级网络等待，不是额外延迟；前端不按区间求和。":
+    "These intervals explain the parent network wait only; they are not extra latency and the front end does not sum them.",
 
   /* C0-5 execution envelope ------------------------------------------- */
   信封身份与时间边界: "Envelope identity and time boundaries",

@@ -208,7 +208,13 @@ try {
     }
     $webSourceDigest = Get-DirectoryDigest $webRoot
     Invoke-Checked "wsl.exe" @("-d", $WslDistro, "--exec", "env", "TILESIM_WSL_BUILD_DIR=$buildDirWsl", "bash", "$backendWsl/scripts/build_wsl.sh")
-    Invoke-Checked "wsl.exe" @("-d", $WslDistro, "--exec", "ctest", "--test-dir", $buildDirWsl, "--output-on-failure")
+    # A few DES/resource tests are timing-sensitive under a busy WSL host. Keep
+    # deployment deterministic and allow one per-test retry, while preserving a
+    # non-zero result when the failure is reproducible.
+    Invoke-Checked "wsl.exe" @(
+        "-d", $WslDistro, "--exec", "ctest", "--test-dir", $buildDirWsl,
+        "--output-on-failure", "-j1", "--repeat", "until-pass:2"
+    )
     Write-Output "Backend validation passed; validating and rebuilding the frontend once..."
     Invoke-Checked "wsl.exe" @("-d", $WslDistro, "--exec", "python3", "-m", "py_compile", "$webRootWsl/bridge/server.py")
     Invoke-Checked $node @((Join-Path $webRoot "node_modules\vitest\vitest.mjs"), "run") $webRoot

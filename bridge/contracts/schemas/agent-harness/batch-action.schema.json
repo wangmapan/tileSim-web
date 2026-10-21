@@ -1,0 +1,13 @@
+{
+  "$id": "tilesim.agent_harness.batch_action.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["batch_id", "action"],
+  "properties": {
+    "batch_id": { "type": "string" },
+    "action": { "enum": ["start", "pause", "resume", "cancel", "retry"] },
+    "recovery_acknowledged": { "type": "boolean" },
+    "idempotency_key": { "type": "string", "minLength": 8, "maxLength": 128 }
+  }
+}

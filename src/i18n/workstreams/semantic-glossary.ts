@@ -433,6 +433,20 @@ export const semanticGlossaryEnglishCatalog: Readonly<Record<string, string>> = 
   "Fixture 报告该阶段以排队等待为主。": "The fixture reports queueing wait as dominant in this phase.",
   "Fixture 报告的排队等待贡献。": "Queueing-wait contribution reported by the fixture.",
   "本次运行从推理引擎与服务运行时模块开始。": "This run starts at the inference engine and serving runtime module.",
+  "本次运行从推理引擎与服务运行时开始。": "This run starts at the inference engine and serving runtime.",
+  "本次运行从推理引擎与服务运行时边界开始，工作负载输入按边界缺省。":
+    "This run starts at the inference-engine and serving-runtime boundary; workload input is absent by boundary definition.",
+  "运行时输入和 request metrics 均无此 request_id。":
+    "Neither the runtime input nor request metrics contains this request_id.",
+  "使用 request_id 精确连接运行时输入与请求指标。":
+    "Use request_id to bind the runtime input precisely to the request metrics.",
+  "没有该 request_id 的唯一网络阶段记录。": "There is no unique network-stage record for this request_id.",
+  网络阶段资源引用: "Network-stage resource reference",
+  "没有该 request_id 的网络阶段。": "There is no network stage for this request_id.",
+  "网络阶段缺少稳定 phase_id。": "The network stage has no stable phase_id.",
+  "使用 request_id 唯一匹配，并以 phase_id 作为网络阶段身份。":
+    "Match uniquely by request_id and use the network stage as the entity identity.",
+  网络阶段: "Network stage",
   "包含推理引擎与服务运行时模块的 DES 证据。":
     "Contains DES evidence for the inference engine and serving runtime module.",
   "包含运行时到执行语义的转换证据。": "Contains runtime-to-execution-semantics lowering evidence.",

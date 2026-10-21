@@ -22,10 +22,10 @@
         "request_id": { "type": "string" },
         "batch_id": { "type": "string" },
         "batch_request_ids": { "type": "array", "items": { "type": "string" } },
-        "event_time_ps": { "type": "integer", "minimum": 0 },
-        "logical_step": { "type": "integer", "minimum": 0 },
-        "kv_tokens": { "type": "integer", "minimum": 0 },
-        "active_requests": { "type": "integer", "minimum": 0 }
+        "event_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "logical_step": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "kv_tokens": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "active_requests": { "$ref": "f6b-common.schema.json#/$defs/uint64" }
       }
     },
     "summary": {
@@ -42,10 +42,10 @@
       ],
       "properties": {
         "has_events": { "type": "boolean" },
-        "total_events": { "type": "integer", "minimum": 0 },
-        "first_event_time_ps": { "type": "integer", "minimum": 0 },
-        "last_event_time_ps": { "type": "integer", "minimum": 0 },
-        "peak_active_requests": { "type": "integer", "minimum": 0 },
+        "total_events": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "first_event_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "last_event_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "peak_active_requests": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
         "monotonic_time_order": { "type": "boolean" },
         "contiguous_logical_steps": { "type": "boolean" }
       }
@@ -64,12 +64,12 @@
       ],
       "properties": {
         "request_id": { "type": "string", "minLength": 1 },
-        "arrival_time_ps": { "type": "integer", "minimum": 0 },
-        "admit_time_ps": { "type": "integer", "minimum": 0 },
-        "first_batch_issue_time_ps": { "type": "integer", "minimum": 0 },
-        "first_token_time_ps": { "type": "integer", "minimum": 0 },
-        "completion_time_ps": { "type": "integer", "minimum": 0 },
-        "final_kv_tokens": { "type": "integer", "minimum": 0 }
+        "arrival_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "admit_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "first_batch_issue_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "first_token_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "completion_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "final_kv_tokens": { "$ref": "f6b-common.schema.json#/$defs/uint64" }
       }
     },
     "trace": {
@@ -92,10 +92,10 @@
         "schema_version": { "const": "tilesim.s1_runtime_event_summary.v1" },
         "run_id": { "type": "string", "minLength": 1 },
         "has_events": { "type": "boolean" },
-        "total_events": { "type": "integer", "minimum": 0 },
-        "first_event_time_ps": { "type": "integer", "minimum": 0 },
-        "last_event_time_ps": { "type": "integer", "minimum": 0 },
-        "peak_active_requests": { "type": "integer", "minimum": 0 },
+        "total_events": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "first_event_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "last_event_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "peak_active_requests": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
         "monotonic_time_order": { "type": "boolean" },
         "contiguous_logical_steps": { "type": "boolean" }
       },

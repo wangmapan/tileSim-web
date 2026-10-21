@@ -44,6 +44,94 @@
       "inspect_schema_identity": "tilesim.bridge.trace_package_inspect.v1",
       "submission_source_modes": ["synthetic_trace"]
     },
+    "agent_harness": {
+      "contract_revision": "2026-10-17.wpa.v1",
+      "successor_contract_revision": "2026-10-18.wpb.v1",
+      "schema_identities": [
+        "tilesim.agent_harness.agent_operation.v1",
+        "tilesim.agent_harness.agent_turn.v1",
+        "tilesim.agent_harness.workflow_event.v1",
+        "tilesim.agent_harness.checkpoint.v1",
+        "tilesim.agent_harness.tool_call.v1",
+        "tilesim.agent_harness.tool_result.v1",
+        "tilesim.agent_harness.experiment_draft.v1",
+        "tilesim.agent_harness.approval.v1",
+        "tilesim.agent_harness.study.v1",
+        "tilesim.agent_harness.candidate.v1"
+      ],
+      "successor_schema_identities": [
+        "tilesim.agent_harness.experiment_draft.v2",
+        "tilesim.agent_harness.draft_validation_report.v1",
+        "tilesim.agent_harness.approval.v2"
+      ],
+      "execution_contract_revision": "2026-10-18.wpc.v1",
+      "execution_schema_identities": [
+        "tilesim.agent_harness.execution_request.v1",
+        "tilesim.agent_harness.execution_operation.v1",
+        "tilesim.agent_harness.execution_event.v1",
+        "tilesim.agent_harness.execution_result_reference.v1",
+        "tilesim.agent_harness.execution_mutation_request.v1"
+      ],
+      "execution_submit_endpoint": "POST /api/agent/executions",
+      "execution_run_entrypoint": "POST /api/runs",
+      "capability_endpoint": "GET /api/agent/harness-capabilities",
+      "tool_endpoint": "POST /api/agent/tools/call",
+      "operation_endpoint": "/api/agent/operations",
+      "store": "sqlite_wal_single_host_mvp",
+      "write_tools": [],
+      "live_acceptance": "live_acceptance_pending",
+      "stage2_run_side_effects": false,
+      "optimization": {
+        "contract_revision": "2026-10-19.wpd.v1",
+        "schema_identities": [
+          "tilesim.agent_harness.optimization_session.v1",
+          "tilesim.agent_harness.optimization_candidate.v1",
+          "tilesim.agent_harness.optimization_objective.v1",
+          "tilesim.agent_harness.optimization_constraint.v1",
+          "tilesim.agent_harness.optimization_tool_invocation.v1",
+          "tilesim.agent_harness.optimization_tool_result.v1",
+          "tilesim.agent_harness.optimization_iteration.v1",
+          "tilesim.agent_harness.optimization_evaluation.v1",
+          "tilesim.agent_harness.optimization_checkpoint.v1",
+          "tilesim.agent_harness.optimization_stop_reason.v1",
+          "tilesim.agent_harness.optimization_approval.v1",
+          "tilesim.agent_harness.optimization_action.v1",
+          "tilesim.agent_harness.optimization_summary.v1",
+          "tilesim.agent_harness.optimization_event.v1"
+        ],
+        "local_dev": true,
+        "automatic_submission": false,
+        "production_status": "not_for_production",
+        "tool_registry_revision": "2026-10-19.tools.v2"
+      },
+      "batch": {
+        "contract_revision": "2026-10-19.wpe.v1",
+        "schema_identities": [
+          "tilesim.agent_harness.batch_session.v1",
+          "tilesim.agent_harness.experiment_plan.v1",
+          "tilesim.agent_harness.candidate_set.v1",
+          "tilesim.agent_harness.run_slot.v1",
+          "tilesim.agent_harness.batch_objective.v1",
+          "tilesim.agent_harness.batch_budget.v1",
+          "tilesim.agent_harness.concurrency_policy.v1",
+          "tilesim.agent_harness.stop_policy.v1",
+          "tilesim.agent_harness.batch_checkpoint.v1",
+          "tilesim.agent_harness.batch_summary.v1",
+          "tilesim.agent_harness.batch_run_result.v1",
+          "tilesim.agent_harness.batch_failure_recovery.v1",
+          "tilesim.agent_harness.stop_reason.v1",
+          "tilesim.agent_harness.batch_approval.v1",
+          "tilesim.agent_harness.batch_event.v1",
+          "tilesim.agent_harness.batch_action.v1"
+        ],
+        "local_dev": true,
+        "approval_required": true,
+        "automatic_submission": false,
+        "production_status": "not_for_production",
+        "tool_registry_revision": "2026-10-19.tools.v3",
+        "execution_endpoint": "POST /api/agent/executions"
+      }
+    },
     "known_report_schema_identities": {
       "run": ["wind_tunnel.run.v1alpha1"],
       "metrics": ["tilesim.metrics_report.v1"],
@@ -310,6 +398,643 @@
         }
       }
     },
+    "/agent/harness-capabilities": {
+      "x-backend-only": true,
+      "get": {
+        "operationId": "agentHarnessCapabilities",
+        "x-client-response-type": "AgentHarnessCapabilitySnapshot",
+        "responses": {
+          "200": { "$ref": "#/components/responses/AgentHarnessCapabilitySnapshot" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/tools": {
+      "x-backend-only": true,
+      "get": {
+        "operationId": "agentHarnessTools",
+        "x-client-response-type": "AgentHarnessToolCatalog",
+        "responses": {
+          "200": { "$ref": "#/components/responses/AgentHarnessToolCatalog" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/operations": {
+      "x-backend-only": true,
+      "get": {
+        "operationId": "listAgentHarnessOperations",
+        "x-client-response-type": "AgentHarnessOperationList",
+        "responses": {
+          "200": { "$ref": "#/components/responses/AgentHarnessOperationList" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "post": {
+        "operationId": "createAgentHarnessOperation",
+        "x-client-response-type": "AgentHarnessOperationResponse",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "additionalProperties": false } } }
+        },
+        "responses": {
+          "202": { "$ref": "#/components/responses/AgentHarnessOperationResponse" },
+          "200": { "$ref": "#/components/responses/AgentHarnessOperationResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/operations/{operation_id}": {
+      "x-backend-only": true,
+      "parameters": [{ "$ref": "#/components/parameters/OperationId" }],
+      "get": {
+        "operationId": "getAgentHarnessOperation",
+        "x-client-response-type": "AgentHarnessOperationResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/AgentHarnessOperationResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteAgentHarnessOperation",
+        "responses": {
+          "200": { "$ref": "#/components/responses/AgentHarnessDeleteResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/operations/{operation_id}/events": {
+      "x-backend-only": true,
+      "parameters": [{ "$ref": "#/components/parameters/OperationId" }],
+      "get": {
+        "operationId": "getAgentHarnessEvents",
+        "x-client-response-type": "AgentHarnessEventsResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/AgentHarnessEventsResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/operations/{operation_id}/events/stream": {
+      "x-backend-only": true,
+      "parameters": [{ "$ref": "#/components/parameters/OperationId" }],
+      "get": {
+        "operationId": "streamAgentHarnessEvents",
+        "responses": {
+          "200": {
+            "description": "Replayable workflow SSE",
+            "content": { "text/event-stream": { "schema": { "type": "string" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/operations/{operation_id}/{action}": {
+      "x-backend-only": true,
+      "parameters": [
+        { "$ref": "#/components/parameters/OperationId" },
+        { "name": "action", "in": "path", "required": true, "schema": { "enum": ["cancel", "resume", "retry"] } }
+      ],
+      "post": {
+        "operationId": "mutateAgentHarnessOperation",
+        "x-client-response-type": "AgentHarnessOperationResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/AgentHarnessOperationResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/operations/{operation_id}/checkpoint": {
+      "x-backend-only": true,
+      "parameters": [{ "$ref": "#/components/parameters/OperationId" }],
+      "post": {
+        "operationId": "saveAgentHarnessCheckpoint",
+        "x-client-response-type": "AgentHarnessCheckpointResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/AgentHarnessCheckpointResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/checkpoints/{checkpoint_id}": {
+      "x-backend-only": true,
+      "parameters": [{ "name": "checkpoint_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+      "get": {
+        "operationId": "getAgentHarnessCheckpoint",
+        "x-client-response-type": "AgentHarnessCheckpointResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/AgentHarnessCheckpointResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/tools/call": {
+      "x-backend-only": true,
+      "post": {
+        "operationId": "callAgentHarnessTool",
+        "x-client-response-type": "AgentHarnessToolCallResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/AgentHarnessToolCallResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/approvals": {
+      "x-backend-only": true,
+      "post": {
+        "operationId": "saveAgentHarnessApproval",
+        "x-client-response-type": "AgentHarnessApprovalResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/AgentHarnessApprovalResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/approvals/{approval_digest}": {
+      "x-backend-only": true,
+      "parameters": [{ "name": "approval_digest", "in": "path", "required": true, "schema": { "type": "string" } }],
+      "get": {
+        "operationId": "getAgentHarnessApproval",
+        "x-client-response-type": "AgentHarnessApprovalResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/AgentHarnessApprovalResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/drafts": {
+      "x-backend-only": true,
+      "post": {
+        "operationId": "createAgentHarnessDraft",
+        "x-client-response-type": "AgentHarnessDraftResponse",
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "$ref": "#/components/schemas/AgentHarnessDraftCreateRequest" }
+          }
+        },
+        "responses": {
+          "201": { "$ref": "#/components/responses/AgentHarnessDraftResponse" },
+          "200": { "$ref": "#/components/responses/AgentHarnessDraftResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/drafts/{draft_id}": {
+      "x-backend-only": true,
+      "parameters": [{ "$ref": "#/components/parameters/DraftId" }],
+      "get": {
+        "operationId": "getAgentHarnessDraft",
+        "x-client-response-type": "AgentHarnessDraftResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/AgentHarnessDraftResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteAgentHarnessDraft",
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/AgentHarnessDraftDeleteResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/drafts/{draft_id}/validate": {
+      "x-backend-only": true,
+      "parameters": [{ "$ref": "#/components/parameters/DraftId" }],
+      "post": {
+        "operationId": "validateAgentHarnessDraft",
+        "x-client-response-type": "AgentHarnessValidationResponse",
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "$ref": "#/components/schemas/AgentHarnessDraftValidationRequest" } }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/AgentHarnessValidationResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/drafts/{draft_id}/events": {
+      "x-backend-only": true,
+      "parameters": [{ "$ref": "#/components/parameters/DraftId" }],
+      "get": {
+        "operationId": "getAgentHarnessDraftEvents",
+        "x-client-response-type": "AgentHarnessDraftEventsResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/AgentHarnessDraftEventsResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/drafts/{draft_id}/events/stream": {
+      "x-backend-only": true,
+      "parameters": [{ "$ref": "#/components/parameters/DraftId" }],
+      "get": {
+        "operationId": "streamAgentHarnessDraftEvents",
+        "responses": {
+          "200": {
+            "description": "Replayable draft workflow SSE",
+            "content": { "text/event-stream": { "schema": { "type": "string" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/drafts/{draft_id}/approvals": {
+      "x-backend-only": true,
+      "parameters": [{ "$ref": "#/components/parameters/DraftId" }],
+      "post": {
+        "operationId": "createAgentHarnessDraftApproval",
+        "x-client-response-type": "AgentHarnessApprovalResponseV2",
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "$ref": "#/components/schemas/AgentHarnessApprovalCreateRequest" } }
+        },
+        "responses": {
+          "201": { "$ref": "#/components/responses/AgentHarnessApprovalResponseV2" },
+          "200": { "$ref": "#/components/responses/AgentHarnessApprovalResponseV2" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/drafts/{draft_id}/approvals/{approval_id}": {
+      "x-backend-only": true,
+      "parameters": [{ "$ref": "#/components/parameters/DraftId" }, { "$ref": "#/components/parameters/ApprovalId" }],
+      "get": {
+        "operationId": "getAgentHarnessDraftApproval",
+        "x-client-response-type": "AgentHarnessApprovalResponseV2",
+        "responses": {
+          "200": { "$ref": "#/components/responses/AgentHarnessApprovalResponseV2" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/drafts/{draft_id}/approvals/{approval_id}/reject": {
+      "x-backend-only": true,
+      "parameters": [{ "$ref": "#/components/parameters/DraftId" }, { "$ref": "#/components/parameters/ApprovalId" }],
+      "post": {
+        "operationId": "rejectAgentHarnessDraftApproval",
+        "x-client-response-type": "AgentHarnessApprovalResponseV2",
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": { "reason": { "type": "string", "maxLength": 512 } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/AgentHarnessApprovalResponseV2" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/drafts/{draft_id}/approvals/{approval_id}/revoke": {
+      "x-backend-only": true,
+      "parameters": [{ "$ref": "#/components/parameters/DraftId" }, { "$ref": "#/components/parameters/ApprovalId" }],
+      "post": {
+        "operationId": "revokeAgentHarnessDraftApproval",
+        "x-client-response-type": "AgentHarnessApprovalResponseV2",
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": { "reason": { "type": "string", "maxLength": 512 } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/AgentHarnessApprovalResponseV2" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/executions": {
+      "x-backend-only": true,
+      "post": {
+        "operationId": "submitAgentExecution",
+        "x-client-response-type": "AgentHarnessExecutionResponse",
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "./schemas/agent-harness/execution-request.schema.json" } }
+          }
+        },
+        "responses": {
+          "202": { "$ref": "#/components/responses/AgentHarnessExecutionResponse" },
+          "200": { "$ref": "#/components/responses/AgentHarnessExecutionResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/executions/{operation_id}": {
+      "x-backend-only": true,
+      "parameters": [{ "$ref": "#/components/parameters/OperationId" }],
+      "get": {
+        "operationId": "getAgentExecution",
+        "x-client-response-type": "AgentHarnessExecutionResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/AgentHarnessExecutionResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/executions/{operation_id}/events": {
+      "x-backend-only": true,
+      "parameters": [{ "$ref": "#/components/parameters/OperationId" }],
+      "get": {
+        "operationId": "getAgentExecutionEvents",
+        "x-client-response-type": "AgentHarnessExecutionEventsResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/AgentHarnessExecutionEventsResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/executions/{operation_id}/events/stream": {
+      "x-backend-only": true,
+      "parameters": [{ "$ref": "#/components/parameters/OperationId" }],
+      "get": {
+        "operationId": "streamAgentExecutionEvents",
+        "responses": {
+          "200": {
+            "description": "Replayable execution SSE",
+            "content": { "text/event-stream": { "schema": { "type": "string" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/executions/{operation_id}/result": {
+      "x-backend-only": true,
+      "parameters": [{ "$ref": "#/components/parameters/OperationId" }],
+      "get": {
+        "operationId": "getAgentExecutionResult",
+        "x-client-response-type": "AgentHarnessExecutionResultResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/AgentHarnessExecutionResultResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/executions/{operation_id}/{action}": {
+      "x-backend-only": true,
+      "parameters": [
+        { "$ref": "#/components/parameters/OperationId" },
+        { "name": "action", "in": "path", "required": true, "schema": { "enum": ["cancel", "retry", "resume"] } }
+      ],
+      "post": {
+        "operationId": "mutateAgentExecution",
+        "x-client-request-type": "AgentHarnessExecutionMutationRequest",
+        "x-client-response-type": "AgentHarnessExecutionResponse",
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "./schemas/agent-harness/execution-mutation-request.schema.json" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/AgentHarnessExecutionResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/optimization/sessions": {
+      "post": {
+        "operationId": "createOptimizationSession",
+        "x-client-request-type": "OptimizationSessionCreateRequest",
+        "x-client-response-type": "OptimizationSessionResponse",
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "./schemas/agent-harness/optimization-session.schema.json" } }
+          }
+        },
+        "responses": {
+          "201": { "$ref": "#/components/responses/OptimizationSessionResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "get": {
+        "operationId": "listOptimizationSessions",
+        "x-client-response-type": "OptimizationSessionListResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/OptimizationSessionListResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/optimization/sessions/{session_id}": {
+      "parameters": [{ "$ref": "#/components/parameters/SessionId" }],
+      "get": {
+        "operationId": "getOptimizationSession",
+        "x-client-response-type": "OptimizationSessionResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/OptimizationSessionResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/optimization/sessions/{session_id}/events": {
+      "parameters": [{ "$ref": "#/components/parameters/SessionId" }],
+      "get": {
+        "operationId": "getOptimizationSessionEvents",
+        "x-client-response-type": "OptimizationSessionEventsResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/OptimizationSessionEventsResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/optimization/sessions/{session_id}/events/stream": {
+      "parameters": [{ "$ref": "#/components/parameters/SessionId" }],
+      "get": {
+        "operationId": "streamOptimizationSessionEvents",
+        "responses": {
+          "200": {
+            "description": "Durable optimization event stream",
+            "content": { "text/event-stream": { "schema": { "type": "string" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/optimization/sessions/{session_id}/candidates/{candidate_id}/approve": {
+      "parameters": [
+        { "$ref": "#/components/parameters/SessionId" },
+        { "$ref": "#/components/parameters/CandidateId" }
+      ],
+      "post": {
+        "operationId": "approveOptimizationCandidate",
+        "x-client-request-type": "OptimizationApprovalRequest",
+        "x-client-response-type": "OptimizationApprovalResponse",
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": { "schema": { "$ref": "./schemas/agent-harness/optimization-approval.schema.json" } }
+          }
+        },
+        "responses": {
+          "202": { "$ref": "#/components/responses/OptimizationApprovalResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/optimization/sessions/{session_id}/{action}": {
+      "parameters": [
+        { "$ref": "#/components/parameters/SessionId" },
+        {
+          "name": "action",
+          "in": "path",
+          "required": true,
+          "schema": { "enum": ["pause", "resume", "cancel", "retry"] }
+        }
+      ],
+      "post": {
+        "operationId": "mutateOptimizationSession",
+        "x-client-request-type": "OptimizationActionRequest",
+        "x-client-response-type": "OptimizationSessionResponse",
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "./schemas/agent-harness/optimization-action.schema.json" } }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/OptimizationSessionResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/batches": {
+      "post": {
+        "operationId": "createBatch",
+        "x-client-request-type": "BatchCreateRequest",
+        "x-client-response-type": "BatchResponse",
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "./schemas/agent-harness/batch-session.schema.json" } }
+          }
+        },
+        "responses": {
+          "201": { "$ref": "#/components/responses/BatchResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "get": {
+        "operationId": "listBatches",
+        "x-client-response-type": "BatchListResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/BatchListResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/batches/{batch_id}": {
+      "parameters": [{ "$ref": "#/components/parameters/BatchId" }],
+      "get": {
+        "operationId": "getBatch",
+        "x-client-response-type": "BatchResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/BatchResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/batches/{batch_id}/events": {
+      "parameters": [{ "$ref": "#/components/parameters/BatchId" }],
+      "get": {
+        "operationId": "getBatchEvents",
+        "x-client-response-type": "BatchEventsResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/BatchEventsResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/batches/{batch_id}/events/stream": {
+      "parameters": [{ "$ref": "#/components/parameters/BatchId" }],
+      "get": {
+        "operationId": "streamBatchEvents",
+        "responses": {
+          "200": {
+            "description": "Durable batch event stream",
+            "content": { "text/event-stream": { "schema": { "type": "string" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/batches/{batch_id}/approve": {
+      "parameters": [{ "$ref": "#/components/parameters/BatchId" }],
+      "post": {
+        "operationId": "approveBatch",
+        "x-client-request-type": "BatchApprovalRequest",
+        "x-client-response-type": "BatchResponse",
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "./schemas/agent-harness/batch-approval.schema.json" } }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/BatchResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/batches/{batch_id}/{action}": {
+      "parameters": [
+        { "$ref": "#/components/parameters/BatchId" },
+        {
+          "name": "action",
+          "in": "path",
+          "required": true,
+          "schema": { "enum": ["start", "pause", "resume", "cancel", "retry"] }
+        }
+      ],
+      "post": {
+        "operationId": "mutateBatch",
+        "x-client-request-type": "BatchActionRequest",
+        "x-client-response-type": "BatchResponse",
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "./schemas/agent-harness/batch-action.schema.json" } }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/BatchResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
     "/agent/assistant-model-catalogue": {
       "get": {
         "operationId": "assistantModelCatalogue",
@@ -512,6 +1237,15 @@
           "200": { "$ref": "#/components/responses/Run" },
           "default": { "$ref": "#/components/responses/Error" }
         }
+      },
+      "delete": {
+        "operationId": "deleteRun",
+        "x-client-response-type": "DeleteRunResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/DeleteRun" },
+          "409": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
       }
     },
     "/runs/{run_id}/events": {
@@ -605,6 +1339,42 @@
       "ScenarioId": { "name": "scenario_id", "in": "path", "required": true, "schema": { "type": "string" } },
       "PackageId": { "name": "package_id", "in": "path", "required": true, "schema": { "type": "string" } },
       "ArtifactId": { "name": "artifact_id", "in": "path", "required": true, "schema": { "type": "string" } },
+      "OperationId": {
+        "name": "operation_id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "pattern": "^op-[A-Za-z0-9]+$" }
+      },
+      "DraftId": {
+        "name": "draft_id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "pattern": "^draft-[A-Za-z0-9]+$" }
+      },
+      "ApprovalId": {
+        "name": "approval_id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "pattern": "^approval-[A-Za-z0-9]+$" }
+      },
+      "SessionId": {
+        "name": "session_id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "pattern": "^opt-[A-Za-z0-9]+$" }
+      },
+      "BatchId": {
+        "name": "batch_id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "pattern": "^batch-[A-Za-z0-9]+$" }
+      },
+      "CandidateId": {
+        "name": "candidate_id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "pattern": "^candidate-[A-Za-z0-9]+$" }
+      },
       "IdempotencyKey": {
         "name": "Idempotency-Key",
         "in": "header",
@@ -1003,6 +1773,16 @@
               "additionalProperties": false
             }
           },
+          "structured_inputs": {
+            "type": "object",
+            "required": ["runtime_trace", "topology"],
+            "properties": {
+              "runtime_trace": { "type": "object", "description": "Validated synthetic runtime trace document." },
+              "topology": { "type": "object", "description": "Validated synthetic topology document." }
+            },
+            "additionalProperties": false,
+            "description": "Optional complete synthetic runtime_trace and topology proposal. The page validates and applies it atomically; it never creates a run."
+          },
           "dropped": {
             "type": "array",
             "items": {
@@ -1127,6 +1907,12 @@
         "properties": { "run_id": { "type": "string" }, "run_name": { "type": "string" } },
         "additionalProperties": false
       },
+      "DeleteRunResponse": {
+        "type": "object",
+        "required": ["run_id", "deleted"],
+        "properties": { "run_id": { "type": "string" }, "deleted": { "const": true } },
+        "additionalProperties": false
+      },
       "Week7EvidenceMapResponse": { "$ref": "./schemas/week7-evidence-map.schema.json" },
       "Week7CalibrationResponse": { "$ref": "./schemas/week7-calibration.schema.json" },
       "Week7OrchestrationResponse": { "$ref": "./schemas/week7-orchestration.schema.json" },
@@ -1139,6 +1925,351 @@
             "properties": { "idempotent_replay": { "type": "boolean" } }
           }
         ]
+      },
+      "AgentHarnessCapabilitySnapshot": { "type": "object", "additionalProperties": true },
+      "AgentHarnessToolCatalog": { "type": "object", "additionalProperties": true },
+      "AgentHarnessOperationList": {
+        "type": "object",
+        "required": ["operations"],
+        "properties": {
+          "operations": { "type": "array", "items": { "$ref": "./schemas/agent-harness/agent-operation.schema.json" } }
+        },
+        "additionalProperties": false
+      },
+      "AgentHarnessOperationResponse": {
+        "type": "object",
+        "required": ["operation"],
+        "properties": {
+          "operation": { "$ref": "./schemas/agent-harness/agent-operation.schema.json" },
+          "events": { "type": "array" },
+          "idempotent_replay": { "type": "boolean" },
+          "action": { "type": "string" }
+        },
+        "additionalProperties": true
+      },
+      "AgentHarnessEventsResponse": {
+        "type": "object",
+        "required": ["events"],
+        "properties": {
+          "operation": { "$ref": "./schemas/agent-harness/agent-operation.schema.json" },
+          "events": { "type": "array" },
+          "after_sequence": { "type": "integer" },
+          "terminal": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      },
+      "AgentHarnessCheckpointResponse": {
+        "type": "object",
+        "required": ["checkpoint"],
+        "properties": { "checkpoint": { "$ref": "./schemas/agent-harness/checkpoint.schema.json" } },
+        "additionalProperties": false
+      },
+      "AgentHarnessToolCallResponse": {
+        "type": "object",
+        "required": ["operation", "tool_result"],
+        "properties": {
+          "operation": { "$ref": "./schemas/agent-harness/agent-operation.schema.json" },
+          "tool_result": { "type": "object" }
+        },
+        "additionalProperties": false
+      },
+      "AgentHarnessApprovalResponse": {
+        "type": "object",
+        "required": ["approval"],
+        "properties": { "approval": { "$ref": "./schemas/agent-harness/approval.schema.json" } },
+        "additionalProperties": false
+      },
+      "AgentHarnessDraftCreateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "draft_id": { "type": "string" },
+          "operation_id": { "type": "string" },
+          "conversation_id": { "type": ["string", "null"] },
+          "turn_id": { "type": ["string", "null"] },
+          "principal": { "type": "string" },
+          "workspace_id": { "type": "string" },
+          "run_scope": { "type": "string" },
+          "input_snapshot_digest": { "type": "string" },
+          "schema_set_revision": { "type": "string" },
+          "backend_identity": { "type": "object", "additionalProperties": true },
+          "parameter_catalog_revision": { "type": "string" },
+          "validator_revision": { "type": "string" },
+          "policy_revision": { "type": "string" },
+          "field_diffs": { "type": "array" },
+          "assumptions": { "type": "array" },
+          "evidence_refs": { "type": "array" },
+          "budget_request": { "type": "object", "additionalProperties": true },
+          "risk_flags": { "type": "array" },
+          "expires_at": { "type": "string" },
+          "create_run_request": { "type": "object", "additionalProperties": true },
+          "request": { "type": "object", "additionalProperties": true },
+          "idempotency_key": { "type": "string" }
+        }
+      },
+      "AgentHarnessDraftValidationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "create_run_request": { "type": "object", "additionalProperties": true },
+          "request": { "type": "object", "additionalProperties": true },
+          "input_snapshot_digest": { "type": "string" },
+          "validated_create_run_request_digest": { "type": "string" },
+          "idempotency_key": { "type": "string" }
+        }
+      },
+      "AgentHarnessApprovalCreateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "approval_id": { "type": "string" },
+          "validation_id": { "type": "string" },
+          "expires_at": { "type": "string" },
+          "reason": { "type": ["string", "null"] },
+          "single_use": { "type": "boolean" },
+          "approval_digest": { "type": "string" },
+          "idempotency_key": { "type": "string" }
+        }
+      },
+      "AgentHarnessDraftResponse": {
+        "type": "object",
+        "required": ["draft", "would_create_run"],
+        "properties": {
+          "draft": { "$ref": "./schemas/agent-harness/experiment-draft-v2.schema.json" },
+          "validation": { "$ref": "./schemas/agent-harness/draft-validation-report.schema.json" },
+          "idempotent_replay": { "type": "boolean" },
+          "would_create_run": { "const": false }
+        },
+        "additionalProperties": false
+      },
+      "AgentHarnessValidationResponse": {
+        "type": "object",
+        "required": ["validation", "would_create_run"],
+        "properties": {
+          "validation": { "$ref": "./schemas/agent-harness/draft-validation-report.schema.json" },
+          "idempotent_replay": { "type": "boolean" },
+          "would_create_run": { "const": false }
+        },
+        "additionalProperties": false
+      },
+      "AgentHarnessDraftEventsResponse": {
+        "type": "object",
+        "required": ["draft_id", "events", "terminal"],
+        "properties": {
+          "draft_id": { "type": "string" },
+          "events": { "type": "array" },
+          "after_sequence": { "type": "integer", "minimum": 0 },
+          "terminal": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      },
+      "AgentHarnessApprovalResponseV2": {
+        "type": "object",
+        "required": ["approval", "would_create_run"],
+        "properties": {
+          "approval": { "$ref": "./schemas/agent-harness/approval-v2.schema.json" },
+          "would_create_run": { "const": false },
+          "idempotent_replay": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      },
+      "AgentHarnessDraftDeleteResponse": {
+        "type": "object",
+        "required": ["draft_id", "deleted", "would_create_run"],
+        "properties": {
+          "draft_id": { "type": "string" },
+          "deleted": { "const": true },
+          "idempotent_replay": { "type": "boolean" },
+          "would_create_run": { "const": false }
+        },
+        "additionalProperties": false
+      },
+      "AgentHarnessDeleteResponse": {
+        "type": "object",
+        "required": ["operation_id", "deleted"],
+        "properties": { "operation_id": { "type": "string" }, "deleted": { "const": true } },
+        "additionalProperties": false
+      },
+      "AgentHarnessExecutionResponse": {
+        "type": "object",
+        "required": ["execution", "operation"],
+        "properties": {
+          "execution": { "$ref": "./schemas/agent-harness/execution-operation.schema.json" },
+          "operation": { "$ref": "./schemas/agent-harness/agent-operation.schema.json" },
+          "idempotent_replay": { "type": "boolean" },
+          "action": { "type": "string" }
+        },
+        "additionalProperties": false
+      },
+      "AgentHarnessExecutionEventsResponse": {
+        "type": "object",
+        "required": ["execution", "operation", "events", "terminal"],
+        "properties": {
+          "execution": { "$ref": "./schemas/agent-harness/execution-operation.schema.json" },
+          "operation": { "$ref": "./schemas/agent-harness/agent-operation.schema.json" },
+          "events": { "type": "array", "items": { "$ref": "./schemas/agent-harness/execution-event.schema.json" } },
+          "after_sequence": { "type": "integer", "minimum": 0 },
+          "terminal": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      },
+      "AgentHarnessExecutionResultResponse": {
+        "type": "object",
+        "required": ["result"],
+        "properties": { "result": { "$ref": "./schemas/agent-harness/execution-result-reference.schema.json" } },
+        "additionalProperties": false
+      },
+      "OptimizationSessionResponse": {
+        "type": "object",
+        "required": ["session", "provenance"],
+        "properties": {
+          "session": { "$ref": "./schemas/agent-harness/optimization-session.schema.json" },
+          "detail": { "type": "object" },
+          "provenance": { "type": "object" },
+          "idempotent_replay": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      },
+      "OptimizationSessionListResponse": {
+        "type": "object",
+        "required": ["sessions", "provenance"],
+        "properties": {
+          "sessions": {
+            "type": "array",
+            "items": { "$ref": "./schemas/agent-harness/optimization-session.schema.json" }
+          },
+          "provenance": { "type": "object" }
+        },
+        "additionalProperties": false
+      },
+      "OptimizationSessionEventsResponse": {
+        "type": "object",
+        "required": ["session_id", "events", "terminal", "provenance"],
+        "properties": {
+          "session_id": { "type": "string" },
+          "events": { "type": "array", "items": { "$ref": "./schemas/agent-harness/optimization-event.schema.json" } },
+          "after_sequence": { "type": "integer" },
+          "terminal": { "type": "boolean" },
+          "provenance": { "type": "object" }
+        },
+        "additionalProperties": false
+      },
+      "OptimizationApprovalResponse": {
+        "type": "object",
+        "required": ["approval", "session", "provenance"],
+        "properties": {
+          "approval": { "$ref": "./schemas/agent-harness/optimization-approval.schema.json" },
+          "session": { "$ref": "./schemas/agent-harness/optimization-session.schema.json" },
+          "provenance": { "type": "object" }
+        },
+        "additionalProperties": false
+      },
+      "OptimizationSessionCreateRequest": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "schema_identity",
+          "contract_revision",
+          "input_snapshot_digest",
+          "schema_set_revision",
+          "backend_identity",
+          "objective",
+          "base_config",
+          "local_dev",
+          "automatic_submission"
+        ]
+      },
+      "OptimizationApprovalRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "candidate_id": { "type": "string" },
+          "approval_digest": { "type": "string" },
+          "expires_at": { "type": "string" },
+          "idempotency_key": { "type": "string" }
+        }
+      },
+      "OptimizationActionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["session_id", "action"],
+        "properties": {
+          "session_id": { "type": "string" },
+          "action": { "enum": ["pause", "resume", "cancel", "retry"] },
+          "idempotency_key": { "type": "string" }
+        }
+      },
+      "BatchResponse": {
+        "type": "object",
+        "required": ["batch", "provenance"],
+        "properties": {
+          "batch": { "$ref": "./schemas/agent-harness/batch-session.schema.json" },
+          "detail": { "type": "object" },
+          "provenance": { "type": "object" },
+          "idempotent_replay": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      },
+      "BatchListResponse": {
+        "type": "object",
+        "required": ["batches", "provenance"],
+        "properties": {
+          "batches": { "type": "array", "items": { "$ref": "./schemas/agent-harness/batch-session.schema.json" } },
+          "provenance": { "type": "object" }
+        },
+        "additionalProperties": false
+      },
+      "BatchEventsResponse": {
+        "type": "object",
+        "required": ["batch_id", "events", "terminal", "provenance"],
+        "properties": {
+          "batch_id": { "type": "string" },
+          "events": { "type": "array", "items": { "$ref": "./schemas/agent-harness/batch-event.schema.json" } },
+          "after_sequence": { "type": "integer" },
+          "terminal": { "type": "boolean" },
+          "provenance": { "type": "object" }
+        },
+        "additionalProperties": false
+      },
+      "BatchCreateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_identity",
+          "contract_revision",
+          "input_snapshot_digest",
+          "schema_set_revision",
+          "backend_identity",
+          "plan",
+          "candidate_set",
+          "objective",
+          "local_dev",
+          "approval_required"
+        ],
+        "properties": {
+          "schema_identity": { "const": "tilesim.agent_harness.batch_session.v1" },
+          "contract_revision": { "const": "2026-10-19.wpe.v1" }
+        }
+      },
+      "BatchApprovalRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "approval_digest": { "type": "string" },
+          "expires_at": { "type": "string" },
+          "idempotency_key": { "type": "string" }
+        }
+      },
+      "BatchActionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["batch_id", "action"],
+        "properties": {
+          "batch_id": { "type": "string" },
+          "action": { "enum": ["start", "pause", "resume", "cancel", "retry"] },
+          "recovery_acknowledged": { "type": "boolean" },
+          "idempotency_key": { "type": "string" }
+        }
       }
     },
     "responses": {
@@ -1277,6 +2408,10 @@
       "RenameRun": {
         "description": "Updated run name",
         "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RenameRunResponse" } } }
+      },
+      "DeleteRun": {
+        "description": "Deleted local run and its artifacts",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteRunResponse" } } }
       }
     }
   }

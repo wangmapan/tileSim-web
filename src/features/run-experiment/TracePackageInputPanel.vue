@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { PackageSearch, RefreshCw, ShieldCheck, TriangleAlert } from "@lucide/vue";
 import type { TracePackageCatalogResponse } from "../../lib/api";
 import { useI18n } from "../../i18n";
+import InlineHelp from "../../components/InlineHelp.vue";
 
 const props = defineProps<{
   catalog: TracePackageCatalogResponse | null;
@@ -39,7 +40,7 @@ const selectedPackage = computed(
       <span><PackageSearch :size="18" /></span>
       <div>
         <h2>{{ t("Trace package") }}</h2>
-        <p>{{ t("从 Bridge 受控目录选择已经过 TileSimCLI 检查的语义 Trace 包。") }}</p>
+        <InlineHelp :text="t('从 Bridge 受控目录选择已经过 TileSimCLI 检查的语义 Trace 包。')" />
       </div>
       <button class="text-button" :disabled="status === 'loading'" @click="emit('refresh')">
         <RefreshCw :size="14" :class="{ spin: status === 'loading' }" />{{ t("刷新目录") }}
@@ -171,6 +172,13 @@ const selectedPackage = computed(
           </li>
         </ul>
         <p class="trace-integrity-scope">{{ t("完整性检查不代表校准或验证通过。") }}</p>
+        <p class="trace-contract-gap" role="status">
+          {{
+            t(
+              "Bridge contract gap：当前 inspect schema 未暴露对象数量、evidence_only/executable、observed/inferred 或 snapshot digest；这些元数据保持未知。",
+            )
+          }}
+        </p>
         <p v-if="!selectedPackage.submission_available" class="field-error">
           {{ selectedPackage.unavailable_reason }}；{{ t("首版仅开放 synthetic_trace，不构成校准或留出验证证据。") }}
         </p>

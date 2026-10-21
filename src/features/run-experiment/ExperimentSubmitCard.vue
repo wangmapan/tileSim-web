@@ -17,6 +17,19 @@ const props = defineProps({
 });
 defineEmits(["submit", "back"]);
 const { t } = useI18n();
+const boundaryLabels = {
+  S0: "工作负载输入",
+  S1: "运行时",
+  S2: "执行语义",
+  S3: "内存资源",
+  S4: "设备计算",
+  S5: "集合通信",
+  S6: "网络执行",
+};
+function displayBoundary(value) {
+  if (!value) return t("边界未知");
+  return String(value).replace(/S[0-6]/g, (id) => t(boundaryLabels[id] || "已声明入口"));
+}
 const contractLabel = computed(() => {
   if (!props.bridgeAvailable) return t("等待本地服务");
   const value = String(props.surface.contractStatus || "");
@@ -35,7 +48,7 @@ const inputLabel = computed(() => {
 });
 const designSpaceLabel = computed(() => {
   if (props.mode === "trace_package") return t("不合并");
-  return props.designSpaceJson.trim() ? t("外部清单") : t("内置 S6");
+  return props.designSpaceJson.trim() ? t("外部清单") : t("内置网络候选");
 });
 </script>
 
@@ -45,7 +58,13 @@ const designSpaceLabel = computed(() => {
     <dl>
       <div>
         <dt>{{ t("边界") }}</dt>
-        <dd>{{ mode === "trace_package" ? `${tracePackage?.entry_boundary || "—"} → S6` : "S1 → S6" }}</dd>
+        <dd>
+          {{
+            mode === "trace_package"
+              ? `${displayBoundary(tracePackage?.entry_boundary)} → ${t("网络执行")}`
+              : `${t("运行时")} → ${t("网络执行")}`
+          }}
+        </dd>
       </div>
       <div>
         <dt>{{ t("输入") }}</dt>

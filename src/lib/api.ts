@@ -13,6 +13,22 @@ import { waitForRun } from "./api/run-events";
 import { getExperimentDescriptor } from "./api/experiment-schema";
 import { getEvidenceAgentDescriptor, postEvidenceAgentAnalysis } from "./api/evidence-agent";
 import { getTracePackageCatalog, postTracePackageInspect } from "./api/trace-packages";
+import {
+  callAgentHarnessReadOnlyTool,
+  createAgentHarnessReadOnlyOperation,
+  getAgentHarnessCapabilities,
+  getAgentHarnessOperation,
+  getAgentHarnessOperationSnapshots,
+  getAgentHarnessOperations,
+  getAgentHarnessToolCatalog,
+  observeAgentHarnessOperation,
+  executeAgentHarnessReadOnlyTool,
+  getCapabilityCatalog,
+  getRunStatus,
+  listRunEvidence,
+  queryVerifiedMetrics,
+} from "./api/agent-harness";
+export { projectAgentHarnessEvents } from "./api/agent-harness";
 
 export type {
   ApiManifestResponse,
@@ -39,6 +55,21 @@ export type { WaitForRunOptions } from "./api/run-events";
 export { BridgeApiError } from "./api/errors";
 export { apiRequest } from "./api/transport";
 export { rawArtifactUrl, SUPPORTED_BRIDGE_API_VERSION };
+export {
+  callAgentHarnessReadOnlyTool,
+  createAgentHarnessReadOnlyOperation,
+  getAgentHarnessCapabilities,
+  getAgentHarnessOperation,
+  getAgentHarnessOperationSnapshots,
+  getAgentHarnessOperations,
+  getAgentHarnessToolCatalog,
+  observeAgentHarnessOperation,
+  executeAgentHarnessReadOnlyTool,
+  getCapabilityCatalog,
+  getRunStatus,
+  listRunEvidence,
+  queryVerifiedMetrics,
+} from "./api/agent-harness";
 
 export const bridgeApi = {
   manifest: getApiManifest,
@@ -65,7 +96,21 @@ export const bridgeApi = {
   getTemplate: (scenarioId: string) => generatedBridgeClient.getTemplate(scenarioId),
   getInput: (runId: string) => generatedBridgeClient.getArtifact(runId, "input-runtime-trace"),
   renameRun: (runId: string, runName: string) => generatedBridgeClient.renameRun(runId, { run_name: runName }),
+  deleteRun: (runId: string) => generatedBridgeClient.deleteRun(runId),
   createRun: (payload: CreateRunRequest, idempotencyKey: string) =>
     generatedBridgeClient.createRun(payload, idempotencyKey),
   waitForRun,
+  agentHarnessCapabilities: getAgentHarnessCapabilities,
+  agentHarnessTools: getAgentHarnessToolCatalog,
+  createAgentHarnessReadOnlyOperation,
+  getAgentHarnessOperation,
+  getAgentHarnessOperationSnapshots,
+  getAgentHarnessOperations,
+  observeAgentHarnessOperation,
+  callAgentHarnessReadOnlyTool,
+  executeAgentHarnessReadOnlyTool,
+  getCapabilityCatalog,
+  getRunStatus,
+  listRunEvidence,
+  queryVerifiedMetrics,
 };

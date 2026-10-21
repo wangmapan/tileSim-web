@@ -27,8 +27,18 @@
             "trace_name": { "type": "string" },
             "range_label": { "type": "string" },
             "end_to_end_latency_us": { "type": "number" },
-            "runtime_event_count": { "type": "integer", "minimum": 0 },
-            "fabric_record_count": { "type": "integer", "minimum": 0 }
+            "runtime_event_count": {
+              "type": "integer",
+              "minimum": 0,
+              "tsType": "bigint",
+              "description": "A JSON integer that MUST be parsed and retained losslessly."
+            },
+            "fabric_record_count": {
+              "type": "integer",
+              "minimum": 0,
+              "tsType": "bigint",
+              "description": "A JSON integer that MUST be parsed and retained losslessly."
+            }
           },
           "additionalProperties": true
         }

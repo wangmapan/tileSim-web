@@ -1,6 +1,16 @@
 import { workstreamEnglishCatalogs } from "./workstream-catalogs";
 
 export const coreEnglishCatalog: Readonly<Record<string, string>> = {
+  "这是仿真中的版本化运行时语义，不会启动真实推理服务。DES 是独立请求保真度，实际 resolved fidelity 以运行结果为准。":
+    "This is versioned runtime semantics for the simulation; it does not start an inference service. DES is per-request fidelity, while resolved fidelity comes from the run result.",
+  "batch_scheduler 控制通用运行时；缺省为 decode_priority。":
+    "batch_scheduler controls the generic runtime; the default is decode_priority.",
+  "由所选画像调度；policy.batch_scheduler 不覆盖画像。先填写正数容量、请求 token、足额 KV 与 TP/参与设备。":
+    "Scheduling follows the selected profile; policy.batch_scheduler does not override it. Fill positive capacities, request tokens, sufficient KV, and TP/participants first.",
+  "回放按观测记录顺序，不会重新执行引擎调度；请勿将合成记录标作真实观测。":
+    "Replay follows the recorded order and does not run engine scheduling again; do not label synthetic records as observations.",
+  "vllm.0.6.tilesim_pd.v1 未开放：缺少完整放置、handoff 与 dense host 前置。":
+    "vllm.0.6.tilesim_pd.v1 is unavailable because placement, handoff, and dense-host prerequisites are incomplete.",
   实验结果: "Experiment results",
   方案探索: "Explore options",
   实验管理: "Manage experiments",
@@ -375,6 +385,36 @@ export const coreEnglishCatalog: Readonly<Record<string, string>> = {
   提醒: "Warning",
   预期缺省: "Expected absence",
   有报告记录: "Reported",
+  精确匹配: "Exact match",
+  插值匹配: "Interpolated match",
+  可移植回退: "Portable fallback",
+  混合选择: "Mixed selection",
+  有效样本: "Valid sample",
+  "后端明确声明该指标存在有效样本。": "The backend explicitly declares a valid sample for this metric.",
+  未采样: "Not sampled",
+  "后端明确声明该指标没有有效样本。": "The backend explicitly declares that this metric has no valid sample.",
+  "后端没有提供可安全展示的有效样本。": "The backend did not provide a valid sample that can be shown safely.",
+  观测值: "Observed value",
+  合成有效样本: "Valid synthetic sample",
+  "后端标记该数值为直接观测值。": "The backend marks this value as directly observed.",
+  设备级汇总: "Device-level summary",
+  "设备级记录由后端直接提供；观测、模型估算和推断状态保持原样。":
+    "Device-level records come directly from the backend; observed, modeled, and inferred states are preserved.",
+  请求级网络等待解释区间: "Request-level network wait explanation intervals",
+  "这些区间解释父级网络等待，不是额外延迟，不能与父级等待重复计费。":
+    "These intervals explain parent network waits; they are not extra latency and must not be charged twice.",
+  "该数值由后端标记为推断或模型值，不是直接观测。":
+    "The backend marks this value as inferred or model-derived rather than directly observed.",
+  "该数值来自 synthetic trace，不能扩大为真实校准结论。":
+    "This value comes from a synthetic trace and cannot be generalized as a real calibration conclusion.",
+  推断值: "Inferred value",
+  模型估算: "Modeled estimate",
+  外部指定值: "Externally specified value",
+  用户提供值: "User supplied value",
+  "fallback 结果": "Fallback result",
+  "该数值来自后端 fallback 路径，不能当作精确匹配。":
+    "This value comes from a backend fallback path and must not be treated as an exact match.",
+  "该数值来自 compatibility harness trace。": "This value comes from a compatibility harness trace.",
   仅解析声明: "Declaration only",
   已匹配: "Matched",
   未覆盖: "Not covered",
@@ -385,6 +425,10 @@ export const coreEnglishCatalog: Readonly<Record<string, string>> = {
   "真实 Trace": "Real trace",
   "兼容夹具 Trace": "Compatibility harness trace",
   未校准: "Uncalibrated",
+  未关联: "Unlinked",
+  "未请求逐请求归因。": "Per-request attribution was not requested.",
+  "Bridge contract gap：后端未提供 request_attribution_applicable；当前适用性保持未知，页面不会根据 TP、设备数或拓扑数量猜测。":
+    "Bridge contract gap: the backend does not provide request_attribution_applicable; applicability remains unknown and the page does not infer it from TP, device count, or topology count.",
   探索性结论: "Exploratory claims",
   已覆盖: "Covered",
   不适用: "Not applicable",

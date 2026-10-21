@@ -213,6 +213,7 @@ export function useDashboard() {
     toggleComparison: runs.toggleComparison,
     clearComparisons: runs.clearComparisons,
     renameRun: runs.renameRun,
+    deleteRun: runs.deleteRun,
     importFiles,
     fetchRunEvidence: runs.fetchRunEvidence,
     initialize,

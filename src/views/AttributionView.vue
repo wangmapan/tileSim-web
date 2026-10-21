@@ -360,7 +360,7 @@ function semanticField(field: string, value: unknown) {
               <li v-for="{ item: cause, sourceIndex } in visibleCauses" :key="sourceIndex">
                 <span>{{ sourceIndex + 1 }}</span>
                 <div>
-                  <small>{{ executionLayerName(cause.subsystem) }} · {{ cause.subsystem }}</small
+                  <small>{{ executionLayerName(cause.subsystem) }}</small
                   ><strong>{{ backendExplanation(cause.title || cause.cause_code).text }}</strong>
                   <code>{{
                     t("技术字段：{field} = {value}", { field: "cause_code", value: cause.cause_code || "—" })
@@ -386,7 +386,7 @@ function semanticField(field: string, value: unknown) {
           <p>
             <strong>{{ t("输出面不是延迟因果来源") }}</strong
             >{{
-              t("报告中的 S7/S8/S9 项保留为输出面记录，但不会进入 S0-S6 causal ranking：{ids}", {
+              t("输出记录保留在结果区，不参与当前延迟原因排序：{ids}", {
                 ids: outputPlaneAttributions.map(({ item }) => item.attribution_id || item.subsystem).join(", "),
               })
             }}
@@ -398,7 +398,7 @@ function semanticField(field: string, value: unknown) {
             <div>
               <p class="section-kicker">{{ t("非因果输出记录") }}</p>
               <h2>{{ t("执行宿主、验证与输出记录") }}</h2>
-              <p>{{ t("这些记录原样保留供审计，但与上方 S0–S6 latency causal ranking 明确分区。") }}</p>
+              <p>{{ t("这些记录仅供审计，并与上方的延迟原因排序分开显示。") }}</p>
             </div>
           </header>
           <div
@@ -424,7 +424,6 @@ function semanticField(field: string, value: unknown) {
                   <td>{{ item.rank ?? t("缺失") }}</td>
                   <td>
                     <strong>{{ executionLayerName(item.subsystem) }}</strong>
-                    <code>{{ item.subsystem || t("缺失") }}</code>
                   </td>
                   <td>{{ item.component_code || t("缺失") }}</td>
                   <td class="numeric">{{ formatPercent(item.share) }}</td>

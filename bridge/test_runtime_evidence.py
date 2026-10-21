@@ -69,6 +69,88 @@ class RuntimeEvidenceContractTests(unittest.TestCase):
                 schema_set_revision=server.SCHEMA_SET_REVISION,
             )
 
+    def test_all_runtime_artifacts_bind_schema_run_and_lossless_uint64(self):
+        max_uint64 = 18_446_744_073_709_551_615
+        event = {
+            "kind": "arrival", "request_id": "r1", "batch_id": "b1",
+            "batch_request_ids": ["r1"], "event_time_ps": max_uint64,
+            "logical_step": max_uint64, "kv_tokens": max_uint64,
+            "active_requests": max_uint64,
+        }
+        request = {
+            "request_id": "r1", "arrival_time_ps": max_uint64,
+            "admit_time_ps": max_uint64, "first_batch_issue_time_ps": max_uint64,
+            "first_token_time_ps": max_uint64, "completion_time_ps": max_uint64,
+            "final_kv_tokens": max_uint64,
+        }
+        summary = {
+            "schema_version": "tilesim.s1_runtime_event_summary.v1",
+            "run_id": self.run_id, "has_events": True,
+            "total_events": max_uint64, "first_event_time_ps": max_uint64,
+            "last_event_time_ps": max_uint64, "peak_active_requests": max_uint64,
+            "monotonic_time_order": True, "contiguous_logical_steps": True,
+        }
+        payloads = {
+            "runtime-events": {
+                "schema_version": "tilesim.s1_runtime_event_trace.v1",
+                "run_id": self.run_id, "trace_name": "synthetic-test", "events": [event],
+            },
+            "runtime-summary": summary,
+            "runtime-requests": {
+                "schema_version": "tilesim.s1_runtime_request_summaries.v1",
+                "run_id": self.run_id, "requests": [request],
+            },
+            "runtime-analysis": {
+                "schema_version": "tilesim.s1_runtime_analysis.v1",
+                "run_id": self.run_id, "trace_name": "synthetic-test",
+                "summary": summary, "requests": [request], "events": [event],
+            },
+        }
+        paths = {}
+        for artifact_id, payload in payloads.items():
+            definition = server.JSON_ARTIFACT_DEFINITIONS[artifact_id]
+            path = self.directory / definition["file_name"]
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            paths[artifact_id] = path
+            inspected = runs.inspect_artifact(self.run_id, path, definition)
+            self.assertEqual(inspected["content_status"], "ready")
+        manifest = runs.artifact_manifest_for(
+            self.run_id, self.directory,
+            artifact_definitions=server.JSON_ARTIFACT_DEFINITIONS,
+            artifact_manifest_schema=server.ARTIFACT_MANIFEST_SCHEMA,
+            api_version=server.API_VERSION,
+            schema_set_revision=server.SCHEMA_SET_REVISION,
+        )
+        self.assertFalse({item["artifact_id"] for item in manifest["rejected_artifacts"]}
+                         & set(payloads))
+        entries = {item["artifact_id"]: item for item in manifest["artifacts"]}
+        for artifact_id in payloads:
+            self.assertEqual(entries[artifact_id]["contract_status"], "supported")
+            self.assertEqual(entries[artifact_id]["content_status"], "ready")
+        self.assertEqual(
+            runs.inspect_artifact(self.run_id, paths["runtime-events"],
+                                  server.JSON_ARTIFACT_DEFINITIONS["runtime-events"])
+            ["value"]["events"][0]["event_time_ps"], max_uint64)
+        self.assertEqual(
+            runs.inspect_artifact(self.run_id, paths["runtime-analysis"],
+                                  server.JSON_ARTIFACT_DEFINITIONS["runtime-analysis"])
+            ["value"]["summary"]["total_events"], max_uint64)
+        for artifact_id, payload in payloads.items():
+            definition = server.JSON_ARTIFACT_DEFINITIONS[artifact_id]
+            path = paths[artifact_id]
+            path.write_text(json.dumps({**payload, "schema_version": "unknown"}), encoding="utf-8")
+            with self.assertRaises(runs.ArtifactContractError) as schema_failure:
+                runs.inspect_artifact(self.run_id, path, definition)
+            self.assertEqual((schema_failure.exception.reason,
+                              schema_failure.exception.json_pointer),
+                             ("unsupported_schema", "/schema_version"))
+            path.write_text(json.dumps({**payload, "run_id": "run-other"}), encoding="utf-8")
+            with self.assertRaises(runs.ArtifactContractError) as run_failure:
+                runs.inspect_artifact(self.run_id, path, definition)
+            self.assertEqual((run_failure.exception.reason,
+                              run_failure.exception.json_pointer),
+                             ("run_binding_mismatch", "/run_id"))
+
     def test_expected_absence_descriptor_is_not_data_and_is_run_bound(self):
         descriptor = {
             "schema_version": "tilesim.wind_tunnel_artifact_descriptor.v1",
@@ -281,6 +363,57 @@ class RuntimeEvidenceContractTests(unittest.TestCase):
         self.assertIn("--runtime-events-out", calls[1])
         self.assertNotIn("--request-attribution-out", calls[1])
         self.assertNotIn("--runtime-events-out", calls[2])
+
+    def test_trace_package_applicability_does_not_infer_from_dense_shape(self):
+        dense_shape_without_contract = {
+            "dense_execution": {"schema_version": "tilesim.dense_execution.v1"},
+            "runtime_config": {"default_tp_degree": 8, "default_participants": ["gpu-0", "gpu-1"]},
+        }
+        self.assertIsNone(execution.explicit_request_attribution_applicability(dense_shape_without_contract))
+        self.assertIsNone(execution.explicit_request_attribution_applicability({}))
+        self.assertTrue(
+            execution.explicit_request_attribution_applicability(
+                {"request_attribution_applicable": True}
+            )
+        )
+        self.assertFalse(
+            execution.explicit_request_attribution_applicability(
+                {"applicability": {"request_attribution_applicable": False}}
+            )
+        )
+
+    def test_request_attribution_command_requires_boolean_true(self):
+        calls = []
+
+        def runner(command, **_kwargs):
+            calls.append(command)
+            return execution.subprocess.CompletedProcess(command, 1, stdout=b"{}", stderr=b"failed")
+
+        for applicability in (False, "false", None):
+            scenario = {
+                "from": "S0",
+                "to": "S6",
+                "trace": Path("trace.json"),
+                "topology": Path("topology.json"),
+                "request_attribution_applicable": applicability,
+            }
+            with mock.patch.object(execution, "trace_package_manifest_matches", return_value=True):
+                execution.execute_run(
+                    self.run_id,
+                    scenario,
+                    "des",
+                    runs_root=Path(self.temp.name),
+                    tilesim_cli=Path("TileSimCLI"),
+                    tilesim_root=self.directory,
+                    runs={self.run_id: {"run_id": self.run_id, "status": "running"}},
+                    runs_lock=execution.threading.Lock(),
+                    report_paths_for=server.report_paths_for,
+                    is_valid_json_file=lambda _: False,
+                    update_run_metadata=lambda *_args, **_kwargs: None,
+                    now=lambda: "now",
+                    process_runner=runner,
+                )
+        self.assertTrue(all("--request-attribution-out" not in command for command in calls))
 
 
 if __name__ == "__main__":

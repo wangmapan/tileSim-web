@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tilesim.agent_harness.agent_turn.v1",
+  "allOf": [{ "$ref": "tilesim.agent_harness.common.v1" }],
+  "type": "object",
+  "additionalProperties": false,
+  "unevaluatedProperties": false,
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.agent_turn.v1" },
+    "parent_turn_id": { "type": ["string", "null"] },
+    "actor": { "type": "string" },
+    "input_digest": { "type": "string" },
+    "output_digest": { "type": ["string", "null"] }
+  },
+  "required": ["parent_turn_id", "actor", "input_digest", "output_digest"]
+}

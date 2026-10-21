@@ -1,6 +1,7 @@
 export {
   fetchArtifactManifest,
   fetchRunEvidence,
+  removeRunEvidenceQueries,
   fetchVerifiedArtifact,
   fetchVerifiedArtifactText,
   releaseVerifiedArtifactText,

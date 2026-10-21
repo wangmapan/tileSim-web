@@ -15,6 +15,13 @@ export const workflowReviewEnglishCatalog: Readonly<Record<string, string>> = {
   "第 {page} / {pages} 页 · {count} 条匹配": "Page {page} of {pages} · {count} matches",
   上一页: "Previous",
   下一页: "Next",
+  删除本地运行记录: "Delete local run",
+  "删除本地运行记录？": "Delete local run?",
+  "运行结果和工件会从本地记录目录永久删除。":
+    "The result and artifacts will be permanently removed from the local run directory.",
+  删除: "Delete",
+  "删除失败：{message}": "Delete failed: {message}",
+  "本地运行记录已删除。": "Local run deleted.",
   "选择 Trace package": "Select a Trace package",
   检查状态: "Inspection status",
   来源与证据边界: "Provenance and evidence scope",

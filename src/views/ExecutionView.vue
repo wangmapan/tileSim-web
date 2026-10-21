@@ -13,6 +13,7 @@ import {
 } from "@lucide/vue";
 import { computed, ref } from "vue";
 import EmptyState from "../components/EmptyState.vue";
+import InlineHelp from "../components/InlineHelp.vue";
 import StatusPill from "../components/StatusPill.vue";
 import {
   attributionSource,
@@ -61,6 +62,21 @@ const evidenceLabels: Record<string, string> = {
   missing: "没有明细",
 };
 
+const boundaryLabels: Record<string, string> = {
+  S0: "工作负载输入",
+  S1: "运行时",
+  S2: "执行语义",
+  S3: "内存资源",
+  S4: "设备计算",
+  S5: "集合通信",
+  S6: "网络执行",
+};
+
+function displayBoundary(value: unknown) {
+  if (!value) return t("边界未知");
+  return String(value).replace(/S[0-6]/g, (id) => t(boundaryLabels[id] || "已声明入口"));
+}
+
 function semanticField(field: string, value: unknown) {
   return semanticFieldPresentation(field, value);
 }
@@ -75,9 +91,7 @@ function stageKind(stage: ExecutionStage) {
 
 function displayHeadline(layer: ExecutionLayer | undefined) {
   if (!layer?.headline) return "—";
-  return typeof layer.headline.value === "number"
-    ? formatNumber(layer.headline.value, 0)
-    : String(layer.headline.value);
+  return formatNumber(layer.headline.value, 0);
 }
 
 function friendlyHeadline(layer: ExecutionLayer | undefined) {
@@ -98,7 +112,8 @@ function displayValue(value: unknown, unit = "") {
   if (value === null || value === undefined || value === "") return "—";
   if (unit === "%ratio") return formatPercent(value, 1);
   if (unit === "bytes" && typeof value === "number") return `${formatNumber(value / 1_048_576)} MiB`;
-  if (typeof value === "number") return `${formatNumber(value)}${unit ? ` ${unit}` : ""}`;
+  if (typeof value === "number" || typeof value === "bigint" || (typeof value === "string" && /^-?\d+$/.test(value)))
+    return `${formatNumber(value)}${unit ? ` ${unit}` : ""}`;
   return `${value}${unit ? ` ${unit}` : ""}`;
 }
 
@@ -165,7 +180,7 @@ async function exportStructuredReport() {
         </div>
         <div class="execution-map-actions">
           <div class="panel-count">
-            <GitBranch :size="16" />{{ state.bundle.run?.summary?.range_label || t("边界未知") }}
+            <GitBranch :size="16" />{{ displayBoundary(state.bundle.run?.summary?.range_label) }}
           </div>
           <button class="button button--secondary" :disabled="exportingReport" @click="exportStructuredReport">
             <Download :size="16" />{{ exportingReport ? t("生成中…") : t("导出完整技术报告") }}
@@ -202,7 +217,6 @@ async function exportStructuredReport() {
           aria-controls="execution-layer-detail"
           @click="selectedId = id"
         >
-          <span>{{ id }}</span>
           <strong>{{ executionLayerName(id) }}</strong>
           <small>{{ friendlyHeadline(layerById.get(id)) }}</small>
         </button>
@@ -221,7 +235,6 @@ async function exportStructuredReport() {
             aria-controls="execution-layer-detail"
             @click="selectedId = id"
           >
-            <span>{{ id }}</span>
             <strong>{{ executionLayerName(id) }}</strong>
             <small>{{ friendlyHeadline(layerById.get(id)) }}</small>
           </button>
@@ -234,7 +247,6 @@ async function exportStructuredReport() {
           aria-controls="execution-layer-detail"
           @click="selectedId = 'S6'"
         >
-          <span>S6</span>
           <strong>{{ executionLayerName("S6") }}</strong>
           <small>{{ friendlyHeadline(layerById.get("S6")) }}</small>
         </button>
@@ -438,8 +450,10 @@ async function exportStructuredReport() {
         <summary class="panel-header">
           <div>
             <p class="section-kicker">{{ t("仿真执行与控制平面") }}</p>
-            <h2>{{ t("统一时间轴记录") }}</h2>
-            <p>{{ t("这里记录各环节在同一模拟时间线上的开始和结束。") }}</p>
+            <span class="panel-title-with-help">
+              <h2>{{ t("统一时间轴记录") }}</h2>
+              <InlineHelp :text="t('这里记录各环节在同一模拟时间线上的开始和结束。')" :interactive="false" />
+            </span>
           </div>
           <span>{{ t("{count} 个阶段", { count: result.stages.length }) }}</span>
           <TimerReset :size="20" />
@@ -522,7 +536,7 @@ async function exportStructuredReport() {
         <strong>{{ t("字段边界") }}</strong
         >{{
           t(
-            "本页只重组当前后端报告。计数去重仅用于避免同一 S3/S4/S5 证据随多个 Fabric phase 重复展示，不改变模拟结果，也不把关联证据升级为独立 trace。",
+            "本页只重组当前后端报告。计数去重仅用于避免同一并列资源证据随多个网络阶段重复展示，不改变模拟结果，也不把关联证据升级为独立 trace。",
           )
         }}
       </p>

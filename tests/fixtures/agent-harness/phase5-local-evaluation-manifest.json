@@ -1,0 +1,31 @@
+{
+  "identity": "tilesim.agent_harness.phase5_local_evaluation_manifest.v1",
+  "revision": "2026-10-19.wpe.local.v1",
+  "publication_status": "local_dev_only",
+  "contract_revision": "2026-10-19.wpe.v1",
+  "production_status": "not_for_production",
+  "fixture_results_are_live_evidence": false,
+  "provenance": {
+    "deployment_mode": "local_dev",
+    "source_mode": "synthetic_trace",
+    "claim_scope": "exploratory",
+    "production_status": "not_for_production"
+  },
+  "splits": {
+    "train": ["batch-success-single", "batch-success-multi"],
+    "validation": ["batch-pause-resume", "batch-budget-stop"],
+    "test": ["batch-recovery-required", "batch-cancel-fence"],
+    "held_out_adversarial": ["batch-identity-mismatch", "batch-event-gap", "batch-duplicate-candidate"]
+  },
+  "cases": [
+    { "id": "batch-success-single", "outcome": "completed" },
+    { "id": "batch-success-multi", "outcome": "completed" },
+    { "id": "batch-pause-resume", "outcome": "paused_then_completed" },
+    { "id": "batch-budget-stop", "outcome": "completed_with_stop_reason" },
+    { "id": "batch-recovery-required", "outcome": "recovery_required" },
+    { "id": "batch-cancel-fence", "outcome": "cancelled" },
+    { "id": "batch-identity-mismatch", "outcome": "rejected" },
+    { "id": "batch-event-gap", "outcome": "rejected" },
+    { "id": "batch-duplicate-candidate", "outcome": "rejected" }
+  ]
+}

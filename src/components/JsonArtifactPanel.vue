@@ -63,8 +63,8 @@ let lastEvidenceSignature = "";
 let suppressToggleLoad = false;
 
 const definitions: ArtifactDefinition[] = [
-  { id: "input-runtime-trace", label: "S1 输入 · Runtime trace", value: () => state.inputs?.runtime_trace },
-  { id: "input-topology", label: "S6 输入 · Topology", value: () => state.inputs?.topology },
+  { id: "input-runtime-trace", label: "运行时输入 · Runtime trace", value: () => state.inputs?.runtime_trace },
+  { id: "input-topology", label: "网络拓扑输入 · Topology", value: () => state.inputs?.topology },
   { id: "run-result", kind: "run", label: "运行结果 · Run", value: () => state.bundle.run },
   { id: "runtime-events", label: "运行期事件 · Runtime events", value: () => null },
   { id: "runtime-summary", label: "运行期汇总 · Runtime summary", value: () => null },

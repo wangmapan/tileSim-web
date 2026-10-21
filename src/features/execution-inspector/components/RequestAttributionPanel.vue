@@ -3,13 +3,15 @@ import { computed, ref, watch } from "vue";
 import ArtifactEvidenceLink from "../../../components/ArtifactEvidenceLink.vue";
 import RecordPager from "../../../components/ui/RecordPager.vue";
 import { useRecordPage } from "../../../components/ui/useRecordPage";
-import { losslessIntegerToBigInt } from "../../../contracts/lossless-json";
+import { isLosslessInteger, losslessIntegerToBigInt } from "../../../contracts/lossless-json";
 import type { RunReport } from "../../../contracts/report-model";
 import type { ApiRun } from "../../../contracts/generated/bridge-contracts";
 import { useI18n } from "../../../i18n";
 import type { ApiManifestResponse, ArtifactManifestResponse } from "../../../lib/api";
 import { fetchVerifiedArtifact } from "../../run-evidence";
 import { RouterLink } from "vue-router";
+import { analyzeNetworkIntervals } from "../model/network-intervals";
+import type { NetworkWaitInterval } from "../../../contracts/report-model";
 
 const props = defineProps<{
   runId: string | null;
@@ -43,13 +45,28 @@ const attributionFailure = computed(() => {
       }
     : null;
 });
-const tooLarge = computed(() => !!entry.value && losslessIntegerToBigInt(entry.value.bytes) > 8_000_000n);
+const tooLarge = computed(() => {
+  const bytes = entry.value?.bytes;
+  return isLosslessInteger(bytes) && losslessIntegerToBigInt(bytes) > 8_000_000n;
+});
 const reports = computed(() => (Array.isArray(payload.value?.requests) ? payload.value.requests : []));
-const selected = computed(() => {
-  const id = chosenRequestId.value || props.selectedRequestId;
-  return (reports.value.find(
-    (item) => object(item).explained_entity && object(object(item).explained_entity).id === id,
-  ) || reports.value[0]) as unknown;
+const requestedRequestId = computed(() => chosenRequestId.value || props.selectedRequestId || "");
+const matchingReports = computed(() =>
+  reports.value.filter(
+    (item) =>
+      object(object(item).explained_entity).kind === "request" &&
+      object(object(item).explained_entity).id === requestedRequestId.value,
+  ),
+);
+const selected = computed(() =>
+  requestedRequestId.value && matchingReports.value.length === 1 ? matchingReports.value[0] : null,
+);
+const selectionIssue = computed(() => {
+  if (!reports.value.length) return "empty";
+  if (!requestedRequestId.value) return "missing";
+  if (matchingReports.value.length > 1) return "duplicate";
+  if (!matchingReports.value.length) return "missing";
+  return "";
 });
 const causes = computed(() =>
   Array.isArray(object(selected.value).cause_chain) ? (object(selected.value).cause_chain as unknown[]) : [],
@@ -59,10 +76,20 @@ const { page, pages, visibleRecords } = useRecordPage(causes);
 function object(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
+function intervals(value: unknown): unknown[] {
+  const raw = object(value).network_intervals;
+  return Array.isArray(raw) ? raw : [];
+}
+function intervalAnalysis(value: unknown) {
+  return analyzeNetworkIntervals(intervals(value) as NetworkWaitInterval[]);
+}
 function label(value: unknown): string {
   return value === null || value === undefined ? t("未报告") : String(value);
 }
-watch([() => props.runId, () => entry.value?.sha256], () => {
+function association(value: unknown): string {
+  return value === null || value === undefined || value === "" ? t("未关联") : String(value);
+}
+watch([() => props.runId, () => entry.value?.sha256, () => props.selectedRequestId], () => {
   payload.value = null;
   error.value = "";
   chosenRequestId.value = "";
@@ -124,7 +151,12 @@ async function load() {
       {{ t("归因不可用") }}：{{ declared.detail || t("dense DES 的设备、网络或请求指标证据不足。") }}
     </p>
     <p v-else-if="!entry" role="status">
-      {{ t("未请求逐请求归因。轻量运行缺少 dense DES 设备及网络证据；非运行时入口不适用。") }}
+      {{ t("未请求逐请求归因。") }}
+      {{
+        t(
+          "Bridge contract gap：后端未提供 request_attribution_applicable；当前适用性保持未知，页面不会根据 TP、设备数或拓扑数量猜测。",
+        )
+      }}
     </p>
     <template v-else>
       <p class="runtime-evidence-identity">
@@ -144,50 +176,129 @@ async function load() {
       <p v-if="payload?.state === 'expected_absence'" role="status">
         {{ label(payload.absence_reason) }} · {{ label(payload.detail) }}
       </p>
+      <p v-else-if="payload && !reports.length" class="callout callout--error" role="alert">
+        <strong>{{ t("请求不存在/数据不可用") }}</strong>
+        {{ t("归因报告为空，没有可安全展示的请求。") }}
+      </p>
       <template v-else-if="payload && reports.length">
         <label class="runtime-evidence-controls">
           <span>{{ t("请求") }}</span>
           <select v-model="chosenRequestId">
+            <option value="" disabled>{{ t("选择请求") }}</option>
             <option
-              v-for="report in reports"
-              :key="label(object(report).report_id)"
+              v-for="(report, reportIndex) in reports"
+              :key="`${label(object(report).report_id)}-${label(object(object(report).explained_entity).id)}-${reportIndex}`"
               :value="label(object(object(report).explained_entity).id)"
             >
               {{ label(object(object(report).explained_entity).id) }}
             </option>
           </select>
         </label>
-        <p>
-          {{ label(object(selected).symptom) }} · {{ t("原因段") }} {{ causes.length }} · {{ t("后端报告置信度") }}
-          {{ label(object(selected).confidence) }}
-          <ArtifactEvidenceLink :source-path="`request-attribution:/requests/${reports.indexOf(selected)}`" />
+        <p v-if="selectionIssue" class="callout callout--error" role="alert">
+          <strong>{{ t("请求不存在/数据不可用") }}</strong>
+          <span v-if="selectionIssue === 'empty'">{{ t("归因报告为空，没有可安全展示的请求。") }}</span>
+          <span v-else-if="selectionIssue === 'duplicate'">{{ t("请求 ID 重复，无法确定唯一归因报告。") }}</span>
+          <span v-else>{{ t("请求 ID 缺失或不在归因报告中；已停止展示原因链。") }}</span>
         </p>
-        <div class="table-wrap runtime-evidence-table" role="region" :aria-label="t('逐请求原因链')" tabindex="0">
-          <table>
-            <thead>
-              <tr>
-                <th>{{ t("时间范围 (ps)") }}</th>
-                <th>{{ t("模块 / 原因") }}</th>
-                <th>{{ t("后端证据引用") }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(cause, index) in visibleRecords" :key="label(object(cause).cause_id)">
-                <td>
-                  <code>{{ label(object(cause).start_time_ps) }}–{{ label(object(cause).end_time_ps) }}</code>
-                </td>
-                <td>{{ label(object(cause).subsystem) }} · {{ label(object(cause).cause_code) }}</td>
-                <td>
-                  <code>{{ label(object(cause).evidence) }}</code>
-                  <ArtifactEvidenceLink
-                    :source-path="`request-attribution:/requests/${reports.indexOf(selected)}/cause_chain/${(page - 1) * 25 + index}/evidence_refs`"
-                  />
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <RecordPager v-if="pages > 1" v-model:page="page" :pages="pages" :label="t('逐请求原因链分页')" />
+        <template v-else-if="selected">
+          <p>
+            {{ label(object(selected).symptom) }} · {{ t("原因段") }} {{ causes.length }} · {{ t("后端报告置信度") }}
+            {{ label(object(selected).confidence) }}
+            <ArtifactEvidenceLink :source-path="`request-attribution:/requests/${reports.indexOf(selected)}`" />
+          </p>
+          <div class="table-wrap runtime-evidence-table" role="region" :aria-label="t('逐请求原因链')" tabindex="0">
+            <table>
+              <thead>
+                <tr>
+                  <th>{{ t("时间范围 (ps)") }}</th>
+                  <th>{{ t("模块 / 原因") }}</th>
+                  <th>{{ t("后端证据引用") }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template v-for="(cause, index) in visibleRecords" :key="`${label(object(cause).cause_id)}-${index}`">
+                  <tr>
+                    <td>
+                      <code>{{ label(object(cause).start_time_ps) }}–{{ label(object(cause).end_time_ps) }}</code>
+                    </td>
+                    <td>
+                      <div>{{ label(object(cause).subsystem) }} · {{ label(object(cause).cause_code) }}</div>
+                      <small class="attribution-associations">
+                        model call={{ association(object(cause).model_execution_call_id) }} · execution={{
+                          association(object(cause).execution_id)
+                        }}
+                        · KV={{ association(object(cause).kv_operation_id) }} · network={{
+                          association(object(cause).network_demand_id)
+                        }}
+                        · device={{ association(object(cause).device_task_id) }} · collective={{
+                          association(object(cause).collective_id)
+                        }}
+                      </small>
+                      <small class="attribution-associations">
+                        PD handoff={{ association(object(cause).pd_handoff_id) }} · group={{
+                          association(object(cause).pd_disaggregation_group_id)
+                        }}
+                        · placement={{ association(object(cause).pd_source_placement_group_id) }} →
+                        {{ association(object(cause).pd_destination_placement_group_id) }}
+                      </small>
+                    </td>
+                    <td>
+                      <code>{{ label(object(cause).evidence) }}</code>
+                      <ArtifactEvidenceLink
+                        :source-path="`request-attribution:/requests/${reports.indexOf(selected)}/cause_chain/${(page - 1) * 25 + index}/evidence_refs`"
+                      />
+                    </td>
+                  </tr>
+                  <tr v-if="intervals(cause).length">
+                    <td colspan="3">
+                      <details class="network-intervals">
+                        <summary>{{ t("网络区间（解释父级网络等待，不额外累加）") }}</summary>
+                        <small
+                          v-if="
+                            intervalAnalysis(cause).overlapPairs ||
+                            intervalAnalysis(cause).duplicateCount ||
+                            intervalAnalysis(cause).invalid.length
+                          "
+                        >
+                          {{ t("重叠/重复/无效区间仅作为解释记录，不重复计费") }} · overlap={{
+                            intervalAnalysis(cause).overlapPairs
+                          }}
+                          · duplicate={{ intervalAnalysis(cause).duplicateCount }} · invalid={{
+                            intervalAnalysis(cause).invalid.length
+                          }}
+                        </small>
+                        <ul>
+                          <li
+                            v-for="(interval, intervalIndex) in intervals(cause)"
+                            :key="`${label(object(interval).demand_id)}-${intervalIndex}`"
+                          >
+                            <code
+                              >{{ label(object(interval).start_time_ps) }}–{{
+                                label(object(interval).end_time_ps)
+                              }}
+                              ps</code
+                            >
+                            · {{ label(object(interval).component_code) }} · demand={{
+                              label(object(interval).demand_id)
+                            }}
+                            · link={{ label(object(interval).link_id) }} · attempt={{ label(object(interval).attempt) }}
+                            <span v-if="object(interval).unresolved_reason">
+                              · {{ label(object(interval).unresolved_reason) }}</span
+                            >
+                            <ArtifactEvidenceLink
+                              :source-path="`request-attribution:/requests/${reports.indexOf(selected)}/cause_chain/${(page - 1) * 25 + index}/network_intervals/${intervalIndex}`"
+                            />
+                          </li>
+                        </ul>
+                      </details>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+          <RecordPager v-if="pages > 1" v-model:page="page" :pages="pages" :label="t('逐请求原因链分页')" />
+        </template>
       </template>
     </template>
   </section>

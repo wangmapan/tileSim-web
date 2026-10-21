@@ -1,0 +1,13 @@
+{
+  "$id": "tilesim.agent_harness.optimization_action.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["session_id", "action"],
+  "properties": {
+    "session_id": { "type": "string", "minLength": 1 },
+    "action": { "enum": ["pause", "resume", "cancel", "retry"] },
+    "idempotency_key": { "type": "string", "minLength": 8, "maxLength": 128 },
+    "recovery_acknowledged": { "type": "boolean" }
+  }
+}

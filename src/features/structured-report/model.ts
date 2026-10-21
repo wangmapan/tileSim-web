@@ -399,7 +399,7 @@ export function buildStructuredPerformanceReport(context: StructuredReportContex
       execution_host: "S7",
       validation_plane: "S8",
       metrics_and_attribution_plane: "S9",
-      resource_semantics_note: t("S3、S4、S5 是同一资源语义层中的并列子系统，不构成线性 S3 -> S4 -> S5 链。"),
+      resource_semantics_note: t("内存、设备与集合通信属于同一资源语义层中的并列环节，不构成线性流程。"),
     },
     run_overview: {
       reported_summary: [
@@ -437,7 +437,7 @@ export function buildStructuredPerformanceReport(context: StructuredReportContex
       visualizations: layer.visualizations,
     })),
     execution_host_s7: {
-      description: t("S7 是统一执行宿主；stage 是 execution envelope，不等同于 S0-S6 canonical trace。"),
+      description: t("统一执行宿主记录的是 execution envelope，不等同于输入到网络执行的分层轨迹。"),
       stages: stageRecords(bundle),
       timeline: execution.timeline,
       raw_stages: (bundle.execution_envelope?.stages || []) as Array<Record<string, unknown>>,

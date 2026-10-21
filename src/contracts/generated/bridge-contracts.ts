@@ -816,7 +816,10 @@ export interface ArtifactManifestEntry {
   report_kind: string | null;
   file_name: string;
   media_type: "application/json";
-  bytes: number;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  bytes: bigint;
   sha256: string;
   schema_identity: string;
   contract_status: "supported" | "legacy_compatibility" | "not_applicable";
@@ -1319,8 +1322,8 @@ export interface ApiRun {
   digest?: {
     end_to_end_latency_us?: number | null;
     throughput_requests_per_second?: number | null;
-    completed_request_count?: number | null;
-    request_count?: number | null;
+    completed_request_count?: bigint | null;
+    request_count?: bigint | null;
     validation_lane?: string | null;
     evidence_tier?: string | null;
     [k: string]: unknown;
@@ -1340,10 +1343,41 @@ export interface ReportsResponse {
 export interface MetricsReportV1 {
   schema_version: "tilesim.metrics_report.v1";
   run_id: string;
-  request_metrics: {
-    request_id: string;
+  request_metrics: RequestMetric[];
+  trace_provenance?: Provenance;
+  observation_window?: {
+    /**
+     * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+     */
+    start_time_ps?: bigint;
+    /**
+     * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+     */
+    end_time_ps?: bigint;
     [k: string]: unknown;
-  }[];
+  };
+  summary?: {
+    /**
+     * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+     */
+    request_count?: bigint;
+    /**
+     * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+     */
+    completed_request_count?: bigint;
+    /**
+     * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+     */
+    rejected_request_count?: bigint;
+    throughput_requests_per_second?: number;
+    [k: string]: unknown;
+  };
+  tail_latency_summary?: {
+    ttft_ps?: MetricDistribution;
+    tpot_ps?: MetricDistribution;
+    end_to_end_latency_ps?: MetricDistribution;
+    [k: string]: unknown;
+  };
   percentile_subjects: {
     metric_kind: "ttft_ps" | "tpot_ps" | "end_to_end_latency_ps";
     percentile: 50 | 95 | 99;
@@ -1377,6 +1411,12 @@ export interface MetricsReportV1 {
        */
       subject_refs: [SubjectRef, ...SubjectRef[]];
       topology_domain_ref: EvidenceRef;
+      utilization_ratio?: number;
+      queue_delay_us?: number;
+      congestion_delay_us?: number;
+      runtime_us?: number;
+      queue_delay_ratio?: number;
+      congestion_delay_ratio?: number;
       [k: string]: unknown;
     }[];
     phase_fabric_contributions: {
@@ -1386,10 +1426,260 @@ export interface MetricsReportV1 {
       device_task_id: string;
       collective_id: string;
       not_s5_collective: boolean;
+      domain_id?: string;
+      /**
+       * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+       */
+      record_count?: bigint;
+      /**
+       * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+       */
+      busy_time_ps?: bigint;
+      queue_delay_us?: number;
+      congestion_delay_us?: number;
+      runtime_us?: number;
+      queue_delay_ratio?: number;
+      congestion_delay_ratio?: number;
+      dominant_delay_kind?: string;
+      memory_operation?: string;
+      memory_match_status?: string;
+      memory_latency_us?: number;
+      device_profile?: string;
+      device_profile_selection?: string;
+      device_profile_asset_id?: string;
+      device_profile_claim_scope?: string;
+      device_stream_id?: string;
+      device_match_status?: string;
+      device_latency_us?: number;
+      device_occupancy_ratio?: number;
+      device_contention_delay_us?: number;
+      network_profile?: string;
+      network_profile_selection?: string;
+      network_profile_asset_id?: string;
+      network_profile_claim_scope?: string;
+      resource_convergence_status?: string;
+      transfer_kind?: string;
+      pd_handoff_id?: string;
+      pd_disaggregation_group_id?: string;
+      pd_source_placement_group_id?: string;
+      pd_destination_placement_group_id?: string;
       [k: string]: unknown;
     }[];
+    request_fabric_contributions?: {
+      request_id?: string;
+      /**
+       * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+       */
+      record_count?: bigint;
+      /**
+       * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+       */
+      busy_time_ps?: bigint;
+      runtime_us?: number;
+      queue_delay_us?: number;
+      congestion_delay_us?: number;
+      queue_delay_ratio?: number;
+      congestion_delay_ratio?: number;
+      dominant_domain_id?: string;
+      dominant_phase_id?: string;
+      dominant_collective_id?: string;
+      dominant_delay_kind?: string;
+      network_profile?: string;
+      network_profile_selection?: string;
+      network_profile_asset_id?: string;
+      network_profile_claim_scope?: string;
+      [k: string]: unknown;
+    }[];
+    request_network_wait_intervals?: RequestNetworkWaitInterval[];
+    device_metrics?: DeviceMetrics[];
+    /**
+     * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+     */
+    representative_device_task_count?: bigint;
+    /**
+     * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+     */
+    unmapped_device_task_count?: bigint;
+    pd_disaggregation?: {
+      has_handoff_evidence?: boolean;
+      /**
+       * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+       */
+      handoff_record_count?: bigint;
+      /**
+       * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+       */
+      handoff_busy_time_ps?: bigint;
+      handoff_latency_us?: number;
+      handoff_queue_delay_us?: number;
+      handoff_congestion_delay_us?: number;
+      handoff_runtime_us?: number;
+      /**
+       * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+       */
+      handoff_ready_event_count?: bigint;
+      /**
+       * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+       */
+      decode_wait_for_handoff_ps?: bigint;
+      /**
+       * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+       */
+      decode_wait_after_handoff_ps?: bigint;
+      /**
+       * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+       */
+      max_decode_wait_for_handoff_ps?: bigint;
+      /**
+       * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+       */
+      max_decode_wait_after_handoff_ps?: bigint;
+      dominant_runtime_handoff_request_id?: string;
+      dominant_runtime_handoff_id?: string;
+      dominant_handoff_request_id?: string;
+      dominant_handoff_phase_id?: string;
+      dominant_handoff_domain_id?: string;
+      dominant_handoff_id?: string;
+      dominant_source_placement_group_id?: string;
+      dominant_destination_placement_group_id?: string;
+      [k: string]: unknown;
+    };
     [k: string]: unknown;
   };
+  [k: string]: unknown;
+}
+export interface RequestMetric {
+  request_id: string;
+  status?: string;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  arrival_time_ps?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  first_token_time_ps?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  completion_time_ps?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  ttft_ps?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  tpot_ps?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  end_to_end_latency_ps?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  decode_step_count?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  batch_issue_count?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  network_wait_ps?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  network_backpressure_ps?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  kv_wait_ps?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  kv_allocation_wait_ps?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  kv_pressure_wait_ps?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  kv_remote_read_wait_ps?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  kv_migration_wait_ps?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  kv_pd_handoff_wait_ps?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  kv_bytes_read?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  kv_bytes_migrated?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  kv_eviction_bytes?: bigint;
+  kv_source_identity?: string;
+  kv_destination_identity?: string;
+  dominant_kv_wait_reason?: string;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  device_wait_ps?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  collective_wait_ps?: bigint;
+  dominant_wait_reason?: string;
+  device_profile?: string;
+  device_profile_selection?: string;
+  device_profile_asset_id?: string;
+  device_profile_claim_scope?: string;
+  network_profile?: string;
+  network_profile_selection?: string;
+  network_profile_asset_id?: string;
+  network_profile_claim_scope?: string;
+  has_first_token_time?: boolean;
+  has_ttft_sample?: boolean;
+  has_tpot_sample?: boolean;
+  has_end_to_end_latency_sample?: boolean;
+  [k: string]: unknown;
+}
+export interface Provenance {
+  source_mode: "real_trace" | "synthetic_trace" | "compatibility_harness_trace";
+  calibration_level: string;
+  allowed_claim_scope: string;
+  [k: string]: unknown;
+}
+export interface MetricDistribution {
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  sample_count?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  p50_ps?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  p95_ps?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  p99_ps?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  max_ps?: bigint;
   [k: string]: unknown;
 }
 export interface SubjectRef {
@@ -1451,6 +1741,56 @@ export interface EvidenceRef {
     | "unresolved_not_executed";
   subject: SubjectRef;
 }
+export interface RequestNetworkWaitInterval {
+  request_id?: string;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  start_time_ps?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  end_time_ps?: bigint;
+  collective?: boolean;
+  [k: string]: unknown;
+}
+export interface DeviceMetrics {
+  device_id?: string;
+  device_type?: string;
+  group_id?: string;
+  evidence_state?: string;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  task_count?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  prefill_task_count?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  decode_task_count?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  modeled_memory_bytes?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  service_time_ps?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  active_time_ps?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  observation_window_ps?: bigint;
+  active_time_ratio?: number;
+  hardware_counter_state?: string;
+  [k: string]: unknown;
+}
 export interface DesignSpaceReportV1 {
   schema_version: "tilesim.design_space_report.v1";
   contract_version?: "tilesim.design_space_report.v1";
@@ -1504,12 +1844,6 @@ export interface DesignSpaceReportV1 {
   }[];
   [k: string]: unknown;
 }
-export interface Provenance {
-  source_mode: "real_trace" | "synthetic_trace" | "compatibility_harness_trace";
-  calibration_level: string;
-  allowed_claim_scope: string;
-  [k: string]: unknown;
-}
 export interface S6TopologyInputV1 {
   schema_version: "tilesim.s6_topology_input.v1";
   run_id: string;
@@ -1540,18 +1874,74 @@ export interface S6TopologyInputV1 {
 export interface TailCauseChainReportV1 {
   schema_version: "tilesim.tail_cause_chain_report.v1";
   run_id: string;
-  cause_chain: {
-    cause_id: string;
-    subject_refs: SubjectRef[];
-    evidence_refs: EvidenceRef[];
-    [k: string]: unknown;
-  }[];
-  attribution_ranking: {
-    attribution_id: string;
-    subject_refs: SubjectRef[];
-    evidence_refs: EvidenceRef[];
-    [k: string]: unknown;
-  }[];
+  cause_chain: Cause[];
+  attribution_ranking: Attribution[];
+  [k: string]: unknown;
+}
+export interface Cause {
+  cause_id: string;
+  subject_refs: SubjectRef[];
+  evidence_refs: EvidenceRef[];
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  start_time_ps?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  end_time_ps?: bigint;
+  subsystem?: string;
+  cause_code?: string;
+  title?: string;
+  evidence?: string;
+  model_execution_call_id?: string;
+  execution_id?: string;
+  kv_operation_id?: string;
+  network_demand_id?: string;
+  device_task_id?: string;
+  collective_id?: string;
+  pd_handoff_id?: string;
+  pd_disaggregation_group_id?: string;
+  pd_source_placement_group_id?: string;
+  pd_destination_placement_group_id?: string;
+  network_intervals?: NetworkInterval[];
+  [k: string]: unknown;
+}
+export interface NetworkInterval {
+  component_code?: string;
+  demand_id?: string;
+  link_id?: string;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  attempt?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  start_time_ps?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  end_time_ps?: bigint;
+  evidence?: string;
+  unresolved_reason?: string;
+  evidence_refs?: EvidenceRef[];
+  [k: string]: unknown;
+}
+export interface Attribution {
+  attribution_id: string;
+  subject_refs: SubjectRef[];
+  evidence_refs: EvidenceRef[];
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  rank?: bigint;
+  score_ps?: number;
+  share?: number;
+  subsystem?: string;
+  component_code?: string;
+  title?: string;
+  detail?: string;
   [k: string]: unknown;
 }
 export interface S7ExecutionEnvelopeV1 {
@@ -1582,20 +1972,44 @@ export interface Event {
   request_id: string;
   batch_id: string;
   batch_request_ids: string[];
-  event_time_ps: number;
-  logical_step: number;
-  kv_tokens: number;
-  active_requests: number;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  event_time_ps: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  logical_step: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  kv_tokens: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  active_requests: bigint;
   [k: string]: unknown;
 }
 export interface RuntimeEventSummary {
   schema_version: "tilesim.s1_runtime_event_summary.v1";
   run_id: string;
   has_events: boolean;
-  total_events: number;
-  first_event_time_ps: number;
-  last_event_time_ps: number;
-  peak_active_requests: number;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  total_events: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  first_event_time_ps: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  last_event_time_ps: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  peak_active_requests: bigint;
   monotonic_time_order: boolean;
   contiguous_logical_steps: boolean;
   [k: string]: unknown;
@@ -1608,12 +2022,30 @@ export interface RuntimeRequestSummaries {
 }
 export interface Request {
   request_id: string;
-  arrival_time_ps: number;
-  admit_time_ps: number;
-  first_batch_issue_time_ps: number;
-  first_token_time_ps: number;
-  completion_time_ps: number;
-  final_kv_tokens: number;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  arrival_time_ps: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  admit_time_ps: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  first_batch_issue_time_ps: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  first_token_time_ps: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  completion_time_ps: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  final_kv_tokens: bigint;
   [k: string]: unknown;
 }
 export interface RuntimeAnalysis {
@@ -1627,10 +2059,22 @@ export interface RuntimeAnalysis {
 }
 export interface Summary {
   has_events: boolean;
-  total_events: number;
-  first_event_time_ps: number;
-  last_event_time_ps: number;
-  peak_active_requests: number;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  total_events: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  first_event_time_ps: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  last_event_time_ps: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  peak_active_requests: bigint;
   monotonic_time_order: boolean;
   contiguous_logical_steps: boolean;
   [k: string]: unknown;
@@ -2927,10 +3371,96 @@ export interface RequestAttributionArtifact {
     request_metrics: [
       {
         request_id: string;
+        /**
+         * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+         */
+        ttft_ps?: bigint;
+        /**
+         * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+         */
+        tpot_ps?: bigint;
+        /**
+         * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+         */
+        end_to_end_latency_ps?: bigint;
+        /**
+         * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+         */
+        network_wait_ps?: bigint;
+        /**
+         * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+         */
+        kv_wait_ps?: bigint;
+        /**
+         * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+         */
+        device_wait_ps?: bigint;
+        /**
+         * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+         */
+        collective_wait_ps?: bigint;
+        /**
+         * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+         */
+        kv_bytes_read?: bigint;
+        /**
+         * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+         */
+        kv_bytes_migrated?: bigint;
+        /**
+         * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+         */
+        kv_eviction_bytes?: bigint;
+        has_ttft_sample?: boolean;
+        has_tpot_sample?: boolean;
+        has_end_to_end_latency_sample?: boolean;
         [k: string]: unknown;
       },
       ...{
         request_id: string;
+        /**
+         * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+         */
+        ttft_ps?: bigint;
+        /**
+         * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+         */
+        tpot_ps?: bigint;
+        /**
+         * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+         */
+        end_to_end_latency_ps?: bigint;
+        /**
+         * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+         */
+        network_wait_ps?: bigint;
+        /**
+         * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+         */
+        kv_wait_ps?: bigint;
+        /**
+         * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+         */
+        device_wait_ps?: bigint;
+        /**
+         * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+         */
+        collective_wait_ps?: bigint;
+        /**
+         * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+         */
+        kv_bytes_read?: bigint;
+        /**
+         * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+         */
+        kv_bytes_migrated?: bigint;
+        /**
+         * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+         */
+        kv_eviction_bytes?: bigint;
+        has_ttft_sample?: boolean;
+        has_tpot_sample?: boolean;
+        has_end_to_end_latency_sample?: boolean;
         [k: string]: unknown;
       }[],
     ];
@@ -2949,6 +3479,11 @@ export interface RequestAttributionArtifact {
   };
 }
 export interface AttributionRow {
+  attribution_id?: string;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  rank?: bigint;
   subject_refs: {
     [k: string]: unknown;
   }[];
@@ -2956,6 +3491,34 @@ export interface AttributionRow {
    * @minItems 1
    */
   evidence_refs: [RequestAttributionEvidenceRef, ...RequestAttributionEvidenceRef[]];
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  start_time_ps?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  end_time_ps?: bigint;
+  subsystem?: string;
+  cause_code?: string;
+  title?: string;
+  evidence?: string;
+  component_code?: string;
+  detail?: string;
+  score_ps?: number;
+  share?: number;
+  evidence_link?: string;
+  model_execution_call_id?: string;
+  execution_id?: string;
+  kv_operation_id?: string;
+  network_demand_id?: string;
+  device_task_id?: string;
+  collective_id?: string;
+  pd_handoff_id?: string;
+  pd_disaggregation_group_id?: string;
+  pd_source_placement_group_id?: string;
+  pd_destination_placement_group_id?: string;
+  network_intervals?: RequestAttributionNetworkInterval[];
   [k: string]: unknown;
 }
 export interface RequestAttributionEvidenceRef {
@@ -2967,6 +3530,27 @@ export interface RequestAttributionEvidenceRef {
   subject: {
     [k: string]: unknown;
   };
+  [k: string]: unknown;
+}
+export interface RequestAttributionNetworkInterval {
+  component_code?: string;
+  demand_id?: string;
+  link_id?: string;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  attempt?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  start_time_ps?: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  end_time_ps?: bigint;
+  evidence?: string;
+  unresolved_reason?: string;
+  evidence_refs?: RequestAttributionEvidenceRef[];
   [k: string]: unknown;
 }
 
@@ -3044,6 +3628,11 @@ export interface RenameRunRequest {
 export interface RenameRunResponse {
   run_id: string;
   run_name: string;
+}
+
+export interface DeleteRunResponse {
+  run_id: string;
+  deleted: true;
 }
 
 export interface Week7EvidenceMapResponse {
@@ -4075,6 +4664,23 @@ export interface AssistantModelPlanResponse {
     value: string;
     why: string;
   }[];
+  /**
+   * Optional complete synthetic runtime_trace and topology proposal. The page validates and applies it atomically; it never creates a run.
+   */
+  structured_inputs?: {
+    /**
+     * Validated synthetic runtime trace document.
+     */
+    runtime_trace: {
+      [k: string]: unknown;
+    };
+    /**
+     * Validated synthetic topology document.
+     */
+    topology: {
+      [k: string]: unknown;
+    };
+  };
   dropped: {
     key: string;
     reason: string;
@@ -4579,6 +5185,490 @@ export interface NotExposedCapability {
     | "slo";
   state: "not_exposed";
   reason_code: "not_exposed_to_agent";
+}
+
+export interface OptimizationSessionCreateRequest {
+  [k: string]: unknown;
+}
+
+export interface OptimizationApprovalRequest {
+  candidate_id?: string;
+  approval_digest?: string;
+  expires_at?: string;
+  idempotency_key?: string;
+}
+
+export interface OptimizationActionRequest {
+  session_id: string;
+  action: "pause" | "resume" | "cancel" | "retry";
+  idempotency_key?: string;
+}
+
+export interface OptimizationSessionResponse {
+  session: TilesimAgentHarnessOptimizationSessionV1;
+  detail?: {
+    [k: string]: unknown;
+  };
+  provenance: {
+    [k: string]: unknown;
+  };
+  idempotent_replay?: boolean;
+}
+export interface TilesimAgentHarnessOptimizationSessionV1 {
+  schema_identity: "tilesim.agent_harness.optimization_session.v1";
+  contract_revision: "2026-10-19.wpd.v1";
+  session_id: string;
+  principal: string;
+  workspace_id: string;
+  input_snapshot_digest: string;
+  schema_set_revision: string;
+  backend_identity: {
+    [k: string]: unknown;
+  };
+  policy_revision: "tilesim.agent_harness.local_optimization.policy.v1";
+  objective: {
+    [k: string]: unknown;
+  };
+  /**
+   * @maxItems 32
+   */
+  constraints: unknown[];
+  budget: {
+    [k: string]: unknown;
+  };
+  base_config: {
+    [k: string]: unknown;
+  };
+  local_dev: true;
+  automatic_submission: false;
+  provenance: {
+    [k: string]: unknown;
+  };
+  state?: string;
+  current_candidate_id?: string | null;
+  current_iteration?: number;
+  run_count?: number;
+  failure_count?: number;
+  execution_request?: {
+    [k: string]: unknown;
+  } | null;
+  active_operation_id?: string | null;
+  summary?: {
+    [k: string]: unknown;
+  } | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface OptimizationSessionListResponse {
+  sessions: TilesimAgentHarnessOptimizationSessionV1[];
+  provenance: {
+    [k: string]: unknown;
+  };
+}
+export interface TilesimAgentHarnessOptimizationSessionV1 {
+  schema_identity: "tilesim.agent_harness.optimization_session.v1";
+  contract_revision: "2026-10-19.wpd.v1";
+  session_id: string;
+  principal: string;
+  workspace_id: string;
+  input_snapshot_digest: string;
+  schema_set_revision: string;
+  backend_identity: {
+    [k: string]: unknown;
+  };
+  policy_revision: "tilesim.agent_harness.local_optimization.policy.v1";
+  objective: {
+    [k: string]: unknown;
+  };
+  /**
+   * @maxItems 32
+   */
+  constraints: unknown[];
+  budget: {
+    [k: string]: unknown;
+  };
+  base_config: {
+    [k: string]: unknown;
+  };
+  local_dev: true;
+  automatic_submission: false;
+  provenance: {
+    [k: string]: unknown;
+  };
+  state?: string;
+  current_candidate_id?: string | null;
+  current_iteration?: number;
+  run_count?: number;
+  failure_count?: number;
+  execution_request?: {
+    [k: string]: unknown;
+  } | null;
+  active_operation_id?: string | null;
+  summary?: {
+    [k: string]: unknown;
+  } | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface OptimizationSessionEventsResponse {
+  session_id: string;
+  events: TilesimAgentHarnessOptimizationEventV1[];
+  after_sequence?: number;
+  terminal: boolean;
+  provenance: {
+    [k: string]: unknown;
+  };
+}
+export interface TilesimAgentHarnessOptimizationEventV1 {
+  schema_identity: "tilesim.agent_harness.optimization_event.v1";
+  contract_revision: "2026-10-19.wpd.v1";
+  session_id: string;
+  event_id: string;
+  sequence: number;
+  state: string;
+  node: string;
+  payload_digest: string;
+  created_at?: string;
+  provenance: {
+    [k: string]: unknown;
+  };
+}
+
+export interface OptimizationApprovalResponse {
+  approval: TilesimAgentHarnessOptimizationApprovalV1;
+  session: TilesimAgentHarnessOptimizationSessionV1;
+  provenance: {
+    [k: string]: unknown;
+  };
+}
+export interface TilesimAgentHarnessOptimizationApprovalV1 {
+  schema_identity: "tilesim.agent_harness.optimization_approval.v1";
+  contract_revision: "2026-10-19.wpd.v1";
+  approval_id: string;
+  session_id: string;
+  candidate_id: string;
+  candidate_digest: string;
+  approval_digest: string;
+  principal: string;
+  workspace_id: string;
+  schema_set_revision: string;
+  backend_identity: {
+    [k: string]: unknown;
+  };
+  policy_revision: string;
+  status: "approved" | "rejected" | "expired" | "revoked" | "stale";
+  expires_at: string;
+  consumed: boolean;
+  provenance: {
+    [k: string]: unknown;
+  };
+}
+export interface TilesimAgentHarnessOptimizationSessionV1 {
+  schema_identity: "tilesim.agent_harness.optimization_session.v1";
+  contract_revision: "2026-10-19.wpd.v1";
+  session_id: string;
+  principal: string;
+  workspace_id: string;
+  input_snapshot_digest: string;
+  schema_set_revision: string;
+  backend_identity: {
+    [k: string]: unknown;
+  };
+  policy_revision: "tilesim.agent_harness.local_optimization.policy.v1";
+  objective: {
+    [k: string]: unknown;
+  };
+  /**
+   * @maxItems 32
+   */
+  constraints: unknown[];
+  budget: {
+    [k: string]: unknown;
+  };
+  base_config: {
+    [k: string]: unknown;
+  };
+  local_dev: true;
+  automatic_submission: false;
+  provenance: {
+    [k: string]: unknown;
+  };
+  state?: string;
+  current_candidate_id?: string | null;
+  current_iteration?: number;
+  run_count?: number;
+  failure_count?: number;
+  execution_request?: {
+    [k: string]: unknown;
+  } | null;
+  active_operation_id?: string | null;
+  summary?: {
+    [k: string]: unknown;
+  } | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface BatchActionRequest {
+  batch_id: string;
+  action: "start" | "pause" | "resume" | "cancel" | "retry";
+  recovery_acknowledged?: boolean;
+  idempotency_key?: string;
+}
+
+export interface BatchApprovalRequest {
+  approval_digest?: string;
+  expires_at?: string;
+  idempotency_key?: string;
+}
+
+export interface BatchCreateRequest {
+  schema_identity: "tilesim.agent_harness.batch_session.v1";
+  contract_revision: "2026-10-19.wpe.v1";
+}
+
+export interface BatchEventsResponse {
+  batch_id: string;
+  events: TilesimAgentHarnessBatchEventV1[];
+  after_sequence?: number;
+  terminal: boolean;
+  provenance: {
+    [k: string]: unknown;
+  };
+}
+export interface TilesimAgentHarnessBatchEventV1 {
+  schema_identity: "tilesim.agent_harness.batch_event.v1";
+  contract_revision: "2026-10-19.wpe.v1";
+  batch_id: string;
+  event_id: string;
+  sequence: number;
+  state: string;
+  node: string;
+  payload_digest: string;
+  created_at?: string;
+  provenance: {
+    [k: string]: unknown;
+  };
+}
+
+export interface BatchListResponse {
+  batches: TilesimAgentHarnessBatchSessionV1[];
+  provenance: {
+    [k: string]: unknown;
+  };
+}
+export interface TilesimAgentHarnessBatchSessionV1 {
+  schema_identity: "tilesim.agent_harness.batch_session.v1";
+  contract_revision: "2026-10-19.wpe.v1";
+  batch_id: string;
+  principal: string;
+  workspace_id: string;
+  input_snapshot_digest: string;
+  schema_set_revision: string;
+  backend_identity: {
+    [k: string]: unknown;
+  };
+  policy_revision: "tilesim.agent_harness.local_batch.policy.v1";
+  plan: {
+    [k: string]: unknown;
+  };
+  /**
+   * @minItems 1
+   * @maxItems 32
+   */
+  candidate_set: [
+    {
+      [k: string]: unknown;
+    },
+    ...{
+      [k: string]: unknown;
+    }[],
+  ];
+  objective: TilesimAgentHarnessBatchObjectiveV1;
+  budget: TilesimAgentHarnessBatchBudgetV1;
+  concurrency_policy: TilesimAgentHarnessConcurrencyPolicyV1;
+  stop_policy: TilesimAgentHarnessStopPolicyV1;
+  execution_request?: {
+    [k: string]: unknown;
+  } | null;
+  approval_required: true;
+  auto_execute: boolean;
+  local_dev: true;
+  provenance: {
+    [k: string]: unknown;
+  };
+  state?: string;
+  status?: string;
+  approval?: TilesimAgentHarnessBatchApprovalV1;
+  summary?: {
+    [k: string]: unknown;
+  } | null;
+  stop_reason?: {
+    [k: string]: unknown;
+  } | null;
+  created_at?: string;
+  updated_at?: string;
+}
+export interface TilesimAgentHarnessBatchObjectiveV1 {
+  schema_identity: "tilesim.agent_harness.batch_objective.v1";
+  contract_revision: "2026-10-19.wpe.v1";
+  metric_path: string;
+  direction: "minimize" | "maximize";
+  policy_revision: string;
+  digest?: string;
+  value?: number | null;
+  status?: "pending" | "verified" | "unavailable" | "rejected";
+}
+export interface TilesimAgentHarnessBatchBudgetV1 {
+  max_candidates: number;
+  max_runs: number;
+  max_seconds: number;
+  max_concurrency: 1;
+  max_failures: number;
+  max_retries: number;
+  resource_units: number;
+  max_no_improvement: number;
+}
+export interface TilesimAgentHarnessConcurrencyPolicyV1 {
+  schema_identity: "tilesim.agent_harness.concurrency_policy.v1";
+  contract_revision: "2026-10-19.wpe.v1";
+  max_concurrency: 1;
+  queue_policy: "bounded_fifo";
+}
+export interface TilesimAgentHarnessStopPolicyV1 {
+  schema_identity: "tilesim.agent_harness.stop_policy.v1";
+  contract_revision: "2026-10-19.wpe.v1";
+  on_failure: "continue" | "stop";
+  on_no_improvement: "stop";
+}
+export interface TilesimAgentHarnessBatchApprovalV1 {
+  schema_identity: "tilesim.agent_harness.batch_approval.v1";
+  contract_revision: "2026-10-19.wpe.v1";
+  approval_id: string;
+  batch_id: string;
+  approval_digest: string;
+  status: "approved" | "consumed" | "expired" | "revoked";
+  single_use: true;
+  consumed: boolean;
+  expires_at: string;
+  consumed_at?: string;
+  created_at?: string;
+  provenance: {
+    [k: string]: unknown;
+  };
+}
+
+export interface BatchResponse {
+  batch: TilesimAgentHarnessBatchSessionV1;
+  detail?: {
+    [k: string]: unknown;
+  };
+  provenance: {
+    [k: string]: unknown;
+  };
+  idempotent_replay?: boolean;
+}
+export interface TilesimAgentHarnessBatchSessionV1 {
+  schema_identity: "tilesim.agent_harness.batch_session.v1";
+  contract_revision: "2026-10-19.wpe.v1";
+  batch_id: string;
+  principal: string;
+  workspace_id: string;
+  input_snapshot_digest: string;
+  schema_set_revision: string;
+  backend_identity: {
+    [k: string]: unknown;
+  };
+  policy_revision: "tilesim.agent_harness.local_batch.policy.v1";
+  plan: {
+    [k: string]: unknown;
+  };
+  /**
+   * @minItems 1
+   * @maxItems 32
+   */
+  candidate_set: [
+    {
+      [k: string]: unknown;
+    },
+    ...{
+      [k: string]: unknown;
+    }[],
+  ];
+  objective: TilesimAgentHarnessBatchObjectiveV1;
+  budget: TilesimAgentHarnessBatchBudgetV1;
+  concurrency_policy: TilesimAgentHarnessConcurrencyPolicyV1;
+  stop_policy: TilesimAgentHarnessStopPolicyV1;
+  execution_request?: {
+    [k: string]: unknown;
+  } | null;
+  approval_required: true;
+  auto_execute: boolean;
+  local_dev: true;
+  provenance: {
+    [k: string]: unknown;
+  };
+  state?: string;
+  status?: string;
+  approval?: TilesimAgentHarnessBatchApprovalV1;
+  summary?: {
+    [k: string]: unknown;
+  } | null;
+  stop_reason?: {
+    [k: string]: unknown;
+  } | null;
+  created_at?: string;
+  updated_at?: string;
+}
+export interface TilesimAgentHarnessBatchObjectiveV1 {
+  schema_identity: "tilesim.agent_harness.batch_objective.v1";
+  contract_revision: "2026-10-19.wpe.v1";
+  metric_path: string;
+  direction: "minimize" | "maximize";
+  policy_revision: string;
+  digest?: string;
+  value?: number | null;
+  status?: "pending" | "verified" | "unavailable" | "rejected";
+}
+export interface TilesimAgentHarnessBatchBudgetV1 {
+  max_candidates: number;
+  max_runs: number;
+  max_seconds: number;
+  max_concurrency: 1;
+  max_failures: number;
+  max_retries: number;
+  resource_units: number;
+  max_no_improvement: number;
+}
+export interface TilesimAgentHarnessConcurrencyPolicyV1 {
+  schema_identity: "tilesim.agent_harness.concurrency_policy.v1";
+  contract_revision: "2026-10-19.wpe.v1";
+  max_concurrency: 1;
+  queue_policy: "bounded_fifo";
+}
+export interface TilesimAgentHarnessStopPolicyV1 {
+  schema_identity: "tilesim.agent_harness.stop_policy.v1";
+  contract_revision: "2026-10-19.wpe.v1";
+  on_failure: "continue" | "stop";
+  on_no_improvement: "stop";
+}
+export interface TilesimAgentHarnessBatchApprovalV1 {
+  schema_identity: "tilesim.agent_harness.batch_approval.v1";
+  contract_revision: "2026-10-19.wpe.v1";
+  approval_id: string;
+  batch_id: string;
+  approval_digest: string;
+  status: "approved" | "consumed" | "expired" | "revoked";
+  single_use: true;
+  consumed: boolean;
+  expires_at: string;
+  consumed_at?: string;
+  created_at?: string;
+  provenance: {
+    [k: string]: unknown;
+  };
 }
 
 export type CreateRunResponse = ApiRun & { idempotent_replay: boolean };

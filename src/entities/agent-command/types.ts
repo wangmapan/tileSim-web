@@ -33,6 +33,24 @@ export type AgentParameterReceipt = {
   reason: string;
 };
 
+/** A complete synthetic-input proposal, kept as JSON text until the owning page validates it. */
+export type AgentParameterStructuredInputs = {
+  runtimeJson: string;
+  topologyJson: string;
+};
+
+/**
+ * A bounded-in-memory preview of the structured documents a plan will write.
+ * It is a UI proposal only: the owning page still re-runs the same catalog,
+ * reference and document validation when the user confirms the plan.
+ */
+export type AgentParameterJsonPreview = {
+  /** Partial scalar overrides when the current page has not opened structured input. */
+  overridesJson?: string;
+  runtimeJson: string;
+  topologyJson: string;
+};
+
 export type AgentParameterApplyResult = {
   receipts: readonly AgentParameterReceipt[];
   /**

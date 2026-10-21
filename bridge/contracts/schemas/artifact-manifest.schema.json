@@ -31,7 +31,7 @@
           "report_kind": { "type": ["string", "null"] },
           "file_name": { "type": "string", "pattern": "^[^/\\\\]+\\.json$" },
           "media_type": { "const": "application/json" },
-          "bytes": { "type": "integer", "minimum": 0 },
+          "bytes": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
           "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
           "schema_identity": { "type": "string" },
           "contract_status": { "enum": ["supported", "legacy_compatibility", "not_applicable"] },

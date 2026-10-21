@@ -20,8 +20,14 @@ export interface RunReportContract {
     trace_name: string;
     range_label: string;
     end_to_end_latency_us?: number;
-    runtime_event_count?: number;
-    fabric_record_count?: number;
+    /**
+     * A JSON integer that MUST be parsed and retained losslessly.
+     */
+    runtime_event_count?: bigint;
+    /**
+     * A JSON integer that MUST be parsed and retained losslessly.
+     */
+    fabric_record_count?: bigint;
     [k: string]: unknown;
   };
   [k: string]: unknown;

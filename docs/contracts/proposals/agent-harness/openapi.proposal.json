@@ -1,0 +1,89 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "TileSim Agent Harness (proposal)",
+    "version": "2026-10-17.wpa.v0",
+    "description": "Proposal-only endpoint shape. No path below is implemented or advertised by the current Bridge.",
+    "x-publication-status": "proposal_non_published",
+    "x-schema-set-scope": "not_in_bridge_schema_set"
+  },
+  "servers": [{ "url": "https://tilesim.invalid", "description": "Placeholder only; never used by the Web fixture." }],
+  "paths": {
+    "/api/agent/operations": {
+      "post": {
+        "operationId": "proposeAgentOperation",
+        "x-runtime-status": "not_exposed",
+        "responses": {
+          "202": { "$ref": "#/components/responses/NotExposed" },
+          "409": { "$ref": "#/components/responses/Conflict" }
+        }
+      }
+    },
+    "/api/agent/operations/{operation_id}": {
+      "get": {
+        "operationId": "getAgentOperation",
+        "x-runtime-status": "not_exposed",
+        "parameters": [{ "$ref": "#/components/parameters/OperationId" }],
+        "responses": { "200": { "$ref": "#/components/responses/NotExposed" } }
+      }
+    },
+    "/api/agent/operations/{operation_id}/events": {
+      "get": {
+        "operationId": "listWorkflowEvents",
+        "x-runtime-status": "not_exposed",
+        "parameters": [{ "$ref": "#/components/parameters/OperationId" }],
+        "responses": { "200": { "$ref": "#/components/responses/NotExposed" } }
+      }
+    },
+    "/api/agent/operations/{operation_id}/resume": {
+      "post": {
+        "operationId": "resumeAgentOperation",
+        "x-runtime-status": "not_exposed",
+        "parameters": [{ "$ref": "#/components/parameters/OperationId" }],
+        "responses": {
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "501": { "$ref": "#/components/responses/NotExposed" }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "OperationId": { "name": "operation_id", "in": "path", "required": true, "schema": { "type": "string" } }
+    },
+    "responses": {
+      "NotExposed": {
+        "description": "The current Bridge has not published this capability.",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AgentHarnessError" } } }
+      },
+      "Conflict": {
+        "description": "Revision, idempotency, stale, or terminal fence conflict.",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AgentHarnessError" } } }
+      }
+    },
+    "schemas": {
+      "AgentHarnessEnvelope": { "$ref": "./agent-harness-envelope.schema.proposal.json" },
+      "AgentHarnessError": {
+        "type": "object",
+        "required": [
+          "schema_identity",
+          "contract_revision",
+          "code",
+          "field_path",
+          "retryable",
+          "terminal_failure",
+          "unknown_outcome"
+        ],
+        "properties": {
+          "schema_identity": { "const": "tilesim.agent_harness.error.v0" },
+          "contract_revision": { "const": "2026-10-17.wpa.v0" },
+          "code": { "type": "string" },
+          "field_path": { "type": ["string", "null"] },
+          "retryable": { "type": "boolean" },
+          "terminal_failure": { "type": "boolean" },
+          "unknown_outcome": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

@@ -993,6 +993,80 @@ export function seedStructuredInput(options: {
 export type ControlWriteResult = { runtimeJson: string; topologyJson: string; note: SeedNote | null };
 
 /**
+ * Reads the structured documents back into the scalar control surface.
+ *
+ * The structured editors and the quick controls are two views over the same
+ * draft, not two independent sources of truth.  A control pointer is allowed
+ * to be read only when the corresponding structured document owns that value;
+ * workload.message_size_multiplier intentionally remains unsupported because
+ * it is a multiplier with no lossless document equivalent.  `found: false`
+ * means the owning document omitted the optional key and lets the caller show
+ * the same "unset" state as the JSON editor.
+ */
+export type ControlReadResult = {
+  supported: boolean;
+  found: boolean;
+  value?: string | number | boolean;
+};
+
+function scalarValue(value: unknown): string | number | boolean | undefined {
+  return typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? value : undefined;
+}
+
+export function readControlPointer(options: {
+  runtimeJson: string;
+  topologyJson: string;
+  pointer: string;
+  policyKeys?: readonly string[];
+  overrideKeys?: readonly string[];
+}): ControlReadResult {
+  const policyKeys: readonly string[] = options.policyKeys || runtimePolicyFields.map((field) => field.key);
+  const overrideKeys: readonly string[] = options.overrideKeys || moduleBindingOverrideFields.map((field) => field.key);
+
+  if (options.pointer.startsWith(RUNTIME_POINTER_PREFIX)) {
+    const key = options.pointer.slice(RUNTIME_POINTER_PREFIX.length);
+    if (!policyKeys.includes(key)) return { supported: false, found: false };
+    const parsed = parseJsonDocument(options.runtimeJson, "Runtime trace");
+    if (!parsed.ok) return { supported: false, found: false };
+    const policy = runtimePolicyOf(parsed.value);
+    if (!policy) return { supported: false, found: false };
+    if (!Object.hasOwn(policy, key)) return { supported: true, found: false };
+    const value = scalarValue(policy[key]);
+    return value === undefined ? { supported: true, found: false } : { supported: true, found: true, value };
+  }
+
+  if (options.pointer.startsWith(FABRIC_POINTER_PREFIX)) {
+    const suffix = options.pointer.slice(FABRIC_POINTER_PREFIX.length);
+    const match = overrideKeys
+      .map((key) => ({ key, kind: suffix.slice(0, suffix.length - key.length - 1) }))
+      .find((candidate) => suffix === `${candidate.kind}_${candidate.key}`);
+    if (!match) return { supported: false, found: false };
+    const parsed = parseJsonDocument(options.topologyJson, "Fabric topology");
+    if (!parsed.ok) return { supported: true, found: false };
+    const topology = topologyOf(parsed.value);
+    const bindings = topology ? arrayChild(topology, "module_bindings") || [] : [];
+    const matchingBindings = bindings.filter(
+      (binding): binding is JsonObject => isJsonObject(binding) && binding.module_kind === match.kind,
+    );
+    if (!matchingBindings.length) return { supported: false, found: false };
+    const values = matchingBindings
+      .map((binding) => {
+        const params = isJsonObject(binding.override_params) ? binding.override_params : null;
+        return params && Object.hasOwn(params, match.key) ? scalarValue(params[match.key]) : undefined;
+      })
+      .filter((value): value is string | number | boolean => value !== undefined);
+    if (!values.length) return { supported: true, found: false };
+    const first = values[0];
+    // A single control cannot represent divergent bindings.  Leave it alone
+    // rather than silently selecting one module's value.
+    if (values.some((value) => value !== first)) return { supported: true, found: false };
+    return { supported: true, found: true, value: first };
+  }
+
+  return { supported: false, found: false };
+}
+
+/**
  * Mirrors one quick-control knob into the structured documents.
  *
  * While the structured editor sits open next to the knobs both surfaces claim

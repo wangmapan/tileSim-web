@@ -16,6 +16,10 @@ function evidenceKey(runId: string, context: EvidenceQueryContext) {
   return ["run-evidence", runId, context.backendRevision || "unknown", schemaRevision(context)] as const;
 }
 
+export function removeRunEvidenceQueries(runId: string) {
+  queryClient.removeQueries({ queryKey: ["run-evidence", runId] });
+}
+
 function artifactEntry(manifest: ArtifactManifestResponse | null, artifactId: string) {
   return manifest?.artifacts.find((entry) => entry.artifact_id === artifactId) || null;
 }

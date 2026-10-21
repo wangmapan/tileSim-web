@@ -611,6 +611,27 @@ class DesignSpaceBridgeTest(unittest.TestCase):
             (ignored / "large-output.bin").write_bytes(payload)
             self.assertEqual(server.worktree_state_digest(root), expected)
 
+    def test_worktree_digest_ignores_side_by_side_generated_build_directories(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            server.subprocess.run(["git", "init", str(root)], check=True, capture_output=True)
+            server.subprocess.run(["git", "-C", str(root), "config", "user.name", "TileSim Test"], check=True)
+            server.subprocess.run(
+                ["git", "-C", str(root), "config", "user.email", "tilesim-test@example.invalid"],
+                check=True,
+            )
+            tracked = root / "source.cpp"
+            tracked.write_text("int main() {}\n", encoding="utf-8")
+            server.subprocess.run(["git", "-C", str(root), "add", "source.cpp"], check=True)
+            server.subprocess.run(
+                ["git", "-C", str(root), "commit", "-m", "baseline"], check=True, capture_output=True
+            )
+            baseline = server.worktree_state_digest(root)
+            generated = root / "build-large" / "nested"
+            generated.mkdir(parents=True)
+            (generated / "huge-output.bin").write_bytes(b"generated output")
+            self.assertEqual(server.worktree_state_digest(root), baseline)
+
     def test_windows_worktree_git_pointer_is_translated_for_wsl(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -1219,7 +1240,12 @@ class BridgeApiContractTest(unittest.TestCase):
         body = json.dumps(payload).encode("utf-8") if payload is not None else None
         request = urllib.request.Request(self.base_url + path, data=body, headers=headers or {}, method=method)
         try:
-            response = urllib.request.urlopen(request, timeout=5)
+            # Evidence-agent tests may synchronously restart the temporary
+            # Bridge and rebuild run-bound state.  WSL filesystems can take
+            # longer than the ordinary API budget during that cold path; a
+            # short client timeout closes the socket first and turns a valid
+            # response into a BrokenPipeError in the test server.
+            response = urllib.request.urlopen(request, timeout=30)
         except urllib.error.HTTPError as error:
             return error.code, json.loads(error.read()), error.headers
         with response:
@@ -1660,6 +1686,32 @@ class BridgeApiContractTest(unittest.TestCase):
         status, payload, _ = self.create_run({"scenario_id": "s1_des_example"}, None)
         self.assertEqual(status, 400)
         self.assertEqual(payload["error"]["field_path"], "/headers/Idempotency-Key")
+
+    def test_terminal_run_delete_removes_local_directory_and_is_idempotent_as_not_found(self) -> None:
+        run_id = "run-delete-fixture"
+        run_dir = server.RUNS_ROOT / run_id
+        run_dir.mkdir()
+        (run_dir / "artifact.json").write_text("{}", encoding="utf-8")
+        server.atomic_write_json(run_dir / "run-metadata.json", {"run_id": run_id, "status": "completed"})
+
+        status, payload, _ = self.request(f"/api/runs/{run_id}", method="DELETE")
+        self.assertEqual(status, 200)
+        self.assertEqual(payload, {"run_id": run_id, "deleted": True})
+        self.assertFalse(run_dir.exists())
+
+        status, payload, _ = self.request(f"/api/runs/{run_id}", method="DELETE")
+        self.assertEqual(status, 404)
+        self.assertEqual(payload["error"]["code"], "run_not_found")
+
+    def test_active_run_delete_is_rejected_without_removing_directory(self) -> None:
+        run_id = "run-delete-active"
+        run_dir = server.RUNS_ROOT / run_id
+        run_dir.mkdir()
+        server.atomic_write_json(run_dir / "run-metadata.json", {"run_id": run_id, "status": "running"})
+        status, payload, _ = self.request(f"/api/runs/{run_id}", method="DELETE")
+        self.assertEqual(status, 409)
+        self.assertEqual(payload["error"]["code"], "run_active")
+        self.assertTrue(run_dir.exists())
 
     def test_run_creation_is_idempotent_for_the_same_payload(self) -> None:
         request = {"scenario_id": "s1_des_example", "overrides": {}}

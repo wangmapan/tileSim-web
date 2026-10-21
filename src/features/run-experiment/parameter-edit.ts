@@ -15,7 +15,10 @@
  * catalogue (see `scenario-recommendation.ts`) differ only in where the lines
  * came from, so they are validated and reported identically.
  */
-import type { AgentParameterEdit } from "../../entities/agent-command";
+import type { AgentParameterEdit, AgentParameterJsonPreview } from "../../entities/agent-command";
+import type { AgentParameterStructuredInputs } from "../../entities/agent-command";
+import { stringifyJsonLossless } from "../../contracts/lossless-json";
+import { createRunRequest as validateCreateRunRequest } from "../../contracts/generated/experiment-validators.js";
 import { dynamicEngineIssue, engineModeOf } from "./runtime-engine";
 import {
   projectCollectionEntries,
@@ -28,10 +31,69 @@ import {
   deviceIdsOf,
   deviceReferences,
   patchJsonDocument,
+  rewriteRequestParallelism,
   setDeviceCount,
   setRequestCount,
   type JsonObject,
 } from "./structured-input";
+import { parseTopologyDocument } from "./topology-graph";
+
+export type StructuredInputValidation =
+  { ok: true; inputs: AgentParameterStructuredInputs } | { ok: false; reason: string };
+
+/** Validate a complete model-produced synthetic input pair with the same gates used at submit time. */
+export function validateAgentStructuredInputs(value: unknown): StructuredInputValidation {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return { ok: false, reason: "structured_inputs 必须是对象。" };
+  const candidate = value as { runtime_trace?: unknown; topology?: unknown };
+  if (!candidate.runtime_trace || typeof candidate.runtime_trace !== "object" || Array.isArray(candidate.runtime_trace))
+    return { ok: false, reason: "structured_inputs/runtime_trace 必须是对象。" };
+  if (!candidate.topology || typeof candidate.topology !== "object" || Array.isArray(candidate.topology))
+    return { ok: false, reason: "structured_inputs/topology 必须是对象。" };
+  const runtimeJson = stringifyJsonLossless(candidate.runtime_trace);
+  const topologyJson = stringifyJsonLossless(candidate.topology);
+  const parsedTopology = parseTopologyDocument(topologyJson);
+  if (!parsedTopology.document) return { ok: false, reason: `topology：${parsedTopology.error}` };
+  const trace = candidate.runtime_trace as Record<string, unknown>;
+  const topology = candidate.topology as Record<string, unknown>;
+  const traceProvenance = trace.trace_provenance;
+  const topologyProvenance = topology.provenance;
+  if (
+    !traceProvenance ||
+    typeof traceProvenance !== "object" ||
+    Array.isArray(traceProvenance) ||
+    !topologyProvenance ||
+    typeof topologyProvenance !== "object" ||
+    Array.isArray(topologyProvenance)
+  )
+    return { ok: false, reason: "两个 JSON 文档都必须声明 synthetic_trace provenance。" };
+  if (
+    (traceProvenance as Record<string, unknown>).source_mode !== "synthetic_trace" ||
+    (topologyProvenance as Record<string, unknown>).source_mode !== "synthetic_trace"
+  )
+    return { ok: false, reason: "助手生成的拓扑只能使用 source_mode=synthetic_trace。" };
+  if (
+    (traceProvenance as Record<string, unknown>).calibration_level !== "uncalibrated" ||
+    (topologyProvenance as Record<string, unknown>).calibration_level !== "uncalibrated"
+  )
+    return { ok: false, reason: "助手生成的拓扑只能使用 calibration_level=uncalibrated。" };
+  const request = {
+    scenario_id: "s1_des_example",
+    fidelity_policy: "default",
+    gpu_participation_mode: "gpu_free",
+    custom_inputs: { runtime_trace: candidate.runtime_trace, topology: candidate.topology },
+  };
+  const validator = validateCreateRunRequest as typeof validateCreateRunRequest & {
+    errors?: readonly { instancePath?: string; message?: string }[];
+  };
+  if (!validator(request)) {
+    const issue = validator.errors?.[0];
+    const pointer = issue?.instancePath || "/structured_inputs";
+    const detail = issue?.message ? `：${issue.message}` : "";
+    return { ok: false, reason: `${pointer}${detail}` };
+  }
+  return { ok: true, inputs: { runtimeJson, topologyJson } };
+}
 
 /** A planned edit carries the resolved contract shape plus what the user typed. */
 export type ParameterEditItem = AgentParameterEdit & { raw: string; kind: ParameterKind };
@@ -449,6 +511,49 @@ export type ParameterApplyOutcome = {
   requiresStructuredInput: boolean;
 };
 
+/**
+ * Builds the exact structured JSON that the page would receive after one
+ * confirmation.  This is deliberately the same validation path as apply: a
+ * preview can never show a document that the real write path would reject.
+ */
+export function previewParameterEdits(options: {
+  items: readonly AgentParameterEdit[];
+  runtimeJson: string;
+  topologyJson: string;
+  structuredInputs?: AgentParameterStructuredInputs;
+}): AgentParameterJsonPreview | null {
+  const controlItems = options.items.filter((item) => item.target === "control");
+  const overrides: Record<string, Record<string, string | number | boolean>> = {};
+  controlItems.forEach((item) => {
+    const match = /^overrides\/([^/]+)\/([^/]+)$/u.exec(item.path);
+    if (!match) return;
+    const section = overrides[match[1]] || (overrides[match[1]] = {});
+    section[match[2]] = item.value;
+  });
+  const hasDocuments =
+    Boolean(options.structuredInputs) ||
+    options.items.some((item) => item.target === "runtime_trace" || item.target === "topology");
+  if (!hasDocuments && !Object.keys(overrides).length) return null;
+  try {
+    const outcome = applyParameterEdits(options);
+    if (outcome.rejected.length) return null;
+    if (
+      hasDocuments &&
+      !options.structuredInputs &&
+      outcome.runtimeJson === options.runtimeJson &&
+      outcome.topologyJson === options.topologyJson
+    )
+      return null;
+    return {
+      ...(Object.keys(overrides).length ? { overridesJson: JSON.stringify({ overrides }, null, 2) } : {}),
+      runtimeJson: outcome.runtimeJson,
+      topologyJson: outcome.topologyJson,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function toApplied(item: AgentParameterEdit): AppliedParameterEdit {
   return {
     path: item.path,
@@ -516,6 +621,7 @@ export function applyParameterEdits(options: {
   items: readonly AgentParameterEdit[];
   runtimeJson: string;
   topologyJson: string;
+  structuredInputs?: AgentParameterStructuredInputs;
 }): ParameterApplyOutcome {
   const applied: AppliedParameterEdit[] = [];
   const rejected: ParameterEditProblem[] = [];
@@ -523,27 +629,62 @@ export function applyParameterEdits(options: {
   let topologyJson = options.topologyJson;
   let requiresStructuredInput = false;
 
-  const documentItems = options.items.filter((item) => item.target === "runtime_trace" || item.target === "topology");
-  const stateItems = options.items.filter((item) => item.target === "control" || item.target === "form");
-  if (options.runtimeJson.trim()) {
-    const runtime = JSON.parse(options.runtimeJson) as JsonObject;
-    if (
-      engineModeOf(runtime) !== "generic" &&
-      stateItems.some((item) => item.path === "overrides/runtime/batch_scheduler")
-    ) {
+  if (options.structuredInputs) {
+    let validation: StructuredInputValidation;
+    try {
+      validation = validateAgentStructuredInputs({
+        runtime_trace: JSON.parse(options.structuredInputs.runtimeJson),
+        topology: JSON.parse(options.structuredInputs.topologyJson),
+      });
+    } catch {
+      validation = { ok: false, reason: "structured_inputs JSON 无法解析。" };
+    }
+    if (!validation.ok) {
       return {
         applied: [],
-        rejected: [
-          {
-            raw: "overrides/runtime/batch_scheduler",
-            reason: "版本化引擎由画像调度；整份方案已回滚，其他改动也未写入。",
-          },
-        ],
+        rejected: [{ raw: "structured_inputs", reason: `${validation.reason} 整份方案已回滚，其他改动也未写入。` }],
         runtimeJson: options.runtimeJson,
         topologyJson: options.topologyJson,
         requiresStructuredInput: false,
       };
     }
+    runtimeJson = validation.inputs.runtimeJson;
+    topologyJson = validation.inputs.topologyJson;
+    requiresStructuredInput = true;
+  }
+  const documentItems = options.structuredInputs
+    ? []
+    : options.items.filter((item) => item.target === "runtime_trace" || item.target === "topology");
+  const stateItems = options.items.filter((item) => item.target === "control" || item.target === "form");
+  try {
+    if ((options.structuredInputs ? runtimeJson : options.runtimeJson).trim()) {
+      const runtime = JSON.parse(options.structuredInputs ? runtimeJson : options.runtimeJson) as JsonObject;
+      if (
+        engineModeOf(runtime) !== "generic" &&
+        stateItems.some((item) => item.path === "overrides/runtime/batch_scheduler")
+      ) {
+        return {
+          applied: [],
+          rejected: [
+            {
+              raw: "overrides/runtime/batch_scheduler",
+              reason: "版本化引擎由画像调度；整份方案已回滚，其他改动也未写入。",
+            },
+          ],
+          runtimeJson: options.runtimeJson,
+          topologyJson: options.topologyJson,
+          requiresStructuredInput: false,
+        };
+      }
+    }
+  } catch {
+    return {
+      applied: [],
+      rejected: [{ raw: "custom_inputs", reason: "结构化输入 JSON 无法解析；整份方案已回滚，其他改动也未写入。" }],
+      runtimeJson: options.runtimeJson,
+      topologyJson: options.topologyJson,
+      requiresStructuredInput: false,
+    };
   }
 
   // Resize before projected element leaves regardless of the model's order. Work
@@ -598,11 +739,57 @@ export function applyParameterEdits(options: {
     }
   });
 
+  // A complete Agent device/parallelism composition explicitly names the target device
+  // count and the TP for every existing request. In that one composition,
+  // participants are not guessed: the requested TP equals the resulting
+  // device inventory, so the same deterministic pairing operation exposed by
+  // the structured editor can atomically select every device. This is
+  // intentionally generic — the contract permits any count up to its declared
+  // maxItems, not a special 8-card preset. A count-only edit still leaves the
+  // editor's pairing prompt in charge, and a partial TP set remains fail-closed.
+  if (!rejected.length) {
+    const deviceCountEdit = documentItems.find((item) => item.path === "topology/devices");
+    const tpEdits = documentItems.filter((item) => /^runtime_trace\/requests\[\d+\]\/tp_degree$/u.test(item.path));
+    if (deviceCountEdit && typeof deviceCountEdit.value === "number" && tpEdits.length) {
+      try {
+        const originalRuntime = JSON.parse(options.runtimeJson) as JsonObject;
+        const requests = Array.isArray(originalRuntime.requests) ? originalRuntime.requests : [];
+        const requestIndexes = new Set(
+          tpEdits
+            .map((item) => Number(/\[(\d+)\]/u.exec(item.path)?.[1]))
+            .filter((index) => Number.isSafeInteger(index)),
+        );
+        const completePairing =
+          deviceCountEdit.value > 0 &&
+          requests.length > 0 &&
+          requestIndexes.size === requests.length &&
+          [...requestIndexes].every((index) => index >= 0 && index < requests.length) &&
+          tpEdits.every((item) => item.value === deviceCountEdit.value);
+        if (completePairing) {
+          const topology = JSON.parse(topologyJson) as JsonObject;
+          const deviceIds = deviceIdsOf(topology);
+          if (deviceIds.length !== deviceCountEdit.value) {
+            throw new StructuredInputError("设备数与生成后的设备集合不一致，整份方案已回滚。");
+          }
+          runtimeJson = patchJsonDocument(runtimeJson, "Runtime trace", (draft) => {
+            rewriteRequestParallelism(draft, deviceIds);
+          });
+        }
+      } catch (error) {
+        rejected.push({
+          raw: "runtime_trace/requests/*/participants",
+          reason: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  }
+
   // The shipped runtime template pins participants to specific GPUs. Changing
-  // tp_degree alone cannot make that fixed list a larger tensor-parallel group;
-  // leaving it behind would make a 16-card receipt misleading. The editor owns
-  // the explicit clear/rewrite choice, so refuse this batch and direct the user
-  // there instead of silently changing an unlisted array.
+  // tp_degree alone cannot make that fixed list a different tensor-parallel
+  // group; leaving it behind would make a receipt misleading. Only the
+  // complete device-count + every-request-TP composition above may perform the
+  // same explicit rewrite as the structured editor; all partial batches remain
+  // refused instead of silently changing an unlisted array.
   if (!rejected.length) {
     const tpEdits = documentItems.filter((item) => /^runtime_trace\/requests\[\d+\]\/tp_degree$/u.test(item.path));
     if (tpEdits.length && runtimeJson.trim()) {

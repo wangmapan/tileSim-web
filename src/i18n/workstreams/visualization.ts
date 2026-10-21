@@ -55,8 +55,8 @@ export const visualizationEnglishCatalog: Readonly<Record<string, string>> = {
   "哪些 memory event 的报告延迟更高？": "Which memory events have higher reported latency?",
   "先看最长条，再按 memory_event_id 回到完整记录。":
     "Start with the longest bar, then use memory_event_id to inspect the complete record.",
-  "按稳定事件 ID 做展示级去重；不重算内存延迟，也不把 S3 与 S4/S5 串联。":
-    "Deduplicate for display by stable event ID; do not recompute memory latency or chain S3 through S4/S5.",
+  "按稳定事件 ID 做展示级去重；不重算内存延迟，也不把并列资源语义串成线性流程。":
+    "Deduplicate for display by stable event ID; do not recompute memory latency or turn peer resource semantics into a linear flow.",
   "设备任务的延迟与 occupancy 如何共同分布？": "How are device-task latency and occupancy distributed together?",
   "先看远离主要点群的任务，再核对它的精确字段和证据。":
     "Inspect tasks far from the main cluster, then verify their exact fields and evidence.",
@@ -84,8 +84,11 @@ export const visualizationEnglishCatalog: Readonly<Record<string, string>> = {
     "Start with higher-utilization domains, then interpret them with queue/congestion fields and topology evidence.",
   "利用率是模拟报告值，不等同于真实集群链路计数器，也不单独证明拥塞。":
     "Utilization is a simulated reported value, not a real-cluster link counter or proof of congestion by itself.",
-  "S0–S6 的已报告阶段如何落在 S7 的同一全局时间轴上？":
-    "How do reported S0-S6 stages appear on S7's shared global timeline?",
+  "已报告阶段如何落在统一的全局时间轴上？": "How do reported stages appear on one shared global timeline?",
+  "内存、设备与集合通信属于同一资源语义层中的并列环节，不构成线性流程。":
+    "Memory, device, and collective communication are peer stages in one resource-semantics layer, not a linear flow.",
+  "统一执行宿主记录的是 execution envelope，不等同于输入到网络执行的分层轨迹。":
+    "The unified execution host records an execution envelope, not the layered path from input to network execution.",
   "先看阶段顺序、重叠和持续时间，再查看精确 start/end ps。":
     "Review stage order, overlap, and duration before inspecting exact start/end picoseconds.",
   "S7 是统一执行宿主，不是 latency causal ranking；非法或超安全范围的区间失败关闭。":
@@ -157,23 +160,25 @@ export const visualizationEnglishCatalog: Readonly<Record<string, string>> = {
     "No formal objectives are available to plot; the UI will not reconstruct Pareto from projected metrics.",
   "Pareto membership、dominance、rank 与 promotion reason 必须来自正式后端报告。":
     "Pareto membership, dominance, rank, and promotion reason must come from the formal backend report.",
-  "S0–S6 延迟贡献": "S0–S6 latency contributions",
-  "按报告顺序显示 S0–S6 attribution score；图中换算为 µs，字段表保留精确 ps。":
-    "Show S0–S6 attribution scores in report order; the chart uses µs while the table preserves exact ps.",
-  "报告把当前尾延迟分数分配给了哪些 S0–S6 子系统记录？":
-    "Which S0–S6 subsystem records receive the current tail-latency score?",
+  各环节延迟贡献: "Latency contribution by stage",
+  "按报告顺序显示延迟贡献；图中换算为 µs，字段表保留精确 ps。":
+    "Show reported latency contributions in order; the chart uses µs while the table preserves exact ps.",
+  "报告把当前尾延迟分数分配给了哪些环节？": "Which stages receive the current tail-latency score?",
   "先看分数较高的条目，再阅读其 detail 和正式 evidence pointer。":
     "Start with higher scores, then read their detail and formal evidence pointer.",
-  "只显示报告 ranking；不把 S7/S8/S9 输出记录混入，也不把排序当作真实系统因果证明。":
-    "Only the reported ranking is shown; S7/S8/S9 records stay separate, and ranking is not treated as real-system causal proof.",
+  "只显示报告排序；不把输出记录混入，也不把排序当作真实系统因果证明。":
+    "Only the reported ranking is shown; output records stay separate, and ranking is not treated as real-system causal proof.",
   "后端已给出有序离散贡献项，水平条形图便于比较且不改变正式 rank。":
     "The backend provides ordered discrete contributions; horizontal bars aid comparison without changing formal rank.",
-  "没有 S0–S6 attribution_ranking 记录。": "No S0–S6 attribution_ranking records are available.",
-  "S7 是执行宿主，S8/S9 是输出面；三者不能进入 latency causal ranking。":
-    "S7 is the execution host and S8/S9 are output planes; none belongs in latency causal ranking.",
+  "当前没有可用的延迟贡献记录。": "No latency contribution records are available.",
+  "执行宿主、校准与验证记录属于输出面，不参与当前延迟原因排序。":
+    "Execution-host, calibration, and validation records are output-plane records and do not enter the current latency ranking.",
+  "未选择 request，因此没有生成请求证据节点": "No request was selected, so no request evidence nodes were generated.",
+  "仅使用后端稳定 ID、manifest 身份和 JSON Pointer 连接当前 request 的证据。":
+    "Connect the current request to evidence using only backend-stable IDs, manifest identity, and JSON Pointers.",
   "执行宿主、验证与输出记录": "Execution-host, validation, and output records",
-  "这些记录原样保留供审计，但与上方 S0–S6 latency causal ranking 明确分区。":
-    "These records are preserved for audit and clearly separated from the S0–S6 latency causal ranking above.",
+  "这些记录仅供审计，并与上方的延迟原因排序分开显示。":
+    "These records are preserved for audit and shown separately from the latency ranking above.",
   报告说明: "Report detail",
   "保留完整字段与缺失原因，不为不可用数据生成占位图。":
     "Retain complete fields and the absence reason without generating a placeholder chart.",

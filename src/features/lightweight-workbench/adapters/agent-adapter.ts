@@ -223,7 +223,7 @@ export function createLightweightAgentAdapter(input: {
           : clarification?.block_type === "clarification"
             ? "还需要一点信息才能安全生成草案。"
             : unsupported?.block_type === "unsupported"
-              ? "这项请求当前不可用，但可以继续处理已发布的八个参数。"
+              ? "这项请求当前不可用，但可以继续处理当前页面已发布且可校验的参数。"
               : validation?.block_type === "validation_result"
                 ? `确定性校验：${validation.overall}`
                 : "没有生成修改。";

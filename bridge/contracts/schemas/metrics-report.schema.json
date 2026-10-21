@@ -5,16 +5,127 @@
   "type": "object",
   "additionalProperties": true,
   "required": ["schema_version", "run_id", "request_metrics", "percentile_subjects", "system_summary"],
+  "$defs": {
+    "metricDistribution": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "sample_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "p50_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "p95_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "p99_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "max_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" }
+      }
+    },
+    "requestMetric": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["request_id"],
+      "properties": {
+        "request_id": { "type": "string", "minLength": 1 },
+        "status": { "type": "string" },
+        "arrival_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "first_token_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "completion_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "ttft_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "tpot_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "end_to_end_latency_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "decode_step_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "batch_issue_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "network_wait_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "network_backpressure_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "kv_wait_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "kv_allocation_wait_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "kv_pressure_wait_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "kv_remote_read_wait_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "kv_migration_wait_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "kv_pd_handoff_wait_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "kv_bytes_read": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "kv_bytes_migrated": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "kv_eviction_bytes": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "kv_source_identity": { "type": "string" },
+        "kv_destination_identity": { "type": "string" },
+        "dominant_kv_wait_reason": { "type": "string" },
+        "device_wait_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "collective_wait_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "dominant_wait_reason": { "type": "string" },
+        "device_profile": { "type": "string" },
+        "device_profile_selection": { "type": "string" },
+        "device_profile_asset_id": { "type": "string" },
+        "device_profile_claim_scope": { "type": "string" },
+        "network_profile": { "type": "string" },
+        "network_profile_selection": { "type": "string" },
+        "network_profile_asset_id": { "type": "string" },
+        "network_profile_claim_scope": { "type": "string" },
+        "has_first_token_time": { "type": "boolean" },
+        "has_ttft_sample": { "type": "boolean" },
+        "has_tpot_sample": { "type": "boolean" },
+        "has_end_to_end_latency_sample": { "type": "boolean" }
+      }
+    },
+    "requestNetworkWaitInterval": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "request_id": { "type": "string" },
+        "start_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "end_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "collective": { "type": "boolean" }
+      }
+    },
+    "deviceMetrics": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "device_id": { "type": "string" },
+        "device_type": { "type": "string" },
+        "group_id": { "type": "string" },
+        "evidence_state": { "type": "string" },
+        "task_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "prefill_task_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "decode_task_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "modeled_memory_bytes": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "service_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "active_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "observation_window_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "active_time_ratio": { "type": "number" },
+        "hardware_counter_state": { "type": "string" }
+      }
+    }
+  },
   "properties": {
     "schema_version": { "const": "tilesim.metrics_report.v1" },
     "run_id": { "type": "string", "minLength": 1 },
     "request_metrics": {
       "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": true,
-        "required": ["request_id"],
-        "properties": { "request_id": { "type": "string", "minLength": 1 } }
+      "items": { "$ref": "#/$defs/requestMetric" }
+    },
+    "trace_provenance": { "$ref": "f6b-common.schema.json#/$defs/provenance" },
+    "observation_window": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "start_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "end_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "request_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "completed_request_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "rejected_request_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "throughput_requests_per_second": { "type": "number" }
+      }
+    },
+    "tail_latency_summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "ttft_ps": { "$ref": "#/$defs/metricDistribution" },
+        "tpot_ps": { "$ref": "#/$defs/metricDistribution" },
+        "end_to_end_latency_ps": { "$ref": "#/$defs/metricDistribution" }
       }
     },
     "percentile_subjects": {
@@ -74,7 +185,13 @@
               },
               "topology_domain_ref": {
                 "$ref": "f6b-common.schema.json#/$defs/evidenceRef"
-              }
+              },
+              "utilization_ratio": { "type": "number" },
+              "queue_delay_us": { "type": "number" },
+              "congestion_delay_us": { "type": "number" },
+              "runtime_us": { "type": "number" },
+              "queue_delay_ratio": { "type": "number" },
+              "congestion_delay_ratio": { "type": "number" }
             }
           }
         },
@@ -97,8 +214,100 @@
               "memory_event_id": { "type": "string" },
               "device_task_id": { "type": "string" },
               "collective_id": { "type": "string" },
-              "not_s5_collective": { "type": "boolean" }
+              "not_s5_collective": { "type": "boolean" },
+              "domain_id": { "type": "string" },
+              "record_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+              "busy_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+              "queue_delay_us": { "type": "number" },
+              "congestion_delay_us": { "type": "number" },
+              "runtime_us": { "type": "number" },
+              "queue_delay_ratio": { "type": "number" },
+              "congestion_delay_ratio": { "type": "number" },
+              "dominant_delay_kind": { "type": "string" },
+              "memory_operation": { "type": "string" },
+              "memory_match_status": { "type": "string" },
+              "memory_latency_us": { "type": "number" },
+              "device_profile": { "type": "string" },
+              "device_profile_selection": { "type": "string" },
+              "device_profile_asset_id": { "type": "string" },
+              "device_profile_claim_scope": { "type": "string" },
+              "device_stream_id": { "type": "string" },
+              "device_match_status": { "type": "string" },
+              "device_latency_us": { "type": "number" },
+              "device_occupancy_ratio": { "type": "number" },
+              "device_contention_delay_us": { "type": "number" },
+              "network_profile": { "type": "string" },
+              "network_profile_selection": { "type": "string" },
+              "network_profile_asset_id": { "type": "string" },
+              "network_profile_claim_scope": { "type": "string" },
+              "resource_convergence_status": { "type": "string" },
+              "transfer_kind": { "type": "string" },
+              "pd_handoff_id": { "type": "string" },
+              "pd_disaggregation_group_id": { "type": "string" },
+              "pd_source_placement_group_id": { "type": "string" },
+              "pd_destination_placement_group_id": { "type": "string" }
             }
+          }
+        },
+        "request_fabric_contributions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "request_id": { "type": "string" },
+              "record_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+              "busy_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+              "runtime_us": { "type": "number" },
+              "queue_delay_us": { "type": "number" },
+              "congestion_delay_us": { "type": "number" },
+              "queue_delay_ratio": { "type": "number" },
+              "congestion_delay_ratio": { "type": "number" },
+              "dominant_domain_id": { "type": "string" },
+              "dominant_phase_id": { "type": "string" },
+              "dominant_collective_id": { "type": "string" },
+              "dominant_delay_kind": { "type": "string" },
+              "network_profile": { "type": "string" },
+              "network_profile_selection": { "type": "string" },
+              "network_profile_asset_id": { "type": "string" },
+              "network_profile_claim_scope": { "type": "string" }
+            }
+          }
+        },
+        "request_network_wait_intervals": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/requestNetworkWaitInterval" }
+        },
+        "device_metrics": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/deviceMetrics" }
+        },
+        "representative_device_task_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "unmapped_device_task_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "pd_disaggregation": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "has_handoff_evidence": { "type": "boolean" },
+            "handoff_record_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+            "handoff_busy_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+            "handoff_latency_us": { "type": "number" },
+            "handoff_queue_delay_us": { "type": "number" },
+            "handoff_congestion_delay_us": { "type": "number" },
+            "handoff_runtime_us": { "type": "number" },
+            "handoff_ready_event_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+            "decode_wait_for_handoff_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+            "decode_wait_after_handoff_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+            "max_decode_wait_for_handoff_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+            "max_decode_wait_after_handoff_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+            "dominant_runtime_handoff_request_id": { "type": "string" },
+            "dominant_runtime_handoff_id": { "type": "string" },
+            "dominant_handoff_request_id": { "type": "string" },
+            "dominant_handoff_phase_id": { "type": "string" },
+            "dominant_handoff_domain_id": { "type": "string" },
+            "dominant_handoff_id": { "type": "string" },
+            "dominant_source_placement_group_id": { "type": "string" },
+            "dominant_destination_placement_group_id": { "type": "string" }
           }
         }
       }

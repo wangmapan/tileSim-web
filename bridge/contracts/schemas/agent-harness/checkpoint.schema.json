@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tilesim.agent_harness.checkpoint.v1",
+  "allOf": [{ "$ref": "tilesim.agent_harness.common.v1" }],
+  "type": "object",
+  "additionalProperties": false,
+  "unevaluatedProperties": false,
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.checkpoint.v1" },
+    "checkpoint_id": { "type": "string" },
+    "state_digest": { "type": "string" },
+    "last_event_sequence": { "type": "integer", "minimum": 0 },
+    "side_effect_digests": { "type": "array", "items": { "type": "string" } },
+    "resume_policy": { "type": "object", "additionalProperties": false }
+  },
+  "required": ["checkpoint_id", "state_digest", "last_event_sequence", "side_effect_digests", "resume_policy"]
+}

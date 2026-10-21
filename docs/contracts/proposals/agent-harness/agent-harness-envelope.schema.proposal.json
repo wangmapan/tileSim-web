@@ -1,0 +1,503 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.invalid/proposals/agent-harness/agent-harness-envelope.schema.proposal.json",
+  "title": "TileSim Agent Harness proposal envelope",
+  "description": "Proposal-only schema. It is not part of bridge/contracts or the live schema-set.",
+  "x-publication-status": "proposal_non_published",
+  "x-contract-revision": "2026-10-17.wpa.v0",
+  "oneOf": [
+    { "$ref": "#/$defs/agent_operation" },
+    { "$ref": "#/$defs/agent_turn" },
+    { "$ref": "#/$defs/workflow_event" },
+    { "$ref": "#/$defs/checkpoint" },
+    { "$ref": "#/$defs/tool_call" },
+    { "$ref": "#/$defs/tool_result" },
+    { "$ref": "#/$defs/experiment_draft" },
+    { "$ref": "#/$defs/approval" },
+    { "$ref": "#/$defs/study" },
+    { "$ref": "#/$defs/candidate" },
+    { "$ref": "#/$defs/error" }
+  ],
+  "unevaluatedProperties": false,
+  "$defs": {
+    "meta": {
+      "type": "object",
+      "required": [
+        "schema_identity",
+        "contract_revision",
+        "publication_status",
+        "operation_id",
+        "turn_id",
+        "run_id",
+        "snapshot_digest",
+        "schema_set_revision",
+        "policy_revision"
+      ],
+      "properties": {
+        "schema_identity": { "type": "string", "pattern": "^tilesim\\.agent_harness\\.[a-z_]+\\.v0$" },
+        "contract_revision": { "const": "2026-10-17.wpa.v0" },
+        "publication_status": { "const": "proposal_non_published" },
+        "operation_id": { "type": "string", "minLength": 1 },
+        "turn_id": { "type": ["string", "null"] },
+        "run_id": { "type": ["string", "null"] },
+        "snapshot_digest": { "type": ["string", "null"] },
+        "schema_set_revision": { "type": ["string", "null"] },
+        "policy_revision": { "type": "string", "minLength": 1 }
+      }
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "submitted",
+        "queued",
+        "running",
+        "waiting_tool",
+        "waiting_approval",
+        "retrying",
+        "completed",
+        "failed",
+        "cancelled",
+        "recovery_required",
+        "manual_intervention_required"
+      ]
+    },
+    "availability": {
+      "type": "string",
+      "enum": ["available", "unavailable", "not_exposed", "rejected", "failed", "cancelled", "completed"]
+    },
+    "retention": {
+      "type": "object",
+      "required": ["retention_class", "expires_at", "delete_state", "delete_semantics", "forbidden_payloads"],
+      "properties": {
+        "retention_class": { "enum": ["short_lived", "run_local", "user_visible"] },
+        "expires_at": { "type": ["string", "null"], "format": "date-time" },
+        "delete_state": { "enum": ["not_requested", "requested", "deleted", "delete_failed"] },
+        "delete_semantics": { "enum": ["idempotent_graph_delete", "not_exposed"] },
+        "forbidden_payloads": {
+          "type": "array",
+          "prefixItems": [
+            { "const": "credential" },
+            { "const": "hidden_reasoning" },
+            { "const": "provider_raw_response" },
+            { "const": "unshown_evidence_payload" }
+          ],
+          "minItems": 4,
+          "maxItems": 4
+        }
+      }
+    },
+    "agent_operation": {
+      "allOf": [
+        { "$ref": "#/$defs/meta" },
+        {
+          "type": "object",
+          "properties": {
+            "schema_identity": { "const": "tilesim.agent_harness.agent_operation.v0" },
+            "turn_id": { "const": null },
+            "state": { "$ref": "#/$defs/state" },
+            "state_revision": { "type": "integer", "minimum": 0 },
+            "workflow_revision": { "type": "string", "minLength": 1 },
+            "model_revision": { "type": ["string", "null"] },
+            "idempotency_key": { "type": "string", "minLength": 1 },
+            "created_at": { "type": "string", "format": "date-time" },
+            "updated_at": { "type": "string", "format": "date-time" },
+            "terminal_at": { "type": ["string", "null"], "format": "date-time" },
+            "outcome": {
+              "type": ["string", "null"],
+              "enum": [
+                "succeeded",
+                "rejected",
+                "retryable_failure",
+                "terminal_failure",
+                "unknown_outcome",
+                "cancelled",
+                null
+              ]
+            },
+            "cancellation_fence": { "type": ["integer", "null"], "minimum": 0 },
+            "source": { "enum": ["fixture", "bridge_proposal", "bridge_published"] },
+            "availability": { "$ref": "#/$defs/availability" },
+            "retention": { "$ref": "#/$defs/retention" }
+          },
+          "required": [
+            "state",
+            "state_revision",
+            "workflow_revision",
+            "model_revision",
+            "idempotency_key",
+            "created_at",
+            "updated_at",
+            "terminal_at",
+            "outcome",
+            "cancellation_fence",
+            "source",
+            "availability",
+            "retention"
+          ]
+        }
+      ]
+    },
+    "agent_turn": {
+      "allOf": [
+        { "$ref": "#/$defs/meta" },
+        {
+          "type": "object",
+          "properties": {
+            "schema_identity": { "const": "tilesim.agent_harness.agent_turn.v0" },
+            "turn_id": { "type": "string", "minLength": 1 },
+            "parent_turn_id": { "type": ["string", "null"] },
+            "state": { "$ref": "#/$defs/state" },
+            "sequence": { "type": "integer", "minimum": 1 },
+            "user_message_summary": { "type": "string" },
+            "evidence_set_digest": { "type": ["string", "null"] },
+            "source": { "enum": ["fixture", "bridge_proposal", "bridge_published"] },
+            "availability": { "$ref": "#/$defs/availability" },
+            "retention": { "$ref": "#/$defs/retention" }
+          },
+          "required": [
+            "parent_turn_id",
+            "state",
+            "sequence",
+            "user_message_summary",
+            "evidence_set_digest",
+            "source",
+            "availability",
+            "retention"
+          ]
+        }
+      ]
+    },
+    "workflow_event": {
+      "allOf": [
+        { "$ref": "#/$defs/meta" },
+        {
+          "type": "object",
+          "properties": {
+            "schema_identity": { "const": "tilesim.agent_harness.workflow_event.v0" },
+            "event_id": { "type": "string", "minLength": 1 },
+            "sequence": { "type": "integer", "minimum": 1 },
+            "event_kind": { "type": "string" },
+            "state": { "$ref": "#/$defs/state" },
+            "transition_kind": { "enum": ["normal", "retry", "resume", "cancel"] },
+            "occurred_at": { "type": "string", "format": "date-time" },
+            "payload_digest": { "type": "string", "minLength": 1 },
+            "dedupe_key": { "type": "string", "minLength": 1 },
+            "idempotency_key": { "type": "string", "minLength": 1 },
+            "producer_revision": { "type": "string", "minLength": 1 }
+          },
+          "required": [
+            "event_id",
+            "sequence",
+            "event_kind",
+            "state",
+            "transition_kind",
+            "occurred_at",
+            "payload_digest",
+            "dedupe_key",
+            "idempotency_key",
+            "producer_revision"
+          ]
+        }
+      ]
+    },
+    "checkpoint": {
+      "allOf": [
+        { "$ref": "#/$defs/meta" },
+        {
+          "type": "object",
+          "properties": {
+            "schema_identity": { "const": "tilesim.agent_harness.checkpoint.v0" },
+            "checkpoint_id": { "type": "string", "minLength": 1 },
+            "state": { "$ref": "#/$defs/state" },
+            "completed_event_sequence": { "type": "integer", "minimum": 0 },
+            "state_digest": { "type": "string", "minLength": 1 },
+            "workflow_revision": { "type": "string", "minLength": 1 },
+            "code_revision": { "type": "string", "minLength": 1 },
+            "side_effects": { "type": "array", "items": { "$ref": "#/$defs/side_effect" } },
+            "resume_policy": { "enum": ["resume_if_revision_matches", "manual_intervention_required", "not_exposed"] }
+          },
+          "required": [
+            "checkpoint_id",
+            "state",
+            "completed_event_sequence",
+            "state_digest",
+            "workflow_revision",
+            "code_revision",
+            "side_effects",
+            "resume_policy"
+          ]
+        }
+      ]
+    },
+    "side_effect": {
+      "type": "object",
+      "required": ["effect_id", "effect_kind", "idempotency_key", "command_digest", "outcome", "output_identity"],
+      "properties": {
+        "effect_id": { "type": "string" },
+        "effect_kind": { "enum": ["provider_call", "tool_call", "run_creation", "artifact_read"] },
+        "idempotency_key": { "type": "string" },
+        "command_digest": { "type": "string" },
+        "outcome": { "enum": ["completed", "rejected", "failed", "unknown_outcome"] },
+        "output_identity": { "type": ["string", "null"] }
+      }
+    },
+    "tool_call": {
+      "allOf": [
+        { "$ref": "#/$defs/meta" },
+        {
+          "type": "object",
+          "properties": {
+            "schema_identity": { "const": "tilesim.agent_harness.tool_call.v0" },
+            "tool_call_id": { "type": "string" },
+            "tool_name": { "type": "string" },
+            "tool_revision": { "type": "string" },
+            "input_digest": { "type": "string" },
+            "scope": { "$ref": "#/$defs/tool_scope" },
+            "permission": { "enum": ["allowed", "rejected", "not_exposed"] },
+            "approval_id": { "type": ["string", "null"] },
+            "idempotency_key": { "type": "string" },
+            "proposed_side_effect": { "enum": ["none", "run_creation", "configuration_write", "unknown"] },
+            "outcome": {
+              "type": ["string", "null"],
+              "enum": ["succeeded", "rejected", "retryable_failure", "terminal_failure", "unknown_outcome", null]
+            }
+          },
+          "required": [
+            "tool_call_id",
+            "tool_name",
+            "tool_revision",
+            "input_digest",
+            "scope",
+            "permission",
+            "approval_id",
+            "idempotency_key",
+            "proposed_side_effect",
+            "outcome"
+          ]
+        }
+      ]
+    },
+    "tool_scope": {
+      "type": "object",
+      "required": [
+        "run_id",
+        "snapshot_digest",
+        "allowed_artifact_ids",
+        "allow_network",
+        "allow_shell",
+        "allow_arbitrary_path",
+        "allow_arbitrary_url"
+      ],
+      "properties": {
+        "run_id": { "type": ["string", "null"] },
+        "snapshot_digest": { "type": ["string", "null"] },
+        "allowed_artifact_ids": { "type": "array", "items": { "type": "string" } },
+        "allow_network": { "const": false },
+        "allow_shell": { "const": false },
+        "allow_arbitrary_path": { "const": false },
+        "allow_arbitrary_url": { "const": false }
+      }
+    },
+    "tool_result": {
+      "allOf": [
+        { "$ref": "#/$defs/meta" },
+        {
+          "type": "object",
+          "properties": {
+            "schema_identity": { "const": "tilesim.agent_harness.tool_result.v0" },
+            "tool_result_id": { "type": "string" },
+            "tool_call_id": { "type": "string" },
+            "tool_revision": { "type": "string" },
+            "outcome": {
+              "enum": ["succeeded", "rejected", "retryable_failure", "terminal_failure", "unknown_outcome"]
+            },
+            "output_digest": { "type": ["string", "null"] },
+            "evidence_reference_ids": { "type": "array", "items": { "type": "string" } },
+            "error_code": { "type": ["string", "null"] },
+            "field_path": { "type": ["string", "null"] },
+            "retryable": { "type": "boolean" },
+            "unknown_outcome": { "type": "boolean" }
+          },
+          "required": [
+            "tool_result_id",
+            "tool_call_id",
+            "tool_revision",
+            "outcome",
+            "output_digest",
+            "evidence_reference_ids",
+            "error_code",
+            "field_path",
+            "retryable",
+            "unknown_outcome"
+          ]
+        }
+      ]
+    },
+    "experiment_draft": {
+      "allOf": [
+        { "$ref": "#/$defs/meta" },
+        {
+          "type": "object",
+          "properties": {
+            "schema_identity": { "const": "tilesim.agent_harness.experiment_draft.v0" },
+            "draft_id": { "type": "string" },
+            "draft_digest": { "type": "string" },
+            "state": { "enum": ["draft", "validated", "rejected", "stale", "expired"] },
+            "input_snapshot_digest": { "type": "string" },
+            "validator_revision": { "type": "string" },
+            "field_diff_digest": { "type": "string" },
+            "expires_at": { "type": "string", "format": "date-time" },
+            "stale_reason": { "type": ["string", "null"] },
+            "creates_run": { "const": false },
+            "source": { "enum": ["fixture", "bridge_proposal", "bridge_published"] },
+            "availability": { "$ref": "#/$defs/availability" }
+          },
+          "required": [
+            "draft_id",
+            "draft_digest",
+            "state",
+            "input_snapshot_digest",
+            "validator_revision",
+            "field_diff_digest",
+            "expires_at",
+            "stale_reason",
+            "creates_run",
+            "source",
+            "availability"
+          ]
+        }
+      ]
+    },
+    "approval": {
+      "allOf": [
+        { "$ref": "#/$defs/meta" },
+        {
+          "type": "object",
+          "properties": {
+            "schema_identity": { "const": "tilesim.agent_harness.approval.v0" },
+            "approval_id": { "type": "string" },
+            "draft_id": { "type": "string" },
+            "draft_digest": { "type": "string" },
+            "approval_digest": { "type": "string" },
+            "principal_id": { "type": "string" },
+            "policy_revision": { "type": "string" },
+            "state": { "enum": ["pending", "approved", "rejected", "expired", "stale"] },
+            "approved_at": { "type": ["string", "null"], "format": "date-time" },
+            "expires_at": { "type": "string", "format": "date-time" },
+            "stale_reason": { "type": ["string", "null"] },
+            "creates_run": { "const": false },
+            "availability": { "$ref": "#/$defs/availability" }
+          },
+          "required": [
+            "approval_id",
+            "draft_id",
+            "draft_digest",
+            "approval_digest",
+            "principal_id",
+            "policy_revision",
+            "state",
+            "approved_at",
+            "expires_at",
+            "stale_reason",
+            "creates_run",
+            "availability"
+          ]
+        }
+      ]
+    },
+    "study": {
+      "allOf": [
+        { "$ref": "#/$defs/meta" },
+        {
+          "type": "object",
+          "properties": {
+            "schema_identity": { "const": "tilesim.agent_harness.study.v0" },
+            "study_id": { "type": "string" },
+            "objective_summary": { "type": "string" },
+            "constraints_digest": { "type": "string" },
+            "budget": {
+              "type": "object",
+              "required": ["max_candidates", "max_runs", "max_total_ms"],
+              "properties": {
+                "max_candidates": { "type": "integer", "minimum": 0 },
+                "max_runs": { "type": "integer", "minimum": 0 },
+                "max_total_ms": { "type": ["integer", "null"], "minimum": 0 }
+              }
+            },
+            "stop_policy_digest": { "type": "string" },
+            "state": { "enum": ["draft", "rejected", "not_exposed"] },
+            "automatic_submission": { "const": false },
+            "availability": { "$ref": "#/$defs/availability" }
+          },
+          "required": [
+            "study_id",
+            "objective_summary",
+            "constraints_digest",
+            "budget",
+            "stop_policy_digest",
+            "state",
+            "automatic_submission",
+            "availability"
+          ]
+        }
+      ]
+    },
+    "candidate": {
+      "allOf": [
+        { "$ref": "#/$defs/meta" },
+        {
+          "type": "object",
+          "properties": {
+            "schema_identity": { "const": "tilesim.agent_harness.candidate.v0" },
+            "candidate_id": { "type": "string" },
+            "parent_candidate_id": { "type": ["string", "null"] },
+            "draft_id": { "type": "string" },
+            "draft_digest": { "type": "string" },
+            "run_id": { "const": null },
+            "metrics_snapshot_digest": { "const": null },
+            "state": { "enum": ["proposed", "rejected", "not_exposed"] },
+            "availability": { "$ref": "#/$defs/availability" }
+          },
+          "required": [
+            "candidate_id",
+            "parent_candidate_id",
+            "draft_id",
+            "draft_digest",
+            "metrics_snapshot_digest",
+            "state",
+            "availability"
+          ]
+        }
+      ]
+    },
+    "error": {
+      "allOf": [
+        { "$ref": "#/$defs/meta" },
+        {
+          "type": "object",
+          "properties": {
+            "schema_identity": { "const": "tilesim.agent_harness.error.v0" },
+            "code": { "type": "string" },
+            "message": { "type": "string" },
+            "field_path": { "type": ["string", "null"] },
+            "retryable": { "type": "boolean" },
+            "terminal_failure": { "type": "boolean" },
+            "unknown_outcome": { "type": "boolean" },
+            "availability": { "enum": ["rejected", "failed", "unavailable", "not_exposed"] }
+          },
+          "required": [
+            "code",
+            "message",
+            "field_path",
+            "retryable",
+            "terminal_failure",
+            "unknown_outcome",
+            "availability"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

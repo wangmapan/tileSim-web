@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import { ChevronDown, ChevronRight, SlidersHorizontal } from "@lucide/vue";
 import { useI18n } from "../../i18n";
+import InlineHelp from "../../components/InlineHelp.vue";
 import {
   describeBounds,
   advancedRuntimePolicyKeys,
@@ -93,6 +94,29 @@ const policy = computed<JsonObject | null>(() => (documentValue.value ? runtimeP
  * parameters twice on one screen, and the knobs already mirror into `policy`.
  */
 const advancedFields = computed(() => advancedRuntimePolicyKeys.map((key) => policyField(key)));
+const NUMERIC_PRESETS: Readonly<Record<string, readonly number[]>> = {
+  prefill_starvation_threshold_ps: [0, 1000, 10000, 100000],
+  pd_handoff_delay_ps: [0, 1000, 10000, 100000],
+  pd_handoff_queue_service_ps: [0, 1000, 10000, 100000],
+  kv_page_size_tokens: [16, 32, 64, 128, 256],
+  kv_fragmentation_overhead: [0, 0.05, 0.1, 0.2],
+  fabric_backpressure_delay_us: [0, 1, 5, 10, 25],
+  fabric_backpressure_throttle_threshold_us: [0, 1, 5, 10, 25],
+  fabric_backpressure_prefill_batch_limit: [1, 4, 8, 16, 32],
+  long_context_threshold_tokens: [2048, 4096, 8192, 16384, 32768],
+  decode_penalty_per_threshold: [0, 0.1, 0.25, 0.5, 1],
+};
+function numericPresetValues(field: SchemaFieldMeta): number[] {
+  return (NUMERIC_PRESETS[field.key] || []).filter(
+    (value) =>
+      (field.minimum === null || value >= field.minimum) &&
+      (field.maximum === null || value <= field.maximum) &&
+      (field.exclusiveMinimum === null || value > field.exclusiveMinimum),
+  );
+}
+function numericListId(field: SchemaFieldMeta): string | undefined {
+  return numericPresetValues(field).length ? `policy-${field.key}-presets` : undefined;
+}
 
 /** Every value is written through a whole-document patch so unknown keys survive. */
 function commit(mutate: (draft: JsonObject) => void) {
@@ -175,11 +199,16 @@ function fieldPathFor(key: string): string {
       <SlidersHorizontal :size="16" />
       <div>
         <strong>{{ t("进阶运行策略") }}</strong>
-        <small>{{
-          t("只放旋钮管不到的 {count} 个参数；浅色数字是后端缺省值，不写入输入 JSON。填写后覆盖，清空则恢复缺省值。", {
-            count: advancedFields.length,
-          })
-        }}</small>
+        <InlineHelp
+          :text="
+            t(
+              '只放旋钮管不到的 {count} 个参数；浅色数字是后端缺省值，不写入输入 JSON。填写后覆盖，清空则恢复缺省值。',
+              {
+                count: advancedFields.length,
+              },
+            )
+          "
+        />
       </div>
     </header>
 
@@ -209,6 +238,7 @@ function fieldPathFor(key: string): string {
         >
           <span :title="field.key">
             {{ policyLabel(field.key) }}
+            <InlineHelp :text="boundsHint(field).text" :label="t('查看字段范围')" />
             <small v-if="isOmitted(field)">{{
               t("后端默认 {value}（未写入）", { value: backendDefault(field) })
             }}</small>
@@ -237,6 +267,7 @@ function fieldPathFor(key: string): string {
           <input
             v-else
             :value="displayValue(field)"
+            :list="numericListId(field)"
             :placeholder="field.key in BACKEND_POLICY_DEFAULTS ? String(BACKEND_POLICY_DEFAULTS[field.key]) : undefined"
             type="number"
             step="any"
@@ -244,7 +275,9 @@ function fieldPathFor(key: string): string {
             :aria-invalid="fieldPath === fieldPathFor(field.key)"
             @change="updateNumeric(field, $event)"
           />
-          <small class="policy-field__hint">{{ boundsHint(field).text }}</small>
+          <datalist v-if="numericListId(field)" :id="numericListId(field)">
+            <option v-for="value in numericPresetValues(field)" :key="value" :value="value" />
+          </datalist>
         </label>
       </div>
 

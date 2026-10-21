@@ -3,6 +3,7 @@ import { AlertTriangle, ArrowRight, GitCompareArrows, Layers3, Route } from "@lu
 import { computed } from "vue";
 import ArtifactEvidenceLink from "../components/ArtifactEvidenceLink.vue";
 import EmptyState from "../components/EmptyState.vue";
+import InlineHelp from "../components/InlineHelp.vue";
 import StatCard from "../components/StatCard.vue";
 import StatusPill from "../components/StatusPill.vue";
 import { formatNumber } from "../lib/format";
@@ -69,7 +70,7 @@ function displayedKnobValue(value: unknown, availability: string) {
       />
       <StatCard
         :label="t('实际比较范围')"
-        :value="report.execution_scope === 'S6_only' ? t('仅网络与通信（S6）') : report.execution_scope || t('未知')"
+        :value="report.execution_scope === 'S6_only' ? t('仅网络与通信') : report.execution_scope || t('未知')"
         :hint="t('其他环节的候选变量尚未执行')"
       />
     </section>
@@ -94,7 +95,7 @@ function displayedKnobValue(value: unknown, availability: string) {
       <header class="panel-header panel-header--row">
         <div>
           <h2>{{ t("方案排名") }}</h2>
-          <p>{{ t("排名直接来自后端报告；先比较 P95、P99，再按需查看进一步模拟和专业证据。") }}</p>
+          <InlineHelp :text="t('排名直接来自后端报告；先比较 P95、P99，再按需查看进一步模拟和专业证据。')" />
         </div>
         <div class="panel-count"><Layers3 :size="16" />{{ t("{count} 个方案", { count: candidates.length }) }}</div>
       </header>
@@ -177,7 +178,9 @@ function displayedKnobValue(value: unknown, availability: string) {
       <header>
         <div>
           <h2>{{ t("Pareto 与 artifact-record 证据") }}</h2>
-          <p>{{ t("候选仅导航到当前 run 的 design-space artifact 记录；backend instance 不是 Bridge run。") }}</p>
+          <InlineHelp
+            :text="t('候选仅导航到当前 run 的 design-space artifact 记录；backend instance 不是 Bridge run。')"
+          />
         </div>
         <StatusPill :value="formalAnalysis.availability" />
       </header>
@@ -201,7 +204,10 @@ function displayedKnobValue(value: unknown, availability: string) {
       <summary class="panel-header">
         <div>
           <h2>{{ t("Fabric 与设计空间契约状态") }}</h2>
-          <p>{{ t("按需查看后端能力与契约缺口；前端不会排序、计算或文本解析补齐。") }}</p>
+          <InlineHelp
+            :text="t('按需查看后端能力与契约缺口；前端不会排序、计算或文本解析补齐。')"
+            :interactive="false"
+          />
         </div>
       </summary>
       <div class="f7-capability-grid">
@@ -384,7 +390,7 @@ function displayedKnobValue(value: unknown, availability: string) {
           </section>
 
           <section v-if="candidate.executed_s6_knobs?.length" class="candidate-formal-evidence">
-            <h3>{{ t("实际执行的 S6 knobs") }}</h3>
+            <h3>{{ t("实际执行的参数") }}</h3>
             <p class="candidate-detail-note">
               {{ t("requested 与 resolved 分开显示；not_applicable 不会被替换为零或默认值。") }}
             </p>
@@ -468,7 +474,7 @@ function displayedKnobValue(value: unknown, availability: string) {
               </div>
             </dl>
             <p class="candidate-detail-note">
-              {{ t("只有 S6 参数参与当前候选执行；unresolved_not_executed 不是默认值，也不参与排名。") }}
+              {{ t("只有网络与通信参数参与当前候选执行；unresolved_not_executed 不是默认值，也不参与排名。") }}
             </p>
           </section>
 
@@ -479,7 +485,9 @@ function displayedKnobValue(value: unknown, availability: string) {
               :key="`${item.subsystem}-${item.reason}-${itemIndex}`"
             >
               <strong>{{ item.subsystem || "unknown" }} · {{ item.reason || "reported" }}</strong>
-              <span v-if="typeof item.score_ps === 'number'">{{ formatNumber(item.score_ps) }} ps</span>
+              <span v-if="item.score_ps !== undefined && item.score_ps !== null"
+                >{{ formatNumber(item.score_ps) }} ps</span
+              >
               <p>{{ item.detail }}</p>
             </div>
           </section>

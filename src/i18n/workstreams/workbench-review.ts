@@ -23,4 +23,14 @@ export const workbenchReviewEnglishCatalog: Readonly<Record<string, string>> = {
   分析路径: "Analysis paths",
   "请求、批次、迭代与执行片段": "Requests, batches, iterations and execution fragments",
   "来源、校准与结论范围": "Provenance, calibration and claim scope",
+  后端运行期证据: "Backend runtime evidence",
+  "按需读取当前运行已登记的后端证据工件。": "Read the backend evidence artifacts registered for this run on demand.",
+  "后端事件流，保留事件时间、请求、批次与逻辑步。":
+    "Backend event stream with event time, request, batch, and logical-step fields.",
+  "后端原始计数与顺序证据，不与指标报告重复累加。":
+    "Backend counts and ordering evidence; not re-aggregated with metric reports.",
+  "到达、准入、首次发批与完成时间均为后端已有值。":
+    "Arrival, admission, first-batch, and completion times are backend-reported values.",
+  "包含汇总、逐请求与事件的完整后端工件；不重复计算。":
+    "Complete backend artifact with summary, request, and event records; not recalculated.",
 };

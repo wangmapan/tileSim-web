@@ -1,0 +1,42 @@
+{
+  "$id": "tilesim.agent_harness.optimization_approval.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_identity",
+    "contract_revision",
+    "approval_id",
+    "session_id",
+    "candidate_id",
+    "candidate_digest",
+    "approval_digest",
+    "principal",
+    "workspace_id",
+    "schema_set_revision",
+    "backend_identity",
+    "policy_revision",
+    "status",
+    "expires_at",
+    "consumed",
+    "provenance"
+  ],
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.optimization_approval.v1" },
+    "contract_revision": { "const": "2026-10-19.wpd.v1" },
+    "approval_id": { "type": "string" },
+    "session_id": { "type": "string" },
+    "candidate_id": { "type": "string" },
+    "candidate_digest": { "type": "string" },
+    "approval_digest": { "type": "string" },
+    "principal": { "type": "string" },
+    "workspace_id": { "type": "string" },
+    "schema_set_revision": { "type": "string" },
+    "backend_identity": { "type": "object" },
+    "policy_revision": { "type": "string" },
+    "status": { "enum": ["approved", "rejected", "expired", "revoked", "stale"] },
+    "expires_at": { "type": "string" },
+    "consumed": { "type": "boolean" },
+    "provenance": { "type": "object" }
+  }
+}

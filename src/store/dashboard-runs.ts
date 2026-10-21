@@ -1,10 +1,14 @@
 import { normalizeApiReports } from "../lib/reports";
 import { t } from "../i18n";
-import { fetchRunEvidence as queryRunEvidence } from "../features/run-evidence";
-import { fetchRunHistory, renameRun as renameRunMutation } from "../features/run-history";
+import { fetchRunEvidence as queryRunEvidence, removeRunEvidenceQueries } from "../features/run-evidence";
+import {
+  deleteRun as deleteRunMutation,
+  fetchRunHistory,
+  renameRun as renameRunMutation,
+} from "../features/run-history";
 import type { ApplyBundleOptions } from "../entities/dashboard/types";
 import { persistDashboardSelection as persist } from "./dashboard-persistence";
-import { acquireRunBusy, errorMessage, queryContext, releaseBusy, session, state } from "./dashboard-state";
+import { acquireRunBusy, errorMessage, queryContext, releaseBusy, session, state, workspace } from "./dashboard-state";
 
 interface DashboardRunCoordinatorOptions {
   applyBundle: (value: unknown, options?: ApplyBundleOptions) => void;
@@ -87,6 +91,21 @@ export function createDashboardRunCoordinator({ applyBundle, setView }: Dashboar
     session.notify(t("实验名称已更新。"), "positive");
   }
 
+  async function deleteRun(runId: string) {
+    await deleteRunMutation(runId, queryContext());
+    state.history.runs = state.history.runs.filter((run) => run.run_id !== runId);
+    state.history.selected = state.history.selected.filter((selectedId) => selectedId !== runId);
+    delete state.history.comparisons[runId];
+    removeRunEvidenceQueries(runId);
+    if (state.runId === runId) {
+      const currentView = state.view;
+      workspace.resetDemo();
+      setView(currentView);
+    }
+    persist();
+    session.notify(t("本地运行记录已删除。"), "positive");
+  }
+
   async function restoreRemoteState() {
     await loadHistory({ quiet: true });
     if (state.runId) {
@@ -131,6 +150,7 @@ export function createDashboardRunCoordinator({ applyBundle, setView }: Dashboar
     toggleComparison,
     clearComparisons,
     renameRun,
+    deleteRun,
     restoreRemoteState,
   };
 }

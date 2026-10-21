@@ -29,8 +29,8 @@ const hiddenCount = computed(
 <template>
   <article :class="output ? 'run-bound-output-node' : 'run-bound-node'" :data-module="node.subsystem">
     <header>
-      <span>{{ node.subsystem }}</span
-      ><strong>{{ title }}</strong>
+      <strong>{{ title }}</strong>
+      <span>{{ node.subsystem }}</span>
       <small :class="`availability--${node.availability}`">{{ statusLabel }}</small>
     </header>
     <div class="run-bound-node-content">

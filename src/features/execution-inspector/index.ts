@@ -6,6 +6,7 @@ export {
   buildFabricCompositionVisualizations,
   buildRequestLatencyVisualization,
 } from "./model/analysis-visualizations";
+export { analyzeNetworkIntervals } from "./model/network-intervals";
 export {
   attributionSource,
   causeSource,

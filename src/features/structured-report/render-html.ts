@@ -218,7 +218,7 @@ function renderChecks<T extends object>(checks: T[], title: string) {
 
 function renderSubsystem(section: StructuredSubsystemSection) {
   return `<section id="${section.subsystem.toLowerCase()}" class="subsystem page-section">
-    <header class="section-header"><span>${section.subsystem}</span><div><small>${escapeHtml(section.name)}</small><h2>${escapeHtml(section.title)}</h2><p>${escapeHtml(section.role)}</p></div><em>${escapeHtml(section.evidence_state)}</em></header>
+    <header class="section-header"><span aria-hidden="true">•</span><div><small>${escapeHtml(section.name)}</small><h2>${escapeHtml(section.title)}</h2><p>${escapeHtml(section.role)}</p></div><em>${escapeHtml(section.evidence_state)}</em></header>
     <p class="detail">${escapeHtml(section.detail)}</p>
     ${renderMetrics(section.performance_metrics)}
     <div class="two-column"><article><h3>${translated("Fidelity 解析")}</h3>${renderKeyValues(section.fidelity as Record<string, unknown> | null)}</article><article><h3>${translated("实现证据与限制")}</h3>${renderKeyValues(section.implementation as Record<string, unknown> | null)}</article></div>
@@ -245,7 +245,7 @@ function renderDesignSpace(report: StructuredPerformanceReport["design_space_app
     report.report_summary,
   )}</article><article><h3>${translated("排名解释边界")}</h3><p>${translated(
     "排名以报告中的确定性 final_rank 为准；promotion hint 仅作输入备注。",
-  )}</p><p><b>${translated("执行范围")}</b> ${escapeHtml(report.execution_scope || t("缺失"))}</p></article></div><h3>${translated(
+  )}</p><p><b>${translated("执行范围")}</b> ${escapeHtml(report.execution_scope === "S6_only" ? t("仅网络与通信") : report.execution_scope || t("缺失"))}</p></article></div><h3>${translated(
     "设计空间契约能力",
   )}</h3>${renderChecks(report.contract_capabilities, t("设计空间契约能力"))}
   <h3>${translated("候选完整证据")}</h3>${candidates || `<p class="empty">${translated("没有报告记录")}</p>`}
@@ -266,7 +266,7 @@ function renderRunBoundEvidence(report: StructuredPerformanceReport["run_bound_e
     ? report.nodes
         .map(
           (node) =>
-            `<article class="run-bound-node"><header><b>${escapeHtml(node.subsystem)} · ${escapeHtml(
+            `<article class="run-bound-node"><header><b>${escapeHtml(
               node.title,
             )}</b><em>${escapeHtml(node.availability)}</em></header><p>${escapeHtml(node.detail)}</p><p><small>${translated(
               "稳定 ID",
@@ -279,7 +279,7 @@ function renderRunBoundEvidence(report: StructuredPerformanceReport["run_bound_e
             }</article>`,
         )
         .join("")
-    : `<p class="empty">${translated("未选择 request，因此没有生成 S1-S9 run-bound 节点")}</p>`;
+    : `<p class="empty">${translated("未选择 request，因此没有生成请求证据节点")}</p>`;
   const week8 = report.week8_execution;
   return `<div class="two-column"><article><h3>${translated("请求选择")}</h3><p>${selectedRequest}</p><dl class="key-values"><div><dt>selection_availability</dt><dd>${escapeHtml(
     report.selection_availability,
@@ -299,7 +299,7 @@ function renderRunBoundEvidence(report: StructuredPerformanceReport["run_bound_e
     reference: week8.reference,
   })}<p>${escapeHtml(week8.detail)}</p></article></div><h3>${translated("后端声明的 P99 subjects")}</h3>${
     percentileSubjects
-  }<div class="peer-note"><b>${translated("并列资源语义")}</b><span>S3 Memory / KV</span><span>S4 Device</span><span>S5 Collective</span></div><div class="run-bound-grid">${nodes}</div><h3>${translated(
+  }<div class="peer-note"><b>${translated("并列资源语义")}</b><span>Memory / KV</span><span>Device</span><span>Collective</span></div><div class="run-bound-grid">${nodes}</div><h3>${translated(
     "契约缺口",
   )}</h3>${
     report.gaps.length
@@ -316,7 +316,7 @@ export function renderStructuredPerformanceReportHtml(report: StructuredPerforma
   const identity = report.report_identity;
   const evidence = report.evidence_boundary;
   const toc = [
-    ...report.modeled_subsystems.map((item) => [item.subsystem.toLowerCase(), `${item.subsystem} ${item.title}`]),
+    ...report.modeled_subsystems.map((item) => [item.subsystem.toLowerCase(), item.title]),
     ["s7", t("S7 执行宿主")],
     ["s8", t("S8 验证")],
     ["s9", t("S9 指标与归因")],
@@ -330,13 +330,13 @@ export function renderStructuredPerformanceReportHtml(report: StructuredPerforma
   <section class="cover"><p class="eyebrow">TILESIM STRUCTURED PERFORMANCE REPORT</p><h1>${escapeHtml(identity.run_name)}</h1><p>${translated("沿 canonical flow 展示本次模拟的分层性能事实、执行阶段、验证和报告归因。")}</p><div class="notice"><b>${translated("证据边界：")}</b>${translated("本报告由前端确定性整理，不重新执行模拟，不生成新的根因判断或优化建议。")}</div>
   <div class="identity"><div><small>Run ID</small><b>${escapeHtml(identity.run_id || t("本地导入 / 内置示例"))}</b></div><div><small>Trace</small><b>${escapeHtml(identity.trace_name || t("缺失"))}</b></div><div><small>${translated("执行范围")}</small><b>${escapeHtml(identity.modeled_range || t("缺失"))}</b></div><div><small>${translated("来源模式")}</small><b>${escapeHtml(evidence.source_mode || t("缺失"))}</b></div><div><small>${translated("校准级别")}</small><b>${escapeHtml(evidence.calibration_level || t("缺失"))}</b></div><div><small>${translated("允许声明")}</small><b>${escapeHtml(evidence.allowed_claim_scope || t("缺失"))}</b></div></div>
   <nav class="toc">${toc.map(([id, label]) => `<a href="#${id}">${escapeHtml(label)}</a>`).join("")}</nav></section>
-  <section class="page-section"><h2>${translated("全局概览")}</h2>${renderMetrics(report.run_overview.reported_summary)}<div class="two-column"><article><h3>${translated("后端报告的瓶颈摘要")}</h3>${renderKeyValues(report.run_overview.reported_bottleneck, t("没有后端 bottleneck_report"))}</article><article><h3>${translated("证据与 Artifact 完整性")}</h3>${renderKeyValues(evidence as unknown as Record<string, unknown>)}</article><article><h3>Runtime policy</h3>${renderKeyValues(report.input_configuration.runtime_policy)}</article><article><h3>${translated("Topology 输入")}</h3>${renderKeyValues(report.input_configuration.topology)}</article></div><div class="process"><span>S0 Workload</span><i>→</i><span>S1 Runtime</span><i>→</i><span>S2 Execution</span><i>→</i><span>${translated("S3 / S4 / S5 并列资源语义")}</span><i>→</i><span>S6 Fabric</span></div><p>${escapeHtml(report.process_model.resource_semantics_note)}</p></section>
+  <section class="page-section"><h2>${translated("全局概览")}</h2>${renderMetrics(report.run_overview.reported_summary)}<div class="two-column"><article><h3>${translated("后端报告的瓶颈摘要")}</h3>${renderKeyValues(report.run_overview.reported_bottleneck, t("没有后端 bottleneck_report"))}</article><article><h3>${translated("证据与 Artifact 完整性")}</h3>${renderKeyValues(evidence as unknown as Record<string, unknown>)}</article><article><h3>Runtime policy</h3>${renderKeyValues(report.input_configuration.runtime_policy)}</article><article><h3>${translated("Topology 输入")}</h3>${renderKeyValues(report.input_configuration.topology)}</article></div><div class="process"><span>Workload</span><i>→</i><span>Runtime</span><i>→</i><span>Execution semantics</span><i>→</i><span>${translated("并列资源语义")}</span><i>→</i><span>Network fabric</span></div><p>${escapeHtml(report.process_model.resource_semantics_note)}</p></section>
   ${report.modeled_subsystems.map(renderSubsystem).join("")}
   <section id="s7" class="page-section"><header class="section-header"><span>S7</span><div><small>Unified Simulation Kernel</small><h2>${translated("统一执行宿主")}</h2><p>${escapeHtml(report.execution_host_s7.description)}</p></div><em>${report.execution_host_s7.stages.length ? "reported" : "missing"}</em></header>${renderVisualization(report.execution_host_s7.timeline)}${renderRecords(report.execution_host_s7.stages, "Execution envelope stages")}</section>
   <section id="s8" class="page-section"><header class="section-header"><span>S8</span><div><small>Calibration and Validation</small><h2>${translated("证据与验证")}</h2><p>${translated("展示报告声明的 provenance、fidelity resolution、检查与未关闭问题。")}</p></div><em>${escapeHtml(report.validation_s8.status)}</em></header><div class="two-column"><article><h3>${translated("验证身份")}</h3>${renderKeyValues({ completeness: report.validation_s8.completeness, lane: report.validation_s8.lane, evidence_tier: report.validation_s8.evidence_tier, claim_scope_summary: report.validation_s8.claim_scope_summary })}</article><article><h3>Trace provenance</h3>${renderKeyValues(report.validation_s8.provenance)}</article></div><h3>Fidelity resolution</h3>${renderChecks(report.validation_s8.fidelity_resolution, "fidelity resolution")}<h3>Validation checks</h3>${renderChecks(report.validation_s8.checks, "validation checks")}<h3>Open gaps</h3>${report.validation_s8.open_gaps.length ? `<ul>${report.validation_s8.open_gaps.map((gap) => `<li>${escapeHtml(gap)}</li>`).join("")}</ul>` : `<p class="empty">${translated("报告没有 open gaps；这不自动代表真实留出验证已经完成。")}</p>`}</section>
   <section id="s9" class="page-section"><header class="section-header"><span>S9</span><div><small>Metrics and Attribution</small><h2>${translated("指标与报告归因")}</h2><p>${translated("保留请求级性能、tail summary 以及后端已报告的 attribution/cause chain。")}</p></div><em>${escapeHtml(report.metrics_and_attribution_s9.status)}</em></header><h3>Tail latency summary</h3>${renderKeyValues(report.metrics_and_attribution_s9.tail_latency_summary)}<h3>${translated("归因守恒与传播审计")}</h3>${renderKeyValues(report.metrics_and_attribution_s9.attribution_audit)}<h3>Request metrics</h3>${renderChecks(report.metrics_and_attribution_s9.request_metrics, "request metrics")}<h3>${translated("后端报告归因")}</h3>${renderChecks(report.metrics_and_attribution_s9.reported_attribution, "reported attribution")}<h3>${translated("后端报告原因链")}</h3>${renderChecks(report.metrics_and_attribution_s9.reported_cause_chain, "reported cause chain")}</section>
-  <section id="run-bound" class="page-section"><header class="section-header"><span>LINK</span><div><small>REQUEST EVIDENCE</small><h2>${translated("请求证据链")}</h2><p>${translated("仅使用后端稳定 ID、manifest 身份和 JSON Pointer 连接当前 request 的 S1-S9 证据。")}</p></div><em>${escapeHtml(report.run_bound_evidence.contract_state)}</em></header>${renderRunBoundEvidence(report.run_bound_evidence)}</section>
-  <section id="design-space" class="page-section"><header class="section-header"><span>DS</span><div><small>S6 DESIGN SPACE</small><h2>${translated("设计空间与选择性 DES")}</h2><p>${translated("保留候选排名、晋级过程、运行实例、证据边界和完整候选字段。")}</p></div><em>${escapeHtml(report.design_space_appendix.availability)}</em></header>${renderDesignSpace(report.design_space_appendix)}</section>
+  <section id="run-bound" class="page-section"><header class="section-header"><span>LINK</span><div><small>REQUEST EVIDENCE</small><h2>${translated("请求证据链")}</h2><p>${translated("仅使用后端稳定 ID、manifest 身份和 JSON Pointer 连接当前 request 的证据。")}</p></div><em>${escapeHtml(report.run_bound_evidence.contract_state)}</em></header>${renderRunBoundEvidence(report.run_bound_evidence)}</section>
+  <section id="design-space" class="page-section"><header class="section-header"><span>DS</span><div><small>NETWORK DESIGN SPACE</small><h2>${translated("设计空间与选择性 DES")}</h2><p>${translated("保留候选排名、晋级过程、运行实例、证据边界和完整候选字段。")}</p></div><em>${escapeHtml(report.design_space_appendix.availability)}</em></header>${renderDesignSpace(report.design_space_appendix)}</section>
   <section id="appendix" class="page-section"><header class="section-header"><span>RAW</span><div><small>PERFORMANCE EVIDENCE APPENDIX</small><h2>${translated("完整性能证据明细")}</h2><p>${translated("保留结构化视图聚合前的请求、phase、Fabric contribution 和域利用率记录。")}</p></div><em>reported fields</em></header><h3>${translated("Fabric 证据身份")}</h3>${renderKeyValues(report.performance_evidence_appendix.fabric_contract as unknown as Record<string, unknown>)}<details><summary>Workload requests <span>${translated("{count} 条", { count: report.performance_evidence_appendix.workload_requests.length })}</span></summary>${renderChecks(report.performance_evidence_appendix.workload_requests, "workload requests")}</details><details><summary>Request metrics <span>${translated("{count} 条", { count: report.performance_evidence_appendix.request_metrics.length })}</span></summary>${renderChecks(report.performance_evidence_appendix.request_metrics, "request metrics")}</details><details><summary>Phase fabric contributions <span>${translated("{count} 条", { count: report.performance_evidence_appendix.phase_fabric_contributions.length })}</span></summary>${renderChecks(report.performance_evidence_appendix.phase_fabric_contributions, "phase fabric contributions")}</details><details><summary>Request fabric contributions <span>${translated("{count} 条", { count: report.performance_evidence_appendix.request_fabric_contributions.length })}</span></summary>${renderChecks(report.performance_evidence_appendix.request_fabric_contributions, "request fabric contributions")}</details><details><summary>Fabric domain utilization <span>${translated("{count} 条", { count: report.performance_evidence_appendix.fabric_domain_utilization.length })}</span></summary>${renderChecks(report.performance_evidence_appendix.fabric_domain_utilization, "fabric domain utilization")}</details></section>
   <section id="agent" class="page-section agent-pending"><header class="section-header"><span>AI</span><div><small>FUTURE EVIDENCE-AWARE AGENT</small><h2>${translated("根因分析与优化建议")}</h2><p>${escapeHtml(report.agent_analysis.note)}</p></div><em>${escapeHtml(report.agent_analysis.status)}</em></header><div class="two-column"><article><h3>${translated("具体根因")}</h3><p class="empty">${translated("尚未生成")}</p></article><article><h3>${translated("优化建议")}</h3><p class="empty">${translated("尚未生成")}</p></article></div></section>
   <p class="footer">${translated("生成时间")} ${escapeHtml(report.generated_at)} · Schema ${escapeHtml(report.schema_version)} · ${translated("完整机器可读数据已嵌入本文档")}</p>

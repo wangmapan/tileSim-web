@@ -1,19 +1,21 @@
 <script setup>
 import { computed, ref, watch } from "vue";
-import { GitCompareArrows, Pencil, RefreshCw, Search, X } from "@lucide/vue";
+import { GitCompareArrows, Pencil, RefreshCw, Search, Trash2, X } from "@lucide/vue";
 import ComparisonPanel from "../components/ComparisonPanel.vue";
 import EmptyState from "../components/EmptyState.vue";
+import InlineHelp from "../components/InlineHelp.vue";
 import ModalDialog from "../components/ModalDialog.vue";
 import StatusPill from "../components/StatusPill.vue";
 import { formatDate, formatNumber } from "../lib/format";
 import { useDashboard } from "../store/dashboard";
 import { useI18n } from "../i18n";
 
-const { state, filteredRuns, loadHistory, openRun, toggleComparison, clearComparisons, renameRun, notify } =
+const { state, filteredRuns, loadHistory, openRun, toggleComparison, clearComparisons, renameRun, deleteRun, notify } =
   useDashboard();
 const { t } = useI18n();
 const renameTarget = ref(null);
 const renameValue = ref("");
+const deleteTarget = ref(null);
 const completeCount = computed(() => state.history.runs.filter((run) => run.status === "completed").length);
 const pageSize = 25;
 const requestedPage = ref(1);
@@ -35,6 +37,10 @@ function inputModeLabel(value) {
   return t(inputModeLabels[value] || value || "旧版输入");
 }
 
+function canDelete(run) {
+  return ["completed", "failed", "incomplete"].includes(run.status);
+}
+
 function beginRename(run) {
   renameTarget.value = run;
   renameValue.value = run.run_name || t("未命名实验");
@@ -47,6 +53,16 @@ async function submitRename() {
     renameTarget.value = null;
   } catch (error) {
     notify(t("重命名失败：{message}", { message: error.message }), "danger");
+  }
+}
+async function submitDelete() {
+  if (!deleteTarget.value) return;
+  const runId = deleteTarget.value.run_id;
+  try {
+    await deleteRun(runId);
+    deleteTarget.value = null;
+  } catch (error) {
+    notify(t("删除失败：{message}", { message: error.message }), "danger");
   }
 }
 </script>
@@ -162,6 +178,14 @@ async function submitRename() {
                   <button class="icon-button" :title="t('重命名')" @click="beginRename(run)">
                     <Pencil :size="16" /></button
                   ><button
+                    class="icon-button"
+                    :title="t('删除本地运行记录')"
+                    :aria-label="t('删除本地运行记录')"
+                    :disabled="!canDelete(run)"
+                    @click="deleteTarget = run"
+                  >
+                    <Trash2 :size="16" /></button
+                  ><button
                     class="button button--secondary button--small"
                     :disabled="run.status !== 'completed'"
                     :aria-pressed="state.history.selected.includes(run.run_id)"
@@ -206,7 +230,7 @@ async function submitRename() {
       <header class="panel-header panel-header--row">
         <div>
           <h2>{{ t("两次运行对比") }}</h2>
-          <p>{{ t("先选择基线 A，再选择变体 B。") }}</p>
+          <InlineHelp :text="t('先选择基线 A，再选择变体 B。')" />
         </div>
         <button v-if="state.history.selected.length" class="text-button" @click="clearComparisons">
           <X :size="15" />{{ t("清除选择") }}
@@ -221,6 +245,15 @@ async function submitRename() {
         <div>
           <button type="button" class="button button--ghost" @click="renameTarget = null">{{ t("取消") }}</button
           ><button type="submit" class="button button--primary">{{ t("保存") }}</button>
+        </div>
+      </form>
+    </ModalDialog>
+    <ModalDialog :open="Boolean(deleteTarget)" :title="t('删除本地运行记录？')" @close="deleteTarget = null">
+      <form class="modal-form" @submit.prevent="submitDelete">
+        <p>{{ t("运行结果和工件会从本地记录目录永久删除。") }}</p>
+        <div>
+          <button type="button" class="button button--ghost" @click="deleteTarget = null">{{ t("取消") }}</button
+          ><button type="submit" class="button button--danger">{{ t("删除") }}</button>
         </div>
       </form>
     </ModalDialog>

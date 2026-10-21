@@ -40,8 +40,12 @@
       "properties": {
         "end_to_end_latency_us": { "type": ["number", "null"] },
         "throughput_requests_per_second": { "type": ["number", "null"] },
-        "completed_request_count": { "type": ["integer", "null"] },
-        "request_count": { "type": ["integer", "null"] },
+        "completed_request_count": {
+          "anyOf": [{ "$ref": "f6b-common.schema.json#/$defs/uint64" }, { "type": "null" }]
+        },
+        "request_count": {
+          "anyOf": [{ "$ref": "f6b-common.schema.json#/$defs/uint64" }, { "type": "null" }]
+        },
         "validation_lane": { "type": ["string", "null"] },
         "evidence_tier": { "type": ["string", "null"] }
       }

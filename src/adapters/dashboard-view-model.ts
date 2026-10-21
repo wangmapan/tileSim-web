@@ -1,4 +1,5 @@
 import type { Availability, LosslessInteger, ReportBundle, ReportKind, SourcedValue } from "../contracts/report-model";
+import { isLosslessInteger, losslessIntegerToBigInt } from "../contracts/lossless-json";
 
 /** Single source of truth for the five `Availability` states of a missing value. */
 export function unavailable(bundle: ReportBundle, reportKind: ReportKind, subsystems: string[]): Availability {
@@ -29,17 +30,27 @@ export function sourced<T>(
   };
 }
 
+function sampledPercentileValue(
+  distribution: { sample_count?: LosslessInteger; p95_ps?: LosslessInteger; p99_ps?: LosslessInteger } | undefined,
+  percentile: "p95_ps" | "p99_ps",
+) {
+  if (!distribution) return undefined;
+  const sampleCount = distribution.sample_count;
+  if (!isLosslessInteger(sampleCount) || losslessIntegerToBigInt(sampleCount) === 0n) return undefined;
+  return distribution[percentile];
+}
+
 export interface DashboardViewModel {
   overview: {
     status: SourcedValue<string>;
     claimSummary: SourcedValue<string>;
     endToEndLatencyUs: SourcedValue<number>;
-    runtimeEventCount: SourcedValue<number>;
-    fabricRecordCount: SourcedValue<number>;
+    runtimeEventCount: SourcedValue<LosslessInteger>;
+    fabricRecordCount: SourcedValue<LosslessInteger>;
     validationCompleteness: SourcedValue<number>;
     throughputRequestsPerSecond: SourcedValue<number>;
-    requestCount: SourcedValue<number>;
-    completedRequestCount: SourcedValue<number>;
+    requestCount: SourcedValue<LosslessInteger>;
+    completedRequestCount: SourcedValue<LosslessInteger>;
     rangeLabel: SourcedValue<string>;
     hostPath: SourcedValue<string>;
     executionPath: SourcedValue<string>;
@@ -47,8 +58,8 @@ export interface DashboardViewModel {
   };
   metrics: {
     throughputRequestsPerSecond: SourcedValue<number>;
-    requestCount: SourcedValue<number>;
-    completedRequestCount: SourcedValue<number>;
+    requestCount: SourcedValue<LosslessInteger>;
+    completedRequestCount: SourcedValue<LosslessInteger>;
     ttftP95Ps: SourcedValue<LosslessInteger>;
     ttftP99Ps: SourcedValue<LosslessInteger>;
     tpotP95Ps: SourcedValue<LosslessInteger>;
@@ -142,28 +153,44 @@ export function buildDashboardViewModel(bundle: ReportBundle): DashboardViewMode
         "metrics",
         ["S1"],
       ),
-      ttftP95Ps: sourced(bundle, tail?.ttft_ps?.p95_ps, ["/metrics/tail_latency_summary/ttft_ps/p95_ps"], "metrics", [
-        "S1",
-      ]),
-      ttftP99Ps: sourced(bundle, tail?.ttft_ps?.p99_ps, ["/metrics/tail_latency_summary/ttft_ps/p99_ps"], "metrics", [
-        "S1",
-      ]),
-      tpotP95Ps: sourced(bundle, tail?.tpot_ps?.p95_ps, ["/metrics/tail_latency_summary/tpot_ps/p95_ps"], "metrics", [
-        "S1",
-      ]),
-      tpotP99Ps: sourced(bundle, tail?.tpot_ps?.p99_ps, ["/metrics/tail_latency_summary/tpot_ps/p99_ps"], "metrics", [
-        "S1",
-      ]),
+      ttftP95Ps: sourced(
+        bundle,
+        sampledPercentileValue(tail?.ttft_ps, "p95_ps"),
+        ["/metrics/tail_latency_summary/ttft_ps/p95_ps"],
+        "metrics",
+        ["S1"],
+      ),
+      ttftP99Ps: sourced(
+        bundle,
+        sampledPercentileValue(tail?.ttft_ps, "p99_ps"),
+        ["/metrics/tail_latency_summary/ttft_ps/p99_ps"],
+        "metrics",
+        ["S1"],
+      ),
+      tpotP95Ps: sourced(
+        bundle,
+        sampledPercentileValue(tail?.tpot_ps, "p95_ps"),
+        ["/metrics/tail_latency_summary/tpot_ps/p95_ps"],
+        "metrics",
+        ["S1"],
+      ),
+      tpotP99Ps: sourced(
+        bundle,
+        sampledPercentileValue(tail?.tpot_ps, "p99_ps"),
+        ["/metrics/tail_latency_summary/tpot_ps/p99_ps"],
+        "metrics",
+        ["S1"],
+      ),
       endToEndP95Ps: sourced(
         bundle,
-        tail?.end_to_end_latency_ps?.p95_ps,
+        sampledPercentileValue(tail?.end_to_end_latency_ps, "p95_ps"),
         ["/metrics/tail_latency_summary/end_to_end_latency_ps/p95_ps"],
         "metrics",
         ["S1"],
       ),
       endToEndP99Ps: sourced(
         bundle,
-        tail?.end_to_end_latency_ps?.p99_ps,
+        sampledPercentileValue(tail?.end_to_end_latency_ps, "p99_ps"),
         ["/metrics/tail_latency_summary/end_to_end_latency_ps/p99_ps"],
         "metrics",
         ["S1"],

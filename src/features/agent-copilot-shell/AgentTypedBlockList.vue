@@ -317,6 +317,28 @@ function formatBlockTime(value: string | undefined): string {
           }}
         </h3>
         <p v-if="block.rationale" class="agent-block__body">{{ block.rationale }}</p>
+        <details v-if="block.jsonPreview" class="agent-block__details agent-block__json-preview">
+          <summary>查看将要写入的 JSON（确认后一次性应用）</summary>
+          <p class="agent-block__body">这是当前页面校验后的输入草案；尚未写入，也不会创建运行。</p>
+          <section v-if="block.jsonPreview.overridesJson" class="agent-block__json-preview-section">
+            <h4>overrides（快捷控制）</h4>
+            <pre tabindex="0"><code>{{ block.jsonPreview.overridesJson }}</code></pre>
+          </section>
+          <section v-if="block.jsonPreview.runtimeJson" class="agent-block__json-preview-section">
+            <h4>runtime_trace</h4>
+            <pre tabindex="0"><code>{{ block.jsonPreview.runtimeJson }}</code></pre>
+          </section>
+          <section v-if="block.jsonPreview.topologyJson" class="agent-block__json-preview-section">
+            <h4>topology</h4>
+            <pre tabindex="0"><code>{{ block.jsonPreview.topologyJson }}</code></pre>
+          </section>
+        </details>
+        <section v-if="block.warnings?.length" class="agent-block__section agent-block__section--warning">
+          <h4>结构化输入提示</h4>
+          <ul>
+            <li v-for="(item, index) in block.warnings" :key="`warning:${index}`">{{ item }}</li>
+          </ul>
+        </section>
         <p v-if="block.incomplete?.length" class="agent-block__draft-notice" role="alert">
           方案不完整，已禁止应用。请补齐以下参数后重新生成；当前面板没有写入任何改动。
         </p>
@@ -329,7 +351,7 @@ function formatBlockTime(value: string | undefined): string {
         <p
           v-if="
             !block.receipts &&
-            block.edits.length &&
+            (block.edits.length || block.structuredInputs) &&
             !block.incomplete?.length &&
             !block.rejected.length &&
             !block.unknown.length
@@ -395,14 +417,16 @@ function formatBlockTime(value: string | undefined): string {
         <div
           v-if="
             !block.receipts &&
-            block.edits.length &&
+            (block.edits.length || block.structuredInputs) &&
             !block.incomplete?.length &&
             !block.rejected.length &&
             !block.unknown.length
           "
           class="agent-block__options"
         >
-          <button type="button" @click="emit('apply', block.block_id)">应用到面板</button>
+          <button type="button" @click="emit('apply', block.block_id)">
+            {{ block.structuredInputs || block.jsonPreview ? "应用 JSON 草案到输入" : "应用到面板" }}
+          </button>
         </div>
         <p v-if="block.receipts && block.note" class="agent-block__body">{{ block.note }}</p>
         <section
@@ -838,6 +862,28 @@ function formatBlockTime(value: string | undefined): string {
   border-collapse: collapse;
   table-layout: fixed;
   font-family: var(--font-mono);
+}
+
+.agent-block__json-preview-section {
+  margin-top: 10px;
+}
+
+.agent-block__json-preview-section h4 {
+  margin-bottom: 4px;
+}
+
+.agent-block__json-preview-section pre {
+  max-height: 280px;
+  margin: 0;
+  padding: 9px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  color: var(--ink-soft);
+  background: var(--canvas);
+  font: var(--text-micro) / 1.45 var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .agent-block__details th,

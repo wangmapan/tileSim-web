@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tilesim.agent_harness.approval.v1",
+  "allOf": [{ "$ref": "tilesim.agent_harness.common.v1" }],
+  "type": "object",
+  "additionalProperties": false,
+  "unevaluatedProperties": false,
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.approval.v1" },
+    "approval_digest": { "type": "string" },
+    "draft_digest": { "type": "string" },
+    "principal": { "type": "string" },
+    "approved_at": { "type": ["string", "null"], "format": "date-time" },
+    "expires_at": { "type": "string", "format": "date-time" },
+    "decision": { "enum": ["approved", "rejected", "expired"] }
+  },
+  "required": ["approval_digest", "draft_digest", "principal", "approved_at", "expires_at", "decision"]
+}

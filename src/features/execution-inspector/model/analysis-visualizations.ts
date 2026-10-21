@@ -12,6 +12,7 @@ import {
   requestFabricContributionSource,
   requestMetricSource,
 } from "./evidence-pointers";
+import { executionLayerName } from "../presentation";
 import type { LayerVisualization, VisualizationRow } from "./types";
 
 const palette = {
@@ -20,6 +21,7 @@ const palette = {
   congestion: "#bd6457",
   secondary: "#567fb0",
 };
+const decimalPattern = /^-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/;
 
 function localized(visualization: LayerVisualization): LayerVisualization {
   return {
@@ -37,17 +39,95 @@ function localized(visualization: LayerVisualization): LayerVisualization {
   };
 }
 
-function safePsToMicroseconds(value: LosslessInteger | undefined): number | null {
-  if (!isLosslessInteger(value)) return null;
-  const ps = losslessIntegerToBigInt(value);
-  const integer = ps / 1_000_000n;
-  const remainder = ps % 1_000_000n;
-  if (integer > BigInt(Number.MAX_SAFE_INTEGER) || integer < BigInt(Number.MIN_SAFE_INTEGER)) return null;
-  return Number(integer) + Number(remainder) / 1_000_000;
+function safePsToMicroseconds(value: LosslessInteger | number | undefined, allowDecimal = false): number | null {
+  if (typeof value === "number") {
+    // A backend uint64 may only arrive as a number when it is exactly
+    // representable.  Treat an unsafe integer as unavailable instead of
+    // plotting a rounded value as if it were an observed latency.
+    if (!Number.isFinite(value)) return null;
+    if (Number.isInteger(value)) return Number.isSafeInteger(value) ? value / 1_000_000 : null;
+    return allowDecimal ? value / 1_000_000 : null;
+  }
+  // Integer strings are the canonical lossless representation for uint64
+  // fields.  Convert through bigint before the display-unit conversion so
+  // values above Number.MAX_SAFE_INTEGER never pass through Number().
+  if (isLosslessInteger(value)) {
+    const ps = losslessIntegerToBigInt(value);
+    const integer = ps / 1_000_000n;
+    const remainder = ps % 1_000_000n;
+    if (integer > BigInt(Number.MAX_SAFE_INTEGER) || integer < BigInt(Number.MIN_SAFE_INTEGER)) return null;
+    return Number(integer) + Number(remainder) / 1_000_000;
+  }
+  if (allowDecimal && typeof value === "string" && decimalPattern.test(value)) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed / 1_000_000 : null;
+  }
+  return null;
 }
 
-function rawLossless(value: LosslessInteger | undefined) {
-  return isLosslessInteger(value) ? String(value) : "";
+function rawLossless(value: LosslessInteger | number | undefined) {
+  return typeof value === "number" &&
+    Number.isFinite(value) &&
+    (!Number.isInteger(value) || Number.isSafeInteger(value))
+    ? String(value)
+    : typeof value === "string" && decimalPattern.test(value)
+      ? value
+      : isLosslessInteger(value)
+        ? String(value)
+        : "";
+}
+
+type RequestLatencyField = "ttft_ps" | "tpot_ps" | "end_to_end_latency_ps";
+type RequestLatencySample =
+  | "sample_reported"
+  | "sample_observed"
+  | "sample_unsampled"
+  | "sample_unavailable"
+  | "sample_inferred"
+  | "sample_synthetic"
+  | "sample_fallback"
+  | "sample_compatibility";
+
+export function requestLatencySampleState(
+  request: NonNullable<MetricsReport["request_metrics"]>[number],
+  field: RequestLatencyField,
+  traceMode?: string,
+): RequestLatencySample {
+  const flag =
+    field === "ttft_ps"
+      ? request.has_ttft_sample
+      : field === "tpot_ps"
+        ? request.has_tpot_sample
+        : request.has_end_to_end_latency_sample;
+  if (flag === false) return "sample_unsampled";
+  if (flag !== true) return "sample_unavailable";
+  if (!isLosslessInteger(request[field])) return "sample_unavailable";
+  const source = request[`${field}_source`];
+  const provenance = request.metric_provenance?.[field];
+  if (provenance?.kind === "inferred" || provenance?.kind === "modelled" || source === "inferred")
+    return "sample_inferred";
+  if (provenance?.kind === "observed" || source === "observed") return "sample_observed";
+  if (source === "fallback") return "sample_fallback";
+  if (source === "synthetic" || traceMode === "synthetic_trace") return "sample_synthetic";
+  if (traceMode === "compatibility_harness_trace") return "sample_compatibility";
+  return "sample_reported";
+}
+
+function requestLatencyValue(
+  request: NonNullable<MetricsReport["request_metrics"]>[number],
+  field: RequestLatencyField,
+  traceMode?: string,
+) {
+  return [
+    "sample_reported",
+    "sample_observed",
+    "sample_synthetic",
+    "sample_compatibility",
+    "sample_inferred",
+    "sample_fallback",
+  ].includes(requestLatencySampleState(request, field, traceMode))
+    ? safePsToMicroseconds(request[field])
+    : null;
 }
 
 function unavailable(id: string, title: string, reason: string, boundary: string): LayerVisualization {
@@ -72,16 +152,35 @@ function unavailable(id: string, title: string, reason: string, boundary: string
 
 export function buildRequestLatencyVisualization(metrics: MetricsReport | null | undefined): LayerVisualization {
   const requests = metrics?.request_metrics || [];
+  const traceMode = metrics?.trace_provenance?.source_mode;
   const rows: VisualizationRow[] = requests.map((request) => ({
     label: request.request_id,
     values: [
-      safePsToMicroseconds(request.ttft_ps),
-      safePsToMicroseconds(request.tpot_ps),
-      safePsToMicroseconds(request.end_to_end_latency_ps),
+      requestLatencyValue(request, "ttft_ps", traceMode),
+      requestLatencyValue(request, "tpot_ps", traceMode),
+      requestLatencyValue(request, "end_to_end_latency_ps", traceMode),
     ],
-    rawValues: [rawLossless(request.ttft_ps), rawLossless(request.tpot_ps), rawLossless(request.end_to_end_latency_ps)],
+    rawValues: [
+      requestLatencyValue(request, "ttft_ps", traceMode) !== null ? rawLossless(request.ttft_ps) : "",
+      requestLatencyValue(request, "tpot_ps", traceMode) !== null ? rawLossless(request.tpot_ps) : "",
+      requestLatencyValue(request, "end_to_end_latency_ps", traceMode) !== null
+        ? rawLossless(request.end_to_end_latency_ps)
+        : "",
+    ],
     sourcePath: requestMetricSource(requests, request.request_id),
     status: request.status,
+    valueStatuses: [
+      requestLatencySampleState(request, "ttft_ps", traceMode),
+      requestLatencySampleState(request, "tpot_ps", traceMode),
+      requestLatencySampleState(request, "end_to_end_latency_ps", traceMode),
+    ],
+    detail:
+      "TTFT/TPOT/端到端样本状态：" +
+      [
+        requestLatencySampleState(request, "ttft_ps", traceMode),
+        requestLatencySampleState(request, "tpot_ps", traceMode),
+        requestLatencySampleState(request, "end_to_end_latency_ps", traceMode),
+      ].join(" / "),
   }));
   if (!rows.length)
     return unavailable(
@@ -255,7 +354,7 @@ export function buildDesignSpaceVisualization(
       : "可配对的正式 objective 不足，降级为首个可用 objective 的候选条形图。",
     question: "候选在正式 objectives 上如何权衡，哪些被后端标记为 Pareto member？",
     firstLook: "先看标记为 pareto_member 的候选，再核对方向、单位、rank 与正式 objective evidence。",
-    boundary: "前端不计算 Pareto、dominance、rank 或 promotion reason；当前 execution_scope 必须保持 S6_only。",
+    boundary: "前端不计算 Pareto、dominance、rank 或 promotion reason；当前执行范围必须保持网络参数范围。",
     rationale: useScatter
       ? "两个正式定量 objective 且至少两个完整候选适合散点比较；membership 仅使用报告标签。"
       : "正式双 objective 数据不足时不伪造二维关系，改用单 objective 条形图。",
@@ -278,8 +377,8 @@ export function buildAttributionVisualization(
 ): LayerVisualization {
   const causalItems = items.filter((item) => /^S[0-6]$/.test(item.subsystem || ""));
   const rows = causalItems.map((item) => ({
-    label: `${item.subsystem || "unknown"} · ${item.component_code || item.attribution_id || "unknown"}`,
-    values: [safePsToMicroseconds(item.score_ps)],
+    label: `${executionLayerName(item.subsystem)} · ${item.component_code || item.attribution_id || "unknown"}`,
+    values: [safePsToMicroseconds(item.score_ps, true)],
     rawValues: [rawLossless(item.score_ps)],
     sourcePath: source(item),
     status: item.subsystem,
@@ -288,18 +387,18 @@ export function buildAttributionVisualization(
   if (!rows.length)
     return unavailable(
       "s9-causal-attribution",
-      "S0–S6 延迟贡献",
-      "没有 S0–S6 attribution_ranking 记录。",
-      "S7 是执行宿主，S8/S9 是输出面；三者不能进入 latency causal ranking。",
+      "各环节延迟贡献",
+      "当前没有可用的延迟贡献记录。",
+      "执行宿主、校准与验证记录属于输出面，不参与当前延迟原因排序。",
     );
   return localized({
     id: "s9-causal-attribution",
     kind: "bar",
-    title: "S0–S6 延迟贡献",
-    description: "按报告顺序显示 S0–S6 attribution score；图中换算为 µs，字段表保留精确 ps。",
-    question: "报告把当前尾延迟分数分配给了哪些 S0–S6 子系统记录？",
+    title: "各环节延迟贡献",
+    description: "按报告顺序显示延迟贡献；图中换算为 µs，字段表保留精确 ps。",
+    question: "报告把当前尾延迟分数分配给了哪些环节？",
     firstLook: "先看分数较高的条目，再阅读其 detail 和正式 evidence pointer。",
-    boundary: "只显示报告 ranking；不把 S7/S8/S9 输出记录混入，也不把排序当作真实系统因果证明。",
+    boundary: "只显示报告排序；不把输出记录混入，也不把排序当作真实系统因果证明。",
     rationale: "后端已给出有序离散贡献项，水平条形图便于比较且不改变正式 rank。",
     unit: "µs",
     sourcePaths: ["tail:/attribution_ranking/*/{rank,subsystem,score_ps,share}"],

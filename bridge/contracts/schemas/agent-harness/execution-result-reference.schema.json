@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tilesim.agent_harness.execution_result_reference.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_identity",
+    "contract_revision",
+    "operation_id",
+    "execution_id",
+    "draft_id",
+    "approval_id",
+    "run_id",
+    "run_status",
+    "manifest_schema_identity",
+    "manifest_digest",
+    "schema_set_revision",
+    "requested_fidelity",
+    "resolved_fidelity",
+    "provenance",
+    "artifacts",
+    "rejected_artifacts"
+  ],
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.execution_result_reference.v1" },
+    "contract_revision": { "const": "2026-10-18.wpc.v1" },
+    "operation_id": { "type": "string" },
+    "execution_id": { "type": "string" },
+    "draft_id": { "type": "string" },
+    "approval_id": { "type": "string" },
+    "run_id": { "type": "string" },
+    "run_status": { "const": "completed" },
+    "manifest_schema_identity": { "type": "string" },
+    "manifest_digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "schema_set_revision": { "type": "string" },
+    "requested_fidelity": { "type": ["string", "null"] },
+    "resolved_fidelity": { "type": ["string", "null"] },
+    "provenance": { "type": "object" },
+    "artifacts": { "type": "array" },
+    "rejected_artifacts": { "type": "array" }
+  }
+}

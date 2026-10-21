@@ -48,9 +48,11 @@ export {
   topologyDevicesOf,
   validateRuntimeRequests,
   writeControlPointer,
+  readControlPointer,
 } from "./structured-input";
 export type {
   ControlWriteResult,
+  ControlReadResult,
   DeviceCountChange,
   DeviceReference,
   RequestIssue,
@@ -76,10 +78,21 @@ export type {
   ParameterKind,
   ParameterTarget,
 } from "./parameter-catalog";
-export { modelScenarioRecommendation, parameterKeyOf, resolveCatalogPath } from "./scenario-recommendation";
+export {
+  buildDeterministicRequestCountRecommendation,
+  explicitRequestCount,
+  modelScenarioRecommendation,
+  parameterKeyOf,
+  resolveCatalogPath,
+} from "./scenario-recommendation";
 export type { ModelPlanInput, ScenarioRecommendation } from "./scenario-recommendation";
 export { looksInterrogative } from "./instruction-questions";
-export { applyParameterEdits, planParameterEdits } from "./parameter-edit";
+export {
+  applyParameterEdits,
+  planParameterEdits,
+  previewParameterEdits,
+  validateAgentStructuredInputs,
+} from "./parameter-edit";
 export { readExperimentInputDraft, saveExperimentInputDraft } from "./input-draft-session";
 export type {
   AppliedParameterEdit,

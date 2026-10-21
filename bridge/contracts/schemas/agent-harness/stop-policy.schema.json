@@ -1,0 +1,13 @@
+{
+  "$id": "tilesim.agent_harness.stop_policy.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_identity", "contract_revision", "on_failure", "on_no_improvement"],
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.stop_policy.v1" },
+    "contract_revision": { "const": "2026-10-19.wpe.v1" },
+    "on_failure": { "enum": ["continue", "stop"] },
+    "on_no_improvement": { "const": "stop" }
+  }
+}

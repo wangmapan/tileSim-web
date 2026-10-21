@@ -24,3 +24,9 @@ export async function renameRun(runId: string, name: string, context: EvidenceQu
   await queryClient.invalidateQueries({ queryKey: historyKey(context) });
   return result;
 }
+
+export async function deleteRun(runId: string, context: EvidenceQueryContext) {
+  const result = await bridgeApi.deleteRun(runId);
+  await queryClient.invalidateQueries({ queryKey: historyKey(context) });
+  return result;
+}

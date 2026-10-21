@@ -3,6 +3,7 @@ import { Activity, ChevronDown, Network, ShieldCheck, Target, Waves } from "@luc
 import { computed, ref, watch } from "vue";
 import ArtifactEvidenceLink from "../components/ArtifactEvidenceLink.vue";
 import EmptyState from "../components/EmptyState.vue";
+import InlineHelp from "../components/InlineHelp.vue";
 import UtilizationMeasure from "../components/ui/UtilizationMeasure.vue";
 import "../styles/workbench.css";
 import RecordPager from "../components/ui/RecordPager.vue";
@@ -139,7 +140,7 @@ function moduleBinding(value: string | undefined) {
         <ShieldCheck :size="18" />
         <div>
           <strong>{{ t("专业证据与契约信息") }}</strong>
-          <p>{{ t("需要审计或排查问题时，再查看 Schema、SHA-256 和精确证据链接。") }}</p>
+          <InlineHelp :text="t('需要审计或排查问题时，再查看 Schema、SHA-256 和精确证据链接。')" :interactive="false" />
         </div>
         <span>{{ t("按需查看") }}</span>
         <ChevronDown :size="17" />

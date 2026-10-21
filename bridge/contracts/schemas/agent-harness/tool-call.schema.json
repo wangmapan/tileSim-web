@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tilesim.agent_harness.tool_call.v1",
+  "allOf": [{ "$ref": "tilesim.agent_harness.common.v1" }],
+  "type": "object",
+  "additionalProperties": false,
+  "unevaluatedProperties": false,
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.tool_call.v1" },
+    "tool_call_id": { "type": "string" },
+    "tool_name": { "type": "string" },
+    "tool_revision": { "type": "string" },
+    "input_digest": { "type": "string" },
+    "scope": { "type": "string" },
+    "permission_decision": { "enum": ["allow", "deny"] },
+    "idempotency_key": { "type": "string" },
+    "timeout_ms": { "type": "integer", "minimum": 1 },
+    "retry_policy": { "type": "object" }
+  },
+  "required": [
+    "tool_call_id",
+    "tool_name",
+    "tool_revision",
+    "input_digest",
+    "scope",
+    "permission_decision",
+    "idempotency_key",
+    "timeout_ms",
+    "retry_policy"
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tilesim.agent_harness.workflow_event.v1",
+  "allOf": [{ "$ref": "tilesim.agent_harness.common.v1" }],
+  "type": "object",
+  "additionalProperties": false,
+  "unevaluatedProperties": false,
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.workflow_event.v1" },
+    "event_id": { "type": "string" },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "parent_event_id": { "type": ["string", "null"] },
+    "node": { "type": "string" },
+    "payload_digest": { "type": "string" },
+    "terminal": { "type": "boolean" },
+    "idempotency_key": { "type": "string" },
+    "draft_id": { "type": ["string", "null"] },
+    "approval_id": { "type": ["string", "null"] }
+  },
+  "required": ["event_id", "sequence", "parent_event_id", "node", "payload_digest", "terminal", "idempotency_key"]
+}

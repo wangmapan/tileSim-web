@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tilesim.agent_harness.common.v1",
+  "type": "object",
+  "properties": {
+    "schema_identity": { "type": "string" },
+    "contract_revision": { "const": "2026-10-17.wpa.v1" },
+    "operation_id": { "type": "string", "minLength": 1 },
+    "turn_id": { "type": "string", "minLength": 1 },
+    "run_id": { "type": ["string", "null"] },
+    "snapshot_digest": { "type": ["string", "null"] },
+    "workflow_state": {
+      "enum": [
+        "draft",
+        "submitted",
+        "queued",
+        "running",
+        "waiting_tool",
+        "waiting_approval",
+        "retrying",
+        "completed",
+        "failed",
+        "cancelled",
+        "recovery_required",
+        "manual_intervention_required"
+      ]
+    },
+    "schema_set_revision": { "type": "string", "minLength": 1 },
+    "policy_revision": { "type": "string", "minLength": 1 },
+    "backend_identity": { "type": "object" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" }
+  },
+  "required": [
+    "schema_identity",
+    "contract_revision",
+    "operation_id",
+    "turn_id",
+    "run_id",
+    "snapshot_digest",
+    "workflow_state",
+    "schema_set_revision",
+    "policy_revision",
+    "backend_identity",
+    "created_at",
+    "updated_at"
+  ]
+}

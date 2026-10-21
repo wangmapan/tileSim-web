@@ -1,4 +1,5 @@
 import type { ExecutionStage, FidelityResolution, ReportBundle, ReportSummary } from "../../../contracts/report-model";
+import { isLosslessInteger } from "../../../contracts/lossless-json";
 import type { ExecutionFact, ExecutionRecord, ExecutionStat, LayerId } from "./types";
 
 export function uniqueBy<T>(items: T[] | undefined, keyOf: (item: T) => string | undefined): T[] {
@@ -78,10 +79,10 @@ export function evidenceState(
 ): string {
   if (resolution?.expected_absence || resolution?.resolution === "expected_absence") return "expected_absence";
   if (resolution?.not_covered || resolution?.resolution === "not_covered") return "not_covered";
-  if (id === "S1" && Number.isFinite(runSummary.runtime_event_count)) return "reported";
+  if (id === "S1" && isLosslessInteger(runSummary.runtime_event_count)) return "reported";
   if (id === "S2") return resolution ? "declaration_only" : "missing";
   if (records.length) return "reported";
-  if (id === "S6" && Number.isFinite(runSummary.fabric_record_count)) return "reported";
+  if (id === "S6" && isLosslessInteger(runSummary.fabric_record_count)) return "reported";
   return resolution ? "declaration_only" : "missing";
 }
 

@@ -13,15 +13,29 @@ import type {
   AssistantModelPlanResponse,
   AssistantModelSelectionRequest,
   AssistantModelSelectionResponse,
+  BatchActionRequest,
+  BatchApprovalRequest,
+  BatchCreateRequest,
+  BatchEventsResponse,
+  BatchListResponse,
+  BatchResponse,
   CapabilitiesResponse,
   CatalogResponse,
   CreateRunRequest,
   CreateRunResponse,
+  DeleteRunResponse,
   EvidenceAgentDescriptorResponse,
   EvidenceAgentRequest,
   EvidenceAgentResponse,
   ExperimentDescriptorResponse,
   HealthResponse,
+  OptimizationActionRequest,
+  OptimizationApprovalRequest,
+  OptimizationApprovalResponse,
+  OptimizationSessionCreateRequest,
+  OptimizationSessionEventsResponse,
+  OptimizationSessionListResponse,
+  OptimizationSessionResponse,
   RenameRunRequest,
   RenameRunResponse,
   ReportsResponse,
@@ -47,6 +61,25 @@ export const bridgePaths = {
   tracePackages: () => "/trace-packages",
   inspectTracePackage: (packageId: string) => `/trace-packages/${encodeURIComponent(packageId)}/inspect`,
   assistantModelDescriptor: () => "/agent/assistant-model",
+  listOptimizationSessions: () => "/agent/optimization/sessions",
+  createOptimizationSession: () => "/agent/optimization/sessions",
+  getOptimizationSession: (sessionId: string) => `/agent/optimization/sessions/${encodeURIComponent(sessionId)}`,
+  getOptimizationSessionEvents: (sessionId: string) =>
+    `/agent/optimization/sessions/${encodeURIComponent(sessionId)}/events`,
+  streamOptimizationSessionEvents: (sessionId: string) =>
+    `/agent/optimization/sessions/${encodeURIComponent(sessionId)}/events/stream`,
+  approveOptimizationCandidate: (sessionId: string, candidateId: string) =>
+    `/agent/optimization/sessions/${encodeURIComponent(sessionId)}/candidates/${encodeURIComponent(candidateId)}/approve`,
+  mutateOptimizationSession: (sessionId: string, action: string) =>
+    `/agent/optimization/sessions/${encodeURIComponent(sessionId)}/${encodeURIComponent(action)}`,
+  listBatches: () => "/agent/batches",
+  createBatch: () => "/agent/batches",
+  getBatch: (batchId: string) => `/agent/batches/${encodeURIComponent(batchId)}`,
+  getBatchEvents: (batchId: string) => `/agent/batches/${encodeURIComponent(batchId)}/events`,
+  streamBatchEvents: (batchId: string) => `/agent/batches/${encodeURIComponent(batchId)}/events/stream`,
+  approveBatch: (batchId: string) => `/agent/batches/${encodeURIComponent(batchId)}/approve`,
+  mutateBatch: (batchId: string, action: string) =>
+    `/agent/batches/${encodeURIComponent(batchId)}/${encodeURIComponent(action)}`,
   assistantModelCatalogue: () => "/agent/assistant-model-catalogue",
   selectAssistantModel: () => "/agent/assistant-model-selection",
   planAgentScenario: () => "/agent/scenario-plan",
@@ -62,6 +95,7 @@ export const bridgePaths = {
   listRuns: () => "/runs",
   createRun: () => "/runs",
   getRun: (runId: string) => `/runs/${encodeURIComponent(runId)}`,
+  deleteRun: (runId: string) => `/runs/${encodeURIComponent(runId)}`,
   getRunEvents: (runId: string) => `/runs/${encodeURIComponent(runId)}/events`,
   getReports: (runId: string) => `/runs/${encodeURIComponent(runId)}/reports`,
   getArtifactManifest: (runId: string) => `/runs/${encodeURIComponent(runId)}/artifacts`,
@@ -106,6 +140,105 @@ export class GeneratedBridgeClient {
 
   assistantModelDescriptor(): Promise<AssistantModelDescriptorResponse> {
     return this.transport.request<AssistantModelDescriptorResponse>(bridgePaths.assistantModelDescriptor(), {});
+  }
+
+  listOptimizationSessions(): Promise<OptimizationSessionListResponse> {
+    return this.transport.request<OptimizationSessionListResponse>(bridgePaths.listOptimizationSessions(), {});
+  }
+
+  createOptimizationSession(
+    body: OptimizationSessionCreateRequest,
+    idempotencyKey: string,
+  ): Promise<OptimizationSessionResponse> {
+    return this.transport.request<OptimizationSessionResponse>(bridgePaths.createOptimizationSession(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+      body: JSON.stringify(body),
+    });
+  }
+
+  getOptimizationSession(sessionId: string): Promise<OptimizationSessionResponse> {
+    return this.transport.request<OptimizationSessionResponse>(bridgePaths.getOptimizationSession(sessionId), {});
+  }
+
+  getOptimizationSessionEvents(sessionId: string): Promise<OptimizationSessionEventsResponse> {
+    return this.transport.request<OptimizationSessionEventsResponse>(
+      bridgePaths.getOptimizationSessionEvents(sessionId),
+      {},
+    );
+  }
+
+  approveOptimizationCandidate(
+    sessionId: string,
+    candidateId: string,
+    body: OptimizationApprovalRequest,
+    idempotencyKey: string,
+  ): Promise<OptimizationApprovalResponse> {
+    return this.transport.request<OptimizationApprovalResponse>(
+      bridgePaths.approveOptimizationCandidate(sessionId, candidateId),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+        body: JSON.stringify(body),
+      },
+    );
+  }
+
+  mutateOptimizationSession(
+    sessionId: string,
+    action: string,
+    body: OptimizationActionRequest,
+    idempotencyKey: string,
+  ): Promise<OptimizationSessionResponse> {
+    return this.transport.request<OptimizationSessionResponse>(
+      bridgePaths.mutateOptimizationSession(sessionId, action),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+        body: JSON.stringify(body),
+      },
+    );
+  }
+
+  listBatches(): Promise<BatchListResponse> {
+    return this.transport.request<BatchListResponse>(bridgePaths.listBatches(), {});
+  }
+
+  createBatch(body: BatchCreateRequest, idempotencyKey: string): Promise<BatchResponse> {
+    return this.transport.request<BatchResponse>(bridgePaths.createBatch(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+      body: JSON.stringify(body),
+    });
+  }
+
+  getBatch(batchId: string): Promise<BatchResponse> {
+    return this.transport.request<BatchResponse>(bridgePaths.getBatch(batchId), {});
+  }
+
+  getBatchEvents(batchId: string): Promise<BatchEventsResponse> {
+    return this.transport.request<BatchEventsResponse>(bridgePaths.getBatchEvents(batchId), {});
+  }
+
+  approveBatch(batchId: string, body: BatchApprovalRequest, idempotencyKey: string): Promise<BatchResponse> {
+    return this.transport.request<BatchResponse>(bridgePaths.approveBatch(batchId), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+      body: JSON.stringify(body),
+    });
+  }
+
+  mutateBatch(
+    batchId: string,
+    action: string,
+    body: BatchActionRequest,
+    idempotencyKey: string,
+  ): Promise<BatchResponse> {
+    return this.transport.request<BatchResponse>(bridgePaths.mutateBatch(batchId, action), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+      body: JSON.stringify(body),
+    });
   }
 
   assistantModelCatalogue(): Promise<AssistantModelCatalogueResponse> {
@@ -183,6 +316,10 @@ export class GeneratedBridgeClient {
 
   getRun(runId: string): Promise<ApiRun> {
     return this.transport.request<ApiRun>(bridgePaths.getRun(runId), {});
+  }
+
+  deleteRun(runId: string): Promise<DeleteRunResponse> {
+    return this.transport.request<DeleteRunResponse>(bridgePaths.deleteRun(runId), { method: "DELETE" });
   }
 
   getReports(runId: string): Promise<ReportsResponse> {

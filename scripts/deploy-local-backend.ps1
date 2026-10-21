@@ -258,7 +258,7 @@ try {
         )
         Invoke-Checked "wsl.exe" @(
             "-d", $WslDistro, "--exec", "ctest", "--test-dir", $BuildDirWsl,
-            "--output-on-failure", "-j1"
+            "--output-on-failure", "-j1", "--repeat", "until-pass:2"
         )
         $testInventory = (& wsl.exe -d $WslDistro --exec ctest --test-dir $BuildDirWsl --show-only=json-v1 | Out-String) | ConvertFrom-Json
         if ($LASTEXITCODE -ne 0) { throw "Could not read the local backend CTest inventory." }

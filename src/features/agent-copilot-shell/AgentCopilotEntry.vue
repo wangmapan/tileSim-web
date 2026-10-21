@@ -3,6 +3,19 @@ import { computed, markRaw, nextTick, onMounted, shallowRef, watch } from "vue";
 import type { PageContextEnvelope } from "../../entities/agent-context";
 import AgentCopilotErrorBoundary from "./AgentCopilotErrorBoundary.vue";
 import type {
+  AgentHarnessOperationProjection,
+  AgentHarnessOptimizationDetail,
+  AgentHarnessOptimizationSession,
+  AgentHarnessBatchDetail,
+  AgentHarnessBatchSession,
+} from "../../lib/api/agent-harness";
+import type {
+  AgentHarnessDraftTaskCenterItem,
+  AgentHarnessExecutionTaskCenterItem,
+  AgentHarnessTaskCenterItem,
+  AgentHarnessToolTimelineItem,
+} from "../agent-harness";
+import type {
   AgentCopilotPanelState,
   AgentCopilotSubmitPayload,
   AgentSessionSummary,
@@ -37,6 +50,20 @@ const props = withDefaults(
     activeSessionId?: string;
     persistenceError?: boolean;
     retentionNotice?: string;
+    harnessAvailable?: boolean;
+    harnessProjection?: AgentHarnessOperationProjection | null;
+    harnessToolTimeline?: readonly AgentHarnessToolTimelineItem[];
+    harnessTaskCenter?: readonly AgentHarnessTaskCenterItem[];
+    harnessDrafts?: readonly AgentHarnessDraftTaskCenterItem[];
+    harnessExecutions?: readonly AgentHarnessExecutionTaskCenterItem[];
+    optimizationSessions?: readonly AgentHarnessOptimizationSession[];
+    optimizationDetail?: AgentHarnessOptimizationDetail | null;
+    optimizationPending?: boolean;
+    optimizationCreatePending?: boolean;
+    batchSessions?: readonly AgentHarnessBatchSession[];
+    batchDetail?: AgentHarnessBatchDetail | null;
+    batchPending?: boolean;
+    batchCreatePending?: boolean;
   }>(),
   {
     modelValue: "closed",
@@ -55,6 +82,20 @@ const props = withDefaults(
     activeSessionId: "",
     persistenceError: false,
     retentionNotice: "",
+    harnessAvailable: true,
+    harnessProjection: null,
+    harnessToolTimeline: () => [],
+    harnessTaskCenter: () => [],
+    harnessDrafts: () => [],
+    harnessExecutions: () => [],
+    optimizationSessions: () => [],
+    optimizationDetail: null,
+    optimizationPending: false,
+    optimizationCreatePending: false,
+    batchSessions: () => [],
+    batchDetail: null,
+    batchPending: false,
+    batchCreatePending: false,
   },
 );
 
@@ -74,6 +115,24 @@ const emit = defineEmits<{
   "delete-session": [sessionId: string];
   "clear-all-sessions": [];
   start: [task: "configure" | "analyze" | "learn"];
+  "execution-cancel": [operationId: string];
+  "execution-retry": [operationId: string];
+  "execution-resume": [operationId: string];
+  "optimization-approve": [sessionId: string, candidateId: string];
+  "optimization-pause": [sessionId: string];
+  "optimization-resume": [sessionId: string];
+  "optimization-retry": [sessionId: string];
+  "optimization-cancel": [sessionId: string];
+  "optimization-create": [
+    payload: { objectivePath: string; direction: "minimize" | "maximize"; baseConfigText: string },
+  ];
+  "batch-approve": [batchId: string];
+  "batch-start": [batchId: string];
+  "batch-pause": [batchId: string];
+  "batch-resume": [batchId: string];
+  "batch-retry": [batchId: string];
+  "batch-cancel": [batchId: string];
+  "batch-create": [payload: { candidateSetText: string; objectivePath: string; direction: "minimize" | "maximize" }];
 }>();
 
 const state = shallowRef<AgentCopilotPanelState>(props.modelValue);
@@ -150,6 +209,10 @@ function retryLoad(): void {
   void ensureLoaded();
 }
 
+function forwardOptimizationApprove(sessionId: string, candidateId: string): void {
+  emit("optimization-approve", sessionId, candidateId);
+}
+
 function retryBoundary(): void {
   componentKey.value += 1;
 }
@@ -215,6 +278,20 @@ onMounted(() => {
           :active-session-id="activeSessionId"
           :persistence-error="persistenceError"
           :retention-notice="retentionNotice"
+          :harness-available="harnessAvailable"
+          :harness-projection="harnessProjection"
+          :harness-tool-timeline="harnessToolTimeline"
+          :harness-task-center="harnessTaskCenter"
+          :harness-drafts="harnessDrafts"
+          :harness-executions="harnessExecutions"
+          :optimization-sessions="optimizationSessions"
+          :optimization-detail="optimizationDetail"
+          :optimization-pending="optimizationPending"
+          :optimization-create-pending="optimizationCreatePending"
+          :batch-sessions="batchSessions"
+          :batch-detail="batchDetail"
+          :batch-pending="batchPending"
+          :batch-create-pending="batchCreatePending"
           @update:model-value="setState"
           @submit="emit('submit', $event)"
           @answer="emit('answer', $event)"
@@ -228,6 +305,22 @@ onMounted(() => {
           @delete-session="emit('delete-session', $event)"
           @clear-all-sessions="emit('clear-all-sessions')"
           @start="emit('start', $event)"
+          @execution-cancel="emit('execution-cancel', $event)"
+          @execution-retry="emit('execution-retry', $event)"
+          @execution-resume="emit('execution-resume', $event)"
+          @optimization-approve="forwardOptimizationApprove"
+          @optimization-pause="emit('optimization-pause', $event)"
+          @optimization-resume="emit('optimization-resume', $event)"
+          @optimization-retry="emit('optimization-retry', $event)"
+          @optimization-cancel="emit('optimization-cancel', $event)"
+          @optimization-create="emit('optimization-create', $event)"
+          @batch-approve="emit('batch-approve', $event)"
+          @batch-start="emit('batch-start', $event)"
+          @batch-pause="emit('batch-pause', $event)"
+          @batch-resume="emit('batch-resume', $event)"
+          @batch-retry="emit('batch-retry', $event)"
+          @batch-cancel="emit('batch-cancel', $event)"
+          @batch-create="emit('batch-create', $event)"
         />
       </AgentCopilotErrorBoundary>
     </div>

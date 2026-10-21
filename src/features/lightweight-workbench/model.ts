@@ -117,7 +117,7 @@ export function createLightweightContext(revision = `lightweight:${Date.now()}`)
 }
 
 export const LIGHTWEIGHT_LIMITATIONS = [
-  "当前仅支持八个正式参数字段的单轮草案。",
-  "模型、设备、卡数、TP/PP/EP、物理 KV、SLO 和工作负载模板仍受公开能力与专业版范围限制。",
+  "助手会按当前页面已发布的参数目录生成单轮草案；未发布或引用不完整的字段会安全拒绝。",
+  "模型、设备、任意卡数、TP/PP/EP、物理 KV、SLO 和工作负载模板仍受公开能力与专业版范围限制。",
   "Agent 不会自行创建正式运行；工作台提交不会调用 Provider，也不保存完整对话。",
 ] as const;

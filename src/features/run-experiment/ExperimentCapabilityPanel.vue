@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from "vue";
 import { useI18n } from "../../i18n";
+import InlineHelp from "../../components/InlineHelp.vue";
 const props = defineProps({
   capabilities: { type: Object, required: true },
   bridge: { type: Object, required: true },
@@ -35,7 +36,7 @@ function statusClass(value) {
       <span>{{ t("能力") }}</span>
       <div>
         <h2>{{ t("执行依赖与边界") }}</h2>
-        <p v-if="!props.compact">{{ t("必要时查看执行门槛与版本信息。") }}</p>
+        <InlineHelp v-if="!props.compact" :text="t('必要时查看执行门槛与版本信息。')" :interactive="false" />
       </div>
       <div class="capability-disclosure-state">
         <span :class="surface.contractStatus === 'supported' ? 'available' : 'partial'">{{
@@ -59,7 +60,7 @@ function statusClass(value) {
           <small>{{ capabilities.dependencies?.gpu_hardware?.reason || t("尚未发现") }}</small>
         </section>
         <section>
-          <strong>S6 Hotspot Cycle</strong>
+          <strong>{{ t("Hotspot Cycle") }}</strong>
           <span :class="capabilities.dependencies?.verilator_cycle?.available ? 'available' : 'unavailable'">
             {{ capabilities.dependencies?.verilator_cycle?.available ? t("RTL 已构建") : t("未构建") }}
           </span>
@@ -78,7 +79,7 @@ function statusClass(value) {
         </section>
       </div>
       <p class="capability-boundary-note">
-        {{ t("Cycle 仅表示") }} <strong>{{ t("S6 信用链路热点细化") }}</strong
+        {{ t("Cycle 仅表示") }} <strong>{{ t("信用链路热点细化") }}</strong
         >{{
           t("，不是全栈 Cycle。当前网页尚未开放显式窗口请求，因此即使 Verilator 已构建也不会显示为可提交的 fidelity。")
         }}
@@ -88,7 +89,7 @@ function statusClass(value) {
         <header>
           <div>
             <strong>{{ t("实验编排契约") }}</strong>
-            <small>{{ t("顶层选项来自 create-run schema 与运行时 capabilities 的交集。") }}</small>
+            <InlineHelp :text="t('顶层选项来自 create-run schema 与运行时 capabilities 的交集。')" />
           </div>
           <span :class="surface.contractStatus === 'supported' ? 'available' : 'partial'">{{
             surface.contractStatus
@@ -131,12 +132,14 @@ function statusClass(value) {
           </code>
         </div>
         <div class="experiment-contract-gaps">
-          <strong>{{ t("请求 fidelity 可用性") }}</strong>
+          <strong>
+            {{ t("请求 fidelity 可用性") }}
+            <InlineHelp :text="t('resolved fidelity 仅从运行后的 execution envelope 与 validation 读取。')" />
+          </strong>
           <code v-for="option in surface.fidelityOptions" :key="option.value">
             {{ option.value }}={{ option.available ? "available" : "unavailable"
             }}<template v-if="option.reason"> · {{ option.reason }}</template>
           </code>
-          <small>{{ t("resolved fidelity 仅从运行后的 execution envelope 与 validation 读取。") }}</small>
         </div>
         <div class="experiment-contract-gaps">
           <strong>{{ t("输入来源与允许声明") }}</strong>
@@ -151,7 +154,7 @@ function statusClass(value) {
         <header>
           <div>
             <strong>{{ t("本地后端部署身份") }}</strong>
-            <small>{{ t("运行门禁同时校验源码版本、CLI 构建和工作树状态摘要。") }}</small>
+            <InlineHelp :text="t('运行门禁同时校验源码版本、CLI 构建和工作树状态摘要。')" />
           </div>
           <span :class="statusClass(identity.execution_ready)">
             {{ identity.execution_ready ? t("执行就绪") : t("禁止执行") }}

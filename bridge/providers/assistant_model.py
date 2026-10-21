@@ -32,6 +32,7 @@ line: :class:`AssistantModelConfig` excludes it from ``repr``.
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import re
@@ -39,7 +40,7 @@ from dataclasses import dataclass, field
 from typing import Any, Iterator
 from urllib.parse import urlsplit, urlunsplit
 
-from contracts import parameter_surface
+from contracts import parameter_surface, validation
 
 from .evidence_agent import (
     ProviderConfig,
@@ -74,7 +75,7 @@ MAXIMUM_INSTRUCTION_CHARACTERS = 2_000
 # The cap exists to bound one answer, not to decide how much of the surface a plan may name. It was
 # 20 while only thirteen knobs were addressable; with element addresses ("set every device") a
 # coherent whole-set plan legitimately exceeds that, and a plan truncated at 20 would contradict its
-# own rationale - a live run asked for eight devices and lost every fabric setting to the cap.
+# own rationale - a larger device inventory may require indexed settings for several new elements.
 MAXIMUM_SETTINGS = 64
 MAXIMUM_TITLE_CHARACTERS = 80
 MAXIMUM_RATIONALE_CHARACTERS = 600
@@ -102,6 +103,8 @@ MAXIMUM_RESULT_ANALYSIS_ARTIFACTS = 32
 MAXIMUM_RESULT_ANALYSIS_REJECTED_ARTIFACTS = 64
 MAXIMUM_RESULT_ANALYSIS_ARTIFACT_CONTENT_CHARACTERS = 20_000
 MAXIMUM_RESULT_ANALYSIS_CONTEXT_CHARACTERS = 160_000
+
+_FLATTENED_SYNTHETIC_PROVENANCE_KEYS = frozenset({"exploratory", "synthetic_trace", "uncalibrated"})
 
 # Bounds for the model catalogue the service publishes.  The identity bound matches the one the
 # configuration reader applies, so a catalogue entry and a configured identity are held to one rule.
@@ -136,18 +139,39 @@ SYSTEM_PROMPT = (
     "keeps an integer value.\n"
     "3. Choose a coherent whole set for the scenario, not one isolated tweak. Decide the trade-off between "
     "throughput and latency explicitly.\n"
-    "When increasing topology/devices, include every requested new device's device_type and group_id, "
-    "and any requested runtime_trace/requests[i]/tp_degree. A device group_id alone does not define "
-    "links or domains; never claim a complete connected fabric without explicit link/domain data. "
-    "If the full required set cannot fit or cannot be expressed by these scalar addresses, explain "
-    "the gap honestly instead of presenting a partial plan as complete.\n"
+    "When resizing topology/devices, use any integer within the published collection range; the page "
+    "will safely create generated device ids and default GPU device_type values for new elements. "
+    "Include group_id only when the user explicitly requests a grouping and the corresponding indexed "
+    "addresses are available, and include any requested runtime_trace/requests[i]/tp_degree. For a "
+    "complete N-card resize, participants is a coupled array rather than a standalone scalar setting: "
+    "when the proposal includes topology/devices=N and every existing request's tp_degree=N, the page "
+    "atomically rewrites participants to the generated device ids. Do not reject that safe composition "
+    "because participants is absent from the scalar catalogue. Existing domain member_devices, links "
+    "and module_bindings remain unchanged unless the user explicitly asks for a complete topology. "
+    "synthetic simulation scenario that asks for a complete topology, use the optional structured_inputs "
+    "object instead of pretending links or domains (or module_bindings) are scalar settings. It must contain "
+    "both runtime_trace and topology. Put the runtime provenance exactly at "
+    "runtime_trace.trace_provenance and the topology provenance exactly at topology.provenance; each is an "
+    "object with source_mode=synthetic_trace, calibration_level=uncalibrated, and an exploratory or "
+    "synthetic_consistency allowed_claim_scope. Do not put exploratory, synthetic_trace, or uncalibrated "
+    "as keys on runtime_trace or topology. The page will "
+    "expect the shape runtime_trace:{trace_provenance:{...},policy:{...},requests:[...]} and "
+    "topology:{provenance:{...},topology:{devices:[...],domains:[...],links:[...],module_bindings:[...]}}. "
+    "Every runtime_trace.requests[i].request_id must be a nonempty string and unique across that array; "
+    "if you cannot provide valid request identities, omit structured_inputs instead of inventing an invalid document. "
+    "If the user only asks for an explicit request count (for example 8, 16 or 64 requests), do not emit one "
+    "large JSON object for every request: put the count in the exact collection-size setting "
+    "runtime_trace/requests and let the page reuse its current request template. Never infer a count from "
+    "the word 'several' or '几个'. "
+    "validate every field, endpoint, domain reference, and cross-document constraint before showing it. "
+    "A generated topology is a simulation assumption, not a physical hardware claim.\n"
     "4. For every parameter write one short sentence saying why that value serves this scenario and what it "
     "does to throughput or to latency.\n"
     "5. If the request cannot be honoured from this list, say so plainly and name the address that would "
     "have to serve it; never invent an address.\n"
     "6. Write the title, the rationale and every why sentence in Simplified Chinese.\n"
     "7. Return one JSON object and nothing else: no markdown, no commentary, no tool calls. The shape is\n"
-    '{"title": string, "rationale": string, "settings": [{"key": string, "value": string, "why": string}]}'
+    '{"title": string, "rationale": string, "settings": [{"key": string, "value": string, "why": string}], "structured_inputs": {"runtime_trace": object, "topology": object}}'
 )
 
 # The streaming prompt asks for the same plan, but written after a readable answer instead of as the
@@ -161,16 +185,30 @@ CHAT_SYSTEM_PROMPT = (
     "1. 先用简体中文写一段可以直接阅读的回答。先给结论，再逐条说明每个参数为什么这样设、"
     "它对吞吐或延迟有什么影响；如果用户只是在追问，就回答问题。不要写标题层级，不要罗列无关内容。\n"
     "2. 回答的最后，用一个 ```json 代码块给出完整的参数方案，格式是\n"
-    '{"title": string, "rationale": string, "settings": [{"key": string, "value": string, "why": string}]}\n'
+    '{"title": string, "rationale": string, "settings": [{"key": string, "value": string, "why": string}], "structured_inputs": {"runtime_trace": object, "topology": object}}\n'
     "3. key 必须是下面列出的地址，原样照抄。含 [i] 的地址表示元素，把 [i] 换成真实下标（第一个是 0）。"
     "列在「集合规模」下的地址写的就是元素个数 —— 要增减显卡就改 topology/devices，不要另找一个不存在的字段。\n"
     "4. 每个值必须满足给定的范围或取值列表，整数参数必须给整数。\n"
-    "扩容 topology/devices 时，列出所有新增设备的 device_type 和 group_id，并列出请求所需的 "
-    "runtime_trace/requests[i]/tp_degree。group_id 不能替代 links/domains；没有明确链路和域数据时，"
-    "不得宣称互联拓扑已完整。若条数上限或可写字段无法覆盖完整方案，明确说明缺口，不要声称已配置完成。\n"
+    "调整 topology/devices 时，可以使用目录声明的任意合法卡数；页面会安全生成新增设备的 device_id，"
+    "并为新增设备填入默认 GPU 类型。只有用户明确要求分组时才列出对应下标的 group_id；同时列出请求所需的 "
+    "runtime_trace/requests[i]/tp_degree。participants 是页面随设备数与每条请求 TP 自动原子同步的耦合数组，"
+    "不是单独可写的标量 path；不要因为目录未列 participants 而拒绝完整的 N 卡方案。现有 domains 的 member_devices、"
+    "links 和 module_bindings 只有用户明确要求完整拓扑时才需要 structured_inputs。仿真场景如果用户要求完整拓扑，请在最后的 JSON 中用 structured_inputs 一次性"
+    "给出完整 runtime_trace 和 topology，包括 devices、domains、links、module_bindings；不要把 links/domains 伪装成"
+    "标量 settings。两个文档都必须明确声明 synthetic_trace、uncalibrated 和 exploratory 或 synthetic_consistency。"
+    "runtime_trace 的声明必须写在 runtime_trace.trace_provenance 对象中，拓扑声明必须写在 topology.provenance 对象中；"
+    "不要把 exploratory、synthetic_trace 或 uncalibrated 写成 runtime_trace/topology 的顶层字段。"
+    "结构应为 runtime_trace:{trace_provenance:{...},policy:{...},requests:[...]}，以及 "
+    "topology:{provenance:{...},topology:{devices:[...],domains:[...],links:[...],module_bindings:[...]}}。"
+    "runtime_trace.requests 中每个 request_id 必须是非空且彼此唯一的字符串；无法满足时不要返回 structured_inputs。"
+    "如果用户只要求明确的请求数量（例如 8、16 或 64 个请求），不要生成几十条完整请求 JSON，"
+    "只在精确的 runtime_trace/requests 集合规模地址写入数量，由页面沿用现有请求模板；‘几个请求’没有数字，不能猜。"
+    "这里的连接是仿真假设，不是真实 GPU/物理网络验证；页面会在确认前严格校验引用和契约。\n"
     "5. 如果这件事用下面的地址办不到，就直说办不到，并点名本该由哪个地址承担；不要编造地址。\n"
     "6. 如果不打算改任何参数（例如用户只是在提问），把 settings 写成空数组。\n"
     "7. json 代码块必须放在最后，代码块之后不要再写任何内容。\n"
+    "如果上下文中提供了当前 structured_inputs JSON，必须保留其中已有的 request_id、设备、策略和拓扑字段，"
+    "只修改用户要求的内容；不要因为上下文分段就省略 runtime_trace 或 topology，也不要重新生成空白文档。\n"
     "可用参数清单：\n"
 )
 
@@ -910,7 +948,116 @@ def _normalize_value(rule: ParameterRule, raw: Any) -> tuple[str | None, str | N
     return _format_number(numeric), None
 
 
-def _validated_plan(proposal: dict[str, Any]) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+def _canonicalize_assistant_provenance(value: Any) -> Any:
+    """Normalize one unambiguous model shorthand to the published provenance object.
+
+    Some model responses express the three synthetic markers as object keys rather than as the
+    values of ``source_mode``, ``calibration_level`` and ``allowed_claim_scope``. This compatibility
+    normalization is limited to the assistant response parser; direct user JSON remains strict. The
+    resulting declaration is deliberately the most restrictive synthetic tuple and never upgrades
+    calibration, provenance, or claim scope.
+    """
+
+    if not isinstance(value, dict) or set(value) != _FLATTENED_SYNTHETIC_PROVENANCE_KEYS:
+        return value
+    return {
+        "source_mode": "synthetic_trace",
+        "calibration_level": "uncalibrated",
+        "allowed_claim_scope": "exploratory",
+    }
+
+
+def _canonicalize_assistant_structured_inputs(value: Any) -> Any:
+    if not isinstance(value, dict):
+        return value
+    normalized = copy.deepcopy(value)
+    trace = normalized.get("runtime_trace")
+    if isinstance(trace, dict) and "trace_provenance" in trace:
+        trace["trace_provenance"] = _canonicalize_assistant_provenance(trace["trace_provenance"])
+    topology = normalized.get("topology")
+    if isinstance(topology, dict) and "provenance" in topology:
+        topology["provenance"] = _canonicalize_assistant_provenance(topology["provenance"])
+    return normalized
+
+
+def _validated_structured_inputs(proposal: dict[str, Any]) -> tuple[dict[str, Any] | None, dict[str, str] | None]:
+    """Validate an optional complete synthetic input pair before it reaches the browser.
+
+    Structured topology is intentionally a separate channel from scalar settings.  The Bridge reuses
+    the same custom-input validator as the run endpoint, then requires explicit synthetic provenance so
+    a model cannot turn an invented fabric into a real-hardware claim.  Invalid input is reported as a
+    dropped proposal; it is never partially repaired or returned as a payload.
+    """
+
+    raw = _canonicalize_assistant_structured_inputs(proposal.get("structured_inputs"))
+    if raw is None:
+        return None, None
+    if not isinstance(raw, dict):
+        return None, {"key": "structured_inputs", "reason": "structured_inputs_not_object"}
+    try:
+        validated = validation.validate_custom_inputs(raw)
+    except (ValueError, TypeError) as error:
+        reason = str(error)
+        field_path = getattr(error, "field_path", None)
+        if isinstance(field_path, str) and field_path and field_path not in reason:
+            reason = f"{reason}（字段 {field_path}）"
+        if "Unsupported custom_inputs.runtime_trace field" in reason and any(
+            token in reason for token in ("exploratory", "synthetic_trace", "uncalibrated")
+        ):
+            reason += " 请将 provenance 放在 runtime_trace.trace_provenance 对象中，不要作为 runtime_trace 顶层字段。"
+        return None, {"key": "structured_inputs", "reason": reason[:MAXIMUM_REASON_CHARACTERS]}
+    trace = validated.get("runtime_trace")
+    topology = validated.get("topology")
+    trace_provenance = trace.get("trace_provenance") if isinstance(trace, dict) else None
+    topology_provenance = topology.get("provenance") if isinstance(topology, dict) else None
+    if not isinstance(trace_provenance, dict) or not isinstance(topology_provenance, dict):
+        return None, {"key": "structured_inputs", "reason": "synthetic_provenance_required"}
+    if trace_provenance.get("source_mode") != "synthetic_trace" or topology_provenance.get("source_mode") != "synthetic_trace":
+        return None, {"key": "structured_inputs", "reason": "synthetic_source_mode_required"}
+    if trace_provenance.get("calibration_level") != "uncalibrated" or topology_provenance.get("calibration_level") != "uncalibrated":
+        return None, {"key": "structured_inputs", "reason": "uncalibrated_provenance_required"}
+    if trace_provenance.get("allowed_claim_scope") != "exploratory" or topology_provenance.get("allowed_claim_scope") not in {
+        "exploratory",
+        "exploratory_s6_only",
+        "synthetic_consistency",
+        "synthetic_consistency_only",
+        "workflow_consistency_only",
+    }:
+        return None, {"key": "structured_inputs", "reason": "synthetic_claim_scope_required"}
+    topology_root = topology.get("topology") if isinstance(topology, dict) else None
+    if not isinstance(topology_root, dict) or not isinstance(topology_root.get("links"), list):
+        return None, {"key": "structured_inputs", "reason": "complete_topology_requires_links_array"}
+    devices = topology_root.get("devices")
+    domains = topology_root.get("domains")
+    bindings = topology_root.get("module_bindings")
+    if not isinstance(devices, list) or not isinstance(domains, list) or not isinstance(bindings, list):
+        return None, {"key": "structured_inputs", "reason": "complete_topology_requires_all_collections"}
+    device_ids = {item.get("device_id") for item in devices if isinstance(item, dict)}
+    domain_ids = {item.get("domain_id") for item in domains if isinstance(item, dict)}
+    binding_names = {item.get("module_name") for item in bindings if isinstance(item, dict)}
+    for index, domain in enumerate(domains):
+        if not isinstance(domain, dict) or domain.get("module_binding") not in binding_names:
+            return None, {"key": "structured_inputs", "reason": f"/topology/domains/{index}/module_binding: unknown module binding"}
+        members = domain.get("member_devices")
+        if not isinstance(members, list) or any(member not in device_ids for member in members):
+            return None, {"key": "structured_inputs", "reason": f"/topology/domains/{index}/member_devices: unknown device"}
+    for index, link in enumerate(topology_root["links"]):
+        if (
+            not isinstance(link, dict)
+            or link.get("src_device") not in device_ids
+            or link.get("dst_device") not in device_ids
+        ):
+            return None, {"key": "structured_inputs", "reason": f"/topology/links/{index}: endpoint device does not exist"}
+        if link.get("domain_id") not in domain_ids:
+            return None, {"key": "structured_inputs", "reason": f"/topology/links/{index}/domain_id: unknown domain"}
+        if link.get("src_device") == link.get("dst_device"):
+            return None, {"key": "structured_inputs", "reason": f"/topology/links/{index}: self connection is not allowed"}
+    return validated, None
+
+
+def _validated_plan(
+    proposal: dict[str, Any],
+) -> tuple[list[dict[str, str]], list[dict[str, str]], dict[str, Any] | None]:
     """Bind a model's settings block to the surface, dropping what it cannot mean.
 
     The address a model wrote is resolved against the surface and reported back
@@ -922,10 +1069,13 @@ def _validated_plan(proposal: dict[str, Any]) -> tuple[list[dict[str, str]], lis
 
     settings: list[dict[str, str]] = []
     dropped: list[dict[str, str]] = []
+    structured_inputs, structured_error = _validated_structured_inputs(proposal)
+    if structured_error is not None:
+        dropped.append(structured_error)
     seen: set[str] = set()
     raw_settings = proposal.get("settings")
     if not isinstance(raw_settings, list):
-        return settings, dropped
+        return settings, dropped, structured_inputs
     for candidate in raw_settings:
         if not isinstance(candidate, dict):
             continue
@@ -952,7 +1102,7 @@ def _validated_plan(proposal: dict[str, Any]) -> tuple[list[dict[str, str]], lis
             continue
         seen.add(key)
         settings.append({"key": key, "value": value, "why": _clip(candidate.get("why"), MAXIMUM_REASON_CHARACTERS)})
-    return settings, dropped
+    return settings, dropped, structured_inputs
 
 
 def _delta_content(chunk: Any) -> str:
@@ -1085,7 +1235,7 @@ def _plan_from_answer(
         else:
             if isinstance(proposal.get("settings"), list):
                 answer_state = "settings"
-    settings, dropped = _validated_plan(proposal)
+    settings, dropped, structured_inputs = _validated_plan(proposal)
     return {
         "schema_version": PLAN_SCHEMA_VERSION,
         "protocol": PROTOCOL,
@@ -1097,6 +1247,7 @@ def _plan_from_answer(
         "title": _clip(proposal.get("title"), MAXIMUM_TITLE_CHARACTERS),
         "rationale": _clip(proposal.get("rationale"), MAXIMUM_RATIONALE_CHARACTERS),
         "settings": settings,
+        **({"structured_inputs": structured_inputs} if structured_inputs is not None else {}),
         "dropped": dropped,
         "applied": False,
         "executed": False,
@@ -1273,7 +1424,7 @@ def plan(instruction: str, *, transport=None) -> dict[str, Any]:
     reply = send(_provider_config(config), payload)
     served_model, content = _final_message_content(reply)
     proposal = _parse_plan_object(content)
-    settings, dropped = _validated_plan(proposal)
+    settings, dropped, structured_inputs = _validated_plan(proposal)
     return {
         "schema_version": PLAN_SCHEMA_VERSION,
         "protocol": PROTOCOL,
@@ -1286,6 +1437,7 @@ def plan(instruction: str, *, transport=None) -> dict[str, Any]:
         "title": _clip(proposal.get("title"), MAXIMUM_TITLE_CHARACTERS),
         "rationale": _clip(proposal.get("rationale"), MAXIMUM_RATIONALE_CHARACTERS),
         "settings": settings,
+        **({"structured_inputs": structured_inputs} if structured_inputs is not None else {}),
         "dropped": dropped,
         "applied": False,
         "executed": False,

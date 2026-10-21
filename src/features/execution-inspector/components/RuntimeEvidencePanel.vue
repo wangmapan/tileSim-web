@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import ArtifactEvidenceLink from "../../../components/ArtifactEvidenceLink.vue";
+import InlineHelp from "../../../components/InlineHelp.vue";
 import RecordPager from "../../../components/ui/RecordPager.vue";
 import { useRecordPage } from "../../../components/ui/useRecordPage";
 import { fetchVerifiedArtifact } from "../../run-evidence";
@@ -91,15 +92,16 @@ async function load() {
   <section class="panel runtime-evidence-panel" aria-label="后端运行期证据">
     <header class="panel-header">
       <div>
-        <p class="section-kicker">{{ t("推理引擎与服务运行时模块") }}</p>
-        <h2>{{ t("后端运行期证据") }}</h2>
-        <p>{{ t("这些是后端写出的工件；输入请求与指标的显示级关联不是事件流。只在选择后读取。") }}</p>
+        <h2>
+          {{ t("后端运行期证据") }}
+          <InlineHelp :text="t('按需读取当前运行已登记的后端证据工件。')" />
+        </h2>
       </div>
     </header>
     <div class="runtime-evidence-controls">
       <label>
-        <span>{{ t("工件") }}</span>
-        <select v-model="selected">
+        <span>{{ t("工件") }}<InlineHelp :text="t(activeDefinition.description)" /></span>
+        <select v-model="selected" :aria-label="t('工件')">
           <option v-for="definition in definitions" :key="definition.id" :value="definition.id">
             {{ t(definition.label) }}
           </option>
@@ -109,7 +111,6 @@ async function load() {
         {{ loading ? t("正在校验并读取…") : t("按需读取") }}
       </button>
     </div>
-    <p class="structured-note">{{ t(activeDefinition.description) }}</p>
     <p v-if="!artifactManifest" role="status">{{ t("当前运行没有可信工件清单，不能读取运行期证据。") }}</p>
     <p v-else-if="rejected" role="alert">
       {{ t("工件被校验拒绝") }}：{{ rejected.reason }} · {{ rejected.json_pointer }}
@@ -247,6 +248,9 @@ async function load() {
   display: grid;
   gap: 5px;
   min-width: min(100%, 260px);
+}
+.runtime-evidence-controls select {
+  width: min(100%, 300px);
 }
 .runtime-evidence-panel > p,
 .runtime-evidence-facts {

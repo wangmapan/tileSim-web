@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tilesim.agent_harness.study.v1",
+  "allOf": [{ "$ref": "tilesim.agent_harness.common.v1" }],
+  "type": "object",
+  "additionalProperties": false,
+  "unevaluatedProperties": false,
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.study.v1" },
+    "study_digest": { "type": "string" },
+    "objective_digest": { "type": "string" },
+    "constraint_digest": { "type": "string" },
+    "budget_digest": { "type": "string" },
+    "automatic_submission": { "const": false }
+  },
+  "required": ["study_digest", "objective_digest", "constraint_digest", "budget_digest", "automatic_submission"]
+}

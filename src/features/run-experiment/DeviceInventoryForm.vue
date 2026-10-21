@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import { Server, Plus, Trash2 } from "@lucide/vue";
 import { useI18n } from "../../i18n";
+import InlineHelp from "../../components/InlineHelp.vue";
 import { topologyDeviceFields, topologyDeviceMaxItems, type SchemaFieldMeta } from "./input-schema-meta";
 import {
   deviceIdsOf,
@@ -50,6 +51,26 @@ const documentValue = computed<JsonObject | null>(() => (parsed.value.ok ? parse
 const devices = computed<unknown[] | null>(() => (documentValue.value ? topologyDevicesOf(documentValue.value) : null));
 const rowIndexes = computed(() => (devices.value || []).map((_, index) => index));
 const deviceCount = computed(() => devices.value?.length ?? 0);
+const deviceTypeSuggestions = computed(() => {
+  const values = new Set<string>(["GPU"]);
+  for (const value of devices.value || []) {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      const type = (value as JsonObject).device_type;
+      if (typeof type === "string" && type.trim()) values.add(type.trim());
+    }
+  }
+  return [...values];
+});
+const groupSuggestions = computed(() => {
+  const values = new Set<string>();
+  for (const value of devices.value || []) {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      const group = (value as JsonObject).group_id;
+      if (typeof group === "string" && group.trim()) values.add(group.trim());
+    }
+  }
+  return [...values];
+});
 
 function rowAt(index: number): JsonObject | null {
   const value = devices.value?.[index];
@@ -219,10 +240,15 @@ function cellPath(index: number, key: string): string {
     <header class="structured-block__header">
       <Server :size="16" />
       <div>
-        <strong>{{ t("设备清单") }}</strong>
-        <small>{{
-          t("最多 {max} 台。新增设备按 gpu0、gpu1 的顺序命名，自动跳过重名。", { max: topologyDeviceMaxItems })
-        }}</small>
+        <span
+          ><strong>{{ t("设备清单") }}</strong
+          ><InlineHelp
+            :text="
+              t('最多 {max} 台。新增设备按 gpu0、gpu1 的顺序命名，自动跳过重名。', {
+                max: topologyDeviceMaxItems,
+              })
+            "
+        /></span>
       </div>
       <label class="device-inventory__count"
         ><span>{{ t("卡数") }}</span
@@ -260,6 +286,13 @@ function cellPath(index: number, key: string): string {
             type="text"
             spellcheck="false"
             :value="cellValue(index, field.key)"
+            :list="
+              field.key === 'device_type'
+                ? 'topology-device-type-suggestions'
+                : field.key === 'group_id'
+                  ? 'topology-device-group-suggestions'
+                  : undefined
+            "
             :aria-label="`${deviceLabel(field)} ${index + 1}`"
             :aria-invalid="fieldPath === cellPath(index, field.key)"
             @change="updateField(field, index, $event)"
@@ -275,6 +308,13 @@ function cellPath(index: number, key: string): string {
         </button>
       </li>
     </ul>
+
+    <datalist id="topology-device-type-suggestions">
+      <option v-for="value in deviceTypeSuggestions" :key="value" :value="value" />
+    </datalist>
+    <datalist id="topology-device-group-suggestions">
+      <option v-for="value in groupSuggestions" :key="value" :value="value" />
+    </datalist>
 
     <p v-if="localError" class="structured-note structured-note--error" role="alert">{{ localError }}</p>
     <p v-else-if="unrenderedFields.length" class="structured-note structured-note--warning">

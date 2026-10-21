@@ -1,0 +1,13 @@
+{
+  "$id": "tilesim.agent_harness.concurrency_policy.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_identity", "contract_revision", "max_concurrency", "queue_policy"],
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.concurrency_policy.v1" },
+    "contract_revision": { "const": "2026-10-19.wpe.v1" },
+    "max_concurrency": { "const": 1 },
+    "queue_policy": { "enum": ["bounded_fifo"] }
+  }
+}

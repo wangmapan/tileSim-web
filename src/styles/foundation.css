@@ -793,6 +793,14 @@ html[data-theme="custom"] .app-header {
 .button--primary:hover:not(:disabled) {
   background: var(--accent-hover);
 }
+.button--danger {
+  color: #fff;
+  border-color: var(--danger);
+  background: var(--danger);
+}
+.button--danger:hover:not(:disabled) {
+  background: var(--danger-ink);
+}
 .button--secondary {
   color: var(--ink);
   border-color: var(--line-strong);

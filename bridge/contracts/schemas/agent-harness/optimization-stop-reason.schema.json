@@ -1,0 +1,29 @@
+{
+  "$id": "tilesim.agent_harness.optimization_stop_reason.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_identity", "contract_revision", "reason", "provenance"],
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.optimization_stop_reason.v1" },
+    "contract_revision": { "const": "2026-10-19.wpd.v1" },
+    "session_id": { "type": "string" },
+    "reason": {
+      "enum": [
+        "improvement_reached",
+        "budget_exhausted",
+        "iteration_limit",
+        "run_limit",
+        "time_limit",
+        "failure_limit",
+        "no_improvement",
+        "objective_unavailable",
+        "cancelled",
+        "failed",
+        "recovery_required"
+      ]
+    },
+    "detail": { "type": "string" },
+    "provenance": { "type": "object" }
+  }
+}

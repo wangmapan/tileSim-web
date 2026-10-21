@@ -225,6 +225,9 @@ function semanticValue(value: unknown) {
                     {{ visualization.rawColumns?.[index] || "raw" }}: {{ row.rawValues[index] }}
                     {{ visualization.rawUnit }}
                   </small>
+                  <small v-if="row.valueStatuses?.[index]" class="semantic-technical">
+                    {{ semanticValue(row.valueStatuses[index]).valueLabel }} · status = {{ row.valueStatuses[index] }}
+                  </small>
                   <ArtifactEvidenceLink
                     v-if="row.valueSourcePaths?.[index]"
                     :source-path="row.valueSourcePaths[index]"

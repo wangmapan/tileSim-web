@@ -6,7 +6,12 @@
  * a durable conversation, approval, operation, or create-run request.
  */
 
-import type { AgentParameterEdit, AgentParameterReceipt } from "../agent-command";
+import type {
+  AgentParameterEdit,
+  AgentParameterJsonPreview,
+  AgentParameterReceipt,
+  AgentParameterStructuredInputs,
+} from "../agent-command";
 
 export const PHASE1_LOCAL_CONTRACT_REVISION = "tilesim.web.agent_orchestration.phase1.local.v1" as const;
 export const PHASE1_AGENT_EXPOSED_FIELD_IDS = [
@@ -283,8 +288,9 @@ type AgentTypedBlockBody =
   | {
       /**
        * The parameter-edit prototype. Unlike `draft_summary` this block is not
-       * limited to the frozen eight fields: it carries whatever the catalogue
-       * resolved and, once the owning page has answered, a per-item receipt.
+       * limited to the legacy phase-one field subset: it carries whatever the
+       * current page catalogue resolved and, once the owning page has answered,
+       * a per-item receipt.
        */
       block_type: "parameter_edits";
       block_id: string;
@@ -307,8 +313,14 @@ type AgentTypedBlockBody =
        * a built-in preset explains the set, a model picked each value separately.
        */
       reasons?: Readonly<Record<string, string>>;
+      /** Structured runtime/topology JSON after this plan, shown for review only. */
+      jsonPreview?: AgentParameterJsonPreview;
+      /** Complete synthetic JSON documents, applied only after page-owned validation. */
+      structuredInputs?: AgentParameterStructuredInputs;
       /** Proposed values omitted or refused during planning; the entire set is not applicable. */
       incomplete?: readonly string[];
+      /** Non-blocking notices; the page may still apply the independently validated edits. */
+      warnings?: readonly string[];
       /**
        * The page-context revision the plan was computed against. It is cleared
        * when the page moves on, and applying a plan without it is refused, so a

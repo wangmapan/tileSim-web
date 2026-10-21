@@ -40,6 +40,7 @@ import {
   topologyDomainsOf,
   validateRuntimeRequests,
   writeControlPointer,
+  readControlPointer,
   type JsonObject,
 } from "../../src/features/run-experiment/structured-input";
 import { parseTopologyDocument } from "../../src/features/run-experiment/topology-graph";
@@ -166,6 +167,32 @@ describe("R1 dual-view fidelity", () => {
     const after = JSON.parse(edited) as JsonObject;
     expect(after.requests).toEqual(runtimeTrace().requests);
     expect(after.trace_name).toBe("fixture-trace");
+  });
+});
+
+describe("quick-control projection", () => {
+  it("reads a policy scalar from the structured runtime document", () => {
+    expect(
+      readControlPointer({
+        runtimeJson: runtimeText(),
+        topologyJson: topologyText(),
+        pointer: "/overrides/runtime/max_batch_size",
+      }),
+    ).toEqual({ supported: true, found: true, value: 4 });
+  });
+
+  it("refuses to guess a scalar when module bindings disagree", () => {
+    const changed = JSON.parse(topologyText()) as JsonObject;
+    const modules = (changed.topology as JsonObject).module_bindings as JsonObject[];
+    modules[0].override_params = { bandwidth_gbps: 901 };
+    modules.push({ module_name: "su-module-2", module_kind: "scale_up", override_params: { bandwidth_gbps: 902 } });
+    expect(
+      readControlPointer({
+        runtimeJson: runtimeText(),
+        topologyJson: serializeJsonDocument(changed),
+        pointer: "/overrides/fabric/scale_up_bandwidth_gbps",
+      }),
+    ).toEqual({ supported: true, found: false });
   });
 });
 

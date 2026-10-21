@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tilesim.agent_harness.execution_request.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_identity",
+    "contract_revision",
+    "draft_id",
+    "approval_id",
+    "validation_id",
+    "draft_digest",
+    "approval_digest",
+    "input_snapshot_digest",
+    "schema_set_revision",
+    "backend_identity",
+    "policy_revision",
+    "workflow_revision",
+    "create_run_request",
+    "create_run_request_digest",
+    "idempotency_key"
+  ],
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.execution_request.v1" },
+    "contract_revision": { "const": "2026-10-18.wpc.v1" },
+    "draft_id": { "type": "string", "minLength": 1 },
+    "approval_id": { "type": "string", "minLength": 1 },
+    "validation_id": { "type": "string", "minLength": 1 },
+    "draft_digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "approval_digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "input_snapshot_digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "schema_set_revision": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "create_run_request_digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "backend_identity": { "type": "object", "minProperties": 1 },
+    "policy_revision": { "const": "tilesim.agent_harness.policy.v1" },
+    "workflow_revision": { "const": "2026-10-18.wpc.v1" },
+    "create_run_request": { "type": "object", "minProperties": 1 },
+    "principal": { "type": "string" },
+    "workspace_id": { "type": "string" },
+    "idempotency_key": { "type": "string", "minLength": 1 }
+  }
+}

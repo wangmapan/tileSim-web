@@ -34,8 +34,47 @@ def build_reply(content: str, *, reasoning: str | None = None, model: str = "dee
     }
 
 
-def plan_document(settings: list[dict], *, title: str = "方案", rationale: str = "理由") -> str:
-    return json.dumps({"title": title, "rationale": rationale, "settings": settings}, ensure_ascii=False)
+def plan_document(
+    settings: list[dict],
+    *,
+    title: str = "方案",
+    rationale: str = "理由",
+    structured_inputs: dict | None = None,
+) -> str:
+    payload = {"title": title, "rationale": rationale, "settings": settings}
+    if structured_inputs is not None:
+        payload["structured_inputs"] = structured_inputs
+    return json.dumps(payload, ensure_ascii=False)
+
+
+def synthetic_structured_inputs() -> dict:
+    return {
+        "runtime_trace": {
+            "trace_name": "agent-runtime",
+            "trace_provenance": {
+                "source_mode": "synthetic_trace",
+                "calibration_level": "uncalibrated",
+                "allowed_claim_scope": "exploratory",
+            },
+            "policy": {"max_batch_size": 4},
+            "requests": [{"request_id": "r0", "phase": "prefill", "tp_degree": 1, "participants": ["gpu0"]}],
+        },
+        "topology": {
+            "scenario_name": "agent-topology",
+            "provenance": {
+                "source_mode": "synthetic_trace",
+                "calibration_level": "uncalibrated",
+                "allowed_claim_scope": "synthetic_consistency_only",
+            },
+            "topology": {
+                "topology_name": "synthetic",
+                "devices": [{"device_id": "gpu0", "device_type": "GPU"}],
+                "module_bindings": [{"module_name": "su", "module_kind": "scale_up"}],
+                "domains": [{"domain_id": "d0", "domain_type": "scale_up", "member_devices": ["gpu0"], "module_binding": "su"}],
+                "links": [],
+            },
+        },
+    }
 
 
 class AssistantModelEnvironmentTest(unittest.TestCase):
@@ -216,6 +255,58 @@ class AssistantModelPlanTest(unittest.TestCase):
         self.assertFalse(result["applied"])
         self.assertFalse(result["executed"])
 
+    def test_plan_accepts_a_complete_synthetic_topology_document(self) -> None:
+        result = self.plan_with(
+            build_reply(
+                plan_document([], structured_inputs=synthetic_structured_inputs()),
+            )
+        )
+        self.assertEqual(result["dropped"], [])
+        self.assertEqual(result["structured_inputs"]["topology"]["topology"]["links"], [])
+        self.assertEqual(
+            result["structured_inputs"]["topology"]["provenance"]["source_mode"],
+            "synthetic_trace",
+        )
+
+    def test_plan_rejects_a_synthetic_topology_with_a_dangling_link(self) -> None:
+        inputs = synthetic_structured_inputs()
+        inputs["topology"]["topology"]["links"] = [
+            {"src_device": "gpu0", "dst_device": "gpu99", "domain_id": "d0"}
+        ]
+        result = self.plan_with(build_reply(plan_document([], structured_inputs=inputs)))
+        self.assertIsNone(result.get("structured_inputs"))
+        self.assertEqual(result["dropped"][0]["key"], "structured_inputs")
+
+    def test_plan_normalizes_flattened_runtime_provenance_markers(self) -> None:
+        inputs = synthetic_structured_inputs()
+        inputs["runtime_trace"]["trace_provenance"] = {
+            "exploratory": True,
+            "synthetic_trace": True,
+            "uncalibrated": True,
+        }
+        inputs["topology"]["provenance"] = {
+            "exploratory": True,
+            "synthetic_trace": True,
+            "uncalibrated": True,
+        }
+        result = self.plan_with(build_reply(plan_document([], structured_inputs=inputs)))
+        self.assertEqual(result["dropped"], [])
+        self.assertEqual(
+            result["structured_inputs"]["runtime_trace"]["trace_provenance"],
+            {
+                "source_mode": "synthetic_trace",
+                "calibration_level": "uncalibrated",
+                "allowed_claim_scope": "exploratory",
+            },
+        )
+
+    def test_plan_reports_the_request_pointer_for_duplicate_ids(self) -> None:
+        inputs = synthetic_structured_inputs()
+        inputs["runtime_trace"]["requests"].append(dict(inputs["runtime_trace"]["requests"][0]))
+        result = self.plan_with(build_reply(plan_document([], structured_inputs=inputs)))
+        self.assertIsNone(result.get("structured_inputs"))
+        self.assertIn("/custom_inputs/runtime_trace/requests/1/request_id", result["dropped"][0]["reason"])
+
     def test_prompt_carries_the_catalogue_and_the_scenario(self) -> None:
         self.plan_with(build_reply(plan_document([])), instruction="8 卡 70B 长文档混合负载")
         payload = self.payloads[0]
@@ -293,13 +384,13 @@ class AssistantModelPlanTest(unittest.TestCase):
                     [
                         {"key": "topology/devices", "value": "4096", "why": "超出上限。"},
                         {"key": "topology/devices", "value": "7.5", "why": "不是整数。"},
-                        {"key": "topology/devices", "value": "8", "why": "扩容到 8 张卡。"},
+                        {"key": "topology/devices", "value": "16", "why": "扩容到 16 张卡。"},
                     ]
                 )
             )
         )
         self.assertEqual([item["key"] for item in result["settings"]], ["topology/devices"])
-        self.assertEqual(result["settings"][0]["value"], "8")
+        self.assertEqual(result["settings"][0]["value"], "16")
         self.assertEqual(
             [entry["reason"] for entry in result["dropped"]],
             ["value_above_maximum", "value_not_integer"],
@@ -430,8 +521,13 @@ class AssistantModelPlanTest(unittest.TestCase):
         system = self.payloads[0]["messages"][0]["content"]
         self.assertIn(str(assistant_model.MAXIMUM_SETTINGS), system)
         self.assertGreaterEqual(assistant_model.MAXIMUM_SETTINGS, 34)
-        self.assertIn("device_type and group_id", system)
+        self.assertIn("default GPU device_type", system)
         self.assertIn("links or domains", system)
+        self.assertIn("runtime_trace.trace_provenance", system)
+        self.assertIn(
+            "Do not put exploratory, synthetic_trace, or uncalibrated as keys on runtime_trace or topology",
+            system,
+        )
 
     def test_an_answer_without_settings_returns_an_empty_plan(self) -> None:
         result = self.plan_with(build_reply(plan_document([])))

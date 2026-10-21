@@ -1,5 +1,120 @@
 # TileSim Web AI Handoff
 
+## 2026-10-19 Agent Harness 阶段 5 Local-Dev 当前事实（工作树，未部署）
+
+阶段 5 已新增受控批量实验 successor contract `2026-10-19.wpe.v1`、tool registry
+`2026-10-19.tools.v3`，当前 schema-set 为 `sha256:781b96e8389624f2d33abe800062367d28f2bb702abbec4f824d02413eaccd82`；独立 SQLite WAL batch store、批量审批/队列/状态/lease/heartbeat/checkpoint、SSE
+事件回放和 TanStack Query 前端 Batch Task Center。批量对象均绑定 principal、workspace、snapshot、backend、
+schema-set、policy 与 digest；实际运行仍只经正式 `POST /api/agent/executions`，没有新增 `/api/runs`、shell、
+任意 URL/文件、外部 MCP/A2A 或生产无人值守入口。
+
+本地批量状态支持 `waiting_approval`、`queued`、`running`、`paused`、`completed`、`failed`、`cancelled`、
+`recovery_required` 和 `manual_intervention_required`。批量默认单并发，所有结果标记
+`local_dev`、`synthetic_trace`、`exploratory`、`not_for_production`。Bridge/worker 重启会围栏 queued/running
+批次到 `recovery_required`，未知副作用不盲目重试；幂等 replay/conflict、取消终态、事件 sequence、
+Last-Event-ID 和 polling fallback 均保持 fail-closed。生产 Provider acceptance、真实硬件、独立生产
+evidence/citation review 和生产 GO 仍为 `production_acceptance_pending`。
+
+本轮继续收口批量语义：completed candidate 只在通过正式 execution result 的 snapshot/schema/backend identity、
+local synthetic provenance 和 `query_verified_metrics` allowlist JSON Pointer 后写入最小 objective/evidence 结果。
+Batch summary 现在计算 `best_candidate_id`/`best_value`、评估计数和无改进计数，并输出
+`candidate_set_exhausted`、`run_budget_exhausted`、`time_budget_exhausted`、`failure_budget` 或 `no_improvement`
+停止原因。暂停恢复会恢复 running 状态并维持 lease heartbeat；事件缺口由前端拒绝并回退 polling；删除会清理
+批量有界 SQLite 子记录。新增定向测试覆盖 objective/best candidate、no-improvement、recovery 和 retention。
+
+本次复验还修正了助手侧栏的布局边界：侧栏改为纵向 flex，Harness 观察区独立滚动并受限于首屏高度；只有 Bridge
+成功发布并通过 Harness capability snapshot 后才挂载批量/优化观察区，旧 Bridge 或 fixture 不会因未知端点生成
+占位内容覆盖原对话区。相关前端组件/定向 Harness 测试、Bridge 阶段 3A/4/5 定向测试均通过；浏览器验证使用
+临时 Playwright Vite，不触碰 127.0.0.1:5173。
+
+## 2026-10-19 Agent Harness 阶段 4 Local-Dev 当前事实（工作树，未部署）
+
+阶段 4 已接入受控的本地优化协调器，但范围严格限定为个人 local-dev。新的优化 contract 为
+`2026-10-19.wpd.v1`，schema-set 当前为 `sha256:9ff2bdbb74e0932e3fb8fdefe64575d6b2d3c2d0313c1c930cc13aeb19942bf2`，
+tool registry 为 `2026-10-19.tools.v2`。Bridge 使用独立 SQLite WAL 优化存储，session、candidate、approval、iteration、evaluation、
+checkpoint、tool invocation、event 和 summary 只保存有界身份、digest、状态与 JSON Pointer；不保存 credential、raw Provider response、
+hidden reasoning 或完整敏感 evidence payload。
+
+当前闭环为：session → waiting_approval → queued/running → formal Stage-3 execution → identity/SHA/bytes/Pointer/provenance 校验的
+verified metric → bounded next candidate 或 stop summary。候选配置只能来自已登记执行请求，并经正式 Stage-2 参数 validator；父候选、diff、
+目标、约束、预期副作用和 evidence digest 均可追溯。每个候选要求人工批准，approval 单次消费且有 expiry/stale fence；失败只能显式 retry，
+unknown outcome 进入 `recovery_required`；只有显式 acknowledgement 才能生成新的候选和 approval fence，禁止原地盲重试。取消有 terminal fence，Bridge 重启会把未完成 session 标记为 recovery_required。重复候选、重复
+idempotency key、预算/迭代/运行/时间/失败上限和无改进均有停止语义。没有 shell、任意路径、任意 URL、外部 MCP/A2A 或直接 `/api/runs` 工具。
+
+前端通过生成的 client、TanStack Query 和 Optimization Panel 展示 session/candidate/diff/objective/evaluation/tool digest、operation identity、
+timeline、审批、暂停/恢复/取消/显式重试、刷新恢复和显式 local-dev session 创建；不使用 localStorage/Pinia 伪造优化服务端状态。所有结果继续标记
+`local_dev`、`synthetic_trace`、`exploratory`、`not_for_production`。生产 Provider acceptance、真实硬件、独立 evidence/citation review 与
+held-out validation 仍为 `production_acceptance_pending`，阶段 4 不产生生产 GO。
+
+本轮校正了 Optimization Panel 的默认 objective pointer：由不存在的
+`/request_metrics/p95_ms` 改为正式 metrics schema 中的
+`/tail_latency_summary/ttft_ps/p95_ps`，并同步更新 Bridge HTTP 与前端组件测试。临时端口浏览器实测完成
+session → 人工批准 → 正式 execution → verified evaluation/checkpoint → completed，刷新后状态仍由 Bridge
+恢复；旧 pointer 的 `artifact_pointer_not_found` 记录保留为 fail-closed 证据。阶段 4 local gate 为
+`LOCAL_PHASE4_PASS`（local-dev only），生产 Provider acceptance、独立 review 和生产 GO 仍 pending。
+
+阶段 4 收口复验：全量 Web Vitest 为 **115 files / 1172 passed / 8 skipped**；阶段 4 Bridge 优化 HTTP/contract
+定向套件为 **11/11**；`pnpm contracts:generate` + `contracts:check`、`typecheck`、`lint`（0 error / 2 既有 warning）、
+`build`、`docs:check`、`deps:check` 和 `git diff --check` 通过。Bridge 全量 discovery 为 **413 tests / 412 passed / 1
+既有导入错误**（`contracts.agent_orchestration_phase2.tests.test_registry` 无法导入 `bridge`）；全仓 `format:check` 仍被
+20 个既有/生成文件阻塞，本阶段新增/修改文件单独 Prettier 检查通过。临时 `127.0.0.1:4173`/Bridge 已停止，用户的
+`127.0.0.1:5173` 未触碰。
+
+## 2026-10-19 Agent Harness 阶段 3 local-dev / 3B 当前事实（工作树，未部署）
+
+阶段 3 已在本地个人使用范围完成受控开发闭环；这不是生产发布批准，也不改变正式
+`2026-10-18.wpc.v1` 的 fail-closed 规则。使用当前 TileSim checkout、Bridge schema-set、生成客户端和
+Windows MSVC CLI 自动生成了新的 `local_dev` deployment manifest（不覆盖旧的
+`runtime/backend-current.json`）：
+
+- manifest：`C:\Users\MAPANW~1\AppData\Local\Temp\tilesim-stage3-local-msvc-5aab35d118194c53b9b6ed91d118a02e\local-dev-deployment-manifest.json`
+- manifest digest：`sha256:d1f58f17f94d5b4ee7c922a15d7bc06350491300edb04577086b5c25e9d60236`
+- schema-set：`sha256:ce5ac94634375b58c62c6d47ec70a6f45441c02c789eb61bfa928425222dec50`
+- source/build revision：`5e44db0abb1d1b73d6131b9212277e4ea97d2c8`
+- source/build state digest：`4ee7fdaca4252d2fae5a9418c23e6a453a907964b7dd4a368c964651a4ebb7fc`
+
+local-only gate 为 `LOCAL_ONLY_PASS`：deployment identity `matched`，AH3-F01–AH3-F26 为 26/26，
+并完成 draft → validation → approval → execution → `/api/runs` → result、artifact identity、幂等 replay/conflict、
+SSE/polling event replay（事件 `1..5`）。所有证据均标记 `local_dev`、`synthetic_trace`、`exploratory`、
+`not_for_production`；Provider 为 `provider_unavailable_for_local_dev`，生产 acceptance 仍为
+`production_acceptance_pending`，本地 review 状态为 `review_not_required_for_local_dev`。
+
+前端 3B 已通过正式 WPC adapter 和 TanStack Query 接入 execution submit/status/events/SSE、`Last-Event-ID`
+恢复、polling fallback、result reference、run/artifact identity 校验及显式 cancel/retry/resume。所有写请求带
+`Idempotency-Key`，不由浏览器创建 run，也不使用 localStorage/Pinia 作为 operation store。任务中心明确展示
+`failed`、`recovery_required`、`manual_intervention_required`、`cancelled`、`completed` 以及 local-dev 边界。
+
+正式 3A release-gate 在同一源码状态下实际为 54/54 pass；其结论仍为 `NO-GO`，原因仅是 Provider live acceptance、
+成功 repetition 和独立生产 evidence/citation review 尚未执行。阶段 4 多工具自主循环、自动候选、自动优化、
+无人值守批量实验和外部 MCP/A2A 继续关闭。
+
+## 2026-10-18 拓扑画布清除确认与全屏排布入口（当前工作树，未部署）
+
+- 拓扑编辑器新增“清除画布”操作：点击后先展示确认条，只有再次点击“确认清除”才会生效；“取消”不会修改当前输入。
+- 确认清除会删除当前仿真拓扑中的 `devices`、`domains` 和 `links`，保留 `module_bindings` 网络模型参数；同时清空前端卡片位置、选中连接、排布状态、缩放和平移状态，并同步设备数量为空。
+- 全屏显卡连接工作台的顶部工具栏现在提供“按域一键排布”和“清除画布”，全屏后无需退出即可完成分组排布或发起清除确认。排布只改变画布中的前端位置，不写入拓扑 JSON。
+- 本轮验证：`TopologyGraphEditor` 与结构化输入 i18n 定向测试 **38 passed**；`vue-tsc --noEmit`、目标 ESLint/Prettier、`git diff --check` 已通过。未操作 5173、Bridge、用户运行记录、Provider、提交或部署。
+
+## 2026-10-18 Agent Harness 阶段 2 当前事实
+
+Bridge 已发布 `2026-10-18.wpb.v1` successor：`tilesim.agent_harness.experiment_draft.v2`、
+`tilesim.agent_harness.draft_validation_report.v1`、`tilesim.agent_harness.approval.v2`。WP-A `2026-10-17.wpa.v1`
+兼容读取保留，proposal v0 不接受为运行时身份。
+
+当前 canonical schema-set revision：`sha256:c7a23b668d29415315e1eca4fd8dc0a5ebdff908b8420a6e187f33cc710efb42`。
+
+正式 API 覆盖 draft 创建/读取/校验/删除/events（含 SSE stream）和 approval 创建/读取/reject/revoke。所有写请求要求
+`Idempotency-Key`，并校验 principal/workspace、payload digest、input snapshot、schema-set、backend identity、validator/policy
+revision。SQLite WAL 只保存身份、digest、状态和有界摘要；删除、retention 到期、validation 替换和 identity 漂移会阻断批准。
+`would_create_run` 始终为 `false`，不调用 `/api/runs`、TileSimCLI、run queue 或 artifact materializer；submit/cancel/retry/resume/
+autonomous optimization 仍未开放。Provider acceptance 仍为 `live_acceptance_pending`。
+
+## 2026-10-18 Agent Harness WP-B Web 接入
+
+Web 已接入正式 WP-B draft/validation/approval successor contract（draft `v2`、validation report `v1`、approval `v2`），并使用生成的 `src/contracts/generated/agent-harness.ts` client。API adapter 位于 `src/lib/api/agent-harness.ts`，独立校验 successor contract/schema-set、backend/principal/workspace/snapshot/digest binding，并对所有响应强制 `would_create_run: false`。所有写请求使用 `Idempotency-Key`；删除、stale、expiry、reject、revoke 和 replay 结果均 fail closed。
+
+Task Center/Copilot 通过公共 feature adapter 暴露 Draft Card、Validation Block、Approval Block；展示字段差异、证据引用、预算、风险、JSON Pointer、校验/审批状态和服务端 revision。没有新增 `/api/runs`、TileSimCLI、队列、submit/cancel/retry/resume 或自动优化入口，也不使用 localStorage/Pinia 作为服务端草案真相。Provider acceptance 仍为 `live_acceptance_pending`。
+
 **事实日期**：2026-09-17（下文历史记录）／2026-09-19（本机实测基线，见「2026-09-19 仓库与基线更正」）
 
 **产品范围**：电脑网页端、local Bridge、版本化契约和 Windows/WSL 本地部署
@@ -7,6 +122,163 @@
 **当前状态**：Phase 1 全局 Agent 侧栏与八字段本地草案已发布；Phase 2A/2B 契约已正式发布并提交（`4d7f9fa`）；后端 Phase 2C
 Run Intake Lowering 已落地，Bridge 侧 Run Intake v2 **只读预览**端点（WP-2C-01a/01b，工作树未提交）已注册但仍未与 lowering
 接线；五类 Profile 真实记录仍为 `0/unavailable`，因此 Phase 2 的执行与数据侧仍被阻塞；未部署 5173
+
+## 2026-10-17 Agent Harness 阶段 0 / WP-A（当前工作树）
+
+- 已冻结 Agent/Bridge/run/S0–S5 基线并登记能力、权限、生命周期和评测切分：见 `docs/F9_AGENT_ORCHESTRATION/26_AGENT_HARNESS_PHASE0_WP_A_CURRENT_BASELINE.md`。
+- 已新增 proposal-only Web/domain contract model（`src/entities/agent-orchestration/agent-harness-contract.ts`）和只读 fixture adapter；覆盖 `agent_operation`、`agent_turn`、`workflow_event`、`checkpoint`、`tool_call`、`tool_result`、`experiment_draft`、`approval`、`study`、`candidate`，以及 identity/revision、state、event dedupe/sequence、idempotency、approval stale/expiry、retention/delete、错误码和 JSON Pointer。
+- 新增的 `AgentHarnessStatusCard` 只显示 fixture 来源和 `not_exposed`/`completed` 等展示状态，明确不代表 Bridge queue、checkpoint、真实 Provider 或 run 创建；没有新增 route、Bridge contract、OpenAPI、generated client 或后端入口。
+- 评测 manifest `tests/fixtures/agent-harness/phase0-evaluation-manifest.json` 固定 19 个互斥 case，拆分为 train/validation/test/held-out-adversarial；fixture 结果不计入 live repetitions。
+- 当前 schema-set revision（本机 `python bridge/check_schema_set_revision.py`）为 `sha256:d7abac1889dd1b8a05bae7972fec3c7bd448053393daaf52afc3af893cde793e`；Harness proposal 明确不在该 revision 中。阶段 1 当前 **NO-GO**：后端正式 schema、tool registry、durable store、checkpoint/ledger、真实 Provider acceptance 和恢复门禁均未完成。
+
+## 2026-10-17 Agent Harness 前端阶段 1 只读接入（当前工作树，未部署）
+
+- 本节是对上面 WP-A proposal-only 记录的后续事实补充，不改写历史验收数字。Bridge 正式 successor contract 已核对为 revision `2026-10-17.wpa.v1`，四个对象/tool schema 使用 `tilesim.agent_harness.*.v1`；本机 schema-set revision 为 `sha256:29c1b985068c3f4be921fa48cebe5bbe3502079d3a13d263e6bcdbad4fc6ec73`。
+- Web 新增由 `pnpm contracts:generate` 生成并由 `contracts:check` 校验的 `src/contracts/generated/agent-harness.ts`，只包含正式 v1 DTO、headers/revision binding 和只读 client surface；没有生成 cancel/resume/retry/checkpoint/approval/delete 或其它写工具 client 方法。
+- `src/lib/api/agent-harness.ts` 通过正式 `/api/agent/harness-capabilities`、`/api/agent/tools`、operation/events 和 `/api/agent/tools/call` 接入 `get_capability_catalog`、`get_run_status`、`list_run_evidence`、`query_verified_metrics`；校验 API/schema-set/contract/backend identity、run/snapshot、artifact SHA/bytes/schema/JSON Pointer 和五类 tool outcome，未知/跨 run/越权 fail closed。
+- 前端 operation projection 以 Bridge snapshot/event 驱动，支持 terminal fence、event id 去重、乱序/冲突进入 `recovery_required`、SSE `Last-Event-ID` 恢复和 polling fallback；正式 v1 状态卡/只读工具时间线不伪造进度或证据覆盖率。`AgentHarnessStatusCard` 仍明确为 proposal-only fixture，不进入 v1 runtime path。
+- 阶段 1 仍不开放 `submit_experiment`、cancel/retry/resume UI、checkpoint/approval 写入、自主优化、无人值守实验或 live Provider；Provider 状态仍为 `live_acceptance_pending`。
+
+## 2026-10-17 Agent Harness WP-C 只读 Task Center（当前工作树，未部署）
+
+- `AgentHarnessTaskCenter` 只消费正式 v1 operation list 与已有 snapshot/event projection；按当前 run 过滤 operation，跨 run 记录不会进入任务中心。
+- 任务卡显示 workflow state、node、attempt count、错误原因和只读工具时间线；artifact 展示仅接受已校验的 id、schema、SHA-256、bytes 与 JSON Pointer。
+- operation 列表读取失败明确显示 `unavailable`；取消、恢复、重试和审批写入显示 `not_exposed`，不提供按钮，不创建 run，不把本地状态当作服务端任务真相。
+- 本批没有新增 Bridge contract/OpenAPI/schema，也没有开放任何写工具或自主运行入口。
+
+## 2026-10-18 Agent Harness WP-C 事件快照与 WP-D 评估（当前工作树，未部署）
+
+- Task Center 现在先按当前 run 过滤 operation list，再读取正式 operation detail/events；跨 run operation 不会触发 detail 读取或进入展示。
+- 单个 operation detail 读取失败显示 `unavailable`，不会以列表快照补造阶段；正式事件 sequence 缺口会进入 `recovery_required`，而不是静默跳过。
+- operation card 展示已校验的 workflow event sequence、node、state、created_at 和终态标记；没有新增写按钮、自动 resume 或 run 创建。
+- WP-D durable runtime bake-off 已登记在 [`docs/F9_AGENT_ORCHESTRATION/27_AGENT_HARNESS_WP_D_RUNTIME_BAKEOFF.md`](F9_AGENT_ORCHESTRATION/27_AGENT_HARNESS_WP_D_RUNTIME_BAKEOFF.md)：当前保留 Bridge 自有 SQLite WAL + bounded worker 作为唯一只读 operation source，不引入第二个 workflow runtime。阶段 2 草案/审批写入、阶段 3 可恢复队列 UI、阶段 4 受控执行和阶段 5 自主优化均为 NO-GO。
+- 本轮验证：Harness 定向 Vitest **3 files / 19 passed**；全量 Web Vitest **111 files / 1146 passed / 8 skipped**；`vue-tsc --noEmit`、目标 ESLint（0 error）、目标 Prettier、`docs:check`（69 篇）、`deps:check`（333 source files）、`contracts:check`、生产构建和 `git diff --check` 均通过；Bridge `test_server.py + test_agent_harness.py` **208 tests / OK**，Agent Harness Schema Ajv 检查通过。
+- 本批没有修改 Bridge 队列、durable store、ledger、OpenAPI 或 schema；没有操作 `127.0.0.1:5173`。
+
+## 2026-10-18 Agent Harness Task Center 只读刷新（当前工作树，未部署）
+
+- Task Center 对正式 operation snapshot 使用 5 秒只读刷新；`completed`、`failed`、`cancelled`、`recovery_required` 和 `manual_intervention_required` 到达后停止刷新。
+- 刷新不会调用 cancel/resume/retry/checkpoint/approval，不会创建 run，也不会把浏览器状态写成服务端 operation 真相；空列表不会伪造任务。
+- 新增测试覆盖活动状态刷新和终态/恢复边界；仍未修改 Bridge contract、队列、durable store、ledger 或 5173。
+
+## 2026-10-18 Agent Harness 阶段 2 前置审计（当前工作树，未部署）
+
+- 阶段 2 当前 **NO-GO**：canonical OpenAPI 没有 draft 创建/读取/校验/删除或 draft events endpoint；现有
+  `/api/agent/approvals` 与 `/api/agent/approvals/{approval_digest}` 是 backend-only 最小内部入口，不构成正式
+  draft/validation/approval 闭环，也没有 reject/revoke 路由。
+- `experiment_draft.v1` 目前只包含 `draft_digest`、`creates_run=false`、`diff_digest` 和 `validator_revision`；没有
+  `draft_validation_report` identity，也没有阶段 2 要求的 field diffs、assumptions、evidence refs、budget、risk、status、
+  expiry、parameter catalog revision 与完整 snapshot/backend/policy binding。
+- 当前生成 client 没有 draft/validation/approval 方法。前端因此没有新增审批 UI、按钮或写请求，不使用 localStorage/Pinia
+  冒充服务端草案真相，不调用 `/api/agent/approvals`，不开放任何 run 创建、submit/cancel/retry、自主优化或 Provider 能力。
+- 同步审计与完整缺口见 `docs/F9_AGENT_ORCHESTRATION/26_AGENT_HARNESS_PHASE0_WP_A_CURRENT_BASELINE.md` §12。下一步必须由
+  后端先发布闭合 Schema/OpenAPI/生成物、权限与持久化/删除/幂等/stale/expiry/replay 语义，再重新评估阶段 2。
+
+## 2026-10-17 实验配置下拉与预设（当前工作树）
+
+- 固定枚举继续由后端 descriptor/schema 驱动下拉；请求表新增基于当前拓扑设备的 `tp_degree` 下拉和 `participants` 设备选择，并保留无拓扑时的自由输入回退。
+- `participants` 选择器改为表格内展开式复选框：不需要 Ctrl，多张 GPU 可直接逐项勾选；菜单不再使用会被请求表裁切的悬浮层，设备较多时在选择器内部滚动。
+- 模型标识、集合通信类型、放置组、分离组、KV 交接编号、设备类型/分组、模块版本/配置档增加浏览器原生建议列表；这些字段仍允许输入契约接受的自定义字符串。
+- 调度策略、引擎画像、域类型、域保真度/失败策略、网络模型类型、连线所属域继续使用正式枚举下拉；带宽、延迟、KV、批大小等数值项增加常用预设建议，不限制自由数值。
+- 所有选择都通过原有 JSON patch 通道写回，不新增后端字段、不猜测未在契约中声明的枚举。新增结构化输入回归覆盖 `30` 项；全量 Web Vitest **1118 passed / 8 skipped**，`vue-tsc`、ESLint、Prettier、生产构建、契约生成检查和 `git diff --check` 通过。
+
+## 2026-10-17 本地运行记录删除与提示收敛
+
+- 运行记录页新增删除入口和二次确认；仅 `completed`、`failed`、`incomplete` 记录可删除，`preparing` / `running` 返回 `409 run_active`。
+- Bridge 新增 `DELETE /api/runs/{run_id}`，成功后删除 `STATE_ROOT/runs/<run_id>/` 及其工件；不存在返回 404，非终态返回 409。删除当前打开运行时，前端清空当前结果并保留在运行记录页。
+- 运行期证据区域移除重复的模块说明和工件长段落，改为标题/字段旁的 `InlineHelp` 悬浮提示；错误、缺失、拒绝和大工件状态提示保留。
+- 定向前端测试 11 项通过；Bridge `test_server.py` 185 项通过；契约生成检查、类型检查、ESLint、Prettier、Python 编译和 `git diff --check` 通过。
+
+## 2026-10-17 拓扑画布缩放与全屏编辑（当前工作树）
+
+- 拓扑显卡连接画布新增 75%–200% 缩放：缩小、放大和点击比例恢复 100%；缩放只改变画布显示尺寸，不修改 topology JSON。
+- 浏览器支持 Fullscreen API 时显示“全屏编辑/退出全屏”，全屏后画布独立占满可用区域并保留横向/纵向滚动，适合复杂拓扑的拖拽和连线编辑；退出全屏后恢复原页面布局。
+- 修正全屏网格布局的剩余空间分配，避免工具栏与画布之间出现大片空白；全屏和普通视图均保持现有拖拽连线语义与仿真输入边界。
+- 验证：`TopologyGraphEditor` **21/21**，`vue-tsc --noEmit`、改动文件 ESLint、Prettier、`git diff --check` 通过；4173 浏览器复核覆盖缩放、100% 恢复、全屏进入/退出和全屏后画布可见性。未停止、重启或替换 5173。
+
+## 2026-10-17 拓扑复杂输入边界与连线标签避让补充（当前工作树）
+
+- 一键排布现在记录设备/domain 结构签名：外部 JSON 增加、删除或改动设备/域成员后，旧的“已排布”状态会自动失效，不会把旧坐标误套到新拓扑；保留的卡片坐标会按当前画布边界裁剪。
+- 域内水平连线的标签会移到连线上方，垂直连线与跨域弧线保留可读间距；同一端点的并行 links 会按碰撞组错开标签，并将标签限制在画布可视范围内。
+- 这些改动只影响前端画布布局与显示，不写入 topology JSON，不修改 domain、link、Bridge schema 或仿真语义。
+- 新增并通过：`TopologyGraphEditor` **20/20**；拓扑 Playwright **3/3**；dashboard 拓扑快捷控制 Playwright **2/2**；`vue-tsc --noEmit`、改动文件 ESLint、Prettier、`git diff --check` 和生产构建均通过。
+
+## 2026-10-17 拓扑一键排布复杂场景优化（当前工作树）
+
+- 一键排布不再把同一视觉组强制排成单列：每个 domain 连通组按紧凑网格放置，组间按可用宽度自动横向排列，放不下时换行；重叠 domain 仍合并为一个组，未入域设备各自作为独立组。
+- 增加画布滚动容器和高度上限，设备数量较多时不会把整个实验页无限拉长；卡片位置仍只存在于前端画布，不写入 topology JSON。
+- 组内纵向间距为连线标签保留独立区域，避免跨域弧线、域内直线标签压住卡片；未改变连接语义、domain 判断、Bridge schema 或仿真输入。
+- 验证：`TopologyGraphEditor` **16/16**、结构化输入组件 **29/29**、快捷控制拓扑流程 **2/2**，`vue-tsc --noEmit`、改动文件 ESLint、Prettier 和 `git diff --check` 通过；生产构建通过。
+
+## 2026-10-16 拓扑显卡直连画布最终收口（当前工作树）
+
+- 新建实验的拓扑首屏现在只保留显卡卡片、显式 `topology.links` 连线和三个摘要数字；设备域节点、关系图、域内/跨域关系清单与源/目标下拉添加表单均不再渲染。
+- 连接编辑只保留一条直观路径：从一张显卡拖到另一张显卡即可新增，再拖同一对即可移除；点击已有连线才展开 domain、带宽、延迟和删除操作。卡数、domain 成员和网络模型参数统一放入默认收起的“高级拓扑设置”。
+- 当前 canonical `s1_des_example` 模板明确返回 `gpu0`–`gpu3` 四张设备卡，但 `topology.links` 为空；前端只展示后端显式 links，不从请求 `participants` 或 domain 成员猜造连线。因此首次进入时会看到四张卡和“当前还没有显卡连接”，需要拖拽后才写入 link。
+- 仿真语义保持不变：连线只代表 JSON 中的仿真输入，不代表真实 GPU 或物理网络；没有新增 Bridge 字段、后端仿真逻辑或关系推断。
+- 验证：拓扑/结构化组件 **51/51**、拓扑 JSON Playwright **3/3**、快捷控制拖拽连接 Playwright **2/2**、`vue-tsc --noEmit`、改动文件 ESLint、Prettier 与 `git diff --check` 通过；1440px 视觉检查确认四张卡首屏可见且无横向溢出。
+
+## 2026-10-16 拓扑连线语义与卡片布局补充（当前工作树）
+
+- 连线现在按所属 domain 的显式 `domain_type` 标识：`scale_up` 显示“域内通信”实线，`scale_out` 显示“跨域通信”虚线弧线；连线中点标牌同时显示通信类型与 domain ID，卡片下方显示设备所属 domain，避免把两种通信混在一起。新增连线时同组设备优先选择 scale_up 域、不同组设备优先选择 scale_out 域；拖拽使用指针捕获，移动卡片不会丢失事件；布局仍只保存在前端画布，不写入提交 JSON。
+- 卡片恢复可拖动布局：拖到空白处只移动本次画布位置，拖到另一张卡才写入/删除 `topology.links`；布局坐标仍不会写入提交 JSON。
+- 验证：`TopologyGraphEditor` **12/12**、结构化输入组件 **29/29**；快捷控制连接/移动与 JSON 预览的定向 Playwright 用例均通过；覆盖域内/跨域标签、跨域弧线、分组自动选域、卡片移动后 JSON 不变、连接新增/删除与只读 JSON 预览。
+
+## 2026-10-16 启动器部署 Bridge 门禁超时修复（当前工作树）
+
+- 启动器日志中的 CTest **100/100 通过**；失败发生在 Bridge `test_server.py` 的 182 项 F9 HTTP 测试，WSL 冷启动/临时 Bridge 重启时测试客户端固定 5 秒超时，客户端先断开后服务端出现 `BrokenPipeError`，不属于仿真回归或前端构建失败。
+- `bridge/test_server.py:1222-1227` 将 Bridge API 合约测试客户端超时提高到 30 秒，并保留失败传播；同一套 182 项测试复跑为 **OK（70.210 秒）**，未修改产品 Bridge、契约、仿真逻辑或部署端口。
+- `tests/unit/deployment-portability.test.js` 8 项通过；本机未调用 `wsl.exe` 执行真实部署，5173 未停止、重启或替换。
+
+## 2026-10-16 拓扑仿真关系视图收口（前置方案，已被上方最终收口覆盖）
+
+- 针对拓扑页仍把域归属与连接关系混在交叉画布中的可用性问题，前端默认视图改为“域与设备”：首屏先展示设备归属、每个 domain 的成员设备、域内/跨域仿真连接计数和连接清单；关系图降为“关系图（辅助）”标签页，不再遮挡主阅读路径。
+- 拓扑文案统一明确仿真语义：实线是 `links` 中的仿真连接，虚线是设备归属 domain 的说明关系；设备、domain 和连接均为仿真输入，不代表真实物理网络。未配置 links 时不再使用“不是真实连接”的歧义提示，而是说明设备归属仍有效、添加 links 后模拟器才使用设备间连接参数。
+- `TopologyGraphEditor` 新增域卡片的域内/跨域计数和跨域 domain 路径；关系图、JSON 输入和快捷控制仍共享同一文档与写入校验，未改变 Bridge schema、后端仿真、Provider 或证据边界。
+- 在用户反馈“关系图仍不直观”后，默认拓扑视图进一步改为分组式“仿真部署”布局：按设备 `group_id` 展示虚拟节点组、设备卡片、domain 归属、域内连接和跨组连接；连接编辑模式可直接在设备卡片上依次选择两个端点写入 `links`，已有连接可点击进入属性编辑。该布局只表达仿真输入，不把 `group_id`、domain 或 links 描述为真实主机、机箱、NVLink、PCIe 或物理网络。
+- 验证：上一轮拓扑相关 Vitest **80/80**、拓扑 Playwright **3/3**、快捷控制拓扑相关 Playwright **2/2**；本轮分组部署与卡片连线回归 **27/27**，拓扑 Playwright **3/3**；修改文件 Prettier、ESLint、`vue-tsc`、`git diff --check` 和生产 build 通过。1440px 页面截图复核了分组部署布局与有连接状态；4173 仅用于临时浏览器验证，未部署到 5173。
+
+## 2026-10-16 拓扑显卡连接工作台重构（前置方案，已被上方最终收口覆盖）
+
+- 新建实验的拓扑主路径收敛为“显卡连线”：默认打开仿真连接清单，按“源设备 → 目标设备 → 添加仿真连接”完成最常用的 links 编辑；已有连接继续在清单中按端点、domain、域内/跨域类型查看，并可编辑或删除。
+- 设备清单和域清单不再与连接编辑连续展开，改为“高级拓扑设置”默认收起；部署概览、网络模型和关系图也收进“更多拓扑视图”，关系图只作为辅助定位，不改变 topology JSON、Bridge schema 或仿真语义。
+- 连接参数带宽/延迟改为可选展开项，首屏只保留设备端点和 domain；summary 收敛为设备、仿真连接、domain 三个主指标。所有新文案继续明确这是仿真输入，不代表真实物理网络。
+- 验证：拓扑/结构化组件 57 tests passed；Topology Playwright 3/3；快捷控制拓扑连接 Playwright 2/2；vue-tsc、改动文件 ESLint、Prettier 和 git diff --check 通过。4173 仅用于浏览器视觉复核，未停止、重启或替换 5173。
+
+## 2026-10-14 Agent 结构化 JSON 草案与双视图同步（历史基线；已由 2026-10-15 条目收口）
+
+- 配置助手的模型方案仍只接受 Bridge 已发布的标量 settings；浏览器先按实时参数目录、范围、枚举、引用和集合依赖校验，再通过现有原子写入路径生成 runtime/topology JSON 预览。预览只读展示“确认后一次性应用”，不会创建运行，也不会绕过 `additionalProperties: false` 或猜测 `device_id`、links、domains、module bindings。
+- 实验页和轻量准备页的 Agent command registry 新增只读 preview handler；用户确认时仍由页面 owner 重新执行同一校验并一次性提交两份文档。任一元素或交叉引用失败，整批保持原文档和表单不变。
+- 结构化 JSON 文档变更会按精确指针反向投影到快捷控制；只有单一、无歧义的 scalar 值会回填旋钮，缺失或多个 module binding 值不一致时保持“未设置”，不会猜测。两页继续共享同一 draft/session 状态，草案写入前不会创建 run。
+- 该能力是前端本地预览与原子应用闭环，不新增 Bridge/后端字段或契约 revision；任意卡数配置仍需真实 `device_id`、links、domains 和后端校验，不能由设备数量或 group_id 推断物理互联拓扑。
+- 2026-10-14 目录边界复核：模型上下文现在优先保留当前 runtime trace 中每一条 `requests[i]/tp_degree`，避免短消息预算只暴露前两条请求；`device_id` 等必须联动引用的身份键不再发送给模型（页面结构化编辑仍保留并安全拒绝单独改名）。完整的“设备数 + 每条现有请求 TP”方案会复用结构化编辑器的显式配对操作，原子同步 `participants` 到实际生成的设备集合；只改设备数或只给部分请求仍要求用户在结构化输入中选择配对，links/domains 不会被助手猜测。
+
+## 2026-10-15 Agent 任意卡数配置收口（当前工作树）
+
+- 配置助手不再把 8 卡作为隐含特例：Bridge 提示和前端目录均按 schema 的 `topology/devices.maxItems` 工作，新增设备由原子编辑器安全生成 `device_id` 和默认 `GPU` 类型；只有用户明确要求分组时才要求对应 `group_id`，不会猜测 links/domains。
+- 设备数与请求 TP/participants 的组合应用现在覆盖扩容、缩容和保持卡数调整 TP。只有明确列出所有现有请求且目标 TP 与目标设备数一致时才自动重写参与设备；否则继续整批拒绝或转入结构化输入配对提示。
+- 已补充 3、16、32 卡的原子应用测试及独立 16 卡 Playwright fixture 流程。未修改 Bridge schema、后端核心、5173、Provider 或 credential；任意卡数配置仍不代表物理拓扑、真实 GPU 或生产验收。
+
+## 2026-10-15 部署 CTest 瞬态失败收口（当前工作树）
+
+- 上一次启动器部署在 CTest #91、#97、#98、#99 返回 `wsl.exe` exit 8；同一构建目录随后对这四项连续复跑及全量 100 项复跑均通过，未发现稳定的仿真回归。
+- `scripts/deploy-local-backend.ps1` 与 `scripts/update-backend.ps1` 现以 `-j1 --repeat until-pass:2` 串行执行 CTest：单个时序/资源瞬态失败最多重试一次；重复失败仍保持非零并阻止部署，不吞掉真实失败。
+- 使用 `-ReuseVerifiedArtifacts -NoRestart` 的当前源码部署复核已成功，Bridge/Web 182 项 Bridge unittest、schema revision 和生产构建均通过；本次未停止、重启或替换 5173。
+
+## 2026-10-15 强制全量部署门禁复核（当前工作树）
+
+- 启动器日志中的 `exited with code 1` 后续定位为工作树 UI 文案/结构调整留下的 7 项 Vitest 回归，而非 CTest 或 TileSim 仿真失败。已恢复 S0-S9 身份标识在证据节点和 Agent 契约策略中的可见性，保留场景标签及结构化输入布局，并为新增运行时/请求证据文案补齐英文目录。
+- 完整 Web Vitest 复跑为 **101 files / 1075 passed / 8 skipped / 0 failed**；`vue-tsc --noEmit`、改动文件 lint、contracts check、docs/deps check、生产 build 和 `git diff --check` 均 exit 0。
+- 使用当前 Web 与后端工作树执行 `scripts/deploy-local-backend.ps1 -SourceRoot D:\tileSim -NoRestart` 成功：后端 CTest **100/100**、Bridge **182 tests OK**、Web 全量 Vitest **1075 passed / 8 skipped**、生产构建通过，manifest 已写入当前源码/构建摘要。未停止、重启或替换 5173。
+
+## 2026-10-15 Agent 当前 JSON 上下文与 8 卡方案收口（当前工作树）
+
+- 实验页和轻量准备页现在把当前 `runtime_trace`、`topology` 作为有界、只读的分段上下文随 Agent 配置请求发送；客户端按 Bridge 的单消息/总会话上限裁剪，并在缺失尾部时明确禁止模型猜测。用户原句仍是最后一条消息，页面仍由 live catalog、引用完整性和原子写入路径最终校验。
+- Bridge 助手对明确的 synthetic provenance shorthand 做兼容归一化，并继续拒绝缺失请求 ID、重复 request ID、悬空设备/域/模块引用和不完整拓扑。该兼容只作用于模型返回值，不放宽用户 JSON 或运行契约。
+- 当用户只要求“配置一次 N 卡实验”而 Bridge 额外拒绝了可选 `structured_inputs` 时，前端现在将其显示为非阻塞警告；设备数量、每条现有请求的 TP 与 participants 的完整配对仍可一次性应用。用户明确要求完整 JSON、links 或 domains 时，拒绝仍保持阻塞。完整 JSON 且无标量编辑的方案也可通过页面 owner 的 validator 原子写入。
+- “JSON 输入”页现在与快捷控制页一样发布可写 Agent 上下文：助手可读取当前两份 JSON 并生成草案，页面 owner 仍按同一 live catalog、引用校验和原子写入路径落地；Trace package 选择页继续只解释、不提供可写草案。
+- 两个可写实验页在 Bridge/schema 就绪且没有任何现有 JSON 草案时，会通过 `runExperiment.getTemplate(form.scenario_id)` 自动读取 canonical `runtime_trace` 与 `topology` 作为只读 Agent 上下文；不会打开结构化编辑器、切换模式或创建运行。用户已输入任一 JSON、切换到 Trace package 或模板请求失败时均保持原内容/页面可用，仍可使用显式“加载场景模板”入口。
+- 本轮定向前端 148 tests、Bridge 助手/服务/参数面 279 tests、全量 Web Vitest **101 files / 1083 passed / 8 skipped**（含自动模板上下文与请求字段英文覆盖回归）、typecheck、lint（0 error / 2 既有 warning）、contracts/docs/deps check、生产 build、修改文件 Prettier 和 diff check 通过。全量 `format:check` 仍因 20 个既有/并行改动文件阻塞；本轮修改文件单独格式检查通过。未停止或替换 5173；未读取 credential、调用 Provider、操作用户 run、提交或推送。
 
 ## 2026-10-12 S2–S5 Bridge 矩阵与发布门禁剩余问题（第十二阶段，当前工作树）
 
@@ -16,33 +288,33 @@ Run Intake Lowering 已落地，Bridge 侧 Run Intake v2 **只读预览**端点�
 - 自动化门禁：Bridge 定向 `python -m unittest test_server.py test_assistant_model.py test_parameter_surface.py` 为 275 tests 通过；全量 discovery 300 tests 中 1 项既有 `contracts.agent_orchestration_phase2.tests.test_registry` 导入 `bridge` 失败，其余通过。Web Vitest `1114 passed / 8 skipped`、contracts、typecheck、lint（0 error/2 既有 warning）、build、docs、deps、diff check 通过；`format:check` 仍被 24 个既有未修改文件阻塞。仓外 Release CTest 定向矩阵在 `PYTHONUTF8=1` 下 `13/13` 通过；默认 Windows 代码页有 3 项 Python 解码失败。全量 CTest 在 `PYTHONUTF8=1` 下 `92%`，剩余为未构建目标、既有资源路径及 RuntimeSwap/NetworkWait/PrefixCache/DenseRank/DevicePlacements 回归，未改仿真逻辑。
 - 全量 Playwright 单独运行 `69 passed / 6 skipped / 4 failed / 1 not-run`；4 项均为既有 desktop screenshot drift（synthetic evidence、request evidence、dark evidence、unknown schema），未更新快照；`large-artifact-worker` 的 not-reached 未在本轮出现。结果仍仅属于本地 synthetic hosted、临时 Bridge 和前端集成证据，不代表真实 GPU、Provider、校准、held-out validation 或生产批准。未触碰 `5173`、credential、Provider、用户 run，未提交、推送或部署。
 
-## 2026-10-13 Agent 配置助手与 8 卡扩容安全起点（当前工作树）
+## 2026-10-13 Agent 配置助手与任意卡数扩容安全起点（当前工作树）
 
 ### 模型配置上下文补强（当前工作树）
 
 - 配置助手请求现在把实时参数目录作为有界的只读对话上下文发送给已配置 Agent：包含精确 path、当前值、范围/枚举、结构化输入模式和集合字段模板；原始用户句子仍是最后一条消息。该上下文不改变 Bridge 契约，也不构成前端写入授权。
-- 普通旋钮页会明确告知模型 `topology/devices`、`runtime_trace/requests`、TP、participants 及其元素尚未发布，并引导用户先启用“用表单配置全部输入”；结构化输入页才暴露实时集合目录。模型返回后仍必须通过 live catalog、引用完整性、范围和原子应用校验。
+- 未加载结构化输入时，页面会明确告知模型 `topology/devices`、`runtime_trace/requests`、TP、participants 及其元素尚未发布，并引导用户加载模板或在 JSON 输入页粘贴两份文档；加载后才暴露实时集合目录。模型返回后仍必须通过 live catalog、引用完整性、范围和原子应用校验。
 - 目录上下文按 Bridge 单消息上限裁剪，不发送完整大拓扑；目录外字段继续 fail closed。新增定向单测和 L6 浏览器断言覆盖上下文模式、最后用户消息和不创建 run 的边界。
 
 ### 2026-10-13 配置请求统一委托 Agent（当前工作树）
 
-- 配置页的自然语言请求不再经过本地场景关键词或字段名匹配：8 卡、吞吐/延迟描述和显式参数赋值均统一发送给已配置的 Agent 模型。
+- 配置页的自然语言请求不再经过本地场景关键词或字段名匹配：任意卡数、吞吐/延迟描述和显式参数赋值均统一发送给已配置的 Agent 模型。
 - 浏览器只对模型返回的结构化方案执行实时参数目录、范围、引用/集合完整性和原子应用校验；模型不可用或方案无法验证时 fail closed，不生成本地 fallback 方案、不写入配置、不创建 run。
 - 保留模型返回后的 key 到 live catalog 解析，因为这是拒绝未知字段和保持 JSON Pointer/当前页面边界的校验步骤，不是自然语言兜底。`scenario-profiles.ts` 及本地场景推荐路径已移除。
 - schema-set revision、Bridge 契约、后端核心、5173、Provider、credential、用户 run、提交和部署均未触碰。
 
-- 先前登记的 `eight_card_trial` 确定性场景目录已从运行路径移除；“8 卡／8 GPU／八卡”现在由 Agent 根据当前页面目录生成方案。页面仍不会猜测 domains、links、module bindings 或设备分组，方案必须经实时目录和结构化输入约束验证后才能应用。
+- 先前登记的 `eight_card_trial` 确定性场景目录已从运行路径移除；卡数现在由 Agent 根据当前页面目录生成方案，页面会按契约范围校验任意目标数量。页面仍不会猜测 domains、links、module bindings 或设备分组，方案必须经实时目录和结构化输入约束验证后才能应用。
 - 结构化输入面板在设备清单变化后显示明确的 TP/participants 配对选择：同步 TP 与参与设备到新集合、保留原 TP 并从新集合选择参与设备、清空 participants 保留 TP，或稍后处理。配对提示未处理时运行按钮保持禁用，用户明确选择“稍后再说”后才解除；失败的配对编辑不会清除阻塞状态。TP 大于新设备集合时拒绝静默降低，domains/links 仍由真实拓扑编辑器维护。
 - Agent 应用拓扑设备数量方案后会切换到结构化输入，并通过同一配对提示继续配置；参数目录仍只发布可验证的集合大小和标量叶字段，不新增 Bridge 字段、不放宽 Schema、不生成虚构拓扑引用。版本化引擎的通用 `batch_scheduler` 继续由画像调度，页面禁用该通用控件并显示提示。
 - 本阶段改动集中在 `src/features/run-experiment/`、`src/views/ExperimentView.vue`、结构化输入英文目录及对应单元/组件测试。定向测试 198 passed；全量 Vitest 1123 passed / 8 skipped；`vue-tsc --noEmit`、`pnpm lint`（0 error、2 既有 warning）、`pnpm build`、`contracts:check`、`docs:check`、`deps:check` 和 `git diff --check` 通过。未运行或修改后端核心，未触碰 5173、Provider、credential、用户 run、提交、推送或部署。
 - 全仓 `pnpm format:check` 仍报告 24 个既有文件（含历史契约/文档、`scripts/generate-bridge-client.mjs`、预先存在的运行实验文件）；本阶段实际修改文件的 Prettier 检查通过，未进行无关全仓格式化。
-- 该能力仍是本地参数草案与结构化输入辅助，不代表 8 卡物理拓扑、真实 GPU、Provider、校准、held-out validation 或生产发布已验证；domains/links、设备能力和后端契约校验仍是最终门槛。
+- 该能力仍是本地参数草案与结构化输入辅助，不代表任意卡数的物理拓扑、真实 GPU、Provider、校准、held-out validation 或生产发布已验证；domains/links、设备能力和后端契约校验仍是最终门槛。
 
 ## 2026-10-13 文档整体审查复核（当前工作树）
 
 - 本次复核只更新文档口径，没有修改前端实现、Bridge 契约、生成物或后端仿真。结论范围限定为“前端是否正确暴露和解释当前后端已经提供的能力”；后端尚未实现的 Profile、Run Intake v2 执行、真实 GPU、Provider、校准和 held-out validation 不计为前端对齐缺口。
 - 当前已验证的 S0–S5 前后端边界：S0 dense package 可生成并展示 `request_attribution`；S1 runtime package 可展示四类 runtime 工件但在 dense DES 前置不足时不生成 attribution；S2 execution/kernel、S3 memory、S4 device、S5 collective 可通过当前 canonical Bridge package 进入 `completed`，页面展示 CLI 返回的 entry boundary、provenance、fidelity、Fabric 数量和带身份的 `expected_absence`，不把不适用工件解析为空数据。S2–S5 的完整深链、刷新恢复和全部原始证据入口仍属于浏览器复验项，不能写成已完全覆盖。
-- 当前身份口径保持不变：canonical schema-set revision 由 `bridge/contracts/schema_set.py` 计算，当前值为 `sha256:5ccd91c7457235b67ee9bc6731c887ca580bdf8bb74e171f9ef5fc56a8614b55`；manifest、run、artifact schema、SHA-256 和 bytes 必须绑定校验；query/cache key 继续包含 run ID、backend identity、schema revision 和 artifact SHA-256。
+- 当前身份口径保持不变：canonical schema-set revision 由 `bridge/contracts/schema_set.py` 计算，当前值为 `sha256:aa9e305651fa1731de47b034fec27f2ea19089651119302c21b3698c1a97b327`；manifest、run、artifact schema、SHA-256 和 bytes 必须绑定校验；query/cache key 继续包含 run ID、backend identity、schema revision 和 artifact SHA-256。此前阶段的 revision 数字保留在各自历史记录中。
 
 ### 2026-09-28 审查项当前状态
 
@@ -750,3 +1022,111 @@ docs/archive/                    历史记录
 - `scripts/deploy-local-backend.ps1` 新增显式 `-ReuseVerifiedArtifacts` 快速路径和 `-ForceFullValidation` 安全回退开关。启动器的“重新部署当前代码”默认请求快速路径：只有当前后端 revision、后端源码 digest、build digest、WSL 发行版、CLI 路径及 SHA-256、已记录 CTest 结果，以及 Web immutable release 的源码 digest、schema revision、受控 release 路径和 release/Bridge/static 校验全部一致时才复用；证明不足即回退原完整构建/测试流程。
 - 后端未变化时复用已验证 CLI 与 CTest；Web 未变化时通过 `release-snapshot.mjs verify` 复用 immutable release；Web 有变化时仍执行契约生成物 drift check、schema-set check、Bridge `py_compile` 和生产构建。勾选“强制完整验证”或直接调用脚本不带快速开关会重新运行原有后端构建、CTest、Bridge/Web 测试和 Web 构建。
 - 快速路径不改变 manifest identity、source/build digest、schema-set revision、immutable release、rollback 或 5173 重启语义；manifest 记录复用状态，后续启动也会复核 CLI SHA-256。启动器 fixture、Rust 单测/Clippy、组件和 fixture E2E 已复验；本轮未完成真实部署、未读取 credential、未调用 Provider、未操作用户 run、未提交或推送。一次误触发的脚本检查在进入 manifest/重启阶段前被中断，仅留下仓外增量构建缓存；检查开始时 5173 曾由既有 PID 监听，随后在清理该检查产生的 WSL 子进程后观察为未监听，未执行启动或重启操作，需由用户决定是否恢复服务。
+
+### 2026-10-15 Agent 结构化 JSON 仿真拓扑方案（当前工作树，未部署）
+
+- 助手方案现在可以在 `structured_inputs` 中一次性返回完整的 `runtime_trace` 和 `topology` JSON；拓扑可包含 `devices`、`domains`、`links`、`module_bindings`，不再要求把拓扑连线伪装成标量旋钮。Bridge 复用现有 `custom_inputs` 校验，并额外要求两个文档明确声明 `synthetic_trace`、`uncalibrated` 及合法的探索性/一致性 claim scope；连线端点、domain 成员、module binding 和自连接均在返回方案前拒绝。
+- 前端在确认前展示完整 JSON 预览，使用同一 create-run validator 和拓扑解析器做原子校验；任一文档或引用失败，runtime/topology 均不写入，也不会创建 run。应用后同步进入 JSON 输入状态，仍保留用户确认、requested/resolved fidelity 分离和既有动态引擎边界。
+- 该能力只生成可校验的仿真假设，不代表真实 GPU、物理链路、Provider、校准、held-out validation 或生产验证。当前工作树 `contracts:check`、`typecheck`、`lint`、`docs:check`、`deps:check`、`build`、Bridge 助手 69 tests 和定向前端 81 tests 已通过；无关历史格式问题不在本次重写范围内。未触碰 5173、credential、Provider、用户 run、提交或部署。
+- OpenAPI 增加 `structured_inputs` 后，canonical schema-set revision 从前一阶段的 `sha256:5ccd91c7457235b67ee9bc6731c887ca580bdf8bb74e171f9ef5fc56a8614b55` 变为 `sha256:aa9e305651fa1731de47b034fec27f2ea19089651119302c21b3698c1a97b327`；生成 TypeScript、Bridge client 和 schema-set 检查均已同步，未通过硬编码掩盖漂移。
+- 针对一次 8 卡重试中模型把 `exploratory`、`synthetic_trace`、`uncalibrated` 错放为 runtime provenance 的对象键问题，助手协议已补充精确嵌套示例；Bridge 仅对这组三值的无歧义助手缩写归一化为 canonical provenance，其他未知结构仍 fail closed，并有回归测试覆盖。
+
+## 2026-10-18 Agent Harness 阶段 2 当前事实
+
+本节是当前工作树增量事实，不改写前文历史数字。Bridge 已发布 `2026-10-18.wpb.v1` successor：
+`tilesim.agent_harness.experiment_draft.v2`、`tilesim.agent_harness.draft_validation_report.v1`、
+`tilesim.agent_harness.approval.v2`。WP-A `2026-10-17.wpa.v1` operation/tool/draft v1/approval v1 保留兼容读取，proposal v0
+仍不接受为运行时身份。
+
+正式 API：`POST/GET/DELETE /api/agent/drafts`、`POST .../{draft_id}/validate`、`GET .../{draft_id}/events`（含 SSE stream）、
+`POST/GET .../{draft_id}/approvals/{approval_id}`、`POST .../reject`、`POST .../revoke`。写请求必须携带
+`Idempotency-Key`，并校验 principal/workspace、payload digest、input snapshot、schema-set revision、backend identity、
+validator/policy revision。SQLite WAL 持久化 draft、validation report、approval、event identity 和 digest/有界摘要；删除、
+retention 到期、validation 替换和 identity 漂移会使对象不可读或 stale。完整 create-run payload 不长期保存。
+
+阶段 2 合同没有执行入口：`would_create_run` 固定为 `false`，没有调用 `/api/runs`、TileSimCLI、run repository create、queue
+submit 或 artifact materializer。submit/cancel/retry/resume/autonomous optimization 继续关闭。Provider acceptance 继续为
+`live_acceptance_pending`；当前证据是本地 deterministic/contract/unit/HTTP 测试，不是 live Provider 或 held-out validation。
+
+# 阶段 3A 受控执行交接（2026-10-18）
+
+Bridge execution successor revision 为 `2026-10-18.wpc.v1`，当前 schema-set revision 由 Bridge 启动时计算。
+`POST /api/agent/executions` 只接受 valid draft + approved、未过期未消费 approval；它重新绑定 snapshot、schema-set、
+backend、policy 和 create-run digest，消费单次 approval 后写入 side-effect ledger，并通过现有 `/api/runs` 创建唯一 run。
+状态、事件、SSE/polling、cancel、retry、resume 和 result reference 均有对应 execution endpoint。unknown outcome 只进入
+`recovery_required`/人工接管，取消后的迟到事件不能覆盖终态，结果只能来自 verified artifact manifest。Provider acceptance
+仍为 `live_acceptance_pending`，自主优化和无人值守批量执行继续关闭。
+
+## 2026-10-18 阶段 3A 后端受控执行收口（当前工作树，未部署）
+
+本轮在不触碰 `127.0.0.1:5173`、TileSim C++/仿真逻辑或 Provider credential 的前提下，完成了
+阶段 3A 的故障注入资产和执行边界收口。执行 successor contract 仍为 `2026-10-18.wpc.v1`，本地
+schema-set revision 为 `sha256:ce5ac94634375b58c62c6d47ec70a6f45441c02c789eb61bfa928425222dec50`。
+
+新增 `bridge/test_agent_harness_stage3_matrix.py`，以 `AH3-F01`–`AH3-F26` 固定编号覆盖：未批准/非法/
+stale draft、过期/撤销/replay approval、digest/schema/backend/principal 绑定、幂等 replay/conflict、队列容量、
+worker/Bridge 重启、create-run timeout/non-zero/unknown、重复/乱序 event、取消迟到终态、不可重试失败、
+已完成副作用 resume、artifact identity mismatch、retention/delete 和 terminal fence。每项至少核对稳定错误码、
+根 JSON Pointer、retryable/unknown_outcome、operation 状态、event/ledger 副作用边界；submit/SSE/result 和唯一
+`/api/runs` 入口仍由 `test_agent_harness_stage3.py` 的 hosted HTTP 测试覆盖。
+
+执行边界新增两项 fail-closed 语义：失败 operation 只能由显式 retry 重新打开，`recovery_required` 只能显式 resume
+或 cancel；result reference 生成前重新用 run repository 校验 manifest 的 schema、run、artifact 列表、SHA-256、
+bytes 和 rejection set。删除 operation 会清除 request/result/error payload，只保留删除身份元数据；已删除 operation
+不再可通过 stage3 lookup 读取。
+
+仓外临时 Bridge + 当前源码 `D:\tileSim\build-ca1\Release\TileSimCLI.exe` hosted smoke（端口 `59123`）已完成：
+合法 draft → validation → approval → execution → `/api/runs` → worker polling → manifest/result；单次创建
+`run-20261018-181322-60b580b5`，事件 sequence `1..5`，result 保留 `synthetic_trace` / `exploratory`、requested/resolved
+fidelity 和 artifact SHA/bytes。相同 execution idempotency key 返回 replay 且未增加 run；不同 payload 返回稳定 409。
+临时服务和 run 位于仓外临时状态根，已停止；该 smoke 不计入 Provider acceptance。
+
+Provider acceptance 仍为 `live_acceptance_pending`。自主优化、自动候选、多工具自主循环和无人值守实验仍未开放。
+阶段 3A 仍为 **NO-GO**，直到完整 26 类故障矩阵与 hosted smoke 进入正式发布门禁并完成独立审查；本节不改写历史验收数字。
+
+## 2026-10-18 阶段 3A 独立发布审查（当前工作树，未部署）
+
+新增机器可校验的 release-gate 入口 `bridge/run_agent_harness_stage3_release_gate.py`、
+`bridge/agent_harness/release_gate.py`、`bridge/agent_harness/hosted_smoke.py` 和
+`bridge/test_agent_harness_stage3_release_gate.py`，完整清单见
+[`docs/F9_AGENT_ORCHESTRATION/28_AGENT_HARNESS_STAGE3A_RELEASE_GATE.md`](F9_AGENT_ORCHESTRATION/28_AGENT_HARNESS_STAGE3A_RELEASE_GATE.md)。入口只产生仓外临时 manifest，不读取、保存或输出 Provider credential、raw response 或 hidden reasoning，也不触碰 5173。
+
+独立复核通过 `AH3-F01`–`AH3-F26`（26/26），并使用当前源码 CLI 在仓外临时 Bridge 完成 draft → validation → approval → execution → `/api/runs` → polling/SSE → result → manifest smoke：run `run-20261018-185914-e40329ea`，event sequence `1..5`，单 run，同 key replay 不增加 run，不同 payload 为 `409 payload_conflict`；synthetic provenance 仍为 `synthetic_trace` / `exploratory`。Provider acceptance 仍为 `live_acceptance_pending`，人工 citation/evidence review 为 `not_run`；因此阶段 3A 独立发布审查结论仍为 **NO-GO**，暂不允许进入前端 execution UI 阶段。自主优化、自动候选、多工具自主循环和无人值守实验继续保持 `unavailable`/`not_exposed`。
+
+## 2026-10-18 阶段 3A acceptance / review 准备（当前工作树，未部署）
+
+新增仓外 redacted preparation 入口 `bridge/run_agent_harness_stage3_acceptance_prep.py`、
+`bridge/agent_harness/acceptance_prep.py` 和定向测试；准备资产说明见
+[`29_AGENT_HARNESS_STAGE3A_ACCEPTANCE_PREFLIGHT.md`](F9_AGENT_ORCHESTRATION/29_AGENT_HARNESS_STAGE3A_ACCEPTANCE_PREFLIGHT.md)。Provider
+manifest identity 为 `tilesim.agent_harness.provider_acceptance_manifest.v1` /
+`2026-10-18.3a.acceptance.v1`，人工 review package identity 为
+`tilesim.agent_harness.evidence_citation_review_package.v1` / `2026-10-18.3a.review.v1`。
+
+本轮仅验证 fail-closed 准备契约：Provider state 保持 `live_acceptance_pending`，capability probe 为
+`not_run`/`not_configured`，success repetition 为 `0`，人工 review 为 `not_run`；没有调用 Provider、读取或
+持久化 credential、raw response、hidden reasoning 或完整 evidence payload。3A 仍为 **NO-GO**，不允许启动
+阶段 3B execution UI、阶段 4、自主候选、多工具循环或无人值守执行。
+
+## 2026-10-18 阶段 3A 最终发布验收复核（当前工作树，未部署）
+
+本轮使用正式 release-gate 入口、当前 schema-set、Bridge 和
+`D:\tileSim\build-ca1\Release\TileSimCLI.exe` 在仓外临时状态根复跑。AH3-F01–AH3-F26 为 `26/26 pass`，
+release-gate 测试套件 `54/54 pass`；hosted synthetic smoke 通过，唯一 run 为
+`run-20261018-223907-c3856146`，事件序列为 `1..5`，SSE 与 polling 一致，同 key replay 未增加 run，
+不同 payload 为 `409 payload_conflict`。该结果明确保持 `synthetic_trace` / `exploratory`，不计入 Provider acceptance。
+
+仓外 redacted acceptance manifest 为
+`C:\Users\mapanwang\AppData\Local\Temp\tilesim-stage3a-final-479997e0bd7246849a705890c1f10d5b\provider-acceptance-manifest.json`
+（`sha256:142056eac084dcf47f4539a60f923e9b779cc4103c8d5ae14462b94253076abe`）；review package 为
+`C:\Users\mapanwang\AppData\Local\Temp\tilesim-stage3a-final-479997e0bd7246849a705890c1f10d5b\evidence-citation-review-package.json`
+（`sha256:963ed92dc6064a3f93ff5cf86a74e42cd49683e8d9c86fc3dbf3fdd38ddbc567`）。Provider capability probe 为
+`not_run/not_configured`，四个 acceptance lane（success、refusal_or_invalid_response、timeout_or_unavailable、
+identity_mismatch）均为 `not_run`，成功 repetition 为 `0`；独立人工 evidence/citation review 为
+`not_run`，reviewer 数为 `0`。本轮未读取、打印或持久化 credential、token、raw Provider response、hidden reasoning
+或完整敏感 evidence payload。
+
+release-gate manifest 为
+`C:\Users\mapanwang\AppData\Local\Temp\tilesim-stage3a-release-gate-d2094e8d5b7947a7993aa820c43234d9.json`
+（`sha256:c5cc6e0f8381be31f53f82cfbb96f97e174d9bf7fc93c5dd714d4aa3281922c5`）。Provider acceptance 和独立人工审查
+仍是强制阻塞项，阶段 3A 最终结论保持 **NO-GO**；不得启动阶段 3B execution UI、阶段 4、自主候选、多工具循环
+或无人值守执行。

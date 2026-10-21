@@ -87,6 +87,11 @@ function trustedPlan(payload: unknown): AssistantModelPlanResponse | null {
   // A channel that claims to have written or run something is not trusted.
   if (payload.applied !== false || payload.executed !== false) return null;
   if (!Array.isArray(payload.settings)) return null;
+  if (payload.structured_inputs !== undefined) {
+    if (!isRecord(payload.structured_inputs)) return null;
+    if (!isRecord(payload.structured_inputs.runtime_trace) || !isRecord(payload.structured_inputs.topology))
+      return null;
+  }
   return payload as unknown as AssistantModelPlanResponse;
 }
 

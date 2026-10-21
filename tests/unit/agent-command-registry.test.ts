@@ -97,9 +97,39 @@ describe("agent command registry", () => {
     expect(result.note).toContain("没有任何通过校验的改动");
   });
 
+  it("allows a complete JSON proposal without scalar edits", () => {
+    const registry = createAgentCommandRegistry();
+    let called = false;
+    registry.register("experiment", (_edits, structuredInputs) => {
+      called = Boolean(structuredInputs);
+      return { receipts: [], channelMoved: true, note: "JSON" };
+    });
+
+    const result = registry.apply([], { runtimeJson: '{"requests":[]}', topologyJson: '{"topology":{}}' });
+
+    expect(called).toBe(true);
+    expect(result.note).toBe("JSON");
+  });
+
   it("refuses an empty provider id", () => {
     const registry = createAgentCommandRegistry();
     expect(() => registry.register("", handler("nobody"))).toThrowError("agent_parameter_provider_id_required");
     expect(registry.available()).toBe(false);
+  });
+
+  it("returns a validated JSON preview from the active page without applying it", () => {
+    const registry = createAgentCommandRegistry();
+    let applied = false;
+    registry.register(
+      "experiment",
+      () => {
+        applied = true;
+        return { receipts: [], channelMoved: false, note: "" };
+      },
+      () => ({ runtimeJson: '{"requests":[]}', topologyJson: '{"topology":{}}' }),
+    );
+
+    expect(registry.preview([edit])).toEqual({ runtimeJson: '{"requests":[]}', topologyJson: '{"topology":{}}' });
+    expect(applied).toBe(false);
   });
 });

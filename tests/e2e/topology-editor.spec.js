@@ -20,9 +20,9 @@ const topologyEnvelope = {
   topology: {
     topology_name: "pointer-e2e-topology",
     devices: [
-      { device_id: "gpu-0", device_type: "gpu" },
-      { device_id: "gpu-1", device_type: "gpu" },
-      { device_id: "gpu-2", device_type: "gpu" },
+      { device_id: "gpu-0", device_type: "gpu", group_id: "node-0" },
+      { device_id: "gpu-1", device_type: "gpu", group_id: "node-0" },
+      { device_id: "gpu-2", device_type: "gpu", group_id: "node-1" },
     ],
     module_bindings: [{ module_name: "fabric-0", module_kind: "scale_up" }],
     domains: [
@@ -154,6 +154,8 @@ test.describe("topology preview in the JSON tab", () => {
   test("draws a read-only graph that follows the JSON text and offers no editing", async ({ page }) => {
     await installTopologyApi(page);
     await page.goto("/experiment", { waitUntil: "networkidle" });
+    await page.setViewportSize({ width: 1024, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1024);
 
     await page.getByRole("button", { name: "JSON 输入", exact: true }).click();
     const editor = page.locator(".topology-editor");
@@ -162,14 +164,14 @@ test.describe("topology preview in the JSON tab", () => {
 
     const json = editor.locator(".topology-editor__json textarea");
     await json.fill(JSON.stringify(topologyEnvelope, null, 2));
+    // The primary canvas always shows every GPU; there is no secondary
+    // relationship graph or domain-node layer to interpret.
     await expect(editor.locator(".topology-device")).toHaveCount(3);
-    await expect(editor.locator(".topology-domain-node")).toHaveCount(1);
+    await expect(editor.locator(".topology-view-more")).toHaveCount(0);
+    await expect(editor.locator(".topology-domain-node")).toHaveCount(0);
     await expect(editor.locator(".topology-link")).toHaveCount(0);
 
-    // Typing is the only route into the topology here, so none of the editing
-    // chrome is rendered: no connect mode, no domain chips, no module list, no
-    // layout hint. Those live in the quick-control tab.
-    await expect(editor.getByRole("button", { name: "连接设备", exact: true })).toHaveCount(0);
+    // JSON preview is still read-only and exposes no relation/domain editor.
     await expect(editor.locator(".topology-module-bindings")).toHaveCount(0);
     await expect(editor.locator(".topology-domains")).toHaveCount(0);
     await expect(editor.locator(".topology-editor__hint")).toHaveCount(0);
@@ -185,7 +187,6 @@ test.describe("topology preview in the JSON tab", () => {
     linked.topology.links = [{ src_device: "gpu-0", dst_device: "gpu-1", domain_id: "fabric-0" }];
     await json.fill(JSON.stringify(linked, null, 2));
     await expect(editor.locator(".topology-link")).toHaveCount(1);
-    await expect(editor.locator(".topology-link text").first()).toHaveText("fabric-0");
 
     // ...and shrinking the document shrinks the picture.
     linked.topology.devices = [{ device_id: "gpu-0", device_type: "gpu" }];

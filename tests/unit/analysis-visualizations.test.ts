@@ -16,8 +16,11 @@ describe("analysis visualization models", () => {
           request_id: "request-0",
           status: "completed",
           ttft_ps: 0,
+          has_ttft_sample: true,
           tpot_ps: undefined,
+          has_tpot_sample: false,
           end_to_end_latency_ps: "9007199254740993",
+          has_end_to_end_latency_sample: true,
         },
       ],
     } as MetricsReport);
@@ -27,6 +30,63 @@ describe("analysis visualization models", () => {
     expect(visualization.rows[0].values[1]).toBeNull();
     expect(visualization.rows[0].rawValues).toEqual(["0", "", "9007199254740993"]);
     expect(visualization.derivation).toBe("unit_conversion");
+  });
+
+  it("fails closed when a uint64 latency has already been rounded into an unsafe number", () => {
+    const visualization = buildRequestLatencyVisualization({
+      report_id: "metrics-unsafe-number",
+      request_metrics: [
+        {
+          request_id: "request-unsafe",
+          ttft_ps: Number.MAX_SAFE_INTEGER + 2,
+          has_ttft_sample: true,
+        },
+      ],
+    } as MetricsReport);
+
+    expect(visualization.rows[0].values[0]).toBeNull();
+    expect(visualization.rows[0].rawValues?.[0]).toBe("");
+    expect(visualization.rows[0].valueStatuses?.[0]).toBe("sample_unavailable");
+  });
+
+  it("keeps inferred, synthetic, and fallback samples explicit in the visualization", () => {
+    const visualization = buildRequestLatencyVisualization({
+      report_id: "metrics-provenance",
+      trace_provenance: { source_mode: "synthetic_trace" },
+      request_metrics: [
+        {
+          request_id: "request-provenance",
+          ttft_ps: 10,
+          has_ttft_sample: true,
+          ttft_ps_source: "inferred",
+          tpot_ps: 20,
+          has_tpot_sample: true,
+          tpot_ps_source: "fallback",
+          end_to_end_latency_ps: 30,
+          has_end_to_end_latency_sample: true,
+        },
+      ],
+    } as MetricsReport);
+
+    expect(visualization.rows[0].values).toEqual([0.00001, 0.00002, 0.00003]);
+    expect(visualization.rows[0].valueStatuses).toEqual(["sample_inferred", "sample_fallback", "sample_synthetic"]);
+    expect(visualization.rows[0].rawValues).toEqual(["10", "20", "30"]);
+  });
+
+  it("labels explicitly observed samples separately from generic reported samples", () => {
+    const visualization = buildRequestLatencyVisualization({
+      report_id: "metrics-observed",
+      request_metrics: [
+        {
+          request_id: "request-observed",
+          ttft_ps: 10,
+          has_ttft_sample: true,
+          ttft_ps_source: "observed",
+        },
+      ],
+    } as MetricsReport);
+
+    expect(visualization.rows[0].valueStatuses?.[0]).toBe("sample_observed");
   });
 
   it("uses direct Fabric fields without recomputing runtime, queue, or congestion", () => {
@@ -141,8 +201,29 @@ describe("analysis visualization models", () => {
     ]);
 
     expect(visualization.rows).toHaveLength(1);
-    expect(visualization.rows[0].label).toContain("S6");
+    expect(visualization.rows[0].label).toContain("网络与硬件资源模块");
     expect(visualization.rows[0].rawValues).toEqual(["9007199254740993"]);
     expect(visualization.rawUnit).toBe("ps");
+  });
+
+  it("renders canonical floating-point attribution scores while preserving their raw text", () => {
+    const visualization = buildAttributionVisualization([
+      {
+        attribution_id: "fractional-score",
+        subsystem: "S3",
+        component_code: "kv",
+        score_ps: 1500000.5,
+      },
+      {
+        attribution_id: "legacy-fractional-score",
+        subsystem: "S4",
+        component_code: "device",
+        score_ps: "2500000.25",
+      },
+    ]);
+    expect(visualization.rows[0].values[0]).toBeCloseTo(1.5000005);
+    expect(visualization.rows[0].rawValues).toEqual(["1500000.5"]);
+    expect(visualization.rows[1].values[0]).toBeCloseTo(2.50000025);
+    expect(visualization.rows[1].rawValues).toEqual(["2500000.25"]);
   });
 });

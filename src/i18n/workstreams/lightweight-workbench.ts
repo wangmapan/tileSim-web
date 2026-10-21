@@ -172,15 +172,15 @@ export const lightweightWorkbenchEnglishCatalog: Readonly<Record<string, string>
     "The lightweight workbench focuses on start, setup, runs and results; guidance is centralized in page help.",
   "旧任务入口已兼容重定向到新建实验。": "The legacy task entry redirects to New experiment for compatibility.",
   "当前阶段：L6R": "Current phase: L6R",
-  "当前仅支持八个正式参数字段的单轮草案。":
-    "Only single-turn drafts for the eight formal parameter fields are currently supported.",
-  "模型、设备、卡数、TP/PP/EP、物理 KV、SLO 和工作负载模板仍受公开能力与专业版范围限制。":
-    "Models, devices, card counts, TP/PP/EP, physical KV, SLO and workload templates remain bounded by published capabilities and the professional workbench.",
+  "助手会按当前页面已发布的参数目录生成单轮草案；未发布或引用不完整的字段会安全拒绝。":
+    "The assistant generates single-turn drafts from the parameters published by the current page; unpublished or incomplete references are rejected safely.",
+  "模型、设备、任意卡数、TP/PP/EP、物理 KV、SLO 和工作负载模板仍受公开能力与专业版范围限制。":
+    "Models, devices, arbitrary card counts, TP/PP/EP, physical KV, SLO and workload templates remain bounded by published capabilities and the professional workbench.",
   "Agent 不创建正式运行、不调用 Provider，也不保存完整对话；工作台可提交。":
     "The Agent does not create a run or call a Provider, and full conversations are not saved; the workbench submission flow remains available.",
   "还需要一点信息才能安全生成草案。": "A little more information is needed to safely generate a draft.",
-  "这项请求当前不可用，但可以继续处理已发布的八个参数。":
-    "This request is currently unavailable, but the eight published parameters can still be handled.",
+  "这项请求当前不可用，但可以继续处理当前页面已发布且可校验的参数。":
+    "This request is currently unavailable, but parameters published and validated by the current page can still be handled.",
   "没有生成修改。": "No changes were generated.",
   "暂时无法连接到 Bridge": "Unable to connect to the Bridge for now",
   "Bridge 不可用时页面不伪造状态；恢复后可回到新建实验校验并提交。":

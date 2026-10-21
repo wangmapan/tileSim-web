@@ -303,6 +303,14 @@ const valueDefinitions: Readonly<Record<string, Copy>> = {
     description: "报告未提供所需数据。",
   },
   unknown: { label: "状态未知", description: "" },
+  sample_reported: { label: "有效样本", description: "后端明确声明该指标存在有效样本。" },
+  sample_observed: { label: "观测值", description: "后端标记该数值为直接观测值。" },
+  sample_unsampled: { label: "未采样", description: "后端明确声明该指标没有有效样本。" },
+  sample_unavailable: { label: "不可用", description: "后端没有提供可安全展示的有效样本。" },
+  sample_inferred: { label: "推断值", description: "该数值由后端标记为推断或模型值，不是直接观测。" },
+  sample_synthetic: { label: "合成有效样本", description: "该数值来自 synthetic trace，不能扩大为真实校准结论。" },
+  sample_fallback: { label: "fallback 结果", description: "该数值来自后端 fallback 路径，不能当作精确匹配。" },
+  sample_compatibility: { label: "兼容测试数据", description: "该数值来自 compatibility harness trace。" },
   complete: { label: "完整", description: "" },
   matched: { label: "已匹配", description: "" },
   pass: { label: "通过", description: "" },
@@ -433,7 +441,7 @@ const valueDefinitions: Readonly<Record<string, Copy>> = {
 };
 
 const backendExplanationCopy: Readonly<Record<string, string>> = {
-  "The run starts from S1.": "本次运行从推理引擎与服务运行时模块开始。",
+  "The run starts from S1.": "本次运行从推理引擎与服务运行时开始。",
   "Runtime DES evidence is present.": "包含推理引擎与服务运行时模块的 DES 证据。",
   "Execution lowering evidence is present.": "包含运行时到执行语义的转换证据。",
   "Memory evidence is present.": "包含 KV Cache 与内存证据。",
@@ -444,7 +452,7 @@ const backendExplanationCopy: Readonly<Record<string, string>> = {
   "Synthetic-trace validation cannot stand in for held-out real-trace fidelity claims.":
     "合成数据检查不能替代真实 Trace 留出验证。",
   "The run starts from an S1 canonical boundary, so S0 is intentionally absent.":
-    "本次运行从推理引擎与服务运行时模块边界开始，工作负载模块按边界缺省。",
+    "本次运行从推理引擎与服务运行时边界开始，工作负载输入按边界缺省。",
   "Runtime policy flow emits dependency-ordered DES runtime events in the hosted path.":
     "托管路径生成按依赖排序的运行时 DES 事件。",
   "Execution abstraction is lowered from runtime outputs before collective realization.":

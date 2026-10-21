@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tilesim.agent_harness.agent_operation.v1",
+  "allOf": [{ "$ref": "tilesim.agent_harness.common.v1" }],
+  "type": "object",
+  "unevaluatedProperties": false,
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.agent_operation.v1" },
+    "idempotency_key": { "type": "string", "minLength": 1 },
+    "request_digest": { "type": "string" },
+    "principal": { "type": "string" },
+    "operation_kind": { "type": "string" },
+    "queue_delay_ms": { "type": "integer", "minimum": 0 },
+    "attempt_count": { "type": "integer", "minimum": 0 },
+    "checkpoint_id": { "type": ["string", "null"] },
+    "last_error": { "type": ["object", "null"] },
+    "cancellation_fence": { "type": ["string", "null"] },
+    "lease": { "type": "object" },
+    "retention": { "type": "object" }
+  },
+  "required": [
+    "idempotency_key",
+    "request_digest",
+    "principal",
+    "operation_kind",
+    "queue_delay_ms",
+    "attempt_count",
+    "checkpoint_id",
+    "last_error",
+    "cancellation_fence",
+    "lease",
+    "retention"
+  ]
+}

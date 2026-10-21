@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import { Network, Plus, Trash2 } from "@lucide/vue";
 import { useI18n } from "../../i18n";
+import InlineHelp from "../../components/InlineHelp.vue";
 import { topologyDomainFields, topologyDomainMaxItems } from "./input-schema-meta";
 import {
   addDomain,
@@ -40,6 +41,8 @@ const DOMAIN_LABEL_SOURCE: Record<string, string> = {
   domain_type: "域类型",
   module_binding: "所用网络模型",
   member_devices: "成员设备",
+  default_fidelity: "默认保真度",
+  failure_policy: "失败策略",
 };
 
 const DOMAIN_TYPE_LABEL_SOURCE: Record<string, string> = {
@@ -48,7 +51,21 @@ const DOMAIN_TYPE_LABEL_SOURCE: Record<string, string> = {
 };
 
 /** Domain fields this panel renders. Everything else is reported, not dropped. */
-const RENDERED_DOMAIN_KEYS = ["domain_id", "domain_type", "module_binding", "member_devices"];
+const RENDERED_DOMAIN_KEYS = [
+  "domain_id",
+  "domain_type",
+  "module_binding",
+  "member_devices",
+  "default_fidelity",
+  "failure_policy",
+];
+
+const DOMAIN_ENUM_LABEL_SOURCE: Record<string, string> = {
+  analytical: "Analytical",
+  des: "DES",
+  fallback: "允许降级",
+  fail_closed: "拒绝运行",
+};
 
 function domainLabel(key: string): string {
   const source = DOMAIN_LABEL_SOURCE[key];
@@ -71,7 +88,11 @@ const domainTypeValues = computed(() => {
   const meta = topologyDomainFields.find((field) => field.key === "domain_type");
   return (meta?.enumValues || []) as readonly DomainType[];
 });
-/** Optional domain fields the panel deliberately leaves to the raw JSON. */
+const domainEnumValues = computed(() => ({
+  default_fidelity: topologyDomainFields.find((field) => field.key === "default_fidelity")?.enumValues || [],
+  failure_policy: topologyDomainFields.find((field) => field.key === "failure_policy")?.enumValues || [],
+}));
+/** Optional fields not present in the current contract are still reported. */
 const unrenderedFields = computed(() =>
   topologyDomainFields.filter((field) => !RENDERED_DOMAIN_KEYS.includes(field.key)),
 );
@@ -99,6 +120,15 @@ function domainModule(index: number): string {
 function domainMembers(index: number): string[] {
   const value = rowAt(index)?.member_devices;
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+}
+
+function domainEnumValue(index: number, key: "default_fidelity" | "failure_policy"): string {
+  const value = rowAt(index)?.[key];
+  return typeof value === "string" ? value : "";
+}
+
+function domainEnumLabel(value: string): string {
+  return t(DOMAIN_ENUM_LABEL_SOURCE[value] || value);
 }
 
 function moduleKindOf(name: string): string {
@@ -252,6 +282,22 @@ function updateModule(index: number, event: Event) {
   }
 }
 
+function updateOptionalEnum(index: number, key: "default_fidelity" | "failure_policy", event: Event) {
+  const value = eventValue(event);
+  try {
+    const updated = patchJsonDocument(props.modelValue, "Fabric topology", (draft) => {
+      const target = topologyDomainsOf(draft)?.[index];
+      if (!target || !isJsonObject(target)) return;
+      if (value) target[key] = value;
+      else delete target[key];
+    });
+    emit("update:modelValue", updated);
+    localError.value = "";
+  } catch (error) {
+    reportError(error);
+  }
+}
+
 /** Membership toggles stay silent: the tick itself plus the graph are the feedback. */
 function toggleMember(index: number, device: string, event: Event) {
   const include = Boolean((event.target as HTMLInputElement | null)?.checked);
@@ -299,15 +345,18 @@ function dropDomain(index: number) {
     <header class="structured-block__header">
       <Network :size="16" />
       <div>
-        <strong>{{ t("域清单") }}</strong>
-        <small>{{
-          t(
-            "最多 {max} 个域。域就是「一批卡共用的同一套网络」；新增域自动命名 su0、so0，并绑定一个已存在的网络模型。",
-            {
-              max: topologyDomainMaxItems,
-            },
-          )
-        }}</small>
+        <span
+          ><strong>{{ t("域清单") }}</strong
+          ><InlineHelp
+            :text="
+              t(
+                '最多 {max} 个域。域就是「一批卡共用的同一套网络」；新增域自动命名 su0、so0，并绑定一个已存在的网络模型。',
+                {
+                  max: topologyDomainMaxItems,
+                },
+              )
+            "
+        /></span>
       </div>
       <button type="button" class="button button--secondary" @click="addOne">
         <Plus :size="15" />{{ t("新增域") }}
@@ -363,6 +412,25 @@ function dropDomain(index: number) {
               :value="domainModule(index)"
             >
               {{ domainModule(index) }}
+            </option>
+          </select>
+        </label>
+        <label
+          v-for="key in ['default_fidelity', 'failure_policy'] as const"
+          :key="`${index}-${key}`"
+          :data-input-path="cellPath(index, key)"
+          :title="key"
+        >
+          <span>{{ domainLabel(key) }}</span>
+          <select
+            :value="domainEnumValue(index, key)"
+            :aria-label="`${domainLabel(key)} ${index + 1}`"
+            :aria-invalid="fieldPath === cellPath(index, key)"
+            @change="updateOptionalEnum(index, key, $event)"
+          >
+            <option value="">{{ t("未设置（省略字段）") }}</option>
+            <option v-for="value in domainEnumValues[key]" :key="`${key}-${value}`" :value="value">
+              {{ domainEnumLabel(value) }}
             </option>
           </select>
         </label>

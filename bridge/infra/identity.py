@@ -12,6 +12,15 @@ from pathlib import Path
 from contracts.experiment_descriptor import PARAMETER_FIELD_IDS
 
 
+# Local backend checkouts commonly keep several side-by-side CMake snapshots
+# (for example ``build-kv1`` and ``build-tr1-wsl``) next to the source tree.
+# They are generated artifacts rather than source state.  Git only excludes
+# them when the checkout's .gitignore contains the matching pattern; keeping
+# the deployment digest defensive here prevents a dirty checkout from reading
+# gigabytes of build output during every Bridge identity lookup.
+GENERATED_DIRECTORY_EXCLUDES = ("build-*/",)
+
+
 def controlled_run_surface() -> dict:
     """Stable web submission capabilities; executable discovery cannot upgrade them."""
     return {
@@ -79,8 +88,11 @@ def worktree_state_digest(root: Path) -> str:
             timeout=60,
             check=False,
         )
+        exclude_args = ["--exclude-standard"]
+        for pattern in GENERATED_DIRECTORY_EXCLUDES:
+            exclude_args.extend(("--exclude", pattern))
         untracked = subprocess.run(
-            git_command(root, "ls-files", "--others", "--exclude-standard", "-z"),
+            git_command(root, "ls-files", "--others", *exclude_args, "-z"),
             capture_output=True,
             timeout=60,
             check=False,

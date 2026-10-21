@@ -24,7 +24,7 @@ function buildS1Node(context: BuildContext): RunBoundEvidenceNode {
   if (metrics.state === "ambiguous_reference" || runtime.state === "ambiguous_reference")
     return unavailableNode("S1", "运行时请求", "ambiguous_reference", "同一 request_id 对应多条记录，拒绝按位置选择。");
   if (metrics.state === "missing" && runtime.state === "missing")
-    return unavailableNode("S1", "运行时请求", "missing", "S1 输入和 request metrics 均无此 request_id。");
+    return unavailableNode("S1", "运行时请求", "missing", "运行时输入和 request metrics 均无此 request_id。");
   const references: RunBoundReference[] = [];
   const artifacts: string[] = [];
   if (runtime.state === "available") {
@@ -36,7 +36,7 @@ function buildS1Node(context: BuildContext): RunBoundEvidenceNode {
         `/requests/${runtime.index}`,
         "request",
         context.requestId,
-        "S1 输入请求",
+        "运行时输入请求",
       ),
     );
   }
@@ -63,7 +63,7 @@ function buildS1Node(context: BuildContext): RunBoundEvidenceNode {
       availability,
     ),
     detail:
-      availability === "available" ? "使用 request_id 精确连接 S1 输入与请求指标。" : "只找到一个显式 request 记录。",
+      availability === "available" ? "使用 request_id 精确连接运行时输入与请求指标。" : "只找到一个显式 request 记录。",
     entityIds: [context.requestId],
     references,
   };
@@ -95,7 +95,7 @@ function peerNode(
       phase.state === "ambiguous_reference" ? "ambiguous_reference" : "contract_gap",
       phase.state === "ambiguous_reference"
         ? "request_id 对应多个 phase，且没有唯一 phase_id 选择。"
-        : "没有该 request_id 的唯一 S6 phase 记录。",
+        : "没有该 request_id 的唯一网络阶段记录。",
     );
   const phaseValue = phase.value;
   const field = subsystem === "S3" ? "memory_event_id" : subsystem === "S4" ? "device_task_id" : "collective_id";
@@ -117,7 +117,7 @@ function peerNode(
         `/system_summary/phase_fabric_contributions/${phase.index}`,
         field.replace(/_id$/, ""),
         entityId,
-        "S6 phase 资源引用",
+        "网络阶段资源引用",
       ),
     ],
   };
@@ -131,15 +131,15 @@ function buildS6Node(phase: UniqueMatch<PhaseFabricContribution>, context: Build
       phase.state === "ambiguous_reference" ? "ambiguous_reference" : "missing",
       phase.state === "ambiguous_reference"
         ? "request_id 对应多个 phase，拒绝按 rank 选择。"
-        : "没有该 request_id 的 S6 phase。",
+        : "没有该 request_id 的网络阶段。",
     );
   const phaseId = phase.value.phase_id;
-  if (!phaseId) return unavailableNode("S6", "Fabric request phase", "contract_gap", "S6 phase 缺少稳定 phase_id。");
+  if (!phaseId) return unavailableNode("S6", "Fabric request phase", "contract_gap", "网络阶段缺少稳定 phase_id。");
   return {
     subsystem: "S6",
     title: "Fabric request phase",
     availability: identityAware(context.manifest, ["metrics"], "available"),
-    detail: "使用 request_id 唯一匹配，并以 phase_id 作为 S6 实体身份。",
+    detail: "使用 request_id 唯一匹配，并以 phase_id 作为网络阶段身份。",
     entityIds: [context.requestId, phaseId],
     references: [
       reference(
@@ -148,7 +148,7 @@ function buildS6Node(phase: UniqueMatch<PhaseFabricContribution>, context: Build
         `/system_summary/phase_fabric_contributions/${phase.index}`,
         "fabric_phase",
         phaseId,
-        "S6 phase",
+        "网络阶段",
       ),
     ],
   };

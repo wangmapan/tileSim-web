@@ -1,0 +1,180 @@
+{
+  "schema_identity": "tilesim.web.agent_harness.evaluation_manifest.v0",
+  "revision": "2026-10-17.phase0.v0",
+  "publication_status": "proposal_non_published",
+  "source": "fixture",
+  "live_acceptance": "pending",
+  "fixture_results_are_live_evidence": false,
+  "bridge_schema_set_revision": "sha256:d7abac1889dd1b8a05bae7972fec3c7bd448053393daaf52afc3af893cde793e",
+  "agent_harness_schema_set_scope": "not_in_bridge_schema_set",
+  "splits": {
+    "train": ["success-call", "invalid-arguments", "capability-not-exposed", "duplicate-event"],
+    "validation": [
+      "schema-revision-mismatch",
+      "stale-draft",
+      "approval-expired",
+      "capability-unavailable",
+      "provider-timeout",
+      "bridge-restart"
+    ],
+    "test": ["worker-crash", "out-of-order-event", "duplicate-resume", "cancel-late-result", "unknown-outcome"],
+    "held-out-adversarial": ["prompt-injection", "tool-scope-overreach", "cross-run-leak", "duplicate-side-effect"]
+  },
+  "cases": [
+    { "id": "success-call", "split": "train", "kind": "tool_call", "expected": "succeeded", "side_effects": 0 },
+    {
+      "id": "invalid-arguments",
+      "split": "train",
+      "kind": "tool_call",
+      "expected_code": "invalid_argument",
+      "expected": "rejected",
+      "side_effects": 0
+    },
+    {
+      "id": "capability-not-exposed",
+      "split": "train",
+      "kind": "capability",
+      "expected_code": "capability_not_exposed",
+      "expected": "not_exposed",
+      "side_effects": 0
+    },
+    {
+      "id": "duplicate-event",
+      "split": "train",
+      "kind": "workflow_event",
+      "expected_code": "duplicate_event",
+      "expected": "deduplicated",
+      "side_effects": 0
+    },
+    {
+      "id": "schema-revision-mismatch",
+      "split": "validation",
+      "kind": "binding",
+      "expected_code": "schema_revision_mismatch",
+      "expected": "rejected",
+      "side_effects": 0
+    },
+    {
+      "id": "stale-draft",
+      "split": "validation",
+      "kind": "draft",
+      "expected_code": "stale_draft",
+      "expected": "stale",
+      "side_effects": 0
+    },
+    {
+      "id": "approval-expired",
+      "split": "validation",
+      "kind": "approval",
+      "expected_code": "approval_expired",
+      "expected": "expired",
+      "side_effects": 0
+    },
+    {
+      "id": "capability-unavailable",
+      "split": "validation",
+      "kind": "capability",
+      "expected_code": "capability_unavailable",
+      "expected": "unavailable",
+      "side_effects": 0
+    },
+    {
+      "id": "provider-timeout",
+      "split": "validation",
+      "kind": "provider",
+      "expected_code": "provider_timeout",
+      "expected": "retryable_failure",
+      "side_effects": 0
+    },
+    {
+      "id": "bridge-restart",
+      "split": "validation",
+      "kind": "recovery",
+      "expected_code": "bridge_unavailable",
+      "expected": "recovery_required",
+      "side_effects": 0
+    },
+    {
+      "id": "worker-crash",
+      "split": "test",
+      "kind": "recovery",
+      "expected_code": "worker_crashed",
+      "expected": "recovery_required",
+      "side_effects": 0
+    },
+    {
+      "id": "out-of-order-event",
+      "split": "test",
+      "kind": "workflow_event",
+      "expected_code": "event_sequence_gap",
+      "expected": "recovery_required",
+      "side_effects": 0
+    },
+    {
+      "id": "duplicate-resume",
+      "split": "test",
+      "kind": "resume",
+      "expected_code": "duplicate_resume",
+      "expected": "rejected",
+      "side_effects": 0
+    },
+    {
+      "id": "cancel-late-result",
+      "split": "test",
+      "kind": "cancel",
+      "expected_code": "cancelled_late_result",
+      "expected": "cancelled",
+      "side_effects": 0
+    },
+    {
+      "id": "unknown-outcome",
+      "split": "test",
+      "kind": "side_effect",
+      "expected_code": "unknown_side_effect_outcome",
+      "expected": "manual_intervention_required",
+      "side_effects": 0
+    },
+    {
+      "id": "prompt-injection",
+      "split": "held-out-adversarial",
+      "kind": "security",
+      "expected_code": "prompt_injection",
+      "expected": "rejected",
+      "side_effects": 0
+    },
+    {
+      "id": "tool-scope-overreach",
+      "split": "held-out-adversarial",
+      "kind": "security",
+      "expected_code": "tool_scope_violation",
+      "expected": "rejected",
+      "side_effects": 0
+    },
+    {
+      "id": "cross-run-leak",
+      "split": "held-out-adversarial",
+      "kind": "security",
+      "expected_code": "cross_run_scope_violation",
+      "expected": "rejected",
+      "side_effects": 0
+    },
+    {
+      "id": "duplicate-side-effect",
+      "split": "held-out-adversarial",
+      "kind": "idempotency",
+      "expected_code": "duplicate_side_effect",
+      "expected": "rejected",
+      "side_effects": 0
+    }
+  ],
+  "non_overlap_rule": "case IDs must occur in exactly one split; held-out-adversarial is never used for tuning",
+  "fixture_lane": "not_live_provider",
+  "not_run": [
+    "live_provider_acceptance",
+    "real_trace",
+    "held_out_validation",
+    "durable_queue",
+    "checkpoint_store",
+    "automatic_optimization"
+  ]
+}

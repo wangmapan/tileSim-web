@@ -63,7 +63,7 @@ describe("runtime evidence panel", () => {
     });
     const wrapper = panel();
     expect(fetchVerifiedArtifact).not.toHaveBeenCalled();
-    await wrapper.get("button").trigger("click");
+    await wrapper.get(".runtime-evidence-controls > button").trigger("click");
     await flushPromises();
     expect(fetchVerifiedArtifact).toHaveBeenCalledWith(
       "run-evidence",
@@ -94,7 +94,7 @@ describe("runtime evidence panel", () => {
       absence_reason: "not_expected_for_boundary",
       detail: "not runtime",
     });
-    await wrapper.get("button").trigger("click");
+    await wrapper.get(".runtime-evidence-controls > button").trigger("click");
     await flushPromises();
     expect(wrapper.text()).toContain("期望缺席描述符");
     expect(wrapper.text()).toContain("not runtime");
@@ -117,7 +117,7 @@ describe("runtime evidence panel", () => {
     await wrapper.setProps({ artifactManifest: { ...manifest(), artifacts: [], rejected_artifacts: [] } });
     expect(wrapper.text()).toContain("未请求此工件");
     await wrapper.setProps({ artifactManifest: manifest("runtime-events", { bytes: 8_000_001 }) });
-    expect(wrapper.get("button").attributes("disabled")).toBeDefined();
+    expect(wrapper.get(".runtime-evidence-controls > button").attributes("disabled")).toBeDefined();
     expect(wrapper.text()).toContain("大工件不在此页解析");
     expect(fetchVerifiedArtifact).toHaveBeenCalledTimes(1);
   });
@@ -125,12 +125,12 @@ describe("runtime evidence panel", () => {
   it("resets content on run change and exposes verified-read errors", async () => {
     fetchVerifiedArtifact.mockResolvedValueOnce({ events: [] }).mockRejectedValueOnce(new Error("hash mismatch"));
     const wrapper = panel();
-    await wrapper.get("button").trigger("click");
+    await wrapper.get(".runtime-evidence-controls > button").trigger("click");
     await flushPromises();
     expect(wrapper.text()).toContain("事件集合为空");
     await wrapper.setProps({ runId: "other-run" });
     expect(wrapper.text()).not.toContain("事件集合为空");
-    await wrapper.get("button").trigger("click");
+    await wrapper.get(".runtime-evidence-controls > button").trigger("click");
     await flushPromises();
     expect(wrapper.get('[role="alert"]').text()).toContain("hash mismatch");
   });

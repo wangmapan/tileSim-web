@@ -97,15 +97,24 @@ const formalTerminalStatuses = computed(() => {
           </div>
           <div>
             <dt>{{ t("并列资源语义") }}</dt>
-            <dd><code>S3 · S4 · S5</code></dd>
+            <dd>
+              <code>S3 · S4 · S5</code>
+              <small>{{ t("内存、设备与集合通信") }}</small>
+            </dd>
           </div>
           <div>
             <dt>{{ t("执行宿主") }}</dt>
-            <dd><code>S7</code></dd>
+            <dd>
+              <code>S7</code>
+              <small>{{ t("统一仿真执行") }}</small>
+            </dd>
           </div>
           <div>
             <dt>{{ t("非 causal ranking") }}</dt>
-            <dd><code>S8 · S9</code></dd>
+            <dd>
+              <code>S8 · S9</code>
+              <small>{{ t("校准、验证与归因输出") }}</small>
+            </dd>
           </div>
         </dl>
       </article>

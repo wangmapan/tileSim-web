@@ -105,7 +105,6 @@ function backendExplanation(value: string | null | undefined) {
         >
           <strong class="fidelity-module">
             <span>{{ executionLayerName(entry.subsystem) }}</span>
-            <code>{{ entry.subsystem }}</code>
           </strong>
           <span class="fidelity-value">
             <b>{{ semanticField("requested_fidelity", entry.requested_fidelity).valueLabel }}</b>
@@ -147,7 +146,7 @@ function backendExplanation(value: string | null | undefined) {
             <Check v-if="check.status === 'pass'" :size="16" /><CircleMinus v-else :size="16" />
           </div>
           <div>
-            <small>{{ executionLayerName(check.subsystem) }} · {{ check.subsystem }}</small
+            <small>{{ executionLayerName(check.subsystem) }}</small
             ><strong>{{ check.check_id }}</strong>
             <p>
               <small>{{ backendExplanation(check.detail).label }}</small>

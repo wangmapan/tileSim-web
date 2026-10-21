@@ -1,0 +1,12 @@
+{
+  "$id": "tilesim.agent_harness.optimization_constraint.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["metric_path", "operator", "value"],
+  "properties": {
+    "metric_path": { "type": "string", "pattern": "^/" },
+    "operator": { "enum": ["<=", ">=", "=="] },
+    "value": {}
+  }
+}

@@ -400,6 +400,18 @@ const rawMetrics = {
       dominant_source_placement_group_id: "pg-src",
       dominant_destination_placement_group_id: "pg-dst",
     },
+    device_metrics: [
+      {
+        device_id: "gpu-0",
+        evidence_state: "observed",
+        task_count: "9007199254740993",
+        active_time_ps: "9007199254740993123",
+        active_time_ratio: 0.5,
+      },
+    ],
+    request_network_wait_intervals: [
+      { request_id: "req-a", start_time_ps: 10, end_time_ps: "9007199254740993", collective: false },
+    ],
   },
   fidelity_control: {
     requested_tier: "des",
@@ -441,6 +453,16 @@ const rawMetrics = {
       has_ttft_sample: true,
       has_tpot_sample: false,
       has_end_to_end_latency_sample: true,
+      ttft_ps_source: "observed",
+      network_wait_ps: "9007199254740993",
+      kv_bytes_read: "9007199254740993123",
+      kv_source_identity: "prefill-kv",
+      kv_destination_identity: "decode-kv",
+      dominant_wait_reason: "network_queue",
+      device_profile: "gpu-h100",
+      device_profile_selection: "portable_fallback",
+      device_profile_asset_id: "asset-device-1",
+      device_profile_claim_scope: "matching_only",
       decode_step_count: 2,
       batch_issue_count: 1,
     },
@@ -542,6 +564,9 @@ describe("C0-2 metrics coverage", () => {
     expect(cellOf(requests, 0, "completion_time_ps").text).not.toBeNull();
     expect(cellOf(requests, 0, "has_ttft_sample").text).toBe("是");
     expect(cellOf(requests, 0, "has_tpot_sample").text).toBe("否");
+    expect(cellOf(requests, 0, "ttft_ps_source").text).toBe("observed");
+    expect(cellOf(requests, 0, "network_wait_ps").text).toBe("9,007.2 s");
+    expect(cellOf(requests, 0, "kv_bytes_read").text).toContain("9,007,199,254,740,993,123");
 
     const subjects = listOf(groups, "percentile_subjects");
     expect(subjects.records).toHaveLength(3);
@@ -551,6 +576,8 @@ describe("C0-2 metrics coverage", () => {
       "99",
     ]);
     expect(cellOf(subjects, 0, "subject_refs").text).toBe("request:req-a");
+    expect(cellOf(listOf(groups, "device_metrics"), 0, "task_count").text).toContain("9,007,199,254,740,993");
+    expect(cellOf(listOf(groups, "request_network_wait_intervals"), 0, "collective").text).toBe("否");
   });
 
   it("reports has_fabric_timeline as an explicit boolean fact", () => {
@@ -699,7 +726,24 @@ const rawTail = {
   symptom: "p99 end-to-end latency exceeded the SLO",
   explained_entity: { kind: "request", id: "req-a" },
   observation_window: { start_time_ps: 5, end_time_ps: 25 },
-  cause_chain: [{ cause_id: "cause-1", subsystem: "S6", cause_code: "fabric_congestion" }],
+  cause_chain: [
+    {
+      cause_id: "cause-1",
+      subsystem: "S6",
+      cause_code: "fabric_congestion",
+      network_intervals: [
+        {
+          component_code: "network_service",
+          demand_id: "demand-1",
+          link_id: "link-1",
+          attempt: "9007199254740993",
+          start_time_ps: 10,
+          end_time_ps: 20,
+          evidence: "NetworkDemand:demand-1",
+        },
+      ],
+    },
+  ],
   contributing_factors: [
     { subsystem: "S6", factor_code: "congestion_delay", detail: "fabric congestion", score: 0.7 },
     { subsystem: "S4", factor_code: "device_queue", detail: "device queue wait", score: 0.3 },
@@ -735,6 +779,14 @@ describe("C0-4 tail coverage", () => {
     expect(listOf(groups, "metric_evidence_links").records).toHaveLength(1);
     expect(listOf(groups, "resource_evidence_links").records).toHaveLength(1);
     expect(listOf(groups, "unresolved_gaps").records).toHaveLength(1);
+  });
+
+  it("covers network intervals as parent-wait explanations without summing them", () => {
+    const intervals = listOf(groups, "cause_chain.network_intervals");
+    expect(intervals.sourcePaths).toEqual(["tail:/cause_chain/*/network_intervals"]);
+    expect(intervals.records).toHaveLength(1);
+    expect(cellOf(intervals, 0, "attempt").text).toBe("9,007,199,254,740,993");
+    expect(intervals.description).toContain("不与父级等待重复计费");
   });
 });
 

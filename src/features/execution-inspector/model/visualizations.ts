@@ -240,7 +240,7 @@ export function buildLayerVisualizations(id: LayerId, bundle: ReportBundle, inpu
         ...reading(
           "哪些 memory event 的报告延迟更高？",
           "先看最长条，再按 memory_event_id 回到完整记录。",
-          "按稳定事件 ID 做展示级去重；不重算内存延迟，也不把 S3 与 S4/S5 串联。",
+          "按稳定事件 ID 做展示级去重；不重算内存延迟，也不把并列资源语义串成线性流程。",
         ),
         rationale: "事件是离散类别，水平条形图能保留长 ID 并直接比较大小。",
         unit: "µs",
@@ -441,7 +441,7 @@ export function buildLayerVisualizations(id: LayerId, bundle: ReportBundle, inpu
 function scaledPs(delta: bigint): number | null {
   const integer = delta / 1_000n;
   const remainder = delta % 1_000n;
-  if (integer > BigInt(Number.MAX_SAFE_INTEGER)) return null;
+  if (integer > BigInt(Number.MAX_SAFE_INTEGER) || integer < BigInt(Number.MIN_SAFE_INTEGER)) return null;
   return Number(integer) + Number(remainder) / 1_000;
 }
 
@@ -487,7 +487,7 @@ export function buildStageTimeline(stages: ExecutionStage[]): LayerVisualization
     title: "S7 统一时间轴",
     description: "以最早阶段为零点展示相对开始位置和持续时间；表格保留原始 ps。",
     ...reading(
-      "S0–S6 的已报告阶段如何落在 S7 的同一全局时间轴上？",
+      "已报告阶段如何落在统一的全局时间轴上？",
       "先看阶段顺序、重叠和持续时间，再查看精确 start/end ps。",
       "S7 是统一执行宿主，不是 latency causal ranking；非法或超安全范围的区间失败关闭。",
     ),

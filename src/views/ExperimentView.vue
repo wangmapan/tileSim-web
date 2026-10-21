@@ -11,6 +11,7 @@ import {
   ExperimentSubmitCard,
   TracePackageInputPanel,
   applyParameterEdits,
+  previewParameterEdits,
   buildExperimentAgentContextPublication,
   buildExperimentRequestPreview,
   buildExperimentSurface,
@@ -238,6 +239,64 @@ watch(
 
 const AGENT_COMMAND_PROVIDER_ID = "experiment";
 
+let agentTemplateLoadKey = "";
+let agentTemplateLoadPromise = null;
+
+/**
+ * Give the Agent a real structured scenario to reason about on first entry.
+ * This is context hydration only: it never opens the editor, changes the
+ * submission mode, or creates a run. A partially entered draft always wins.
+ */
+async function ensureAgentStructuredContext() {
+  const manifest = state.bridge.manifest;
+  if (
+    !inputDraftRestored ||
+    !state.bridge.connected ||
+    !state.bridge.available ||
+    state.bridge.checking ||
+    !manifest ||
+    (mode.value !== "controls" && mode.value !== "json") ||
+    runtimeJson.value.trim() ||
+    topologyJson.value.trim()
+  ) {
+    return;
+  }
+  const key = `${form.scenario_id}:${manifest.schema_set_revision}`;
+  if (agentTemplateLoadKey === key) return;
+  if (agentTemplateLoadPromise) return agentTemplateLoadPromise;
+  agentTemplateLoadKey = key;
+  const requestedScenarioId = form.scenario_id;
+  const requestedSchemaRevision = manifest.schema_set_revision;
+  agentTemplateLoadPromise = (async () => {
+    try {
+      const template = await runExperiment.getTemplate(requestedScenarioId);
+      // The user may have started typing while the request was in flight.
+      // Re-check both documents before committing the read-only context seed.
+      if (template?.runtime_trace === undefined || runtimeJson.value.trim() || topologyJson.value.trim()) {
+        return;
+      }
+      if (
+        template.topology === undefined ||
+        form.scenario_id !== requestedScenarioId ||
+        state.bridge.manifest?.schema_set_revision !== requestedSchemaRevision
+      ) {
+        return;
+      }
+      runtimeJson.value = JSON.stringify(template.runtime_trace, null, 2);
+      topologyJson.value = JSON.stringify(template.topology, null, 2);
+    } catch {
+      // Auto-hydration is best effort. The existing explicit “加载场景模板”
+      // action remains available and reports its own error to the user.
+    } finally {
+      agentTemplateLoadPromise = null;
+      if (agentTemplateLoadKey !== `${form.scenario_id}:${state.bridge.manifest?.schema_set_revision || ""}`) {
+        void ensureAgentStructuredContext();
+      }
+    }
+  })();
+  return agentTemplateLoadPromise;
+}
+
 function publishAgentContext() {
   if (!props.agentContextPublisher) return;
   // `onActivated` calls this too, so a kept-alive view re-declares itself the
@@ -269,6 +328,7 @@ function publishAgentContext() {
     build(UNPUBLISHED_CONTEXT_REVISION),
   );
   props.agentContextPublisher(build(revision));
+  void ensureAgentStructuredContext();
 }
 
 watch(
@@ -298,11 +358,12 @@ onActivated(publishAgentContext);
  * edit that lands there has to open the structured channel — the scalar
  * `overrides` channel never carries requests, devices or topology.
  */
-function applyAgentParameterEdits(edits) {
+function applyAgentParameterEdits(edits, structuredInputs) {
   const outcome = applyParameterEdits({
     items: edits,
     runtimeJson: runtimeJson.value,
     topologyJson: topologyJson.value,
+    structuredInputs,
   });
   const receipts = [];
   outcome.applied.forEach((item) => {
@@ -333,6 +394,16 @@ function applyAgentParameterEdits(edits) {
       reason: item.reason,
     });
   });
+  if (structuredInputs && outcome.rejected.length === 0) {
+    receipts.push({
+      path: "custom_inputs",
+      label: "完整 synthetic runtime_trace + topology",
+      previous: "当前输入",
+      next: "助手生成的 JSON",
+      status: "applied",
+      reason: "仅写入草案，没有创建运行。",
+    });
+  }
   runtimeJson.value = outcome.runtimeJson;
   topologyJson.value = outcome.topologyJson;
   const channelMoved = outcome.requiresStructuredInput && !structuredInput.value;
@@ -345,9 +416,19 @@ function applyAgentParameterEdits(edits) {
   };
 }
 
+function previewAgentParameterEdits(edits, structuredInputs) {
+  return previewParameterEdits({
+    items: edits,
+    runtimeJson: runtimeJson.value,
+    topologyJson: topologyJson.value,
+    structuredInputs,
+  });
+}
+
 const unregisterAgentCommands = props.agentCommandRegistry?.register(
   AGENT_COMMAND_PROVIDER_ID,
   applyAgentParameterEdits,
+  previewAgentParameterEdits,
 );
 onBeforeUnmount(() => unregisterAgentCommands?.());
 

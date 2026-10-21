@@ -1,5 +1,6 @@
 <script setup>
 import { useI18n } from "../../i18n";
+import InlineHelp from "../../components/InlineHelp.vue";
 const form = defineModel("form", { type: Object, required: true });
 const props = defineProps({
   surface: { type: Object, required: true },
@@ -15,7 +16,7 @@ const { t } = useI18n();
       <span>01</span>
       <div>
         <h2>{{ t("实验身份") }}</h2>
-        <p v-if="!props.compact">{{ t("用于历史记录和结果回溯。") }}</p>
+        <InlineHelp v-if="!props.compact" :text="t('用于历史记录和结果回溯。')" />
       </div>
     </header>
     <div class="form-grid form-grid--identity">
@@ -31,15 +32,17 @@ const { t } = useI18n();
         />
       </label>
       <label class="field">
-        <span>{{ t("受控场景") }}</span>
+        <span
+          >{{ t("受控场景")
+          }}<InlineHelp
+            v-if="form.scenario_id === 'dense_des_package'"
+            :text="t('此拓扑仅用于经验证的 Trace package；逐请求归因还需要 dense DES、设备和网络证据。')"
+        /></span>
         <select v-model="form.scenario_id" :aria-invalid="fieldPath === '/scenario_id'">
           <option v-for="scenario in surface.scenarios" :key="scenario.value" :value="scenario.value">
             {{ scenario.label }}
           </option>
         </select>
-        <small v-if="form.scenario_id === 'dense_des_package'" class="field-help">{{
-          t("此拓扑仅用于经验证的 Trace package；逐请求归因还需要 dense DES、设备和网络证据。")
-        }}</small>
       </label>
       <label class="field">
         <span>{{ t("请求 fidelity") }}</span>

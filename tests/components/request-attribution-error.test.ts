@@ -1,7 +1,41 @@
 /** @vitest-environment jsdom */
-import { mount } from "@vue/test-utils";
-import { describe, expect, it } from "vitest";
+import { flushPromises, mount } from "@vue/test-utils";
+import { describe, expect, it, vi } from "vitest";
 import RequestAttributionPanel from "../../src/features/execution-inspector/components/RequestAttributionPanel.vue";
+import type { ArtifactManifestResponse } from "../../src/lib/api";
+
+const fetchVerifiedArtifact = vi.hoisted(() => vi.fn());
+vi.mock("../../src/features/run-evidence", () => ({ fetchVerifiedArtifact }));
+
+const manifest = {
+  artifacts: [
+    {
+      artifact_id: "request-attribution",
+      sha256: "sha256:test",
+      bytes: 1,
+      content_status: "available",
+      contract_status: "supported",
+      schema_identity: "test",
+    },
+  ],
+  rejected_artifacts: [],
+} as unknown as ArtifactManifestResponse;
+
+function mountLoaded(selectedRequestId: string | null, requests: unknown[]) {
+  fetchVerifiedArtifact.mockResolvedValue({ requests });
+  return mount(RequestAttributionPanel, {
+    props: {
+      runId: "run-attribution",
+      run: null,
+      runMetadata: null,
+      artifactManifest: manifest,
+      backendRevision: "test",
+      bridgeManifest: null,
+      selectedRequestId,
+    },
+    global: { stubs: { RouterLink: { template: "<a><slot /></a>" } } },
+  });
+}
 
 describe("request attribution failure contract", () => {
   it("exposes the CLI code, duplicate pointer, remediation and retry without a fake cause chain", () => {
@@ -31,5 +65,103 @@ describe("request attribution failure contract", () => {
     expect(wrapper.get('[role="alert"]').text()).toContain("未产生逐请求归因工件");
     expect(wrapper.get("a").attributes("href")).toBe("/experiment");
     expect(wrapper.find("table").exists()).toBe(false);
+  });
+
+  it("fails closed when selectedRequestId is absent instead of choosing reports[0]", async () => {
+    const wrapper = mountLoaded(null, [
+      { report_id: "r0", explained_entity: { kind: "request", id: "r0" }, cause_chain: [] },
+    ]);
+    await wrapper.get("button.button--secondary").trigger("click");
+    await flushPromises();
+    expect(wrapper.get('[role="alert"]').text()).toContain("请求不存在/数据不可用");
+    expect(wrapper.find("table").exists()).toBe(false);
+  });
+
+  it("states the applicability contract gap when no attribution artifact is declared", () => {
+    const wrapper = mount(RequestAttributionPanel, {
+      props: {
+        runId: "run-no-attribution-contract",
+        run: null,
+        runMetadata: null,
+        artifactManifest: { artifacts: [], rejected_artifacts: [] } as unknown as ArtifactManifestResponse,
+        backendRevision: "test",
+        bridgeManifest: null,
+        selectedRequestId: "r1",
+      },
+      global: { stubs: { RouterLink: { template: "<a><slot /></a>" } } },
+    });
+    expect(wrapper.text()).toContain("适用性保持未知");
+  });
+
+  it("fails closed when selectedRequestId has duplicate reports", async () => {
+    const wrapper = mountLoaded("r1", [
+      { report_id: "a", explained_entity: { kind: "request", id: "r1" }, cause_chain: [] },
+      { report_id: "b", explained_entity: { kind: "request", id: "r1" }, cause_chain: [] },
+    ]);
+    await wrapper.get("button.button--secondary").trigger("click");
+    await flushPromises();
+    expect(wrapper.get('[role="alert"]').text()).toContain("请求 ID 重复");
+    expect(wrapper.find("table").exists()).toBe(false);
+  });
+
+  it("does not match a non-request entity with the same id", async () => {
+    const wrapper = mountLoaded("r1", [
+      { report_id: "other", explained_entity: { kind: "execution", id: "r1" }, cause_chain: [] },
+    ]);
+    await wrapper.get("button.button--secondary").trigger("click");
+    await flushPromises();
+    expect(wrapper.get('[role="alert"]').text()).toContain("请求不存在/数据不可用");
+    expect(wrapper.find("table").exists()).toBe(false);
+  });
+
+  it("reports an empty attribution payload without inventing a request", async () => {
+    const wrapper = mountLoaded("r1", []);
+    await wrapper.get("button.button--secondary").trigger("click");
+    await flushPromises();
+    expect(wrapper.get('[role="alert"]').text()).toContain("归因报告为空");
+    expect(wrapper.find("table").exists()).toBe(false);
+  });
+
+  it("shows only backend-declared cross-subsystem links and marks missing links unlinked", async () => {
+    const wrapper = mountLoaded("r1", [
+      {
+        report_id: "r1-report",
+        explained_entity: { kind: "request", id: "r1" },
+        cause_chain: [
+          {
+            cause_id: "cause-1",
+            subsystem: "S3",
+            cause_code: "kv_remote_read",
+            model_execution_call_id: "model-call-1",
+            execution_id: "execution-1",
+            kv_operation_id: "kv-op-1",
+            network_demand_id: "demand-1",
+            device_task_id: "device-task-1",
+            collective_id: "collective-1",
+            pd_handoff_id: "handoff-1",
+            pd_disaggregation_group_id: "pd-group-1",
+            pd_source_placement_group_id: "prefill-group",
+            pd_destination_placement_group_id: "decode-group",
+          },
+        ],
+      },
+    ]);
+    await wrapper.get("button.button--secondary").trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("model-call-1");
+    expect(wrapper.text()).toContain("handoff-1");
+    expect(wrapper.text()).toContain("prefill-group");
+    expect(wrapper.text()).toContain("decode-group");
+
+    const missing = mountLoaded("r1", [
+      {
+        report_id: "r1-report",
+        explained_entity: { kind: "request", id: "r1" },
+        cause_chain: [{ cause_id: "cause-1", subsystem: "S4", cause_code: "device_wait" }],
+      },
+    ]);
+    await missing.get("button.button--secondary").trigger("click");
+    await flushPromises();
+    expect(missing.text()).toContain("未关联");
   });
 });

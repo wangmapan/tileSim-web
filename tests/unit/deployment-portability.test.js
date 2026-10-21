@@ -48,6 +48,13 @@ windowsOnly("deployment portability", () => {
     expect(source).toMatch(/core\.autocrlf=false[^\r\n]+switch[^\r\n]+previousManifest\.source_revision/);
   });
 
+  it("keeps backend CTest serial and retries one transient failure", () => {
+    for (const file of ["scripts/deploy-local-backend.ps1", "scripts/update-backend.ps1"]) {
+      const source = readFileSync(resolve(file), "utf8");
+      expect(source, file).toMatch(/--output-on-failure[\s\S]*-j1[\s\S]*--repeat[\s\S]*until-pass:2/u);
+    }
+  });
+
   it("derives repository defaults from the Web checkout", () => {
     const modulePath = resolve("scripts/deployment-common.psm1").replaceAll("'", "''");
     const result = spawnSync(

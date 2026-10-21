@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tilesim.agent_harness.experiment_draft.v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_identity",
+    "contract_revision",
+    "draft_id",
+    "operation_id",
+    "principal",
+    "workspace_id",
+    "run_scope",
+    "input_snapshot_digest",
+    "schema_set_revision",
+    "backend_identity",
+    "parameter_catalog_revision",
+    "validator_revision",
+    "policy_revision",
+    "field_diffs",
+    "assumptions",
+    "evidence_refs",
+    "budget_request",
+    "risk_flags",
+    "status",
+    "created_at",
+    "expires_at",
+    "draft_digest",
+    "idempotency_key",
+    "would_create_run"
+  ],
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.experiment_draft.v2" },
+    "contract_revision": { "const": "2026-10-18.wpb.v1" },
+    "draft_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "operation_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "conversation_id": { "type": ["string", "null"], "maxLength": 256 },
+    "turn_id": { "type": ["string", "null"], "maxLength": 256 },
+    "principal": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "workspace_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "run_scope": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "input_snapshot_digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "schema_set_revision": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "backend_identity": { "type": "object", "minProperties": 1, "additionalProperties": true },
+    "parameter_catalog_revision": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "validator_revision": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "policy_revision": { "const": "tilesim.agent_harness.policy.v1" },
+    "field_diffs": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["field_id", "json_pointer", "change"],
+        "properties": {
+          "field_id": { "type": "string", "minLength": 1 },
+          "json_pointer": { "type": "string", "pattern": "^(|/(?:[^~/]|~[01])*)*$" },
+          "change": { "enum": ["add", "replace", "remove", "unchanged"] },
+          "value_digest": { "type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$" }
+        }
+      }
+    },
+    "assumptions": { "type": "array", "maxItems": 256, "items": { "type": "string", "maxLength": 512 } },
+    "evidence_refs": {
+      "type": "array",
+      "maxItems": 256,
+      "items": { "type": "string", "minLength": 1, "maxLength": 256 }
+    },
+    "budget_request": { "type": "object", "additionalProperties": true },
+    "risk_flags": { "type": "array", "maxItems": 256, "items": { "type": "string", "maxLength": 256 } },
+    "status": {
+      "enum": ["draft", "validated", "invalid", "unsupported", "unavailable", "stale", "expired", "deleted"]
+    },
+    "created_at": { "type": "string", "format": "date-time" },
+    "expires_at": { "type": "string", "format": "date-time" },
+    "draft_digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "idempotency_key": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "would_create_run": { "const": false },
+    "create_run_request_digest": { "type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

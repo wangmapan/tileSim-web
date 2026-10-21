@@ -33,6 +33,17 @@ const groupPresentation = {
   S6: { title: "互联参数", detail: "Scale-up 与 Scale-out" },
 } as const;
 
+const scenarioLabels: Readonly<Record<string, string>> = {
+  s1_des_example: "标准运行时示例",
+  dense_des_package: "Dense DES Trace package（仅 package 输入）",
+};
+
+function friendlyScenarioLabel(value: string, label: string) {
+  const normalized = label.trim();
+  if (normalized && normalized !== "实验场景" && normalized !== value) return normalized;
+  return scenarioLabels[value] || normalized || "实验场景";
+}
+
 function compatibilityField(
   fieldId: string,
   requestJsonPointer: string,
@@ -354,12 +365,15 @@ function baseOptions(
         )
         .map((scenario) => ({
           value: scenario.scenario_id as string,
-          label: typeof scenario.label === "string" ? scenario.label : (scenario.scenario_id as string),
+          label: friendlyScenarioLabel(
+            scenario.scenario_id as string,
+            typeof scenario.label === "string" ? scenario.label : "实验场景",
+          ),
         }))
     : [];
   const scenarios = catalogScenarios.length
     ? catalogScenarios
-    : schemaScenarioIds.map((value) => ({ value, label: value }));
+    : schemaScenarioIds.map((value) => ({ value, label: friendlyScenarioLabel(value, "实验场景") }));
   const fidelityPolicies = supportedValues(schemaProperties.fidelity_policy.enum, catalog.fidelity_policies);
   const gpuParticipationModes = commonValues(
     supportedValues([schemaProperties.gpu_participation_mode.const], catalog.gpu_participation_modes),
@@ -450,7 +464,10 @@ export function buildExperimentSurface(
   );
   const scenarios = base.scenarios
     .filter((item) => descriptorScenarios.has(item.value))
-    .map((item) => ({ ...item, label: descriptorScenarios.get(item.value)?.label || item.label }));
+    .map((item) => ({
+      ...item,
+      label: friendlyScenarioLabel(item.value, descriptorScenarios.get(item.value)?.label || item.label),
+    }));
   const fidelityOptions = descriptor.requested_fidelity_options.map((option) => ({
     value: option.fidelity_policy,
     available: option.available,

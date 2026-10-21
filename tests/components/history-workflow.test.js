@@ -102,6 +102,26 @@ describe("history workflow", () => {
     expect(wrapper.find('[role="alert"]').exists()).toBe(false);
   });
 
+  it("confirms deletion before removing a terminal local run", async () => {
+    state.history.runs = [{ ...sampleRun }];
+    const deleteRun = vi.spyOn(bridgeApi, "deleteRun").mockResolvedValue({
+      run_id: sampleRun.run_id,
+      deleted: true,
+    });
+    const wrapper = mount(HistoryView);
+
+    await wrapper.findAll(".run-actions .icon-button")[1].trigger("click");
+    expect(document.body.textContent).toContain("运行结果和工件会从本地记录目录永久删除");
+    expect(deleteRun).not.toHaveBeenCalled();
+    const confirm = document.body.querySelector(".modal-form .button--danger");
+    expect(confirm).toBeTruthy();
+    confirm.click();
+    await flushPromises();
+
+    expect(deleteRun).toHaveBeenCalledWith(sampleRun.run_id);
+    expect(state.history.runs).toHaveLength(0);
+  });
+
   it("translates new empty-state and loading guidance", () => {
     setLocale("en-US");
     const wrapper = mount(HistoryView);

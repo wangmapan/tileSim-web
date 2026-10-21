@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tilesim.agent_harness.execution_mutation_request.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_identity", "contract_revision", "operation_id", "action", "idempotency_key"],
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.execution_mutation_request.v1" },
+    "contract_revision": { "const": "2026-10-18.wpc.v1" },
+    "operation_id": { "type": "string", "minLength": 1 },
+    "action": { "enum": ["cancel", "retry", "resume"] },
+    "idempotency_key": { "type": "string", "minLength": 1, "maxLength": 256 }
+  }
+}

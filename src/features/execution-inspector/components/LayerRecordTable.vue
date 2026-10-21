@@ -42,7 +42,11 @@ function display(value: unknown, unit = "") {
   if (value === null || value === undefined || value === "") return t("缺失");
   if (unit === "%ratio") return formatPercent(value, 1);
   if (unit === "bytes" && typeof value === "number") return `${formatNumber(value / 1_048_576, 3)} MiB`;
-  return `${typeof value === "number" ? formatNumber(value, 3) : value}${unit && !unit.startsWith("%") ? ` ${unit}` : ""}`;
+  const formatted =
+    typeof value === "number" || typeof value === "bigint" || (typeof value === "string" && /^-?\d+$/.test(value))
+      ? formatNumber(value, 3)
+      : value;
+  return `${formatted}${unit && !unit.startsWith("%") ? ` ${unit}` : ""}`;
 }
 </script>
 

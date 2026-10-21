@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tilesim.agent_harness.error.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.error.v1" },
+    "contract_revision": { "const": "2026-10-17.wpa.v1" },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": { "type": "string" },
+        "message": { "type": "string" },
+        "field_path": { "type": ["string", "null"] },
+        "retryable": { "type": "boolean" },
+        "terminal_failure": { "type": "boolean" },
+        "unknown_outcome": { "type": "boolean" }
+      },
+      "required": ["code", "message", "field_path", "retryable", "terminal_failure", "unknown_outcome"]
+    },
+    "request_id": { "type": "string" }
+  },
+  "required": ["schema_identity", "contract_revision", "error", "request_id"]
+}

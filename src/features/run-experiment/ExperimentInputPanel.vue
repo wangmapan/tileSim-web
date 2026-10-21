@@ -2,6 +2,7 @@
 import { Braces, Cpu, Database, Network, PackageSearch, RotateCcw, SlidersHorizontal, Table2 } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { useI18n } from "../../i18n";
+import InlineHelp from "../../components/InlineHelp.vue";
 import DeviceInventoryForm from "./DeviceInventoryForm.vue";
 import DomainInventoryForm from "./DomainInventoryForm.vue";
 import RequestTableForm from "./RequestTableForm.vue";
@@ -14,6 +15,7 @@ import {
   patchJsonDocument,
   rewriteParticipantsForExistingTp,
   rewriteRequestParallelism,
+  readControlPointer,
   writeControlPointer,
 } from "./structured-input";
 import { engineModeOf } from "./runtime-engine";
@@ -48,10 +50,36 @@ defineEmits([
 ]);
 const { t } = useI18n();
 const showFieldContracts = ref(false);
+const topologyAdvancedOpen = ref(false);
 const pairingPrompt = ref(null);
 const structuredNotice = ref("");
 const structuredNoticeTone = ref("info");
 const controlFields = computed(() => (props.controlGroups || []).flatMap((group) => group.fields));
+const NUMERIC_PRESETS = {
+  "s0.workload.message_size_multiplier": [0.5, 1, 2, 4],
+  "s1.runtime.max_batch_size": [1, 4, 8, 16, 32, 64],
+  "s1.runtime.kv_capacity_tokens": [4096, 8192, 16384, 32768, 65536],
+  "s1.runtime.max_active_requests": [1, 4, 8, 16, 32, 64],
+  "s1.runtime.initial_kv_tokens": [0, 1024, 4096, 8192],
+  "s1.runtime.kv_admission_watermark": [0.5, 0.75, 0.9, 0.95, 1],
+  "s1.runtime.long_context_threshold_tokens": [2048, 4096, 8192, 16384, 32768],
+  "s1.runtime.decode_penalty_per_threshold": [0, 0.1, 0.25, 0.5, 1],
+  "s6.fabric.scale_up_bandwidth_gbps": [100, 400, 800, 1600],
+  "s6.fabric.scale_up_latency_us": [0.5, 1, 2, 5],
+  "s6.fabric.scale_out_bandwidth_gbps": [25, 100, 400, 800],
+  "s6.fabric.scale_out_latency_us": [1, 5, 10, 25],
+};
+function numericPresetValues(field) {
+  const values = NUMERIC_PRESETS[field.fieldId] || [];
+  return values.filter(
+    (value) => (field.minimum == null || value >= field.minimum) && (field.maximum == null || value <= field.maximum),
+  );
+}
+function numericListId(field) {
+  return numericPresetValues(field).length
+    ? `control-${field.fieldId.replace(/[^a-z0-9]+/gi, "-")}-presets`
+    : undefined;
+}
 const engineMode = computed(() => {
   const parsed = parseJsonDocument(runtimeJson.value, "Runtime trace");
   return parsed.ok ? engineModeOf(parsed.value) : "generic";
@@ -209,6 +237,37 @@ watch(
   { deep: true },
 );
 
+/**
+ * Keep the quick-control view following edits made in the structured JSON
+ * editors (including an assistant-approved JSON plan).  The document remains
+ * canonical while the structured channel is open; this watcher only projects
+ * scalar values back into controls whose pointers have an exact document
+ * owner.  Unsupported projections, such as the workload multiplier, are left
+ * untouched rather than guessed.
+ */
+watch(
+  [runtimeJson, topologyJson, structuredInput, controlFields],
+  () => {
+    if (!structuredInput.value) return;
+    const next = { ...(form.value.parameterValues || {}) };
+    let changed = false;
+    for (const field of controlFields.value) {
+      const result = readControlPointer({
+        runtimeJson: runtimeJson.value,
+        topologyJson: topologyJson.value,
+        pointer: field.requestJsonPointer,
+      });
+      if (!result.supported) continue;
+      const value = result.found ? result.value : undefined;
+      if (next[field.fieldId] !== value) changed = true;
+      next[field.fieldId] = value;
+    }
+    if (changed) form.value.parameterValues = next;
+    lastKnobs = { ...next };
+  },
+  { deep: true, immediate: true },
+);
+
 watch(mode, (next) => {
   if (next !== "controls") setPairingPrompt([]);
 });
@@ -220,7 +279,7 @@ watch(mode, (next) => {
       <span>02</span>
       <div>
         <h2>{{ t("输入方式") }}</h2>
-        <p v-if="!props.compact">{{ t("先选输入方式，再调整需要的参数。") }}</p>
+        <InlineHelp v-if="!props.compact" :text="t('先选输入方式，再调整需要的参数。')" />
       </div>
     </header>
     <div class="experiment-input-toolbar">
@@ -264,8 +323,8 @@ watch(mode, (next) => {
           <Database v-else-if="group.subsystem === 'S0'" :size="17" />
           <Network v-else :size="17" />
           <div>
-            <strong>{{ group.title }}</strong
-            ><small v-if="!props.compact">{{ group.subsystem }} · {{ t(group.detail) }}</small>
+            <strong>{{ group.title }}</strong>
+            <InlineHelp v-if="!props.compact" :text="`${group.subsystem} · ${t(group.detail)}`" />
           </div>
           <button v-if="group.subsystem === 'S1'" class="text-button" @click="$emit('reset-controls')">
             <RotateCcw :size="14" />{{ t("清除可选参数") }}
@@ -299,6 +358,7 @@ watch(mode, (next) => {
               v-else
               v-model.number="form.parameterValues[field.fieldId]"
               type="number"
+              :list="numericListId(field)"
               :disabled="
                 !field.available ||
                 (structuredInput && engineMode !== 'generic' && field.fieldId === 's1.runtime.batch_scheduler')
@@ -309,6 +369,9 @@ watch(mode, (next) => {
               :placeholder="field.explicitDefaultAvailable ? undefined : t('未设置（省略字段）')"
               :aria-invalid="fieldPath === field.requestJsonPointer"
             />
+            <datalist v-if="field.kind !== 'select' && numericListId(field)" :id="numericListId(field)">
+              <option v-for="value in numericPresetValues(field)" :key="value" :value="value" />
+            </datalist>
             <small v-if="showFieldContracts || fieldPath === field.requestJsonPointer" class="field-help"
               ><code>{{ field.fieldId }}</code> · <code>{{ field.requestJsonPointer }}</code></small
             >
@@ -331,11 +394,13 @@ watch(mode, (next) => {
           <Table2 :size="17" />
           <div>
             <strong>{{ t("每个请求 / 显卡数量 / 拓扑连线") }}</strong>
-            <small>{{
-              t("需要配置请求、设备或拓扑时，打开完整输入。", {
-                count: controlFields.length,
-              })
-            }}</small>
+            <InlineHelp
+              :text="
+                t('需要配置请求、设备或拓扑时，打开完整输入。', {
+                  count: controlFields.length,
+                })
+              "
+            />
           </div>
           <button
             v-if="!structuredInput"
@@ -388,20 +453,61 @@ watch(mode, (next) => {
           <template v-if="runtimeJson.trim()">
             <RuntimeEngineForm v-model="runtimeJson" :field-path="fieldPath" />
             <RuntimePolicyForm v-model="runtimeJson" :field-path="fieldPath" />
-            <RequestTableForm v-model="runtimeJson" :field-path="fieldPath" :error-message="errorMessage" />
+            <RequestTableForm
+              v-model="runtimeJson"
+              :topology-json="topologyJson"
+              :field-path="fieldPath"
+              :error-message="errorMessage"
+            />
           </template>
           <p v-else class="structured-note structured-note--warning" role="alert">
             {{ t("runtime trace 还是空的。请先点「用表单配置全部输入」载入场景模板，或到「JSON 输入」页签粘贴内容。") }}
           </p>
+          <section class="topology-connection-entry" :aria-label="t('显卡连接')">
+            <header class="topology-connection-entry__header">
+              <div>
+                <strong>{{ t("显卡连接") }}</strong>
+                <InlineHelp :text="t('最常用的拓扑操作：把一张显卡拖到另一张显卡，添加一条仿真连接。')" />
+              </div>
+              <span class="topology-status-chip topology-status-chip--simulation">{{ t("仿真输入") }}</span>
+            </header>
+            <!-- Mouse-only: the quick-control tab never shows a raw JSON box. -->
+            <TopologyGraphEditor
+              v-model="topologyJson"
+              :field-path="fieldPath"
+              :show-json="false"
+              :show-module-bindings="topologyAdvancedOpen"
+              @device-count-change="onDeviceCountChange"
+              @notice="onBlockNotice"
+            />
+          </section>
+          <button
+            type="button"
+            class="topology-advanced-toggle"
+            :aria-expanded="topologyAdvancedOpen"
+            @click="topologyAdvancedOpen = !topologyAdvancedOpen"
+          >
+            <span>
+              <strong>{{ t("高级拓扑设置") }}</strong>
+              <InlineHelp :text="t('需要改卡数、domain 成员或网络模型时再展开')" :interactive="false" />
+            </span>
+            <span class="topology-advanced-disclosure__hint">{{
+              topologyAdvancedOpen ? t("收起") : t("默认收起")
+            }}</span>
+          </button>
           <DeviceInventoryForm
+            v-show="topologyAdvancedOpen"
             v-model="topologyJson"
             :field-path="fieldPath"
             @notice="onBlockNotice"
             @device-count-change="onDeviceCountChange"
           />
-          <DomainInventoryForm v-model="topologyJson" :field-path="fieldPath" @notice="onBlockNotice" />
-          <!-- Mouse-only: the quick-control tab never shows a raw JSON box. -->
-          <TopologyGraphEditor v-model="topologyJson" :field-path="fieldPath" :show-json="false" />
+          <DomainInventoryForm
+            v-show="topologyAdvancedOpen"
+            v-model="topologyJson"
+            :field-path="fieldPath"
+            @notice="onBlockNotice"
+          />
         </div>
       </section>
     </div>
@@ -433,7 +539,7 @@ watch(mode, (next) => {
               fieldPath === '/custom_inputs/runtime_trace' || fieldPath.startsWith('/custom_inputs/runtime_trace/')
             "
             :aria-describedby="fieldPath.startsWith('/custom_inputs/runtime_trace') ? 'runtime-json-error' : undefined"
-            :placeholder="t('加载模板或粘贴 S1 runtime trace')"
+            :placeholder="t('加载模板或粘贴运行时 Trace')"
           ></textarea>
           <small
             v-if="fieldPath.startsWith('/custom_inputs/runtime_trace')"

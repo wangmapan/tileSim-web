@@ -25,7 +25,10 @@ const agentOrchestrationCapabilityValidatorsOutputPath = resolve(
   "src/contracts/generated/agent-orchestration-capability-validators.js",
 );
 const evidenceAgentValidatorsOutputPath = resolve(root, "src/contracts/generated/evidence-agent-validators.js");
-const agentOrchestrationPhase2ValidatorsOutputPath = resolve(root, "src/contracts/generated/agent-orchestration-phase2-validators.js");
+const agentOrchestrationPhase2ValidatorsOutputPath = resolve(
+  root,
+  "src/contracts/generated/agent-orchestration-phase2-validators.js",
+);
 const openapi = JSON.parse(await readFile(openapiPath, "utf8"));
 const createRunSchema = JSON.parse(await readFile(createRunSchemaPath, "utf8"));
 const experimentDescriptorSchema = JSON.parse(await readFile(experimentDescriptorSchemaPath, "utf8"));
@@ -51,6 +54,7 @@ const inlineTypeNames = [
   "TemplateResponse",
   "RenameRunRequest",
   "RenameRunResponse",
+  "DeleteRunResponse",
   "Week7EvidenceMapResponse",
   "Week7CalibrationResponse",
   "Week7OrchestrationResponse",
@@ -64,6 +68,19 @@ const inlineTypeNames = [
   "AssistantModelSelectionResponse",
   "EvidenceAgentDescriptorResponse",
   "AgentOrchestrationCapabilitySnapshotResponse",
+  "OptimizationSessionCreateRequest",
+  "OptimizationApprovalRequest",
+  "OptimizationActionRequest",
+  "OptimizationSessionResponse",
+  "OptimizationSessionListResponse",
+  "OptimizationSessionEventsResponse",
+  "OptimizationApprovalResponse",
+  "BatchActionRequest",
+  "BatchApprovalRequest",
+  "BatchCreateRequest",
+  "BatchEventsResponse",
+  "BatchListResponse",
+  "BatchResponse",
 ];
 const inlineTypes = [];
 function schemaForStandaloneCompile(value) {
@@ -91,10 +108,13 @@ for (const name of inlineTypeNames) {
 }
 const typesBanner = "// Generated from bridge/contracts OpenAPI and JSON Schema. Do not edit by hand.\n\n";
 const createRunResponse = "export type CreateRunResponse = ApiRun & { idempotent_replay: boolean };\n";
-const nextTypes = await format(`${typesBanner}${coreTypes}\n${requestAttributionTypes}\n${inlineTypes.join("\n")}\n${createRunResponse}`, {
-  ...prettierConfig,
-  filepath: typesOutputPath,
-});
+const nextTypes = await format(
+  `${typesBanner}${coreTypes}\n${requestAttributionTypes}\n${inlineTypes.join("\n")}\n${createRunResponse}`,
+  {
+    ...prettierConfig,
+    filepath: typesOutputPath,
+  },
+);
 
 function identifier(value) {
   const joined = value.replace(/[-_]+(.)/g, (_, character) => character.toUpperCase());
@@ -109,7 +129,8 @@ function resolveParameter(parameter) {
 
 const operations = [];
 for (const [path, pathItem] of Object.entries(openapi.paths)) {
-  for (const method of ["get", "post"]) {
+  if (pathItem["x-backend-only"] === true) continue;
+  for (const method of ["get", "post", "delete"]) {
     const operation = pathItem[method];
     if (!operation) continue;
     const parameters = [...(pathItem.parameters ?? []), ...(operation.parameters ?? [])].map(resolveParameter);
@@ -315,8 +336,22 @@ const nextAgentOrchestrationCapabilityValidators = await format(
 );
 
 const phase2SchemaDirectory = resolve(root, "bridge/contracts/agent_orchestration_phase2/schemas");
-const phase2SchemaNames = ["common.schema.json", "model-profile.schema.json", "engine-profile.schema.json", "device-profile.schema.json", "topology-profile.schema.json", "workload-profile.schema.json", "profile-binding.schema.json", "run-intake.schema.json", "validation-report.schema.json", "calculator-receipt.schema.json", "idempotency-retention-policy.schema.json"];
-const phase2Schemas = await Promise.all(phase2SchemaNames.map(async (name) => JSON.parse(await readFile(resolve(phase2SchemaDirectory, name), "utf8"))));
+const phase2SchemaNames = [
+  "common.schema.json",
+  "model-profile.schema.json",
+  "engine-profile.schema.json",
+  "device-profile.schema.json",
+  "topology-profile.schema.json",
+  "workload-profile.schema.json",
+  "profile-binding.schema.json",
+  "run-intake.schema.json",
+  "validation-report.schema.json",
+  "calculator-receipt.schema.json",
+  "idempotency-retention-policy.schema.json",
+];
+const phase2Schemas = await Promise.all(
+  phase2SchemaNames.map(async (name) => JSON.parse(await readFile(resolve(phase2SchemaDirectory, name), "utf8"))),
+);
 const phase2Ajv = new Ajv2020({ allErrors: true, strict: false, code: { source: true, esm: true } });
 for (const schema of phase2Schemas) phase2Ajv.addSchema(schema);
 const phase2ValidatorIds = {
@@ -329,9 +364,17 @@ const phase2ValidatorIds = {
   runIntakeV2: "https://tilesim.local/contracts/agent-orchestration-phase2/run-intake.schema.json",
   validationReportV1: "https://tilesim.local/contracts/agent-orchestration-phase2/validation-report.schema.json",
   calculatorReceiptV1: "https://tilesim.local/contracts/agent-orchestration-phase2/calculator-receipt.schema.json",
-  idempotencyRetentionPolicyV1: "https://tilesim.local/contracts/agent-orchestration-phase2/idempotency-retention-policy.schema.json",
+  idempotencyRetentionPolicyV1:
+    "https://tilesim.local/contracts/agent-orchestration-phase2/idempotency-retention-policy.schema.json",
 };
-const nextPhase2Validators = await format("// Generated Ajv standalone Phase 2B validators. Do not edit by hand.\n/* eslint-disable */\n" + standaloneCode(phase2Ajv, phase2ValidatorIds).replace(/const (\w+) = require\(("[^"]+")\)\.default;/g, "import $1 from $2;"), { ...prettierConfig, filepath: agentOrchestrationPhase2ValidatorsOutputPath });
+const nextPhase2Validators = await format(
+  "// Generated Ajv standalone Phase 2B validators. Do not edit by hand.\n/* eslint-disable */\n" +
+    standaloneCode(phase2Ajv, phase2ValidatorIds).replace(
+      /const (\w+) = require\(("[^"]+")\)\.default;/g,
+      "import $1 from $2;",
+    ),
+  { ...prettierConfig, filepath: agentOrchestrationPhase2ValidatorsOutputPath },
+);
 
 function hasGeneratedDrift(current, generated) {
   return current.replaceAll("\r\n", "\n") !== generated.replaceAll("\r\n", "\n");

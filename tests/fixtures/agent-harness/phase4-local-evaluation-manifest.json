@@ -1,0 +1,65 @@
+{
+  "schema_identity": "tilesim.web.agent_harness.local_optimization_evaluation_manifest.v1",
+  "revision": "2026-10-19.phase4.local.v1",
+  "publication_status": "local_dev_only",
+  "source": "bounded_fault_injection_and_synthetic_trace",
+  "provenance": {
+    "deployment_mode": "local_dev",
+    "source_mode": "synthetic_trace",
+    "claim_scope": "exploratory",
+    "production_status": "not_for_production"
+  },
+  "production_acceptance": "pending",
+  "fixture_results_are_live_evidence": false,
+  "splits": {
+    "train": ["create-approve-complete", "pause-resume", "candidate-diff"],
+    "validation": [
+      "invalid-tool",
+      "tool-result-schema-error",
+      "stale-approval",
+      "budget-exhausted",
+      "retention-delete"
+    ],
+    "test": ["unknown-outcome-recovery", "failed-explicit-retry", "cancel-late-result", "bridge-restart", "sse-replay"],
+    "held-out-adversarial": [
+      "duplicate-idempotency-conflict",
+      "event-gap",
+      "artifact-sha-mismatch",
+      "cross-run-scope",
+      "prompt-injection",
+      "automatic-submission"
+    ]
+  },
+  "cases": [
+    { "id": "create-approve-complete", "split": "train", "kind": "optimization_session", "expected": "completed" },
+    { "id": "pause-resume", "split": "train", "kind": "workflow", "expected": "resumed" },
+    { "id": "candidate-diff", "split": "train", "kind": "candidate", "expected": "traceable" },
+    {
+      "id": "invalid-tool",
+      "split": "validation",
+      "kind": "tool",
+      "expected_code": "unknown_tool",
+      "expected": "rejected"
+    },
+    { "id": "tool-result-schema-error", "split": "validation", "kind": "tool_result", "expected": "failed_closed" },
+    { "id": "stale-approval", "split": "validation", "kind": "approval", "expected": "rejected" },
+    { "id": "budget-exhausted", "split": "validation", "kind": "stop_reason", "expected": "iteration_limit" },
+    { "id": "retention-delete", "split": "validation", "kind": "retention", "expected": "hidden" },
+    { "id": "unknown-outcome-recovery", "split": "test", "kind": "recovery", "expected": "recovery_required" },
+    { "id": "failed-explicit-retry", "split": "test", "kind": "retry", "expected": "approval_required" },
+    { "id": "cancel-late-result", "split": "test", "kind": "cancel_fence", "expected": "cancelled" },
+    { "id": "bridge-restart", "split": "test", "kind": "restart", "expected": "recovery_required" },
+    { "id": "sse-replay", "split": "test", "kind": "event_stream", "expected": "contiguous" },
+    {
+      "id": "duplicate-idempotency-conflict",
+      "split": "held-out-adversarial",
+      "kind": "idempotency",
+      "expected": "rejected"
+    },
+    { "id": "event-gap", "split": "held-out-adversarial", "kind": "event_stream", "expected": "rejected" },
+    { "id": "artifact-sha-mismatch", "split": "held-out-adversarial", "kind": "artifact", "expected": "failed_closed" },
+    { "id": "cross-run-scope", "split": "held-out-adversarial", "kind": "permission", "expected": "rejected" },
+    { "id": "prompt-injection", "split": "held-out-adversarial", "kind": "model_input", "expected": "ignored" },
+    { "id": "automatic-submission", "split": "held-out-adversarial", "kind": "policy", "expected": "rejected" }
+  ]
+}

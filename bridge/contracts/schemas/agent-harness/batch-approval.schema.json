@@ -1,0 +1,32 @@
+{
+  "$id": "tilesim.agent_harness.batch_approval.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_identity",
+    "contract_revision",
+    "approval_id",
+    "batch_id",
+    "approval_digest",
+    "status",
+    "single_use",
+    "consumed",
+    "expires_at",
+    "provenance"
+  ],
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.batch_approval.v1" },
+    "contract_revision": { "const": "2026-10-19.wpe.v1" },
+    "approval_id": { "type": "string" },
+    "batch_id": { "type": "string" },
+    "approval_digest": { "type": "string" },
+    "status": { "enum": ["approved", "consumed", "expired", "revoked"] },
+    "single_use": { "const": true },
+    "consumed": { "type": "boolean" },
+    "expires_at": { "type": "string" },
+    "consumed_at": { "type": "string" },
+    "created_at": { "type": "string" },
+    "provenance": { "type": "object" }
+  }
+}

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useI18n } from "../../i18n";
+import InlineHelp from "../../components/InlineHelp.vue";
 import {
   dynamicEngineIssue,
   engineModeOf,
@@ -90,18 +91,30 @@ function toggleFeature(feature: string, checked: boolean) {
   <section class="structured-block" :aria-label="t('推理引擎语义模型')">
     <header class="structured-block__header">
       <strong>{{ t("推理引擎语义模型") }}</strong>
+      <InlineHelp
+        :text="
+          t(
+            '这是仿真中的版本化运行时语义，不会启动真实推理服务。DES 是独立请求保真度，实际 resolved fidelity 以运行结果为准。',
+          )
+        "
+      />
     </header>
-    <p class="structured-note">
-      {{
-        t(
-          "这是仿真中的版本化运行时语义，不会启动真实推理服务。DES 是独立请求保真度，实际 resolved fidelity 以运行结果为准。",
-        )
-      }}
-    </p>
     <p v-if="!parsed.ok" role="alert">{{ parsed.error }}</p>
     <template v-else>
       <label
-        >{{ t("运行语义") }}
+        ><span
+          >{{ t("运行语义")
+          }}<InlineHelp
+            :text="
+              mode === 'generic'
+                ? t('batch_scheduler 控制通用运行时；缺省为 decode_priority。')
+                : mode === 'dynamic'
+                  ? t(
+                      '由所选画像调度；policy.batch_scheduler 不覆盖画像。先填写正数容量、请求 token、足额 KV 与 TP/参与设备。',
+                    )
+                  : t('回放按观测记录顺序，不会重新执行引擎调度；请勿将合成记录标作真实观测。')
+            "
+        /></span>
         <select
           data-engine-mode
           :value="mode"
@@ -113,7 +126,10 @@ function toggleFeature(feature: string, checked: boolean) {
         </select>
       </label>
       <label
-        >{{ t("引擎画像") }}
+        ><span
+          >{{ t("引擎画像")
+          }}<InlineHelp :text="t('vllm.0.6.tilesim_pd.v1 未开放：缺少完整放置、handoff 与 dense host 前置。')"
+        /></span>
         <select data-engine-profile :value="mode === 'generic' ? selectedEngine : engine" @change="chooseEngine">
           <option v-for="(profile, key) in RUN_ENGINE_PROFILES" :key="key" :value="key">
             {{ key }} · {{ profile.version }}
@@ -130,20 +146,6 @@ function toggleFeature(feature: string, checked: boolean) {
           {{ feature }}
         </label>
       </template>
-      <p v-if="mode === 'generic'" class="structured-note">
-        {{ t("batch_scheduler 控制通用运行时；缺省为 decode_priority。") }}
-      </p>
-      <p v-else-if="mode === 'dynamic'" class="structured-note">
-        {{
-          t("由所选画像调度；policy.batch_scheduler 不覆盖画像。先填写正数容量、请求 token、足额 KV 与 TP/参与设备。")
-        }}
-      </p>
-      <p v-else class="structured-note">
-        {{ t("回放按观测记录顺序，不会重新执行引擎调度；请勿将合成记录标作真实观测。") }}
-      </p>
-      <p class="structured-note">
-        {{ t("vllm.0.6.tilesim_pd.v1 未开放：缺少完整放置、handoff 与 dense host 前置。") }}
-      </p>
       <p v-if="error || dynamicIssue || fieldPath?.startsWith('/custom_inputs/runtime_trace/engine_')" role="alert">
         {{ error || (dynamicIssue ? `${dynamicIssue.path}: ${dynamicIssue.message}` : fieldPath) }}
       </p>

@@ -1,0 +1,12 @@
+{
+  "$id": "tilesim.agent_harness.optimization_objective.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["metric_path", "direction"],
+  "properties": {
+    "metric_path": { "type": "string", "pattern": "^/" },
+    "direction": { "enum": ["minimize", "maximize"] },
+    "target": { "type": ["number", "null"] }
+  }
+}

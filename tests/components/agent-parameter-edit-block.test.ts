@@ -54,6 +54,29 @@ function section(wrapper: ReturnType<typeof mount>, type: string) {
 }
 
 describe("parameter edit block", () => {
+  it("shows the validated structured JSON before the one-click apply", () => {
+    const wrapper = mount(AgentTypedBlockList, {
+      props: {
+        blocks: [
+          {
+            ...plan,
+            jsonPreview: {
+              overridesJson: '{"overrides":{"runtime":{"max_batch_size":8}}}',
+              runtimeJson: '{"policy":{"max_active_requests":8}}',
+              topologyJson: '{"topology":{"devices":[]}}',
+            },
+          },
+        ],
+      },
+    });
+    const preview = section(wrapper, "parameter_edits").get(".agent-block__json-preview");
+    expect(preview.text()).toContain("确认后一次性应用");
+    expect(preview.text()).toContain("max_active_requests");
+    expect(preview.text()).toContain("max_batch_size");
+    expect(preview.text()).toContain("devices");
+    expect(wrapper.text()).toContain("尚未写入");
+  });
+
   it("presents a plan as pending and only emits apply when the button is pressed", async () => {
     const wrapper = mount(AgentTypedBlockList, { props: { blocks: [plan] } });
     const block = section(wrapper, "parameter_edits");
@@ -128,6 +151,23 @@ describe("parameter edit block", () => {
     // on screen before the button, not tucked into a details element.
     expect(block.text()).toContain("预设里的 kv_capacity_tokens 找不到，已跳过。");
     expect(block.text()).toContain("还没写进面板");
+    expect(block.find(".agent-block__options button").exists()).toBe(true);
+  });
+
+  it("shows a non-blocking structured-input warning while keeping safe edits applicable", () => {
+    const wrapper = mount(AgentTypedBlockList, {
+      props: {
+        blocks: [
+          {
+            ...plan,
+            warnings: ["structured_inputs 未被 Bridge 接受；当前标量改动仍可单独应用。"],
+          },
+        ],
+      },
+    });
+    const block = section(wrapper, "parameter_edits");
+    expect(block.text()).toContain("结构化输入提示");
+    expect(block.text()).toContain("当前标量改动仍可单独应用");
     expect(block.find(".agent-block__options button").exists()).toBe(true);
   });
 

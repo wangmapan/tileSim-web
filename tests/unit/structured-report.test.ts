@@ -402,7 +402,7 @@ describe("structured performance report", () => {
   it("renders human-readable charts, complete evidence appendix, and explicit pending analysis", () => {
     const html = createStructuredReportExport(context()).html;
     expect(html).toContain("TILESIM STRUCTURED PERFORMANCE REPORT");
-    expect(html).toContain("S3 / S4 / S5 并列资源语义");
+    expect(html).toContain("并列资源语义");
     expect(html).toContain('class="export-bars"');
     expect(html).toContain('id="appendix"');
     expect(html).toContain('id="design-space"');

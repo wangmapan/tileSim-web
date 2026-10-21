@@ -66,7 +66,7 @@ def write_json(
         schema_set_revision=schema_set_revision,
     )
     add_cors_headers(handler)
-    handler.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+    handler.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
     handler.send_header(
         "Access-Control-Allow-Headers",
         "Content-Type, X-Request-ID, Idempotency-Key, Last-Event-ID",
@@ -129,7 +129,7 @@ def api_manifest(
 ) -> dict:
     endpoints = {}
     for path, path_item in openapi_contract["paths"].items():
-        for method in ("get", "post"):
+        for method in ("get", "post", "delete"):
             operation = path_item.get(method)
             if operation is not None:
                 endpoints[operation["operationId"]] = f"{method.upper()} /api{path}"

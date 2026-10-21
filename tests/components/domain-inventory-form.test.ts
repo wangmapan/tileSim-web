@@ -29,7 +29,19 @@ const topology = {
   },
 };
 
-type Document = typeof topology;
+type Domain = (typeof topology.topology.domains)[number] & {
+  default_fidelity?: string;
+  failure_policy?: string;
+};
+
+type Document = {
+  topology: {
+    devices: typeof topology.topology.devices;
+    module_bindings: typeof topology.topology.module_bindings;
+    links: typeof topology.topology.links;
+    domains: Domain[];
+  };
+};
 
 function mountForm(document: unknown = topology) {
   return mount(DomainInventoryForm, { props: { modelValue: JSON.stringify(document) } });
@@ -145,10 +157,19 @@ describe("domain list block", () => {
     expect(wrapper.get(".domain-inventory .structured-note--error").text()).toContain("已存在");
   });
 
-  it("reports the optional domain fields it deliberately leaves to the raw JSON", () => {
+  it("edits the optional fidelity and failure fields in the domain row", async () => {
     const wrapper = mountForm();
-    const note = wrapper.get(".domain-inventory .structured-note--warning").text();
-    expect(note).toContain("default_fidelity");
-    expect(note).toContain("failure_policy");
+    const fidelity = wrapper.get(
+      '[data-input-path="/custom_inputs/topology/topology/domains/0/default_fidelity"] select',
+    );
+    changeValue(fidelity.element as HTMLSelectElement, "des");
+    await fidelity.trigger("change");
+    expect(lastDocument(wrapper)?.topology.domains[0].default_fidelity).toBe("des");
+
+    const failure = wrapper.get('[data-input-path="/custom_inputs/topology/topology/domains/0/failure_policy"] select');
+    changeValue(failure.element as HTMLSelectElement, "fail_closed");
+    await failure.trigger("change");
+    expect(lastDocument(wrapper)?.topology.domains[0].failure_policy).toBe("fail_closed");
+    expect(wrapper.find(".structured-note--warning").exists()).toBe(false);
   });
 });

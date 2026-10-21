@@ -221,9 +221,16 @@ async function installApi(page, mode = "complete", options = {}) {
       agentChatRequests += 1;
       agentChatBodies.push(request.postDataJSON());
       const input = request.postDataJSON()?.messages?.at?.(-1)?.content || "";
+      const requestedCardCount = /(?:^|\D)(\d+)\s*(?:卡|张卡|GPU|张显卡)/u.exec(input)?.[1];
       const settings =
-        input.includes("高吞吐") || input.includes("8 卡") || input.includes("8卡")
-          ? [{ key: "topology/devices", value: "8", why: "按请求扩展设备清单；TP 与参与设备仍需在结构化输入中核对。" }]
+        input.includes("高吞吐") || requestedCardCount
+          ? [
+              {
+                key: "topology/devices",
+                value: requestedCardCount || "8",
+                why: "按请求调整设备清单；TP 与参与设备仍需在结构化输入中核对。",
+              },
+            ]
           : input.includes("topology/devices[15]")
             ? [
                 { key: "run_name", value: "sixteen", why: "使用请求中的运行名称。" },
@@ -390,8 +397,8 @@ test.describe("L6 lightweight formal-run closure", () => {
     await expect(panel).toContainText("4 → 8");
     expect(api.getAgentCapabilityRequests()).toBe(0);
     expect(api.getAgentChatRequests()).toBe(1);
-    expect(api.getAgentChatBodies()[0].messages.at(-2).content).toContain("输入模式=controls_only");
-    expect(api.getAgentChatBodies()[0].messages.at(-2).content).toContain("不要提出 topology/devices");
+    expect(api.getAgentChatBodies()[0].messages.at(-2).content).toContain("输入模式=structured_input");
+    expect(api.getAgentChatBodies()[0].messages.at(-2).content).toContain("topology/devices");
     expect(api.getPostCount()).toBe(0);
     expect(prohibitedRequests).toEqual([]);
 
@@ -419,8 +426,8 @@ test.describe("L6 lightweight formal-run closure", () => {
     await panel.getByRole("textbox", { name: "描述要理解或调整的内容" }).fill("给我一份 8 卡试验方案");
     await panel.getByRole("button", { name: "提交", exact: true }).click();
 
-    await expect(panel).toContainText("当前页面尚未发布设备、请求和拓扑字段");
-    await expect(panel.locator('[data-block-type="parameter_edits"]')).toHaveCount(0);
+    await expect(panel).toContainText("模型参数方案");
+    await expect(panel.locator('[data-block-type="parameter_edits"]')).toHaveCount(1);
     expect(api.getAgentChatRequests()).toBe(1);
     expect(api.getPostCount()).toBe(0);
   });
@@ -470,11 +477,29 @@ test.describe("L6 lightweight formal-run closure", () => {
     expect(chatMessages.at(-2).content).toContain("topology/devices");
     expect(chatMessages.at(-1).content).toBe("给我一份 8 卡试验方案");
 
-    await panel.getByRole("button", { name: "应用到面板", exact: true }).click();
+    await panel.getByRole("button", { name: "应用 JSON 草案到输入", exact: true }).click();
     await expect(panel).toContainText("已写入 1 项参数，没有创建运行。");
     await expect(panel).toContainText("设备数量");
     expect(api.getPostCount()).toBe(0);
     expect(prohibitedRequests).toEqual([]);
+  });
+
+  test("the same assistant path accepts a non-eight card count", async ({ page }) => {
+    const api = await installApi(page);
+    await page.goto("/lightweight/prepare", { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: /用表单配置全部输入/ }).click();
+    await expect(page.locator(".structured-stack")).toBeVisible();
+
+    await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
+    const panel = page.locator("#tilesim-agent-copilot");
+    await panel.getByRole("textbox", { name: "描述要理解或调整的内容" }).fill("配置一份 16 卡试验方案");
+    await panel.getByRole("button", { name: "提交", exact: true }).click();
+    await expect(panel.locator('[data-block-type="parameter_edits"]')).toContainText("topology/devices");
+    await expect(panel.locator('[data-block-type="parameter_edits"]')).toContainText("16");
+
+    await panel.getByRole("button", { name: "应用 JSON 草案到输入", exact: true }).click();
+    await expect(page.locator(".device-inventory__count input")).toHaveValue("16");
+    expect(api.getPostCount()).toBe(0);
   });
 
   test("user turn uses its own avatar and identity across themes and narrow desktop width", async ({ page }) => {

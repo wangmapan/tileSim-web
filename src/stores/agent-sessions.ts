@@ -86,6 +86,11 @@ function sanitizePersistedValue(value: unknown, depth = 0): unknown {
     const result: Record<string, unknown> = {};
     for (const [key, child] of Object.entries(value)) {
       if (forbiddenPersistenceKeys.test(key)) continue;
+      // Structured JSON previews are derived from the live page draft. They can
+      // be large and become stale after a reload, so persist the plan metadata
+      // but deliberately rebuild/omit this transient view instead of storing a
+      // clipped JSON document that could look complete.
+      if (key === "jsonPreview") continue;
       result[key] = sanitizePersistedValue(child, depth + 1);
     }
     return result;

@@ -1,0 +1,16 @@
+{
+  "$id": "tilesim.agent_harness.optimization_summary.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_identity", "contract_revision", "session_id", "state", "provenance"],
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.optimization_summary.v1" },
+    "contract_revision": { "const": "2026-10-19.wpd.v1" },
+    "session_id": { "type": "string" },
+    "state": { "type": "string" },
+    "best_candidate_id": { "type": ["string", "null"] },
+    "stop_reason": { "type": ["object", "null"] },
+    "provenance": { "type": "object" }
+  }
+}

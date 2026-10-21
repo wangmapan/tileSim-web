@@ -34,7 +34,7 @@ export function statsFor(id: LayerId, context: StatsContext): ExecutionStat[] {
       stat("校准级别", provenance?.calibration_level || "unknown"),
       stat("允许声明", provenance?.allowed_claim_scope || "unknown"),
       stat("Trace kind", provenance?.trace_kind || "unknown"),
-      stat("S1 输入请求", inputs.runtime_trace?.requests?.length ?? "—"),
+      stat("运行时输入请求", inputs.runtime_trace?.requests?.length ?? "—"),
     ];
   if (id === "S1")
     return [

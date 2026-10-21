@@ -37,13 +37,44 @@
       "properties": {
         "schema_version": { "const": "tilesim.metrics_report.v1" },
         "run_id": { "type": "string" },
-        "request_metrics": { "type": "array", "minItems": 1, "items": { "type": "object", "required": ["request_id"], "properties": { "request_id": { "type": "string" } } } }
+        "request_metrics": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["request_id"],
+            "properties": {
+              "request_id": { "type": "string" },
+              "ttft_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+              "tpot_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+              "end_to_end_latency_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+              "network_wait_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+              "kv_wait_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+              "device_wait_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+              "collective_wait_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+              "kv_bytes_read": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+              "kv_bytes_migrated": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+              "kv_eviction_bytes": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+              "has_ttft_sample": { "type": "boolean" },
+              "has_tpot_sample": { "type": "boolean" },
+              "has_end_to_end_latency_sample": { "type": "boolean" }
+            }
+          }
+        }
       }
     },
     "evidence": {
       "type": "object",
       "additionalProperties": true,
-      "required": ["run_id", "des_committed_event_digest", "des_events", "resource_operations", "network_demands", "fabric"],
+      "required": [
+        "run_id",
+        "des_committed_event_digest",
+        "des_events",
+        "resource_operations",
+        "network_demands",
+        "fabric"
+      ],
       "properties": {
         "run_id": { "type": "string" },
         "des_committed_event_digest": { "type": "string" },
@@ -60,8 +91,51 @@
       "additionalProperties": true,
       "required": ["subject_refs", "evidence_refs"],
       "properties": {
+        "attribution_id": { "type": "string" },
+        "rank": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
         "subject_refs": { "type": "array", "items": { "type": "object" } },
-        "evidence_refs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/requestAttributionEvidenceRef" } }
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/requestAttributionEvidenceRef" }
+        },
+        "start_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "end_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "subsystem": { "type": "string" },
+        "cause_code": { "type": "string" },
+        "title": { "type": "string" },
+        "evidence": { "type": "string" },
+        "component_code": { "type": "string" },
+        "detail": { "type": "string" },
+        "score_ps": { "type": "number" },
+        "share": { "type": "number" },
+        "evidence_link": { "type": "string" },
+        "model_execution_call_id": { "type": "string" },
+        "execution_id": { "type": "string" },
+        "kv_operation_id": { "type": "string" },
+        "network_demand_id": { "type": "string" },
+        "device_task_id": { "type": "string" },
+        "collective_id": { "type": "string" },
+        "pd_handoff_id": { "type": "string" },
+        "pd_disaggregation_group_id": { "type": "string" },
+        "pd_source_placement_group_id": { "type": "string" },
+        "pd_destination_placement_group_id": { "type": "string" },
+        "network_intervals": { "type": "array", "items": { "$ref": "#/$defs/requestAttributionNetworkInterval" } }
+      }
+    },
+    "requestAttributionNetworkInterval": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "component_code": { "type": "string" },
+        "demand_id": { "type": "string" },
+        "link_id": { "type": "string" },
+        "attempt": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "start_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "end_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "evidence": { "type": "string" },
+        "unresolved_reason": { "type": "string" },
+        "evidence_refs": { "type": "array", "items": { "$ref": "#/$defs/requestAttributionEvidenceRef" } }
       }
     },
     "requestAttributionEvidenceRef": {

@@ -13,11 +13,14 @@ export interface ExperimentAgentContextPublication {
   current_values: Readonly<Record<Phase1AgentExposedFieldId, DraftFieldValue | null>>;
   /**
    * Every scalar this page can actually write, so the assistant is not limited
-   * to the frozen eight-field subset when the user asks it to set parameters.
+   * to a fixed field list or a fixed number of devices when the user asks it to
+   * set parameters.
    * Empty while the page is not ready, which is what keeps the parameter-edit
    * entry point off for pages that have no writable surface.
    */
   parameter_catalog: readonly ParameterCatalogEntry[];
+  /** Read-only copies of the current custom-input documents for model planning. */
+  structured_inputs?: { runtime_trace: string; topology: string };
 }
 
 export type ExperimentAgentContextPublisher = (publication: ExperimentAgentContextPublication) => void;
@@ -64,9 +67,17 @@ export function buildExperimentAgentContextPublication(input: {
   runtimeJson?: string;
   topologyJson?: string;
 }): ExperimentAgentContextPublication {
+  const runtimeJson = input.runtimeJson || "";
+  const topologyJson = input.topologyJson || "";
   const surfaceFields = input.surface.controlGroups.flatMap((group) => group.fields);
+  // Both editable input surfaces are owned by this page: the quick-control
+  // view writes scalar overrides, while the JSON view writes the two
+  // custom-input documents. Trace-package mode is intentionally excluded;
+  // it selects an inspected package and must not advertise a mutable draft
+  // surface to the assistant.
+  const editableInputMode = input.mode === "controls" || input.mode === "json";
   const pageReady =
-    input.pageAvailable !== false && input.surface.contractStatus !== "contract_error" && input.mode === "controls";
+    input.pageAvailable !== false && input.surface.contractStatus !== "contract_error" && editableInputMode;
   const allAgentFieldsAvailable = PHASE1_AGENT_EXPOSED_FIELD_IDS.every(
     (fieldId) => surfaceFields.find((candidate) => candidate.fieldId === fieldId)?.available === true,
   );
@@ -95,13 +106,13 @@ export function buildExperimentAgentContextPublication(input: {
     ]),
   ) as Record<Phase1AgentExposedFieldId, DraftFieldValue | null>;
   // The catalogue is descriptor-driven, so an unavailable field simply never
-  // appears in it; it is deliberately not gated on the frozen eight.
+  // appears in it; it is deliberately not gated on a legacy field subset.
   const parameterCatalog = pageReady
     ? buildParameterCatalog({
         form: input.form,
         surface: input.surface,
-        runtimeJson: input.runtimeJson || "",
-        topologyJson: input.topologyJson || "",
+        runtimeJson,
+        topologyJson,
       })
     : [];
   return {
@@ -135,5 +146,8 @@ export function buildExperimentAgentContextPublication(input: {
     },
     current_values: currentValues,
     parameter_catalog: parameterCatalog,
+    ...(runtimeJson.trim() && topologyJson.trim()
+      ? { structured_inputs: { runtime_trace: runtimeJson, topology: topologyJson } }
+      : {}),
   };
 }

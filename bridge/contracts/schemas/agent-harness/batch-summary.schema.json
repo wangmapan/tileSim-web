@@ -1,0 +1,21 @@
+{
+  "$id": "tilesim.agent_harness.batch_summary.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_identity", "contract_revision", "batch_id", "state", "counts", "provenance"],
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.batch_summary.v1" },
+    "contract_revision": { "const": "2026-10-19.wpe.v1" },
+    "batch_id": { "type": "string" },
+    "state": { "type": "string" },
+    "counts": { "type": "object" },
+    "best_candidate_id": { "type": ["string", "null"] },
+    "best_value": { "type": ["number", "null"] },
+    "no_improvement_count": { "type": "integer", "minimum": 0 },
+    "evaluated_count": { "type": "integer", "minimum": 0 },
+    "stop_reason": { "anyOf": [{ "$ref": "./batch-stop-reason.schema.json" }, { "type": "null" }] },
+    "checkpoint_id": { "type": ["string", "null"] },
+    "provenance": { "type": "object" }
+  }
+}

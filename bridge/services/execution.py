@@ -24,6 +24,27 @@ TRACE_SOURCE_MODES = {"real_trace", "synthetic_trace", "compatibility_harness_tr
 ATTRIBUTION_DUPLICATE_CODE = "REQUEST_ATTRIBUTION_REQUEST_ID_DUPLICATED"
 
 
+def explicit_request_attribution_applicability(entry: object) -> bool | None:
+    """Read an explicit backend applicability fact without deriving one locally.
+
+    Trace-package intake does not currently publish this field.  In that case the
+    caller must keep applicability unknown and avoid requesting an attribution
+    artifact.  TP degree, participant count, and topology shape are evidence
+    details, not an applicability contract.
+    """
+    if not isinstance(entry, dict):
+        return None
+    direct = entry.get("request_attribution_applicable")
+    if type(direct) is bool:
+        return direct
+    applicability = entry.get("applicability")
+    if isinstance(applicability, dict):
+        nested = applicability.get("request_attribution_applicable")
+        if type(nested) is bool:
+            return nested
+    return None
+
+
 def validated_cli_failure(report: object, *, attribution_requested: bool) -> dict[str, str]:
     """Preserve structured CLI errors, accepting the attribution code only with its pointer."""
     if not isinstance(report, dict):
@@ -162,7 +183,7 @@ def materialize_trace_package_inputs(
     runtime_entry = (entry_boundary, entry_trace_kind) in {
         ("S0", "s0_workload"), ("S1", "s1_runtime")
     }
-    dense_request_evidence = False
+    request_attribution_applicable: bool | None = None
     if runtime_entry:
         try:
             package = json.loads(manifest_path.read_bytes())
@@ -172,19 +193,7 @@ def materialize_trace_package_inputs(
             entry_body = entry_path.read_bytes()
             if hashlib.sha256(entry_body).hexdigest() == entry_info["sha256"].removeprefix("sha256:"):
                 entry = json.loads(entry_body)
-                profile = entry.get("dense_execution", {})
-                policy = entry.get("runtime_config", entry.get("policy", {}))
-                dense_request_evidence = (
-                    isinstance(profile, dict)
-                    and profile.get("schema_version") == "tilesim.dense_execution.v1"
-                    and isinstance(policy, dict)
-                    and type(policy.get("default_tp_degree")) is int
-                    and policy["default_tp_degree"] >= 2
-                    and isinstance(policy.get("default_participants"), list)
-                    and len(policy["default_participants"]) >= 2
-                    and bool(topology.get("topology", {}).get("domains"))
-                    and bool(topology.get("topology", {}).get("links"))
-                )
+                request_attribution_applicable = explicit_request_attribution_applicability(entry)
         except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
             # A changed or invalid package is rejected by trace_package_manifest_matches
             # or the CLI, not promoted to attribution eligibility.
@@ -195,7 +204,14 @@ def materialize_trace_package_inputs(
         "trace_package": manifest_path,
         "trace_package_manifest_sha256": manifest_sha256,
         "runtime_evidence_applicable": runtime_entry,
-        "request_attribution_applicable": dense_request_evidence,
+        "request_attribution_applicable": request_attribution_applicable,
+        "request_attribution_applicability": (
+            "available"
+            if request_attribution_applicable is True
+            else "unsupported"
+            if request_attribution_applicable is False
+            else "unknown"
+        ),
     }
 
 
@@ -283,7 +299,7 @@ def execute_run(
             "--runtime-requests-out", str(report_paths["runtime_requests"]),
             "--runtime-analysis-out", str(report_paths["runtime_analysis"]),
         ])
-    if fidelity_policy == "des" and scenario.get("request_attribution_applicable"):
+    if fidelity_policy == "des" and scenario.get("request_attribution_applicable") is True:
         command.extend(["--request-attribution-out", str(report_paths["request_attribution"])])
     if fidelity_policy == "des" and (scenario.get("trace_package") is None or scenario.get("runtime_evidence_applicable")):
         command.extend(

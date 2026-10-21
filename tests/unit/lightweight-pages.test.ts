@@ -235,6 +235,33 @@ describe("LightweightPrepareView contract and submission boundary", () => {
     wrapper.unmount();
   });
 
+  it("hydrates the Agent context from the canonical template without opening JSON editing", async () => {
+    mocks.getTemplate.mockResolvedValue({
+      scenario_id: "s1_des_example",
+      runtime_trace: { trace_name: "agent-context-runtime", requests: [{ request_id: "req0", tp_degree: 4 }] },
+      topology: {
+        topology_name: "agent-context-topology",
+        devices: [{ device_id: "gpu0", device_type: "GPU" }],
+        links: [],
+        domains: [],
+        module_bindings: [],
+      },
+    });
+    const publication = vi.fn();
+    const { wrapper } = await mountAt(LightweightPrepareView, "/lightweight/prepare", {
+      agentContextPublisher: publication,
+    });
+
+    await flushPromises();
+
+    expect(mocks.getTemplate).toHaveBeenCalledWith("s1_des_example");
+    const latest = publication.mock.lastCall?.[0];
+    expect(latest.structured_inputs.runtime_trace).toContain("agent-context-runtime");
+    expect(latest.structured_inputs.topology).toContain("agent-context-topology");
+    expect(wrapper.findAll("textarea")).toHaveLength(0);
+    wrapper.unmount();
+  });
+
   it("loads the selected scenario template into JSON input mode", async () => {
     mocks.getTemplate.mockResolvedValue({
       scenario_id: "s1_des_example",

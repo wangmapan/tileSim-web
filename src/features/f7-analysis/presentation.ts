@@ -1,4 +1,5 @@
 import type { DesignCandidate } from "../../contracts/report-model";
+import { isLosslessInteger, losslessIntegerToBigInt } from "../../contracts/lossless-json";
 import { formatNumber } from "../../lib/format";
 import type { F7Capability } from "./model";
 
@@ -8,7 +9,7 @@ const capabilityTitles: Record<F7Capability["key"], string> = {
   reported_ranking: "后端 reported ranking",
   pareto: "Pareto membership",
   candidate_navigation: "候选 run / artifact 导航",
-  executed_s6_knobs: "Executed S6 knobs",
+  executed_s6_knobs: "Executed network parameters",
   topology_domain_join: "Topology → metrics domain",
 };
 
@@ -24,7 +25,7 @@ const availableCapabilityDetails: Record<F7Capability["key"], string> = {
   reported_ranking: "展示后端报告顺序与 final_rank；不会重算排序。",
   pareto: "Pareto front ID、membership、dominance 与 objectives 均来自正式后端契约。",
   candidate_navigation: "候选导航固定到当前 run 的 design-space artifact 记录；backend instance 不是 Bridge run。",
-  executed_s6_knobs: "requested、resolved、单位与 availability 均来自正式 S6 knob 记录。",
+  executed_s6_knobs: "requested、resolved、单位与 availability 均来自正式网络参数记录。",
   topology_domain_join: "metrics 通过正式 EvidenceRef 连接到唯一 topology domain。",
 };
 
@@ -36,10 +37,10 @@ export function unresolvedCandidateKnobs(candidates: DesignCandidate[]): string[
 export function createDesignSpacePresentation(t: Translate) {
   return {
     rankDelta(candidate: DesignCandidate) {
-      if (!candidate.analytical_rank || !candidate.final_rank) return "—";
-      const delta = candidate.analytical_rank - candidate.final_rank;
+      if (!isLosslessInteger(candidate.analytical_rank) || !isLosslessInteger(candidate.final_rank)) return "—";
+      const delta = losslessIntegerToBigInt(candidate.analytical_rank) - losslessIntegerToBigInt(candidate.final_rank);
       if (!delta) return t("不变");
-      return delta > 0 ? `↑ ${delta}` : `↓ ${Math.abs(delta)}`;
+      return delta > 0n ? `↑ ${delta}` : `↓ ${-delta}`;
     },
     metricValue(value: number | undefined, unit = "", available = true) {
       if (!available) return t("不适用");

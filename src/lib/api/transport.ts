@@ -7,6 +7,8 @@ interface StructuredApiError {
   message?: string;
   field_path?: string | null;
   retryable?: boolean;
+  terminal_failure?: boolean;
+  unknown_outcome?: boolean;
 }
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
@@ -46,6 +48,8 @@ export async function parseResponse<T>(response: Response): Promise<T> {
         response.headers.get("x-request-id") ||
         (isRecord(payload) && typeof payload.request_id === "string" ? payload.request_id : ""),
       retryable: structured?.retryable === true,
+      terminalFailure: structured?.terminal_failure === true,
+      unknownOutcome: structured?.unknown_outcome === true,
     });
   }
   return payload as T;
@@ -70,6 +74,7 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
 export interface ApiResponseMetadata<T> {
   payload: T;
   schemaSetRevision: string;
+  apiVersion: string;
 }
 
 export async function apiRequestWithMetadata<T>(
@@ -83,7 +88,8 @@ export async function apiRequestWithMetadata<T>(
     try {
       const response = await fetch(`${root}${path}`, { cache: "no-store", ...options });
       const schemaSetRevision = response.headers.get("x-tilesim-schema-set-revision") || "";
-      return { payload: await parseResponse<T>(response), schemaSetRevision };
+      const apiVersion = response.headers.get("x-tilesim-api-version") || "";
+      return { payload: await parseResponse<T>(response), schemaSetRevision, apiVersion };
     } catch (error) {
       if (error instanceof BridgeApiError) throw error;
       lastError = error;

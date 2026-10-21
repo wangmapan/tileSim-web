@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ArtifactManifestResponse } from "../../src/contracts/bridge-api";
-import type { DesignSpaceReport, MetricsReport } from "../../src/contracts/report-model";
+import type { DesignCandidate, DesignSpaceReport, MetricsReport } from "../../src/contracts/report-model";
 import { adaptReport } from "../../src/adapters/report-registry";
 import { parseJsonLossless } from "../../src/contracts/lossless-json";
 import {
@@ -504,6 +504,12 @@ describe("F7 metrics-backed analysis and contract gaps", () => {
     expect(presentation.metricValue(undefined)).toBe("—");
     expect(presentation.metricValue(10, "µs", false)).toBe("translated:不适用");
     expect(presentation.candidateLinks(candidate)).toContainEqual(["S9 metrics", "MetricsReport:fixture-metrics"]);
+    expect(
+      presentation.rankDelta({
+        analytical_rank: "9007199254740995",
+        final_rank: "9007199254740993",
+      } as DesignCandidate),
+    ).toBe("↑ 2");
     expect(presentation.capabilityTitle(buildF7Capabilities(designSpace, manifest())[1])).toBe(
       "translated:Pareto membership",
     );

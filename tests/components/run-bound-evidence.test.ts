@@ -37,9 +37,9 @@ describe("run-bound evidence panel", () => {
     await flushPromises();
 
     expect(wrapper.findAll(".run-bound-peer-group .run-bound-node").map((node) => node.text().slice(0, 2))).toEqual([
-      "S3",
-      "S4",
-      "S5",
+      "KV",
+      "设备",
+      "集合",
     ]);
     expect(wrapper.find(".run-bound-output-grid").text()).toContain("契约缺口");
     expect(wrapper.find(".run-bound-page-links a").attributes("href")).toContain("evidence_request=req-0");

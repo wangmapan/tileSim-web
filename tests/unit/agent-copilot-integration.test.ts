@@ -188,11 +188,35 @@ describe("Phase 1 public page adapter and redaction", () => {
     expect(unavailableFieldPublication.context.allowed_purposes).toEqual(["explain"]);
     expect(unavailableFieldPublication.context.supported_actions).toEqual(["explain", "check_capability"]);
 
-    const unavailable = buildExperimentAgentContextPublication({
+    const jsonPublication = buildExperimentAgentContextPublication({
       form,
       surface,
       mode: "json",
       contextRevision: "context:lightweight_prepare:json:2",
+      runId: null,
+      pageId: "lightweight-prepare",
+      routeName: "lightweight_prepare",
+      displayLabel: "轻量实验配置",
+      runtimeJson: JSON.stringify({ trace_name: "current-runtime", requests: [] }),
+      topologyJson: JSON.stringify({ topology: { devices: [] } }),
+    });
+    expect(jsonPublication.context.availability).toBe("available");
+    expect(jsonPublication.context.supported_actions).toEqual([
+      "explain",
+      "configure_current_subset",
+      "check_capability",
+    ]);
+    expect(jsonPublication.context.allowed_purposes).toEqual(["explain", "draft"]);
+    expect(jsonPublication.structured_inputs).toEqual({
+      runtime_trace: JSON.stringify({ trace_name: "current-runtime", requests: [] }),
+      topology: JSON.stringify({ topology: { devices: [] } }),
+    });
+
+    const unavailable = buildExperimentAgentContextPublication({
+      form,
+      surface,
+      mode: "trace_package",
+      contextRevision: "context:lightweight_prepare:trace-package:3",
       runId: null,
       pageId: "lightweight-prepare",
       routeName: "lightweight_prepare",

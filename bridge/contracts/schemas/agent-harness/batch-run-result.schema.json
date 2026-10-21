@@ -1,0 +1,33 @@
+{
+  "$id": "tilesim.agent_harness.batch_run_result.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_identity",
+    "contract_revision",
+    "batch_id",
+    "candidate_id",
+    "status",
+    "snapshot_digest",
+    "schema_set_revision",
+    "backend_identity",
+    "provenance"
+  ],
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.batch_run_result.v1" },
+    "contract_revision": { "const": "2026-10-19.wpe.v1" },
+    "batch_id": { "type": "string" },
+    "candidate_id": { "type": "string" },
+    "status": { "type": "string" },
+    "operation_id": { "type": ["string", "null"] },
+    "run_id": { "type": ["string", "null"] },
+    "artifact_manifest_digest": { "type": ["string", "null"] },
+    "objective": { "type": ["object", "null"] },
+    "evidence": { "type": "array" },
+    "snapshot_digest": { "type": "string" },
+    "schema_set_revision": { "type": "string" },
+    "backend_identity": { "type": "object" },
+    "provenance": { "type": "object" }
+  }
+}

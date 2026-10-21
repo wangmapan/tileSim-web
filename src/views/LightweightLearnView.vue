@@ -4,6 +4,7 @@ import { ArrowRight } from "@lucide/vue";
 import { RouterLink, useRoute } from "vue-router";
 import { LightweightLearningCards, preserveWorkbenchQuery } from "../features/lightweight-workbench";
 import { useI18n } from "../i18n";
+import InlineHelp from "../components/InlineHelp.vue";
 
 const route = useRoute();
 const { t } = useI18n();
@@ -14,8 +15,10 @@ const query = computed(() => preserveWorkbenchQuery(route.query));
   <div class="lightweight-learn-view" aria-labelledby="lightweight-learn-title">
     <header class="lightweight-page__heading">
       <p class="section-kicker">{{ t("学习") }}</p>
-      <h1 id="lightweight-learn-title">{{ t("理解字段和结果边界") }}</h1>
-      <p>{{ t("这里是可选参考，不是运行前置步骤；你可以随时回到配置或结果页面。") }}</p>
+      <span class="lightweight-page-title-with-help">
+        <h1 id="lightweight-learn-title">{{ t("理解字段和结果边界") }}</h1>
+        <InlineHelp :text="t('这里是可选参考，不是运行前置步骤；你可以随时回到配置或结果页面。')" />
+      </span>
     </header>
 
     <LightweightLearningCards />

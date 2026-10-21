@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   applyParameterEdits,
+  previewParameterEdits,
   buildExperimentSurface,
   buildParameterCatalog,
   createExperimentForm,
   planParameterEdits,
+  validateAgentStructuredInputs,
   type ParameterCatalogEntry,
 } from "../../src/features/run-experiment";
 import { createF8ExperimentDescriptor, f8Capabilities } from "../fixtures/experiment-descriptor";
@@ -55,6 +57,44 @@ const topologyJson = JSON.stringify(
   null,
   2,
 );
+
+const syntheticStructuredInputs = {
+  runtime_trace: {
+    trace_name: "agent-synthetic",
+    trace_provenance: {
+      source_mode: "synthetic_trace",
+      calibration_level: "uncalibrated",
+      allowed_claim_scope: "exploratory",
+    },
+    policy: { max_batch_size: 4 },
+    requests: [{ request_id: "req0", phase: "prefill", tp_degree: 2, participants: ["gpu0", "gpu1"] }],
+  },
+  topology: {
+    scenario_name: "agent-fabric",
+    provenance: {
+      source_mode: "synthetic_trace",
+      calibration_level: "uncalibrated",
+      allowed_claim_scope: "synthetic_consistency_only",
+    },
+    topology: {
+      topology_name: "synthetic-two-gpu",
+      devices: [
+        { device_id: "gpu0", device_type: "GPU", group_id: "node0" },
+        { device_id: "gpu1", device_type: "GPU", group_id: "node0" },
+      ],
+      module_bindings: [{ module_name: "su", module_kind: "scale_up" }],
+      domains: [
+        {
+          domain_id: "su0",
+          domain_type: "scale_up",
+          member_devices: ["gpu0", "gpu1"],
+          module_binding: "su",
+        },
+      ],
+      links: [{ src_device: "gpu0", dst_device: "gpu1", domain_id: "su0", bandwidth_gbps: 450, latency_us: 0.8 }],
+    },
+  },
+};
 
 const catalogInput = {
   scenarios: [{ scenario_id: "s1_des_example", label: "S1 → S6" }],
@@ -351,6 +391,20 @@ describe("parameter edit planner", () => {
 });
 
 describe("parameter edit apply", () => {
+  it("builds a JSON proposal through the same atomic validation path", () => {
+    const plan = planParameterEdits("runtime_trace/policy/max_batch_size = 8", catalogOf());
+    const preview = previewParameterEdits({ items: plan.items, runtimeJson, topologyJson });
+    expect(preview?.runtimeJson).toContain('"max_batch_size": 8');
+    expect(preview?.topologyJson).toBe(topologyJson);
+  });
+
+  it("also shows the one-shot overrides JSON for a quick-control-only plan", () => {
+    const plan = planParameterEdits("overrides/runtime/max_batch_size = 8", catalogOf());
+    const preview = previewParameterEdits({ items: plan.items, runtimeJson, topologyJson });
+    expect(preview?.overridesJson).toContain('"max_batch_size": 8');
+    expect(preview?.runtimeJson).toBe(runtimeJson);
+  });
+
   it("writes a policy key and leaves the rest of the document alone", () => {
     const catalog = catalogOf();
     const entry = entryAt(catalog, "runtime_trace/policy/batch_scheduler");
@@ -542,6 +596,17 @@ describe("collection sizes", () => {
     expect(grownDocument.requests[2].tp_degree).toBe(2);
     expect(new Set(grownDocument.requests.map((row: { request_id: string }) => row.request_id)).size).toBe(3);
 
+    const sixtyFour = applyParameterEdits({
+      items: planParameterEdits("runtime_trace/requests = 64", catalogOf()).items,
+      runtimeJson,
+      topologyJson,
+    });
+    expect(sixtyFour.rejected).toEqual([]);
+    expect(JSON.parse(sixtyFour.runtimeJson).requests).toHaveLength(64);
+    expect(
+      new Set(JSON.parse(sixtyFour.runtimeJson).requests.map((row: { request_id: string }) => row.request_id)).size,
+    ).toBe(64);
+
     const shrunk = applyParameterEdits({
       items: planParameterEdits("runtime_trace/requests = 1", catalogOf()).items,
       runtimeJson,
@@ -600,6 +665,113 @@ describe("collection sizes", () => {
     expect(JSON.parse(outcome.runtimeJson).requests[0].tp_degree).toBe(16);
   });
 
+  it("applies an eight-card and multi-request TP change as one JSON transaction", () => {
+    const assignments = [
+      "topology/devices = 8",
+      "runtime_trace/requests[0]/tp_degree = 8",
+      "runtime_trace/requests[1]/tp_degree = 8",
+    ];
+    const unpinned = JSON.stringify({
+      ...JSON.parse(runtimeJson),
+      requests: JSON.parse(runtimeJson).requests.map((row: { participants?: string[] }) => {
+        const copy = { ...row };
+        delete copy.participants;
+        return copy;
+      }),
+    });
+    const plan = planParameterEdits(assignments.join("\n"), catalogOf(unpinned, topologyJson));
+    const outcome = applyParameterEdits({ items: plan.items, runtimeJson: unpinned, topologyJson });
+    expect(outcome.rejected).toEqual([]);
+    const runtime = JSON.parse(outcome.runtimeJson);
+    const topology = JSON.parse(outcome.topologyJson);
+    expect(topology.topology.devices).toHaveLength(8);
+    expect(runtime.requests.map((row: { tp_degree: number }) => row.tp_degree)).toEqual([8, 8]);
+    expect(outcome.requiresStructuredInput).toBe(true);
+  });
+
+  it("pairs every pinned request when a complete eight-card expansion names every TP", () => {
+    const pinnedRuntime = JSON.stringify({
+      ...JSON.parse(runtimeJson),
+      requests: [0, 1, 2].map((index) => ({
+        request_id: `req_${index}`,
+        arrival_time_ps: index,
+        phase: index % 2 ? "decode" : "prefill",
+        tp_degree: 4,
+        participants: ["gpu0", "gpu1", "gpu2", "gpu3"],
+      })),
+    });
+    const plan = planParameterEdits(
+      [
+        "topology/devices = 8",
+        "runtime_trace/requests[0]/tp_degree = 8",
+        "runtime_trace/requests[1]/tp_degree = 8",
+        "runtime_trace/requests[2]/tp_degree = 8",
+      ].join("\n"),
+      catalogOf(pinnedRuntime, topologyJson),
+    );
+    const outcome = applyParameterEdits({ items: plan.items, runtimeJson: pinnedRuntime, topologyJson });
+    expect(outcome.rejected).toEqual([]);
+    const runtime = JSON.parse(outcome.runtimeJson);
+    expect(runtime.requests.map((row: { tp_degree: number }) => row.tp_degree)).toEqual([8, 8, 8]);
+    expect(runtime.requests.map((row: { participants: string[] }) => row.participants)).toEqual(
+      [0, 1, 2].map(() => ["gpu0", "gpu1", "gpu2", "gpu3", "gpu4", "gpu5", "gpu6", "gpu7"]),
+    );
+  });
+
+  it.each([3, 16, 32])("applies an arbitrary %i-card target without an eight-card special case", (count) => {
+    const pinnedRuntime = JSON.stringify({
+      ...JSON.parse(runtimeJson),
+      requests: [0, 1, 2].map((index) => ({
+        request_id: `req_${index}`,
+        arrival_time_ps: index,
+        phase: index % 2 ? "decode" : "prefill",
+        tp_degree: 2,
+        participants: ["gpu0", "gpu1"],
+      })),
+    });
+    const plan = planParameterEdits(
+      [
+        `topology/devices = ${count}`,
+        ...[0, 1, 2].map((index) => `runtime_trace/requests[${index}]/tp_degree = ${count}`),
+      ].join("\n"),
+      catalogOf(pinnedRuntime, topologyJson),
+    );
+    const outcome = applyParameterEdits({ items: plan.items, runtimeJson: pinnedRuntime, topologyJson });
+    expect(outcome.rejected).toEqual([]);
+    const runtime = JSON.parse(outcome.runtimeJson);
+    const topology = JSON.parse(outcome.topologyJson);
+    expect(topology.topology.devices).toHaveLength(count);
+    expect(runtime.requests.map((row: { tp_degree: number }) => row.tp_degree)).toEqual([count, count, count]);
+    expect(runtime.requests.map((row: { participants: string[] }) => row.participants)).toEqual(
+      [0, 1, 2].map(() => Array.from({ length: count }, (_, index) => `gpu${index}`)),
+    );
+  });
+
+  it("can atomically pair a same-sized inventory with a new TP", () => {
+    const pinnedRuntime = JSON.stringify({
+      ...JSON.parse(runtimeJson),
+      requests: [0, 1].map((index) => ({
+        request_id: `req_${index}`,
+        arrival_time_ps: index,
+        phase: "prefill",
+        tp_degree: 1,
+        participants: ["gpu0"],
+      })),
+    });
+    const plan = planParameterEdits(
+      "topology/devices = 2\nruntime_trace/requests[0]/tp_degree = 2\nruntime_trace/requests[1]/tp_degree = 2",
+      catalogOf(pinnedRuntime, topologyJson),
+    );
+    const outcome = applyParameterEdits({ items: plan.items, runtimeJson: pinnedRuntime, topologyJson });
+    expect(outcome.rejected).toEqual([]);
+    expect(JSON.parse(outcome.runtimeJson).requests.map((row: { participants: string[] }) => row.participants)).toEqual(
+      [
+        ["gpu0", "gpu1"],
+        ["gpu0", "gpu1"],
+      ],
+    );
+  });
+
   it("rolls back a complete batch if a later projected write fails", () => {
     const plan = planParameterEdits(
       "run_name = sixteen\ntopology/devices = 16\ntopology/devices[15]/group_id = node3",
@@ -622,5 +794,31 @@ describe("collection sizes", () => {
     expect(plan.items).toEqual([]);
     expect(plan.unknown).toHaveLength(1);
     expect(plan.unknown[0].reason).toContain("目录里没有");
+  });
+});
+
+describe("complete synthetic Agent JSON proposals", () => {
+  it("validates and applies devices, domains, links, and module bindings atomically", () => {
+    const checked = validateAgentStructuredInputs(syntheticStructuredInputs);
+    expect(checked.ok).toBe(true);
+    if (!checked.ok) return;
+    const outcome = applyParameterEdits({
+      items: [],
+      runtimeJson,
+      topologyJson,
+      structuredInputs: checked.inputs,
+    });
+    expect(outcome.rejected).toEqual([]);
+    expect(JSON.parse(outcome.topologyJson).topology.links).toHaveLength(1);
+    expect(JSON.parse(outcome.topologyJson).provenance.source_mode).toBe("synthetic_trace");
+    expect(outcome.requiresStructuredInput).toBe(true);
+  });
+
+  it("rejects a generated link that points to an unknown device", () => {
+    const invalid = structuredClone(syntheticStructuredInputs);
+    invalid.topology.topology.links[0].dst_device = "gpu99";
+    const checked = validateAgentStructuredInputs(invalid);
+    expect(checked.ok).toBe(false);
+    expect(!checked.ok && checked.reason).toContain("端点设备不存在");
   });
 });

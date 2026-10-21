@@ -2,6 +2,7 @@
 import { RotateCcw } from "@lucide/vue";
 import { computed } from "vue";
 import { useI18n } from "../../i18n";
+import InlineHelp from "../../components/InlineHelp.vue";
 
 const designSpaceJson = defineModel({ type: String, required: true });
 const props = defineProps({ fieldPath: { type: String, default: "" } });
@@ -32,8 +33,11 @@ const manifestSummary = computed(() => {
     <summary class="form-section-title">
       <span>03</span>
       <div>
-        <h2>{{ t("S6 设计空间候选") }}</h2>
-        <p>{{ t("可选。需要自定义 S6 候选时再展开。") }}</p>
+        <h2>{{ t("设计空间候选") }}</h2>
+        <InlineHelp
+          :text="t('可选。需要自定义候选时再展开；仅支持网络与通信参数，最终范围与执行预算由 Bridge 校验。')"
+          :interactive="false"
+        />
       </div>
       <div class="design-space-disclosure-state">
         <strong>{{ manifestSummary.mode === "built_in" ? t("内置合成候选集") : t("自定义候选 manifest") }}</strong>
@@ -57,7 +61,7 @@ const manifestSummary = computed(() => {
         v-model="designSpaceJson"
         spellcheck="false"
         :aria-invalid="hasDesignSpaceError"
-        :placeholder="t('可选：tilesim.design_space.s6_candidates.v1 或 v2')"
+        :placeholder="t('可选：tilesim.design_space.candidates.v1 或 v2')"
       ></textarea>
       <div class="design-manifest-summary" aria-live="polite">
         <div>
@@ -68,7 +72,7 @@ const manifestSummary = computed(() => {
           <small v-else-if="manifestSummary.error">{{
             t("JSON 尚不可解析：{message}", { message: manifestSummary.error })
           }}</small>
-          <small v-else>tilesim.design_space.s6_candidates.v1</small>
+          <small v-else>tilesim.design_space.candidates.v1</small>
         </div>
         <span :class="{ invalid: manifestSummary.candidateCount < 1 || manifestSummary.candidateCount > 256 }">
           {{ manifestSummary.candidateCount }} / 256 {{ t("候选") }}
@@ -80,7 +84,6 @@ const manifestSummary = computed(() => {
           {{ manifestSummary.transferCount.toLocaleString() }} / 100,000 transfers
         </span>
       </div>
-      <p class="field-help">{{ t("仅支持 S6 参数；最终范围与执行预算由 Bridge 校验。") }}</p>
     </div>
   </details>
 </template>

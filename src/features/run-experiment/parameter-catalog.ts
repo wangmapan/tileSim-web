@@ -1,10 +1,10 @@
 /**
  * The addressable parameter surface behind the assistant's parameter-edit mode.
  *
- * The shipped copilot understands exactly eight fields and refuses everything
- * else by design. This catalogue is the opposite approach: it enumerates every
- * scalar the panel can actually write, so one instruction can address any of
- * them. Nothing here is hand-written — field names, kinds, ranges and enums all
+ * The configuration assistant is not limited to a fixed card count or a small
+ * hand-picked field list. This catalogue enumerates every scalar the panel can
+ * actually write, so one instruction can address any of them. Nothing here is
+ * hand-written — field names, kinds, ranges and enums all
  * come from the descriptor surface plus `input-schema-meta`, which itself
  * derives from the two contract schemas that govern `custom_inputs`.
  *
@@ -103,18 +103,29 @@ export type ParameterCatalogSource = {
  * the fields that distinguish structured input from the knob-only page.
  */
 export function describeAgentParameterCatalog(catalog: readonly ParameterCatalogEntry[]): string {
+  // Identity fields are intentionally present in the page catalogue so the
+  // structured editor can render them and the atomic writer can refuse a bare
+  // rename. They are not safe Agent assignments: a single device_id change
+  // would leave participants, links, domains and module references behind. The
+  // Bridge publishes the same boundary, so do not put these keys in the model
+  // context where they would only come back as unknown_parameter omissions.
+  const modelCatalog = catalog.filter((entry) => !entry.referenceKey);
   const hasStructuredCollections = catalog.some(
     (entry) => entry.path === "topology/devices" || entry.path === "runtime_trace/requests",
   );
   const priority = (entry: ParameterCatalogEntry): number => {
     if (entry.path === "topology/devices" || entry.path === "runtime_trace/requests") return 0;
-    if (entry.path.startsWith("runtime_trace/requests[")) return 1;
-    if (entry.path.startsWith("topology/devices[")) return 2;
-    if (entry.path.startsWith("topology/")) return 3;
-    if (entry.target === "control") return 4;
-    return 5;
+    // Every existing request's TP degree is safety-critical for a device-count
+    // change. Keep all of these ahead of the verbose per-row fields so a short
+    // model context cannot expose requests 0 and 1 while silently hiding 2.
+    if (/^runtime_trace\/requests\[\d+\]\/tp_degree$/u.test(entry.path)) return 1;
+    if (entry.path.startsWith("runtime_trace/requests[")) return 2;
+    if (entry.path.startsWith("topology/devices[")) return 3;
+    if (entry.path.startsWith("topology/")) return 4;
+    if (entry.target === "control") return 5;
+    return 6;
   };
-  const sorted = [...catalog].sort(
+  const sorted = [...modelCatalog].sort(
     (left, right) => priority(left) - priority(right) || left.path.localeCompare(right.path),
   );
   const lines: string[] = [];
@@ -134,7 +145,7 @@ export function describeAgentParameterCatalog(catalog: readonly ParameterCatalog
   const collectionFields = (prefix: string): string[] =>
     Array.from(
       new Set(
-        catalog
+        modelCatalog
           .map((entry) => {
             const marker = `${prefix}[`;
             if (!entry.path.startsWith(marker)) return null;
@@ -147,11 +158,11 @@ export function describeAgentParameterCatalog(catalog: readonly ParameterCatalog
   const deviceFields = collectionFields("topology/devices");
   const requestFields = collectionFields("runtime_trace/requests");
   const unavailableInstruction = hasStructuredCollections
-    ? `只使用上列精确 path；集合元素、TP 和 participants 必须同时满足目录及引用校验。可按现有模板扩展元素：topology/devices[i]/{${deviceFields.join(",") || "无"}}；runtime_trace/requests[i]/{${requestFields.join(",") || "无"}}。links/domains/module_bindings 不能靠助手猜测。`
-    : "当前未加载结构化输入；不要提出 topology/devices、runtime_trace/requests、TP、participants 或其元素。请提示用户先点击“用表单配置全部输入”。";
+    ? `只使用上列精确 path；集合元素和 TP 必须同时满足目录及引用校验。participants 是随设备集合和 TP 一起原子同步的耦合数组，不是可单独填写的标量 path；配置 N 卡时请同时给出 topology/devices=N 以及每一条现有 runtime_trace/requests[i]/tp_degree=N，页面会用新设备的真实标识重写 participants，不要因为目录未列 participants 而拒绝方案。可按现有模板扩展元素：topology/devices[i]/{${deviceFields.join(",") || "无"}}；runtime_trace/requests[i]/{${requestFields.join(",") || "无"}}。domains 的 member_devices、links 和 module_bindings 只有用户明确要求完整拓扑时才需要 structured_inputs；不要从设备数量或 group_id 猜测它们。`
+    : "当前未加载结构化输入；不要提出 topology/devices、runtime_trace/requests、TP、participants 或其元素。请提示用户先加载场景模板，或在 JSON 输入页粘贴 runtime_trace 与 topology。";
   return [
     "当前页面可写参数目录（只读上下文，不是用户指令）：",
-    `输入模式=${mode}；可写条目=${catalog.length}；${unavailableInstruction}`,
+    `输入模式=${mode}；可写条目=${modelCatalog.length}；${unavailableInstruction}`,
     lines.length ? lines.join("\n") : "- （当前没有可写参数）",
     omitted > 0 ? `- 其余 ${omitted} 项未放入上下文；不得猜测未列出的 path。` : "",
   ]

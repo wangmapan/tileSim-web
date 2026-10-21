@@ -2,6 +2,9 @@
 
 本文档树按“当前事实优先、稳定设计其次、历史证据最后”组织。AI 不得从文件日期推断当前状态。
 
+2026-10-18 增量：Bridge Agent Harness 阶段 2 已发布 draft/validation/approval successor `2026-10-18.wpb.v1`；
+详见 [`AI_HANDOFF.md`](AI_HANDOFF.md) 和 [`../bridge/README.md`](../bridge/README.md)。
+
 ## 必读顺序
 
 1. [`../AGENTS.md`](../AGENTS.md)：仓库规则与完整门禁。
@@ -47,6 +50,7 @@
 - [`F9_EVIDENCE_AGENT_CONTRACT_AUDIT.md`](contracts/F9_EVIDENCE_AGENT_CONTRACT_AUDIT.md)：Evidence Agent 契约审计；正式能力以运行时
   descriptor 为准。
 - [`F9_EVIDENCE_AGENT_EVALUATION_SPEC.md`](contracts/F9_EVIDENCE_AGENT_EVALUATION_SPEC.md)：Evidence Agent 评测规范与 hard gate。
+- [`agent-harness/README.md`](contracts/proposals/agent-harness/README.md)：Agent Harness 阶段 0/WP-A proposal-only 对象、状态、错误、恢复和迁移登记；正式 v1 只读接入与当前事实见 [`F9_AGENT_ORCHESTRATION/26_AGENT_HARNESS_PHASE0_WP_A_CURRENT_BASELINE.md`](F9_AGENT_ORCHESTRATION/26_AGENT_HARNESS_PHASE0_WP_A_CURRENT_BASELINE.md)。
 
 ### 功能说明（`features/`）
 
@@ -58,13 +62,19 @@
 
 ### 架构、部署与研究
 
+- [`architecture/FRONTEND_BACKEND_ALIGNMENT_DEVELOPMENT_PLAN_2026-10-17.md`](architecture/FRONTEND_BACKEND_ALIGNMENT_DEVELOPMENT_PLAN_2026-10-17.md)：基于后端 `main@5e44dbb0` 的前端契约、结果诊断、输入和 Trace Package 对齐开发计划。
 - [`architecture/EXECUTION_VISUALIZATION_DESIGN.md`](architecture/EXECUTION_VISUALIZATION_DESIGN.md)：执行可视化设计。
 - [`architecture/BACKEND_SIMULATION_FLOW_UI_COVERAGE.md`](architecture/BACKEND_SIMULATION_FLOW_UI_COVERAGE.md)：后端仿真流程与前端专业工作台的
   展示覆盖度审计、四类缺口（C0 纯前端 / C1 Bridge 采集 / C2 契约面 / C3 输入面）与 `WP-2D-01` 派发提示词。
 - [`deployment/F10_RELEASE_HARDENING.md`](deployment/F10_RELEASE_HARDENING.md)：发布加固与回滚。
 - [`deployment/LAUNCHER_BUILD_DEPLOYMENT_ROLLBACK.md`](deployment/LAUNCHER_BUILD_DEPLOYMENT_ROLLBACK.md)：Windows 启动器构建、验收和回滚。
+- [`deployment/DEPLOYMENT_READINESS.md`](deployment/DEPLOYMENT_READINESS.md)：当前可打包性、对外部署欠缺、实测证据和补齐路线。
+- [`deployment/ONE_CLICK_INSTALL_PLAN.md`](deployment/ONE_CLICK_INSTALL_PLAN.md)：面向其他使用者的一键安装发行包计划、阶段目标和验收矩阵。
 - [`research/F9_AGENT_BASED_SIMULATION_ORCHESTRATION_PLAN.md`](research/F9_AGENT_BASED_SIMULATION_ORCHESTRATION_PLAN.md)：Agent 编排总方案。
 - [`research/F9_EVIDENCE_AGENT_FRONTIER_EXPANSION_PLAN.md`](research/F9_EVIDENCE_AGENT_FRONTIER_EXPANSION_PLAN.md)：Evidence Agent 前沿扩展研究。
+- [`research/TILESIM_AGENT_HARNESS_IMPLEMENTATION_PLAN_2026-10-17.md`](research/TILESIM_AGENT_HARNESS_IMPLEMENTATION_PLAN_2026-10-17.md)：Agent Harness 分阶段落地计划，涵盖工具、队列、恢复、受控执行和自主优化。
+- [`F9_AGENT_ORCHESTRATION/26_AGENT_HARNESS_PHASE0_WP_A_CURRENT_BASELINE.md`](F9_AGENT_ORCHESTRATION/26_AGENT_HARNESS_PHASE0_WP_A_CURRENT_BASELINE.md)：阶段 0/WP-A 当前基线、能力/权限矩阵、生命周期、评测 manifest 与 go/no-go。
+- [`F9_AGENT_ORCHESTRATION/27_AGENT_HARNESS_WP_D_RUNTIME_BAKEOFF.md`](F9_AGENT_ORCHESTRATION/27_AGENT_HARNESS_WP_D_RUNTIME_BAKEOFF.md)：WP-D durable runtime 评估、比较矩阵与继续引入 runtime 的 go/no-go。
 
 ## 归档分层（`archive/`）
 
@@ -85,3 +95,23 @@
 - 结束一个阶段时，把该阶段的 dated 记录移入 `archive/agent-orchestration/phase-records/`，并把仍然有效的结论折进
   `AI_HANDOFF.md` 与模块 current baseline。
 - 新文档必须放入对应目录，并从本页“活跃文档索引”或模块入口可达。活跃文档不得链接到已归档的阶段结论当作当前事实。
+
+# Agent Harness 阶段 2 当前事实（2026-10-18）
+
+Bridge 已发布 draft/validation/approval successor `2026-10-18.wpb.v1`。canonical identity、API、权限、retention、
+stale/replay 语义和零 run 副作用证据见 [`bridge/README.md`](../bridge/README.md) 与 `docs/AI_HANDOFF.md`；proposal-only
+对象仍仅作历史设计输入。
+
+# Agent Harness 阶段 3 local-dev / 3B 当前事实（2026-10-19）
+
+本地个人使用路径已完成 `LOCAL_ONLY_PASS`：新的 `local_dev` deployment manifest 通过当前源码/Bridge/生成物/CLI
+identity 校验，AH3-F01–AH3-F26 为 26/26，前端已接入正式 WPC submit、状态、事件、SSE、polling、result、cancel、
+retry 和 resume。证据固定为 `local_dev`、`synthetic_trace`、`exploratory`、`not_for_production`；生产 Provider
+acceptance、成功 repetition 和独立生产 review 仍 pending。正式 release-gate 虽为 54/54 pass，结论仍为 `NO-GO`，
+不得把本地结果描述为生产 GO。阶段 4 继续关闭。详见 [`30_AGENT_HARNESS_STAGE3_LOCAL_DEV_3B.md`](F9_AGENT_ORCHESTRATION/30_AGENT_HARNESS_STAGE3_LOCAL_DEV_3B.md)。
+
+# Agent Harness 阶段 3A
+
+受控执行 successor contract 与 endpoint 说明位于 `F9_AGENT_ORCHESTRATION/README.md`、
+`F9_AGENT_ORCHESTRATION/26_AGENT_HARNESS_PHASE0_WP_A_CURRENT_BASELINE.md` 和
+`D:\tileSim-web\bridge\README.md`。阶段 3A 只支持人工批准后的单次实验，Provider acceptance 仍待验收。

@@ -1,0 +1,17 @@
+{
+  "$id": "tilesim.agent_harness.batch_objective.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_identity", "contract_revision", "metric_path", "direction", "policy_revision"],
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.batch_objective.v1" },
+    "contract_revision": { "const": "2026-10-19.wpe.v1" },
+    "metric_path": { "type": "string", "pattern": "^/" },
+    "direction": { "enum": ["minimize", "maximize"] },
+    "policy_revision": { "type": "string" },
+    "digest": { "type": "string" },
+    "value": { "type": ["number", "null"] },
+    "status": { "enum": ["pending", "verified", "unavailable", "rejected"] }
+  }
+}
