@@ -1,5 +1,7 @@
 export type TopologyDevice = { device_id: string; device_type?: string; group_id?: string };
 export type TopologyLink = {
+  /** Backend-assigned physical link identity; retained when present. */
+  link_id?: string;
   src_device: string;
   dst_device: string;
   domain_id: string;
@@ -49,7 +51,7 @@ const allowedEnvelope = new Set(["scenario_name", "provenance", "topology", "wor
 const allowedProvenance = new Set(["source_mode", "calibration_level", "allowed_claim_scope"]);
 const allowedWorkload = new Set(["requests"]);
 const allowedDevice = new Set(["device_id", "device_type", "group_id"]);
-const allowedLink = new Set(["src_device", "dst_device", "domain_id", "bandwidth_gbps", "latency_us"]);
+const allowedLink = new Set(["link_id", "src_device", "dst_device", "domain_id", "bandwidth_gbps", "latency_us"]);
 const allowedDomain = new Set([
   "domain_id",
   "domain_type",
@@ -323,6 +325,9 @@ export function parseTopologyDocument(text: string): {
         if (!isRecord(entry)) throw new Error(`/links/${index}: 必须是对象`);
         assertKeys(entry, allowedLink, `/links/${index}`);
         const link = {
+          ...(entry.link_id === undefined
+            ? {}
+            : { link_id: (optionalString(entry.link_id, `/links/${index}/link_id`, 256, 1), entry.link_id as string) }),
           src_device: requiredString(entry.src_device, `/links/${index}/src_device`, 256),
           dst_device: requiredString(entry.dst_device, `/links/${index}/dst_device`, 256),
           domain_id: requiredString(entry.domain_id, `/links/${index}/domain_id`, 256),

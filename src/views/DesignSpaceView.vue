@@ -78,8 +78,10 @@ function displayedKnobValue(value: unknown, availability: string) {
     <section class="design-scope-banner" data-help-anchor="design_space-scope">
       <AlertTriangle :size="19" />
       <div>
-        <strong>{{ t("本轮只比较了网络与通信参数") }}</strong>
-        <p>{{ t("其他环节的配置没有在本轮执行，不能用这张表判断完整系统的最优方案。") }}</p>
+        <strong>
+          {{ t("本轮只比较了网络与通信参数") }}
+          <InlineHelp :text="t('其他环节的配置没有在本轮执行，不能用这张表判断完整系统的最优方案。')" />
+        </strong>
         <small v-if="unresolvedKnobs.length">
           {{
             t("未执行变量：{fields}。这些字段不会影响当前候选数值或仿真语义。", { fields: unresolvedKnobs.join(", ") })

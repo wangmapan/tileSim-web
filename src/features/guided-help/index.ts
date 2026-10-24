@@ -10,8 +10,6 @@ export {
   embeddedGuideIds,
   guideIdsForScope,
   isGuideInScope,
-  lightweightGuideIds,
-  lightweightRoutedGuideIds,
   professionalGuideIds,
   professionalRoutedGuideIds,
   routedGuideIds,

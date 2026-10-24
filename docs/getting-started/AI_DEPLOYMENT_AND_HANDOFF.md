@@ -1,16 +1,50 @@
 # TileSim Web：AI 部署与接手手册
 
-> 事实日期：2026-09-17
+> 当前复核日期：2026-10-24
 >
-> 当前公开发布状态：`published_clean_clone_verified`
+> 当前工作树部署状态：`deployment_ready_to_retry`（最近一次 102/102 CTest 已通过；此前启动器因把 Rust `target` 构建产物计入 Web 源码摘要而误报变化，现已修复）
+
+## 当前事实（2026-10-24）
+
+- 本仓库当前 `HEAD=2e73864`，工作树含既有未提交代码/文档改动；本手册的 clean-clone 记录和下方 dated 数字不能当作当前发布候选。
+- 启动器仍以后端 CTest 为硬门禁；用户最新日志显示 102/102 CTest、Bridge、Web 测试和生产构建均通过，失败发生在收尾的 Web 源码摘要校验。
+- 该误报已修复：`scripts/release-traceability.mjs` 不再把 `target` 等开发/运行产物目录计入 Web 源码摘要；真正的源文件变化仍会阻止部署。可重新运行启动器验证。
+- 不得跳过 CTest、手工把失败写成成功、修改只读的 `D:\tileSim` 后端仓库，或停止/重启用户可能正在使用的 `127.0.0.1:5173`。
 
 ## 1. 仓库交付边界
+
+面向测试人员的 Windows 安装器/离线 ZIP 方案见
+[`WINDOWS_DISTRIBUTION_AND_INSTALLER_PLAN_2026-10-24.md`](../deployment/WINDOWS_DISTRIBUTION_AND_INSTALLER_PLAN_2026-10-24.md)。
+当前已实现的是可审计的 ZIP payload 组装/校验基线（`doctor.ps1`、`package-windows-release.ps1`、
+`install-windows-runtime.ps1`、`smoke-windows-release.ps1`）和 Bridge packaged identity；它们还不是可交付给测试人员的完整安装器。
+在 P0/P1 门槛、WSL import/health smoke、签名和干净 Windows 验收完成前，本手册下面的 Git/Node/WSL bootstrap
+仍是唯一已部署的完整部署路径。不能把根目录 Tauri EXE、`dist/` 或 `runtime/backend-current.json` 单独交给其他人。
 
 本仓库包含完整前端、Python Bridge、契约、生成代码、测试和部署工具，但不复制 C++ TileSim 后端或外部大模型。完整仿真部署需要联网克隆公开后端；bootstrap 会自动完成。离线且只有 Web 仓库时，可构建和运行 fixture 测试，但不能创建真实 simulation run。
 
 外部模型只用于 Evidence Agent，是可选配置。未配置模型时，基础仿真、报告、证据和 Phase 1 本地参数草案仍可使用。
 
-截至事实日期，完整 Web 交付已进入 `https://github.com/wangmapan/tileSim-web.git` 的 `main`，后端已进入
+## 面向测试包维护者的一键发布入口
+
+维护者现在可以直接双击仓库根目录的 [`发布Windows测试包.cmd`](../../发布Windows测试包.cmd)，或在 PowerShell 执行：
+
+```powershell
+.\scripts\publish-windows-release.ps1
+```
+
+脚本会自动读取 `package.json` 版本号，发现旁边的 `D:\tileSim` 和 `D:\tileSim\docs\examples`，运行 Windows/x64/磁盘预检，调用统一的 ZIP 组装器，并在结束时打开 `runtime\windows-release`。代码更新后不需要改脚本；重新运行即可生成新版本。默认 `wsl-prebuilt` 模式找不到 rootfs 或 runtime metadata 时会提示输入路径；若已经通过独立 clean-machine gate 验证 Windows 原生 CLI，可使用：
+
+```powershell
+.\发布Windows测试包.cmd `
+  -RuntimeKind windows-native `
+  -BackendCliPath D:\tileSim\build-ca1\Release\TileSimCLI.exe
+```
+
+脚本也会从常见的 `build-ca1\Release`、`build-dv1-utf8\Release` 和 `build\Release` 位置自动发现 `TileSimCLI.exe`。默认会执行发布前校验和 Web 生产构建；只有临时开发包才应显式传入 `-AllowDirty`、`-SkipValidation` 或 `-SkipWebBuild`。输出包括 `TileSimWebRuntime-<version>-x64.zip`、`tilesim-workbench-release.json` 和 `SHA256SUMS`。`pnpm publish:windows <same parameters>` 是等价的命令行入口（不要额外加入 `--`，否则某些 pnpm/PowerShell 组合会把它当成未知参数）。
+
+当前入口生成的是经过清单和 SHA-256 校验的离线 ZIP，不是可对外宣称“下载后点击即用”的完整安装器；manifest 会明确标记 `runtime_zip_only_installer_pending`。真正交付测试人员前仍需完成 WSL import/native runtime、签名 launcher、安装/升级/回滚和干净 Windows 验收。API Key 不会进入 ZIP：目标配置路径为 `%LocalAppData%\TileSim\config\evidence-agent.local.json`，Base URL、模型名和 API Key 应由启动器设置页填写，API Key 以当前 Windows 用户 DPAPI 保存。
+
+截至 2026-09-11 的公开交付验证，完整 Web 交付已进入 `https://github.com/wangmapan/tileSim-web.git` 的 `main`，后端已进入
 `https://github.com/lqf0624/tileSim.git` 的 `main`。Capability Catalog 绑定的不可变后端证据 revision
 `7e5a8c6a5cf738bd24608b440a61b62dee8d1881` 可由公开后端解析，并保留在公开
 `codex/phase0d-backend-evidence-clean` 分支。其他用户可以只依赖这两个公开仓库和下述系统工具完成本地部署；
@@ -121,7 +155,7 @@ pnpm preview
 .\scripts\configure-evidence-agent.ps1 -Action Show
 ```
 
-Key 只经隐藏输入进入脚本，以 Windows 当前用户 DPAPI 密文保存在 `runtime/evidence-agent.local.json`。不要把 key 放进命令参数、日志、截图、issue 或 AI 对话。换电脑或 Windows 用户后必须重新配置。
+Key 只经隐藏输入进入设置页/脚本，以 Windows 当前用户 DPAPI 密文保存：开发 checkout 使用 `runtime/evidence-agent.local.json`，packaged release 使用 `%LocalAppData%\TileSim\config\evidence-agent.local.json`。不要把 key 放进命令参数、日志、截图、issue 或 AI 对话。换电脑或 Windows 用户后必须重新配置。
 
 ## 6. 不进入 Git 的运行态
 
@@ -145,7 +179,7 @@ Key 只经隐藏输入进入脚本，以 Windows 当前用户 DPAPI 密文保存
 8. view 只编排，跨 feature 走公开入口，canonical request/citation/uint64/provenance 不复制实现。
 
 **前端开发任务**另见 [`AI_FRONTEND_DEVELOPMENT_REFERENCE.md`](AI_FRONTEND_DEVELOPMENT_REFERENCE.md)：代码地图、
-路由 ↔ view 对照、状态归属、契约与生成物规则、本机无 pnpm 的可跑命令与实测门禁基线。
+路由 ↔ view 对照、状态归属、契约与生成物规则、无 pnpm 环境的等价可跑命令与实测门禁基线。
 
 ## 8. 验收命令
 

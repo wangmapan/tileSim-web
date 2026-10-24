@@ -711,17 +711,24 @@
   background: var(--line);
 }
 .provenance-grid article {
+  position: relative;
   display: grid;
   align-content: start;
   gap: 12px;
-  min-height: 137px;
-  padding: 19px;
+  min-height: 0;
+  padding: 14px 18px 15px;
   background: var(--panel);
 }
 .provenance-grid article > small {
+  padding-right: 24px;
   color: var(--muted);
   font: 700 var(--text-xs) var(--font-mono);
   letter-spacing: 0.1em;
+}
+.provenance-grid article > .provenance-help {
+  position: absolute;
+  top: 16px;
+  right: 16px;
 }
 .provenance-grid article > strong {
   font: 600 24px var(--font-mono);
@@ -733,7 +740,7 @@
   font-size: var(--text-sm);
 }
 .provenance-grid .provenance-semantic {
-  gap: 7px;
+  gap: 5px;
 }
 .provenance-grid .provenance-semantic > strong {
   font: 650 var(--text-base)/1.35 var(--font-sans);
@@ -961,7 +968,7 @@
 }
 
 .run-bound-evidence-panel {
-  overflow: hidden;
+  overflow: visible;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -1241,7 +1248,7 @@
 }
 .run-bound-node header small,
 .run-bound-output-node header small {
-  flex-basis: 100%;
+  flex-basis: auto;
   padding: 0;
   color: var(--muted);
   background: transparent;
@@ -1265,6 +1272,41 @@
 }
 .run-bound-node-content > .run-bound-node-reason {
   margin-top: 0;
+}
+.run-bound-node-summary {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+.run-bound-technical-details {
+  margin-top: 10px;
+}
+.run-bound-technical-details summary {
+  width: fit-content;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: var(--text-xs);
+}
+.run-bound-technical-details[open] summary {
+  margin-bottom: 9px;
+}
+.run-bound-technical-section {
+  display: grid;
+  gap: 5px;
+  margin-top: 9px;
+  padding-top: 9px;
+  border-top: 1px solid var(--line);
+}
+.run-bound-technical-section > span {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.run-bound-technical-note {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.6;
 }
 .run-bound-node code,
 .run-bound-output-node code {
@@ -1295,6 +1337,8 @@
   margin: 20px 22px 0;
 }
 .run-bound-output-grid > h3 {
+  display: inline-flex;
+  align-items: center;
   margin: 0 0 6px;
   font-size: var(--text-sm);
 }

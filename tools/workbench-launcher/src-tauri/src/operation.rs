@@ -28,7 +28,8 @@ use crate::{
         POWERSHELL_ARGUMENTS_ENV, POWERSHELL_SCRIPT_ENV,
     },
     runtime::{
-        canonicalize_compatible, extract_bundled_node, process_path_with_node, resolve_web_root,
+        canonicalize_compatible, extract_bundled_node, model_config_path, process_path_with_node,
+        resolve_web_root,
     },
 };
 
@@ -350,10 +351,7 @@ fn prepare_operation(
                 "-Action".into(),
                 "Set".into(),
                 "-ConfigPath".into(),
-                web_root
-                    .join("runtime/evidence-agent.local.json")
-                    .to_string_lossy()
-                    .into_owned(),
+                model_config_path(&web_root).to_string_lossy().into_owned(),
                 "-BaseUrl".into(),
                 base_url,
                 "-Model".into(),
@@ -583,9 +581,19 @@ async fn execute_operation(
         drop(sender);
 
         let mut tail = VecDeque::with_capacity(400);
+        // Keep failure classification stable even when the relevant diagnostic
+        // appears early in a long test log and falls out of the bounded tail.
+        let mut saw_route_unavailable = false;
         let mut current_phase = prepared.initial_phase;
         while let Some(raw_line) = receiver.recv().await {
-            let line = bounded_log_line(&redact(&raw_line));
+            let redacted_line = redact(&raw_line);
+            if redacted_line
+                .to_ascii_lowercase()
+                .contains("route_unavailable")
+            {
+                saw_route_unavailable = true;
+            }
+            let line = bounded_log_line(&redacted_line);
             if line.trim().is_empty() {
                 continue;
             }
@@ -613,9 +621,15 @@ async fn execute_operation(
             )
         })?;
         if !status.success() {
-            return Err(classify_failure(
-                &tail.into_iter().collect::<Vec<_>>().join("\n"),
-            ));
+            let mut failure_output = tail.into_iter().collect::<Vec<_>>().join("\n");
+            if saw_route_unavailable
+                && !failure_output
+                    .to_ascii_lowercase()
+                    .contains("route_unavailable")
+            {
+                failure_output.push_str("\nroute_unavailable");
+            }
+            return Err(classify_failure(&failure_output));
         }
         Ok::<(), PublicError>(())
     }

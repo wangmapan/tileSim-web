@@ -194,6 +194,9 @@ export function buildExperimentRequest(options: BuildExperimentRequestOptions): 
   if (form.scenario_id === "dense_des_package" && form.fidelity_policy !== "des") {
     throw new ExperimentRequestError("Dense DES package attribution requires requested DES fidelity.", "/fidelity_policy");
   }
+  if (form.scenario_id === "pd_disaggregation_example" && form.fidelity_policy !== "des") {
+    throw new ExperimentRequestError("PD disaggregation requires requested DES fidelity.", "/fidelity_policy");
+  }
   if (form.run_name.length > schemaProperties.run_name.maxLength) {
     throw new ExperimentRequestError(
       `Run name exceeds ${schemaProperties.run_name.maxLength} characters.`,

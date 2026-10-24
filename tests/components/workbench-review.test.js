@@ -94,7 +94,7 @@ describe("overview workbench", () => {
     expect(rows[0].findAll("td").map((cell) => cell.text())).toEqual(["0%", "0", "12.34"]);
     expect(rows[1].findAll("td").map((cell) => cell.text())).toEqual(["—", "—", "—"]);
     expect(wrapper.get(".hero-measure strong").text()).toBe("0");
-    expect(wrapper.get(".workbench-note").text()).toContain("不相加解释为请求耗时");
+    expect(wrapper.get(".overview-network-observation .inline-help__bubble").text()).toContain("不相加解释为请求耗时");
   });
 
   it("retains one overview control per analysis destination", () => {

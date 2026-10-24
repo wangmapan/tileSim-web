@@ -1,11 +1,18 @@
 # 后端仿真流程 × 前端专业工作台 展示覆盖度审计
 
-**事实日期**：2026-09-17
-**审计对象**：`D:\tileSim`（后端，只读，`main` = `ba11e6fd`）× `D:\tileSim-web`（前端，`HEAD` = `4d7f9fa`，工作树含未提交的 WP-2C-01a/01b 与 WP-2C-06）
+## 当前复核（2026-10-24）
+
+本文下方的 2026-09-17～2026-10-13 审计与工作包段落保留为 dated 证据，不是新的派发清单。代码复核确认 C0 展示覆盖、
+`DEF-BUSY-RACE-001`、五态 availability 残留和导出状态列收尾均已由当前工作树实现；C1/C2/C3 或后端 Profile 数据缺口
+仍不能由前端补造。当前运行事实、未部署状态和最新门禁以 [`docs/AI_HANDOFF.md`](../AI_HANDOFF.md) 为准；本文件中的工作包提示词
+只用于追溯当时的决策与验收，不得按“可立即派发”旧措辞重复执行。
+
+**历史审计日期**：2026-09-17（以下两项为当时的审计快照，不是当前 revision）
+**历史审计对象**：`D:\tileSim`（后端，只读，`main` = `ba11e6fd`）× `D:\tileSim-web`（前端，`HEAD` = `4d7f9fa`，工作树含未提交的 WP-2C-01a/01b 与 WP-2C-06）
 **审计问题**：后端的输入、输出与中间过程，是否都已在前端专业工作台页面有所体现？有哪些需要前端补充？
 **本文定位**：架构与数据流审计（`docs/README.md` 分类表中 `architecture/`）。本文**不**重述 Agent 编排的 Gap 登记（见 `../F9_AGENT_ORCHESTRATION/14_CONTRACT_GAP_REGISTER.md`），只处理「后端仿真流程 → 工作台展示」这一条链路。
 **下游工作包**：本文 §6 是直接派发物，三个工作包已登记进
-[`../F9_AGENT_ORCHESTRATION/24_PHASE2C_WORK_PACKAGE_PROMPTS.md`](../F9_AGENT_ORCHESTRATION/24_PHASE2C_WORK_PACKAGE_PROMPTS.md)
+归档的 [`../archive/plans/F9_PHASE2C_WORK_PACKAGE_PROMPTS_2026-09.md`](../archive/plans/F9_PHASE2C_WORK_PACKAGE_PROMPTS_2026-09.md)
 §8.1「并行独立轨道」。§6.1 `WP-2D-01`（C0，可立即派发）、§6.2 `WP-2D-02`（C1+C2，契约开窗批次）、
 §6.3 `WP-2C-02a`（后端 issue serializer 补全，与 6.2 共享同一窗口）。
 
@@ -375,7 +382,7 @@ RequestContract(request_id, model_id, arrival_time_ps)
 
 背景与依据（必读，按顺序）：
 1. D:\tileSim-web\AGENTS.md、D:\tileSim-web\docs\AI_HANDOFF.md；回传格式与退回条件借用
-   D:\tileSim-web\docs\F9_AGENT_ORCHESTRATION\24_PHASE2C_WORK_PACKAGE_PROMPTS.md 的第 5 节与第 7 节
+   D:\tileSim-web\docs\archive\plans\F9_PHASE2C_WORK_PACKAGE_PROMPTS_2026-09.md 的第 5 节与第 7 节
    （只借格式，不要执行该文件里的 2C 工作包）
 2. D:\tileSim-web\docs\architecture\BACKEND_SIMULATION_FLOW_UI_COVERAGE.md —— 本工作包的需求来源，
    §3.1 的 C0-1 ~ C0-7 就是你的完整范围清单（编号 1-36，另有第 7b 条），§3.5 列了「不要误判为缺口」的项。
@@ -476,7 +483,7 @@ phase2 的若干 `*.json`、`.workbuddy/memory/*.md` 等）。它们**不是本�
 （0 / missing / expected_absence / not_covered / unsupported_schema 五者互不混淆）；空态文案也要测。
 前端基线为 535 passed / 8 skipped，只允许增加，不允许减少或跳过。
 
-按 `24_PHASE2C_WORK_PACKAGE_PROMPTS.md` 第 5 节的七节结构回传，并明确回答：C0 的 36 条 + 第 7b 条各自状态
+按归档的 `F9_PHASE2C_WORK_PACKAGE_PROMPTS_2026-09.md` 第 5 节的七节结构回传，并明确回答：C0 的 36 条 + 第 7b 条各自状态
 （done / not-done + 原因）；
 SCHEMA_SET_REVISION 是否变化（必须为「否」，并给出实测前缀）；是否新增或修改或删除 bridge/contracts 下
 .json（否）；是否新增或修改任何 HTTP 路由（否）；是否修改 bridge/ 下 .py（否）；是否修改 D:\tileSim
@@ -631,7 +638,7 @@ revision）→ 取代 → 泄漏。故它是**时序竞态**：机器空闲时�
 1. D:\tileSim-web\AGENTS.md、D:\tileSim-web\docs\AI_HANDOFF.md
 2. D:\tileSim-web\docs\architecture\BACKEND_SIMULATION_FLOW_UI_COVERAGE.md —— 需求来源。
    §3.2 是你的 C1 范围（C1-1 / C1-2 / C1-3），§3.3 是你的 C2 范围（C2-1 ~ C2-4），§1.3 是十个规范产物清单。
-3. D:\tileSim-web\docs\F9_AGENT_ORCHESTRATION\23_PHASE2C_WEB_INTEGRATION_PLAN.md —— 上一轮契约开窗
+3. D:\tileSim-web\docs\archive\plans\F9_PHASE2C_WEB_INTEGRATION_PLAN_2026-09.md —— 上一轮契约开窗
    （WP-2C-01b）的完整级联清单，**照它的流程做**；§5 与 §7 的回传格式与退回条件同样适用于本包。
 4. bridge/contracts/openapi.json 的 x-tilesim-contract、bridge/services/execution.py、
    bridge/repositories/runs.py（尤其 inspect_artifact / _artifact_entries）、bridge/server.py（CONTRACT_METADATA 系列）
@@ -711,7 +718,7 @@ TileSimCLI.cpp:304-309 随即 `return 1` —— **整条 run 判为失败**。�
   78 是更早时期的历史数字，已被 WP-2C-01b/02 抬高，不要拿它当基线）
 - 文档：所有引用 SCHEMA_SET_REVISION 的位置必须同步改（至少
   docs/AI_HANDOFF.md、docs/F9_AGENT_ORCHESTRATION/01_CURRENT_BASELINE_AND_GAPS.md、
-  /12_DELIVERY_ROADMAP_AND_BACKLOG.md、/23_PHASE2C_WEB_INTEGRATION_PLAN.md、/24_PHASE2C_WORK_PACKAGE_PROMPTS.md、
+  /12_DELIVERY_ROADMAP_AND_BACKLOG.md、/archive/plans/F9_PHASE2C_WEB_INTEGRATION_PLAN_2026-09.md、/archive/plans/F9_PHASE2C_WORK_PACKAGE_PROMPTS_2026-09.md、
   docs/architecture/BACKEND_SIMULATION_FLOW_UI_COVERAGE.md），并写明旧值
   sha256:518f4da9…e43ece 与 sha256:d498092a…abffab 均已作废
 - tests/fixtures/phase1-agent-orchestration/frozen-current-subset.json **不得改写**：它是 Phase 1 历史证据，
@@ -745,7 +752,7 @@ TileSimCLI.cpp:304-309 随即 `return 1` —— **整条 run 判为失败**。�
 phase2 的若干 `*.json`、`.workbuddy/memory/*.md` 等）。它们不是本工作包造成的，**禁止顺手修或 `--write` 全仓**。
 你新增或修改的每个文件必须自己 prettier-clean，且不得产生无关 diff。
 
-按 24_PHASE2C_WORK_PACKAGE_PROMPTS.md 第 5 节的七节结构回传，并明确回答：步骤 0 的是非题结论与实测依据；
+按归档的 F9_PHASE2C_WORK_PACKAGE_PROMPTS_2026-09.md 第 5 节的七节结构回传，并明确回答：步骤 0 的是非题结论与实测依据；
 C1-1/C1-2/C1-3 与 C2-1~C2-4 各自状态（done / not-done + 原因）；artifact 路线 1 还是路线 2 及理由；
 新 SCHEMA_SET_REVISION 实测全文；是否修改 D:\tileSim（否）；是否新增或修改 HTTP 路由（否）；
 是否创建 run（否）；是否触碰 5173（否）；是否改写 frozen-current-subset.json（否）；是否 commit 或 push（否）。
@@ -809,7 +816,7 @@ run 变成 `exit 1` —— 因为该配置下 `runtime_event_trace` 的 state �
 1. D:\tileSim\include\Core\RunIntakeLowering.h（RunIntakeIssue 与 RunIntakeLoweringResult 的权威定义）
 2. D:\tileSim\src\Core\RunIntakeLowering.cpp:221-257
 3. D:\tileSim\src\apps\TileSimCLI.cpp:138-157
-4. D:\tileSim-web\docs\F9_AGENT_ORCHESTRATION\24_PHASE2C_WORK_PACKAGE_PROMPTS.md §4.2.1 —— 本工作包存在的理由
+4. D:\tileSim-web\docs\archive\plans\F9_PHASE2C_WORK_PACKAGE_PROMPTS_2026-09.md §4.2.1 —— 本工作包存在的理由
 
 现状（三处表示性缺口，逐一关闭）：
 - RunIntakeIssue 有 5 个字段（code / message / field_path / blocking / safe_next_action，
@@ -839,7 +846,7 @@ run 变成 `exit 1` —— 因为该配置下 `runtime_event_trace` 的 state �
 
 完成后运行 D:\tileSim 仓库自身的门禁（`D:\tileSim\AGENTS.md` 规定的构建与测试命令），
 并在回传里贴出实际执行的命令与结果；未跑的门禁必须标注为 not-run，不得写成 passed。
-回传格式沿用 24_PHASE2C_WORK_PACKAGE_PROMPTS.md 第 5 节的七节结构，并明确回答：是否修改
+回传格式沿用归档的 F9_PHASE2C_WORK_PACKAGE_PROMPTS_2026-09.md 第 5 节的七节结构，并明确回答：是否修改
 D:\tileSim-web 任何文件（否）；是否新增或修改 HTTP 路由（否）；是否改动 Run Intake 判定语义（否）。
 ```
 
@@ -856,7 +863,7 @@ B = 收口五态 availability 语义残留（P1）。两部分都只允许改前
 
 背景与依据（必读，按顺序）：
 1. D:\tileSim-web\AGENTS.md、D:\tileSim-web\docs\AI_HANDOFF.md；回传格式与退回条件借用
-   D:\tileSim-web\docs\F9_AGENT_ORCHESTRATION\24_PHASE2C_WORK_PACKAGE_PROMPTS.md 的第 5 节与第 7 节
+   D:\tileSim-web\docs\archive\plans\F9_PHASE2C_WORK_PACKAGE_PROMPTS_2026-09.md 的第 5 节与第 7 节
    （只借格式，不要执行该文件里的 2C 工作包）。
 2. D:\tileSim-web\docs\architecture\BACKEND_SIMULATION_FLOW_UI_COVERAGE.md —— §6.1.2 第 3 条是 A 部的定因与
    DEF-BUSY-RACE-001 的定义；§6.1.2 末尾「残留观察」第 1、2 条是 B 部的范围来源；§6.1.1 是本包的上游验收结论。
@@ -1024,7 +1031,7 @@ phase2 的若干 *.json、.workbuddy/memory/*.md 等）。它们**不是本包�
 - 前端基线（2026-09-18 实测）：**580 passed / 8 skipped**，只允许增加，不允许减少或跳过。
 - Bridge 基线：python -m unittest test_server.py → Ran 143 tests … OK，本包不得使其变化。
 
-按 24_PHASE2C_WORK_PACKAGE_PROMPTS.md 第 5 节的七节结构回传，并明确回答：
+按归档的 F9_PHASE2C_WORK_PACKAGE_PROMPTS_2026-09.md 第 5 节的七节结构回传，并明确回答：
 - A 部：改前的复现失败输出与改后输出；四种取代路径的断言位置；所选不变式实现及其对 (i)(ii)(iii)(iv) 的论证；
   :2079 在定向与全量下各 3 次的原始结果行；全量 e2e 的最终 tally，或 incomplete 的原因。
 - B 部：B-1 / B-2 / B-3 各自的 done / not-done 与证据；B-4 的结论（改了 / 判定无需改，附依据行号）。

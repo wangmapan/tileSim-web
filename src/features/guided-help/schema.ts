@@ -13,14 +13,7 @@ export const professionalRoutedGuideIds = [
   "evidence_lab",
 ] as const;
 
-export const lightweightRoutedGuideIds = [
-  "lightweight",
-  "lightweight_prepare",
-  "lightweight_run",
-  "lightweight_results",
-] as const;
-
-export const routedGuideIds = [...professionalRoutedGuideIds, ...lightweightRoutedGuideIds] as const;
+export const routedGuideIds = professionalRoutedGuideIds;
 
 export const embeddedGuideIds = ["unsupported_schema"] as const;
 
@@ -28,15 +21,12 @@ export type RoutedGuideId = (typeof routedGuideIds)[number];
 export type EmbeddedGuideId = (typeof embeddedGuideIds)[number];
 export type GuideId = RoutedGuideId | EmbeddedGuideId;
 export type GuidedView = RoutedGuideId;
-export type GuideScope = "professional" | "lightweight";
+export type GuideScope = "professional";
 
 export const professionalGuideIds = [...professionalRoutedGuideIds, ...embeddedGuideIds] as const;
-export const lightweightGuideIds = [...lightweightRoutedGuideIds] as const;
-
-const guideIdsByScope = {
-  professional: professionalGuideIds,
-  lightweight: lightweightGuideIds,
-} as const satisfies Readonly<Record<GuideScope, readonly GuideId[]>>;
+const guideIdsByScope = { professional: professionalGuideIds } as const satisfies Readonly<
+  Record<GuideScope, readonly GuideId[]>
+>;
 
 export function guideIdsForScope(scope: GuideScope): readonly GuideId[] {
   return guideIdsByScope[scope];

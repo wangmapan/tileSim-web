@@ -9,7 +9,7 @@ use crate::{
         powershell_utf8_runner, webview2_version, windows_powershell, POWERSHELL_ARGUMENTS_ENV,
         POWERSHELL_SCRIPT_ENV,
     },
-    runtime::{extract_bundled_node, process_path_with_node, resolve_web_root},
+    runtime::{extract_bundled_node, model_config_path, process_path_with_node, resolve_web_root},
 };
 
 #[derive(Serialize)]
@@ -89,7 +89,7 @@ fn read_manifest(path: &Path) -> Value {
 }
 
 fn read_public_model_settings(web_root: &Path, node: &Path) -> ModelSnapshot {
-    let config = web_root.join("runtime/evidence-agent.local.json");
+    let config = model_config_path(web_root);
     if !config.is_file() {
         return ModelSnapshot {
             configured: false,

@@ -360,13 +360,13 @@ test("request evidence rows preserve parallel resources and exact binding detail
     "设备执行",
     "集合通信",
   ]);
-  await expect(panel.locator(".run-bound-output-boundary")).toHaveText("以下记录不作为延迟因果来源。");
+  await expect(panel.locator(".run-bound-output-grid h3 .inline-help__trigger")).toBeVisible();
   const reference = panel.locator('.run-bound-node[data-module="S6"] a').first();
   const evidence = new URL(await reference.getAttribute("href"), "http://tilesim.local");
   expect(evidence.searchParams.get("run")).toBe(runId);
   expect(evidence.searchParams.get("evidence_sha")).toMatch(/^[a-f0-9]{64}$/);
   expect(evidence.searchParams.get("evidence_pointer")).toBe("/system_summary/phase_fabric_contributions/0");
-  const rule = panel.locator('.run-bound-node[data-module="S6"] .run-bound-binding-rule');
+  const rule = panel.locator('.run-bound-node[data-module="S6"] .run-bound-technical-details');
   await expect(rule).not.toHaveAttribute("open", "");
   await rule.locator("summary").focus();
   await page.keyboard.press("Enter");
@@ -1650,6 +1650,7 @@ async function installFixtureApi(
         input_modes: ["controls", "json", "trace_package"],
         design_space_modes: ["built_in_synthetic", "strict_s6_manifest"],
         gpu_participation_modes: ["gpu_free"],
+        model_ids: ["llama3-8b"],
       };
     } else if (path === "/api/capabilities") {
       payload = f8Capabilities;
@@ -1935,7 +1936,7 @@ test("synthetic evidence view is stable, accessible, and field-complete", async 
   await expect(page.locator("#execution-layer-detail h2")).toHaveText("集合通信语义模块");
   await expect(page.locator('.visualization-panel[data-chart-kind="stacked-bar"] .execution-chart svg')).toBeVisible();
   await expect(
-    page.locator('.visualization-panel[data-chart-kind="stacked-bar"] .visualization-caption'),
+    page.locator('.visualization-panel[data-chart-kind="stacked-bar"] .visualization-title-line .inline-help'),
   ).toBeVisible();
   await page.locator(".flow-node--fabric").click();
   await expect(page.locator(".layer-visualizations .visualization-panel")).toHaveCount(2);
@@ -2064,12 +2065,12 @@ test("F6B request evidence stays run-bound across peer resources and S7-S9 pages
   await expect(panel.locator("select")).toHaveValue(longRequestId);
   await expect.poll(() => new URL(page.url()).searchParams.get("evidence_request")).toBe(longRequestId);
   await expect(panel.locator(".run-bound-peer-group .run-bound-node")).toHaveCount(3);
-  await expect(panel.locator(".run-bound-peer-group .run-bound-node").nth(0)).toContainText("S3");
-  await expect(panel.locator(".run-bound-peer-group .run-bound-node").nth(1)).toContainText("S4");
-  await expect(panel.locator(".run-bound-peer-group .run-bound-node").nth(2)).toContainText("S5");
-  await expect(panel.locator(".run-bound-output-node").filter({ hasText: "S7" })).toContainText("已绑定");
-  await expect(panel.locator(".run-bound-output-node").filter({ hasText: "S8" })).toContainText("已绑定");
-  await expect(panel.locator(".run-bound-output-node").filter({ hasText: "S9" })).toContainText("已绑定");
+  await expect(panel.locator(".run-bound-peer-group .run-bound-node").nth(0)).toContainText("KV Cache");
+  await expect(panel.locator(".run-bound-peer-group .run-bound-node").nth(1)).toContainText("设备执行");
+  await expect(panel.locator(".run-bound-peer-group .run-bound-node").nth(2)).toContainText("集合通信");
+  await expect(panel.locator(".run-bound-output-node").filter({ hasText: "统一仿真执行" })).toContainText("已绑定");
+  await expect(panel.locator(".run-bound-output-node").filter({ hasText: "校准与验证" })).toContainText("已绑定");
+  await expect(panel.locator(".run-bound-output-node").filter({ hasText: "指标与归因" })).toContainText("已绑定");
   await expect(panel.locator(".week8-execution-panel")).toContainText("执行详情");
   await panel.locator(".week8-execution-panel summary").click();
   await expect(panel.locator(".week8-execution-panel")).toContainText("partitioned_des");
@@ -2079,10 +2080,10 @@ test("F6B request evidence stays run-bound across peer resources and S7-S9 pages
   await expect(page).toHaveScreenshot(`request-evidence-${testInfo.project.name}.png`, { fullPage: true });
 
   await panel.getByRole("link", { name: "执行过程" }).click();
-  await expect(page).toHaveURL(/\/raw-evidence\?/);
+  await expect(page).toHaveURL(/\/execution\?/);
   expect(new URL(page.url()).searchParams.get("run")).toBe(runId);
   expect(new URL(page.url()).searchParams.get("evidence_request")).toBe(longRequestId);
-  await expect(page.locator(".run-bound-evidence-panel")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "请求执行路线" })).toBeVisible();
 
   await page.getByRole("button", { name: /^性能指标$/ }).click();
   await expect(page.locator(".run-bound-evidence-panel")).toHaveCount(0);
@@ -2516,7 +2517,7 @@ test("analysis charts keep complete tables and bind selected points to the curre
   const browserFailures = await openFixture(page, fixture, "metrics");
   const panel = page.locator(".visualization-panel").filter({ hasText: "请求延迟比较" }).first();
   await expect(panel.locator(".visualization-reading-protocol")).toHaveCount(0);
-  await expect(panel.locator(".visualization-caption")).toContainText("TTFT");
+  await expect(panel.locator(".visualization-title-line .inline-help__bubble")).toContainText("TTFT");
   await expect(panel.locator(".execution-chart svg")).toBeVisible();
   await panel.locator(".visualization-data > summary").click();
   await expect(panel.locator(".visualization-table-scroll tbody tr")).toHaveCount(
@@ -2613,7 +2614,9 @@ test("F7 formal contract exposes Pareto, artifact-record, knob, and topology evi
   const objectiveChart = page.locator(".visualization-panel").filter({ hasText: "正式 Objective 候选图" });
   await expect(objectiveChart).toHaveAttribute("data-chart-kind", "bar");
   await expect(objectiveChart.locator(".visualization-reading-protocol")).toHaveCount(0);
-  await expect(objectiveChart.locator(".visualization-caption")).toContainText("可配对的正式 objective 不足");
+  await expect(objectiveChart.locator(".visualization-title-line .inline-help__bubble")).toContainText(
+    "可配对的正式 objective 不足",
+  );
   await objectiveChart.locator(".visualization-data > summary").click();
   await expect(objectiveChart.locator(".visualization-table-scroll tbody")).toContainText("pareto_member");
   await expect(objectiveChart.locator(".visualization-contract")).toContainText("identity");
@@ -2656,7 +2659,7 @@ test("F7 Fabric view preserves backend order and exact metrics evidence", async 
   await expect(page.locator(".analysis-visualization-stack .visualization-panel")).toHaveCount(2);
   await expect(page.locator(".analysis-visualization-stack .execution-chart svg")).toHaveCount(2);
   await expect(page.locator(".analysis-visualization-stack .visualization-reading-protocol")).toHaveCount(0);
-  await expect(page.locator(".analysis-visualization-stack .visualization-caption")).toHaveCount(2);
+  await expect(page.locator(".analysis-visualization-stack .visualization-title-line .inline-help")).toHaveCount(2);
   await expect(page.locator(".fabric-contract-strip")).not.toHaveAttribute("open", "");
   await expect(page.locator(".fabric-domain-disclosure")).not.toHaveAttribute("open", "");
   await page.locator(".fabric-domain-disclosure summary").focus();
@@ -2703,7 +2706,7 @@ test("language switch updates the desktop workspace and survives reload", async 
   await expect(page.getByRole("heading", { name: "Per-request results" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Request latency comparison" })).toBeVisible();
   await expect(page.locator(".visualization-reading-protocol")).toHaveCount(0);
-  await expect(page.locator(".visualization-caption").first()).toContainText("TTFT");
+  await expect(page.locator(".visualization-title-line .inline-help__bubble").first()).toContainText("TTFT");
   await page.getByRole("button", { name: /Result confidence/ }).click();
   await expect(page.getByRole("heading", { name: "Simulation detail actually used by each stage" })).toBeVisible();
   await page.locator(".new-run-button").click();
@@ -2822,7 +2825,8 @@ test("quick-control tab hosts the structured editors and swaps the submission ch
 
   // Quick control is the tab that owns the structured editors; the JSON tab
   // keeps the shape it has always had (two textareas, runtime first).
-  await expect(page.locator("[data-field-path]")).toHaveCount(13);
+  await expect(page.locator("[role='tab'][data-module]")).toHaveCount(5);
+  await expect(page.locator("[role='tab'][data-module='runtime']")).toHaveAttribute("aria-selected", "true");
   await expect(page.locator(".structured-entry-button")).toHaveCount(1);
   await expect(page.locator(".structured-stack")).toHaveCount(0);
 
@@ -2843,12 +2847,14 @@ test("quick-control tab hosts the structured editors and swaps the submission ch
   await page.locator(".structured-entry-button").click();
   await expect(page.locator(".structured-stack")).toHaveCount(1);
   await expect(page.locator(".json-grid")).toHaveCount(0);
+  await page.locator("[role='tab'][data-module='topology']").click();
   await page.getByRole("button", { name: "高级拓扑设置" }).click();
   await expect(page.locator(".device-inventory")).toBeVisible();
   await expect(page.locator(".structured-area .structured-note--info")).toContainText("完整输入已启用");
 
   // The run-policy block carries only the keys the knobs cannot reach, so the
   // same parameters are never painted twice on one screen.
+  await page.locator("[role='tab'][data-module='runtime']").click();
   await expect(page.locator(".structured-block--policy")).toContainText("进阶运行策略");
   await expect(page.locator("[data-input-path='/custom_inputs/runtime_trace/policy/max_batch_size']")).toHaveCount(0);
   const omittedDelay = page.locator("[data-input-path='/custom_inputs/runtime_trace/policy/pd_handoff_delay_ps']");
@@ -2865,6 +2871,7 @@ test("quick-control tab hosts the structured editors and swaps the submission ch
   // The domain list is the panel's only route to domains[]. A new domain lands in
   // the submitted document with an empty member list, ticking a card writes it
   // straight into member_devices, and deleting the domain takes its links away.
+  await page.locator("[role='tab'][data-module='topology']").click();
   await expect(page.locator(".domain-inventory-row")).toHaveCount(1);
   await page.locator(".domain-inventory .structured-block__header .button").click();
   await expect(page.locator(".domain-inventory-row")).toHaveCount(2);
@@ -2908,6 +2915,7 @@ test("quick-control tab connects, edits and deletes topology links without a JSO
   // The editor starts from the shipped template: all GPU cards are visible on
   // the primary canvas, while links remain explicit topology input.
   await page.locator(".structured-entry-button").click();
+  await page.locator("[role='tab'][data-module='topology']").click();
   const editor = page.locator(".structured-stack .topology-editor");
   await expect(editor).toBeVisible();
   await expect(editor.locator(".topology-device")).toHaveCount(4);

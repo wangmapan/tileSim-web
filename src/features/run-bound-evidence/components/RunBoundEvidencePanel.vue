@@ -3,6 +3,7 @@ import { AlertTriangle, Braces, ChevronDown, GitBranch, Link2 } from "@lucide/vu
 import { computed, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import ArtifactEvidenceLink from "../../../components/ArtifactEvidenceLink.vue";
+import InlineHelp from "../../../components/InlineHelp.vue";
 import type { ArtifactManifestResponse } from "../../../lib/api";
 import type { ReportBundle, RunInputs } from "../../../contracts/report-model";
 import { useI18n } from "../../../i18n";
@@ -114,6 +115,11 @@ function statusLabel(node: { availability: RunBoundAvailability }) {
   } as const;
   return t(labels[node.availability]);
 }
+
+function requestOptionLabel(index: number, isTailExplainedEntity: boolean) {
+  const base = t("请求 {index}", { index: index + 1 });
+  return isTailExplainedEntity ? `${base} · ${t("归因对象")}` : base;
+}
 </script>
 
 <template>
@@ -134,8 +140,8 @@ function statusLabel(node: { availability: RunBoundAvailability }) {
           @change="chooseRequest"
         >
           <option value="" disabled>{{ t("请选择请求") }}</option>
-          <option v-for="option in chain.requestOptions" :key="option.requestId" :value="option.requestId">
-            {{ option.requestId }}{{ option.isTailExplainedEntity ? ` · ${t("归因报告对象")}` : "" }}
+          <option v-for="(option, index) in chain.requestOptions" :key="option.requestId" :value="option.requestId">
+            {{ requestOptionLabel(index, option.isTailExplainedEntity) }}
           </option>
         </select>
       </label>
@@ -153,13 +159,13 @@ function statusLabel(node: { availability: RunBoundAvailability }) {
     </div>
     <div v-else-if="!selectedRequestId" class="run-bound-message" role="status">
       <Braces :size="18" />
-      <p>{{ t("选择一个后端 request_id 后查看可验证的关联；前端不会自行挑选 P99 request。") }}</p>
+      <p>{{ t("选择一个请求查看对应证据。") }}</p>
     </div>
 
     <template v-else>
       <div class="run-bound-identity-strip">
-        <span><GitBranch :size="14" />{{ runId }}</span>
-        <span><Link2 :size="14" />{{ selectedRequestId }}</span>
+        <span><GitBranch :size="14" />{{ t("当前运行") }}</span>
+        <span><Link2 :size="14" />{{ t("当前请求") }}</span>
         <span :class="{ warning: chain.contractState !== 'versioned' }">
           {{
             chain.contractState === "compatibility_unversioned"
@@ -169,6 +175,10 @@ function statusLabel(node: { availability: RunBoundAvailability }) {
                 : t("版本化 contract")
           }}
         </span>
+        <InlineHelp
+          :text="`run_id: ${runId}\nrequest_id: ${selectedRequestId}`"
+          :label="t('查看当前运行和请求的技术身份')"
+        />
       </div>
 
       <nav class="run-bound-page-links" :aria-label="t('请求证据页面导航')">
@@ -187,8 +197,8 @@ function statusLabel(node: { availability: RunBoundAvailability }) {
           :node="nodeMap.get('S1')!"
           :status-label="statusLabel(nodeMap.get('S1')!)"
         />
-        <section class="run-bound-peer-group" :aria-label="t('并列资源语义')">
-          <small>{{ t("并列资源语义") }}</small>
+        <section class="run-bound-peer-group" :aria-label="t('相关资源')">
+          <small>{{ t("相关资源") }}</small>
           <EvidenceNode
             v-for="node in peerNodes"
             :key="node.subsystem"
@@ -204,10 +214,10 @@ function statusLabel(node: { availability: RunBoundAvailability }) {
       </div>
 
       <section class="run-bound-output-grid" :aria-label="t('执行与证据记录')">
-        <h3>{{ t("执行与证据记录") }}</h3>
-        <p class="run-bound-output-boundary">
-          {{ t("以下记录不作为延迟因果来源。") }}
-        </p>
+        <h3>
+          {{ t("执行与证据记录") }}
+          <InlineHelp :text="t('这些记录用于核对执行、校准和归因结果，不单独构成延迟因果结论。')" />
+        </h3>
         <EvidenceNode
           v-for="node in outputNodes"
           :key="node.subsystem"

@@ -2,6 +2,7 @@
 import { ArrowRight, Braces, ChevronDown, FileJson, Play, Workflow } from "@lucide/vue";
 import StatCard from "../components/StatCard.vue";
 import StatusPill from "../components/StatusPill.vue";
+import InlineHelp from "../components/InlineHelp.vue";
 import UtilizationMeasure from "../components/ui/UtilizationMeasure.vue";
 import ArtifactEvidenceLink from "../components/ArtifactEvidenceLink.vue";
 import "../styles/workbench.css";
@@ -37,6 +38,10 @@ function stateText(metric: SourcedValue<number | LosslessInteger>, format: (valu
 
 function stateHint(metric: SourcedValue<number | LosslessInteger>, fallback: string): string {
   return metric.availability === "available" ? fallback : availabilityDescription(metric.availability);
+}
+
+function metricTone(metric: SourcedValue<number | LosslessInteger>) {
+  return metric.availability === "available" ? "accent" : "muted";
 }
 
 function countText(value: unknown) {
@@ -108,12 +113,14 @@ const primarySubsystemName = computed(() => {
           <StatusPill :value="failedRun ? 'failed' : dashboardView.overview.status.value || 'unknown'" />
         </div>
         <div class="hero-measure">
-          <span>{{ t("本次模拟总时长") }}</span>
           <div>
             <strong>{{ stateText(dashboardView.overview.endToEndLatencyUs, durationText) }}</strong
             ><small v-if="dashboardView.overview.endToEndLatencyUs.availability === 'available'">µs</small>
           </div>
-          <span>{{ stateHint(dashboardView.overview.endToEndLatencyUs, t("仿真时间，非程序运行耗时")) }}</span>
+          <span class="hero-measure__label">
+            {{ t("本次模拟总时长") }}
+            <InlineHelp :text="stateHint(dashboardView.overview.endToEndLatencyUs, t('仿真时间，非程序运行耗时'))" />
+          </span>
         </div>
         <nav
           class="analysis-stage__actions overview-analysis-index"
@@ -168,21 +175,25 @@ const primarySubsystemName = computed(() => {
           )
         "
         accent
+        :tone="metricTone(dashboardView.overview.throughputRequestsPerSecond)"
       />
       <StatCard
         :label="t('调度事件')"
         :value="stateText(dashboardView.overview.runtimeEventCount, countText)"
         :hint="stateHint(dashboardView.overview.runtimeEventCount, t('记录调度、批处理和请求推进'))"
+        :tone="metricTone(dashboardView.overview.runtimeEventCount)"
       />
       <StatCard
         :label="t('网络通信记录')"
         :value="stateText(dashboardView.overview.fabricRecordCount, countText)"
         :hint="stateHint(dashboardView.overview.fabricRecordCount, t('记录网络传输与等待'))"
+        :tone="metricTone(dashboardView.overview.fabricRecordCount)"
       />
       <StatCard
         :label="t('验证完整度')"
         :value="stateText(dashboardView.overview.validationCompleteness, (value) => formatPercent(value))"
         :hint="stateHint(dashboardView.overview.validationCompleteness, t('字段覆盖，非准确率'))"
+        :tone="metricTone(dashboardView.overview.validationCompleteness)"
       />
     </section>
 
@@ -190,7 +201,19 @@ const primarySubsystemName = computed(() => {
       <article class="overview-network-observation">
         <header class="workbench-section-heading">
           <div>
-            <h2>{{ t("通信域观测") }}</h2>
+            <h2>
+              {{ t("通信域观测") }}
+              <InlineHelp
+                :text="
+                  t(
+                    '按报告顺序显示前 {count} 个域；占用不等于拥塞或瓶颈排名。延迟沿用报告字段，不相加解释为请求耗时。',
+                    {
+                      count: previewDomains.length,
+                    },
+                  )
+                "
+              />
+            </h2>
           </div>
           <button class="text-button" @click="setView('fabric')">
             {{ t("查看网络与通信") }}<ArrowRight :size="16" />
@@ -222,10 +245,6 @@ const primarySubsystemName = computed(() => {
               </tbody>
             </table>
           </div>
-          <p class="workbench-note">
-            {{ t("按报告顺序显示前 {count} 个域；占用不等于拥塞或瓶颈排名。", { count: previewDomains.length }) }}
-            {{ t("延迟沿用报告字段，不相加解释为请求耗时。") }}
-          </p>
         </template>
         <div v-else class="overview-network-empty">
           <p>{{ t("尚无通信域占用记录") }}</p>
@@ -238,8 +257,7 @@ const primarySubsystemName = computed(() => {
       <summary>
         <span
           ><FileJson :size="18" /><span
-            ><strong>{{ t("原始工件") }}</strong
-            ><small>{{ t("按需打开本次运行的 JSON 证据") }}</small></span
+            ><strong>{{ t("原始工件") }}</strong></span
           ></span
         >
         <span>{{ artifacts.length }} {{ t("个文件") }} <ChevronDown :size="16" /></span>
@@ -269,8 +287,10 @@ const primarySubsystemName = computed(() => {
     -->
     <section v-if="runVerdict" class="panel run-verdict" data-help-anchor="overview-verdict">
       <header>
-        <h2>{{ t("后端结论") }}</h2>
-        <p>{{ t("这两个字段由后端原样给出，前端不改写、不摘编、不降级为提示文案。") }}</p>
+        <h2>
+          {{ t("后端结论") }}
+          <InlineHelp :text="t('这两个字段由后端原样给出，前端不改写、不摘编、不降级为提示文案。')" />
+        </h2>
       </header>
       <dl>
         <div>

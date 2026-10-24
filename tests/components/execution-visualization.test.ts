@@ -35,7 +35,7 @@ describe("execution visualization panel", () => {
     });
     expect(wrapper.find(".execution-chart").exists()).toBe(false);
     expect(wrapper.find(".visualization-reading-protocol").exists()).toBe(false);
-    expect(wrapper.get(".visualization-caption").text()).toBe("保留字段表。");
+    expect(wrapper.get(".visualization-title-line .inline-help__bubble").text()).toBe("保留字段表。");
     expect(wrapper.text()).toContain("JSON 中没有对应字段");
   });
 
@@ -234,7 +234,7 @@ describe("execution visualization panel", () => {
     await flushPromises();
 
     expect(wrapper.find(".visualization-reading-protocol").exists()).toBe(false);
-    expect(wrapper.get(".visualization-caption").text()).toBe("直接显示报告值。");
+    expect(wrapper.get(".visualization-title-line .inline-help__bubble").text()).toBe("直接显示报告值。");
     expect(wrapper.findAll(".visualization-table-scroll tbody tr")).toHaveLength(0);
     const disclosure = wrapper.get<HTMLDetailsElement>(".visualization-data");
     disclosure.element.open = true;
@@ -294,7 +294,7 @@ describe("execution visualization panel", () => {
     await flushPromises();
     expect(mounts).toBe(1);
     expect(wrapper.find(".visualization-table-scroll").exists()).toBe(false);
-    expect(wrapper.get(".visualization-boundary").text()).toContain("不补造数据");
+    expect(wrapper.get(".visualization-title-line .inline-help__bubble").text()).toContain("不补造数据");
     const disclosure = wrapper.get<HTMLDetailsElement>(".visualization-data");
     disclosure.element.open = true;
     await disclosure.trigger("toggle");

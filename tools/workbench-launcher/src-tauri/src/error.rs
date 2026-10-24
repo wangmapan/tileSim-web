@@ -70,6 +70,22 @@ pub fn classify_failure(output: &str) -> PublicError {
             output,
         );
     }
+    if lowered.contains("route_unavailable") {
+        return PublicError::new(
+            "后端仿真验证未通过",
+            "当前仿真拓扑没有可用路径。检查 topology.links、domain 和请求 participants 是否匹配，修复后重新部署；本次失败不会替换上一份已验证部署。",
+            output,
+        );
+    }
+    if lowered.contains("errors while running ctest")
+        || (lowered.contains("ctest") && lowered.contains("exited with code"))
+    {
+        return PublicError::new(
+            "后端验证未通过",
+            "打开操作日志查看失败的 CTest；修复对应后端问题或恢复已验证的后端版本后，再重新部署。",
+            output,
+        );
+    }
     let detail = if output.trim().is_empty() {
         "PowerShell exited without readable output. Open the operation log and retry after refreshing the environment status."
     } else {
@@ -127,5 +143,22 @@ mod tests {
         );
         assert_eq!(error.category, "模型服务能力校验未通过");
         assert!(error.action.contains("模型名"));
+    }
+
+    #[test]
+    fn route_failures_explain_that_deployment_is_blocked_by_simulation_topology() {
+        let error = classify_failure(
+            "TileSimModularFabricTest failed: route_unavailable\nErrors while running CTest",
+        );
+        assert_eq!(error.category, "后端仿真验证未通过");
+        assert!(error.action.contains("topology.links"));
+        assert!(error.action.contains("不会替换上一份已验证部署"));
+    }
+
+    #[test]
+    fn generic_ctest_failures_keep_a_test_focused_next_step() {
+        let error = classify_failure("Errors while running CTest\nwsl.exe exited with code 8.");
+        assert_eq!(error.category, "后端验证未通过");
+        assert!(error.action.contains("CTest"));
     }
 }

@@ -26,11 +26,18 @@ import {
 } from "./structured-input";
 
 const props = withDefaults(
-  defineProps<{ modelValue: string; fieldPath?: string; errorMessage?: string; topologyJson?: string }>(),
+  defineProps<{
+    modelValue: string;
+    fieldPath?: string;
+    errorMessage?: string;
+    topologyJson?: string;
+    modelIds?: readonly unknown[];
+  }>(),
   {
     fieldPath: "",
     errorMessage: "",
     topologyJson: "",
+    modelIds: () => [],
   },
 );
 const emit = defineEmits<{ (event: "update:modelValue", value: string): void }>();
@@ -78,12 +85,6 @@ const REQUEST_LABEL_SOURCE: Record<string, string> = {
   kv_handoff_id: "KV 交接编号",
 };
 
-/**
- * Suggestions from the documented simulation examples. This is not an
- * allow-list: the runtime contract accepts a caller-supplied model identity.
- * A name also does not synthesize model-shape parameters.
- */
-const MODEL_ID_SUGGESTIONS = ["llama3-8b", "llama2-7b", "mixtral", "Qwen3-0.6B", "Qwen2.5-Math-7B-Instruct"] as const;
 const COLLECTIVE_TYPE_SUGGESTIONS = ["AllReduce", "AllGather", "AllToAll", "Broadcast", "ReduceScatter"] as const;
 
 const metadataByKey = new Map(runtimeRequestFields.map((field) => [field.key, field]));
@@ -147,7 +148,7 @@ function rowAt(index: number): JsonObject | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as JsonObject) : null;
 }
 
-const modelIds = computed(() => {
+const rowModelIds = computed(() => {
   const values = new Set<string>();
   for (const index of rowIndexes.value) {
     const value = rowAt(index)?.model_id;
@@ -155,7 +156,10 @@ const modelIds = computed(() => {
   }
   return [...values];
 });
-const modelSuggestions = computed(() => [...new Set([...MODEL_ID_SUGGESTIONS, ...modelIds.value])]);
+const catalogModelIds = computed(() =>
+  props.modelIds.filter((value): value is string => typeof value === "string" && value.trim().length > 0),
+);
+const modelSuggestions = computed(() => [...new Set([...catalogModelIds.value, ...rowModelIds.value])]);
 const suggestionFields = computed(() => columns.filter((field) => stringListId(field) && field.key !== "model_id"));
 
 function boundsHint(meta: SchemaFieldMeta): string {
@@ -400,9 +404,12 @@ const hiddenKeys = computed(() => {
             "
           />
         </span>
-        <code v-for="modelId in modelIds" :key="modelId">{{ modelId }}</code>
-        <span v-if="!modelIds.length" class="request-model-summary__empty">{{ t("未填写") }}</span>
+        <code v-for="modelId in rowModelIds" :key="modelId">{{ modelId }}</code>
+        <span v-if="!rowModelIds.length" class="request-model-summary__empty">{{ t("未填写") }}</span>
       </div>
+      <p v-if="catalogModelIds.length" class="structured-note">
+        {{ t("后端可用模型") }}：{{ catalogModelIds.join("、") }}
+      </p>
 
       <div class="request-table-scroll" tabindex="0" role="region" :aria-label="t('请求表（可横向滚动）')">
         <table class="request-table">

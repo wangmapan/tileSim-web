@@ -11,7 +11,6 @@ import { reportCoverageEnglishCatalog } from "./workstreams/report-coverage";
 
 import { themeColorEnglishCatalog } from "./workstreams/theme-color";
 import { semanticGlossaryEnglishCatalog } from "./workstreams/semantic-glossary";
-import { lightweightWorkbenchEnglishCatalog } from "./workstreams/lightweight-workbench";
 import { topologyEditorEnglishCatalog } from "./workstreams/topology-editor";
 import { structuredInputEnglishCatalog } from "./workstreams/structured-input";
 
@@ -28,7 +27,6 @@ export const workstreamEnglishCatalogs: Readonly<Record<string, string>> = {
   ...reportCoverageEnglishCatalog,
   ...themeColorEnglishCatalog,
   ...semanticGlossaryEnglishCatalog,
-  ...lightweightWorkbenchEnglishCatalog,
   ...topologyEditorEnglishCatalog,
   ...structuredInputEnglishCatalog,
 };

@@ -134,4 +134,48 @@ describe("runtime evidence panel", () => {
     await flushPromises();
     expect(wrapper.get('[role="alert"]').text()).toContain("hash mismatch");
   });
+
+  it("keeps runtime-analysis summary, requests, events, and uint64 values nested", async () => {
+    fetchVerifiedArtifact.mockResolvedValue({
+      schema_version: "tilesim.s1_runtime_analysis.v1",
+      run_id: "run-evidence",
+      summary: {
+        total_events: "18446744073709551615",
+        first_event_time_ps: "9007199254740993",
+        last_event_time_ps: "9007199254740994",
+        peak_active_requests: "2",
+        monotonic_time_order: true,
+      },
+      requests: [
+        {
+          request_id: "r-analysis",
+          arrival_time_ps: "9007199254740993",
+          admit_time_ps: "9007199254740994",
+          first_batch_issue_time_ps: "9007199254740995",
+          completion_time_ps: "9007199254740996",
+          final_kv_tokens: "18446744073709551615",
+        },
+      ],
+      events: [
+        {
+          event_time_ps: "9007199254740997",
+          kind: "arrival",
+          logical_step: "18446744073709551615",
+          request_id: "r-analysis",
+        },
+      ],
+    });
+    const wrapper = panel(
+      manifest("runtime-analysis", {
+        schema_identity: "tilesim.s1_runtime_analysis.v1",
+      }),
+    );
+    await wrapper.get("select").setValue("runtime-analysis");
+    await wrapper.get(".runtime-evidence-controls > button").trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("18446744073709551615");
+    expect(wrapper.text()).toContain("r-analysis");
+    expect(wrapper.text()).toContain("9007199254740997");
+    expect(wrapper.findAll("tbody tr")).toHaveLength(2);
+  });
 });

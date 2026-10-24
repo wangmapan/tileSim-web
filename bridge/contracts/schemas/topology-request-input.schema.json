@@ -57,6 +57,7 @@
             "additionalProperties": false,
             "required": ["src_device", "dst_device", "domain_id"],
             "properties": {
+              "link_id": { "type": "string", "minLength": 1, "maxLength": 256 },
               "src_device": { "type": "string", "minLength": 1, "maxLength": 256 },
               "dst_device": { "type": "string", "minLength": 1, "maxLength": 256 },
               "domain_id": { "type": "string", "minLength": 1, "maxLength": 256 },

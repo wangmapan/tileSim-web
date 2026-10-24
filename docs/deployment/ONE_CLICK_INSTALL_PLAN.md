@@ -1,9 +1,14 @@
-# TileSim Web 一键安装交付计划
+# TileSim Web 一键安装交付计划（兼容入口）
 
 > 计划日期：2026-10-15  
 > 目标平台：Windows 10/11 x64，电脑端本地工作台。  
 > 目标用户：没有 Node、pnpm、Git、Python 或 C++ 开发环境的实验人员。  
 > 关联调查：[部署就绪度调查](DEPLOYMENT_READINESS.md)。
+
+> **当前决策（2026-10-24）**：本文件保留为 2026-10-15 计划的兼容入口。当前唯一实施依据是
+> [`WINDOWS_DISTRIBUTION_AND_INSTALLER_PLAN_2026-10-24.md`](WINDOWS_DISTRIBUTION_AND_INSTALLER_PLAN_2026-10-24.md)。
+> 两者出现差异时，以新方案为准；尤其是第一版同时交付签名安装器和同源离线 ZIP，后端首版先采用预构建 WSL runtime，
+> 当前 Tauri EXE 仍不是可独立分发的完整运行时。
 
 ## 目标和边界
 
@@ -29,7 +34,8 @@
 | Developer bootstrap         | 开发者、维护者 | clone 两个仓库后运行 `bootstrap-workbench.ps1` | 需要 Node、pnpm、Git、WSL、CMake/C++            |
 | Windows Workbench Installer | 实验人员       | 下载安装器并运行向导                           | 不需要 Node、pnpm、Git、CMake；安装器负责运行时 |
 
-第一阶段只交付 Windows Workbench Installer。这样能缩短路径，也不会为了追求跨平台而同时引入 Docker、Linux 原生包和远程服务的复杂度。
+第一阶段同时生成 Windows Workbench Installer 和同源离线 ZIP。安装器面向普通测试人员，ZIP 面向内网、离线安装和问题复现；
+两者共享同一不可变 payload，不能分别从开发机目录拼装。具体构建、签名、WSL rootfs、DPAPI 配置和回滚门槛见当前方案。
 
 ## 推荐的最终安装架构
 
@@ -79,13 +85,13 @@ SHA256SUMS                              # 所有发行物摘要
 
 ### 后端运行时策略
 
-优先级按交付难度排序：
+当前决策不是“先让用户编译”，而是先交付可校验的预构建 WSL runtime：本机可见的 `D:\tileSim\build-tr1-wsl\TileSimCLI`
+是 ELF，且现有 `scripts/start-backend.ps1` 明确通过 WSL 的 `python3` 启动 Bridge。因此第一版安装器携带固定、带摘要的
+WSL rootfs/导入包，调用 `wsl --import`，不在用户电脑执行 CMake、CTest 或 Git。安装器必须检测 WSL2、虚拟化、发行版
+状态、权限和可用空间，并支持重启后继续。
 
-1. **首选：预构建、可校验的 TileSimCLI 运行时。** CI 生成与 Web 版本绑定的 CLI 包，安装器只解压并校验 SHA-256，不在用户电脑上运行 CMake/CTest。
-2. **过渡：预构建 WSL rootfs。** 若 TileSimCLI 只能在 Linux/WSL 运行，发行包携带固定 Ubuntu rootfs 或受控导入包，安装器调用 `wsl --import`，再把 CLI、Bridge 依赖和资源放入该发行版。安装器必须检测 WSL 版本、虚拟化和管理员权限，并支持重启后继续安装。
-3. **后续：Windows 原生 CLI。** 当后端提供稳定的 Windows 构建后，去掉 WSL rootfs，缩短安装时间并减少路径、编码和权限问题。
-
-在首选方案或过渡方案完成前，不能把“下载源码后本机编译”称为一键安装。
+后续只有在 CI 能生成并在干净 Windows 上通过 smoke、选定 CTest、依赖收集和 SHA-256 校验的 `TileSimCLI.exe` 后，才把
+manifest 的 `runtime_kind` 切换为 `windows-native`，并移除 WSL rootfs。上述门槛完成前，不能把“下载源码后本机编译”称为一键安装。
 
 ## 安装器工作流
 

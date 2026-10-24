@@ -53,8 +53,8 @@ describe("parameter plan applicability", () => {
     const assessment = assessParameterPlan({
       edits,
       live: live(),
-      planRevision: "context:lightweight_prepare:1",
-      currentRevision: "context:lightweight_prepare:1",
+      planRevision: "context:experiment:1",
+      currentRevision: "context:experiment:1",
     });
 
     expect(assessment).toEqual({ applicable: true, basis: "revision" });
@@ -67,8 +67,8 @@ describe("parameter plan applicability", () => {
     const assessment = assessParameterPlan({
       edits,
       live: live(),
-      planRevision: "context:lightweight_prepare:1",
-      currentRevision: "context:lightweight_prepare:5",
+      planRevision: "context:experiment:1",
+      currentRevision: "context:experiment:5",
     });
 
     expect(assessment).toEqual({ applicable: true, basis: "values" });
@@ -82,7 +82,7 @@ describe("parameter plan applicability", () => {
       edits,
       live: live(),
       planRevision: null,
-      currentRevision: "context:lightweight_prepare:5",
+      currentRevision: "context:experiment:5",
     });
 
     expect(assessment).toEqual({ applicable: true, basis: "values" });
@@ -92,8 +92,8 @@ describe("parameter plan applicability", () => {
     const assessment = assessParameterPlan({
       edits,
       live: live({ [moved.path]: "32" }),
-      planRevision: "context:lightweight_prepare:1",
-      currentRevision: "context:lightweight_prepare:2",
+      planRevision: "context:experiment:1",
+      currentRevision: "context:experiment:2",
     });
 
     expect(assessment.applicable).toBe(false);
@@ -113,8 +113,8 @@ describe("parameter plan applicability", () => {
     const assessment = assessParameterPlan({
       edits,
       live: live({ [knob.path]: "2048" }),
-      planRevision: "context:lightweight_prepare:1",
-      currentRevision: "context:lightweight_prepare:1",
+      planRevision: "context:experiment:1",
+      currentRevision: "context:experiment:1",
     });
 
     expect(assessment.applicable).toBe(false);
@@ -128,8 +128,8 @@ describe("parameter plan applicability", () => {
     const assessment = assessParameterPlan({
       edits,
       live: live().filter((entry) => entry.path !== knob.path),
-      planRevision: "context:lightweight_prepare:1",
-      currentRevision: "context:lightweight_prepare:2",
+      planRevision: "context:experiment:1",
+      currentRevision: "context:experiment:2",
     });
 
     expect(assessment.applicable).toBe(false);
@@ -180,8 +180,8 @@ describe("parameter plan applicability", () => {
     const assessment = assessParameterPlan({
       edits: [],
       live: live(),
-      planRevision: "context:lightweight_prepare:1",
-      currentRevision: "context:lightweight_prepare:1",
+      planRevision: "context:experiment:1",
+      currentRevision: "context:experiment:1",
     });
 
     expect(assessment).toEqual({ applicable: false, moved: null });
@@ -194,8 +194,8 @@ describe("parameter plan applicability", () => {
     const assessment = assessParameterPlan({
       edits,
       live: [],
-      planRevision: "context:lightweight_prepare:1",
-      currentRevision: "context:lightweight_prepare:2",
+      planRevision: "context:experiment:1",
+      currentRevision: "context:experiment:2",
     });
 
     expect(assessment).toEqual({ applicable: false, moved: null });

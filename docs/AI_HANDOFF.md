@@ -1,5 +1,88 @@
 # TileSim Web AI Handoff
 
+## 2026-10-24 启动器部署源码摘要误报修复（当前工作树，未部署）
+
+用户提供的部署日志显示后端 **102/102 CTest**、Bridge 测试、前端 Vitest（**1097 passed / 8 skipped**）和生产构建均已完成，
+但收尾阶段报 `TileSim Web source changed during build or validation`。根因是 `scripts/release-traceability.mjs` 的 Web 源码摘要把
+`.gitignore` 中的启动器 Rust 构建目录 `tools/workbench-launcher/src-tauri/target` 计入了摘要；启动器/构建过程更新该目录时，
+部署流程会误判源码被修改并安全中止。现已将 `target` 及其他开发/运行产物目录加入默认排除集合，并扩展摘要回归测试；未放宽真正源文件变化的保护，
+也未跳过 CTest 或替换部署。定向摘要测试 **3 passed**，需在用户明确部署授权后重新运行启动器部署。
+
+## 2026-10-24 Windows 发行与安装器实施进展（当前工作树，未部署）
+
+按用户要求完成了 Windows 测试发行方案的代码对齐调研，并开始落地可重复的 ZIP payload 链路，当前实施依据为
+[`docs/deployment/WINDOWS_DISTRIBUTION_AND_INSTALLER_PLAN_2026-10-24.md`](deployment/WINDOWS_DISTRIBUTION_AND_INSTALLER_PLAN_2026-10-24.md)。方案决定同一版本同时生成签名安装器
+`TileSimWebSetup-<version>-x64.exe` 和同源离线 `TileSimWebRuntime-<version>-x64.zip`，而不是发送根目录 Tauri EXE、
+`dist/` 或开发机 `runtime/backend-current.json`。
+
+本轮按源码确认：`tools/workbench-launcher` 目前仍以后端 checkout/WSL deployment 为前提；`bridge/server.py` 依赖
+Python、后端资源、CLI、manifest 和环境变量；`scripts/start-backend.ps1` 通过 WSL 启动 `python3`，本机可见的
+`D:\tileSim\build-tr1-wsl\TileSimCLI` 是 ELF；模型设置已有启动器 UI、Base URL 校验和 Windows 当前用户 DPAPI，
+但配置仍写入 checkout 的 `runtime/evidence-agent.local.json`，不能直接进入发行包。当前方案首版采用预构建 WSL runtime，
+待 Windows 原生 `TileSimCLI.exe` 通过独立 clean-machine gate 后再切换 native runtime。
+
+本轮已新增但尚未部署/签收的工具：`scripts/doctor.ps1`（Windows/x64/WebView2/WSL/端口/磁盘预检）、
+`scripts/package-windows-release.ps1`（同源 payload、release manifest、SHA-256 清单和离线 ZIP）、
+`scripts/install-windows-runtime.ps1`（ZIP/解压 payload 完整性校验、staging/current/previous 指针和回滚骨架）、
+`scripts/smoke-windows-release.ps1`（health/manifest identity smoke），
+并让 `bridge/server.py` 与 `bridge/infra/identity.py` 支持从 packaged release manifest 提供无 Git identity。
+这些工具已做 PowerShell 5.1 语法检查、payload 组装/解压/哈希校验和 Bridge 单元回归；当前 manifest 仍明确标记
+`runtime_zip_only_installer_pending`，安装器尚未嵌入签名 launcher，也尚未实现 WSL import、Bridge health/smoke、
+签名/SBOM、干净 Windows 安装验收或 DPAPI 配置迁移。因此仍不能宣称“下载后点击即用”，完整已部署路径仍是
+Windows + WSL 源码 bootstrap。
+
+本轮新增一键发布入口 `发布Windows测试包.cmd` 与 `scripts/publish-windows-release.ps1`，并在 `package.json` 增加
+`publish:windows`。入口自动读取版本、发现旁边的 `D:\tileSim`/`docs\examples`，执行 doctor，再调用统一 ZIP 组装器；
+`windows-native` 模式新增 `BackendCliPath` 透传，并可自动发现 `build-ca1\Release\TileSimCLI.exe` 等常见路径。
+本地已用现有 native CLI 完成一键编排、ZIP 组装和临时安装校验；该验证跳过了发布门禁/Web 重建，不代表 native CLI
+已完成 clean-machine acceptance。默认 WSL 模式仍会交互询问经过测试的 rootfs tar 与 runtime metadata。配置入口保留在
+`%LocalAppData%\TileSim\config\evidence-agent.local.json`，只存 DPAPI 密文；API Key 不进发行包。
+
+## 2026-10-24 轻量工作台完整移除（当前工作树，未部署）
+
+轻量工作台已从运行时与前端产品表面完整移除：根路径直接进入专业工作台，原轻量路由不再装配，轻量页面、feature、Pinia store、模式切换、专属帮助主题、i18n 文案、单元测试与桌面 E2E 均已删除。专业工作台的实验配置、结果分析、共享助手和帮助基础设施保留。旧轻量设计与验收材料已从活跃文档目录删除；`docs/archive/` 中的 dated 记录仅作为历史证据保留，不代表当前可用功能。
+
+## 2026-10-24 文档与代码基线复核（当前工作树，未部署）
+
+本轮按 `AGENTS.md`、当前代码和运行时 contract 复核活跃文档。当前 Web `HEAD` 为 `2e7386457a9d3974af4e9d5bb42b5fa470f0ae56`
+（分支 `codex/experiment-layout-polish`，工作树含既有未提交改动），`python bridge/check_schema_set_revision.py` 实测为
+`sha256:dd9fad27c1d5591a79a16211f701f5725a711163bb284d960b99cca020064b4e`。Bridge 代码实际注册
+`/api/agent/optimization/*` 与 `/api/agent/batches/*`，分别使用 `2026-10-19.wpd.v1`/`tools.v2` 和
+`2026-10-19.wpe.v1`/`tools.v3`；阶段 5 local-dev 收尾仍为 `LOCAL_PHASE5_PASS`，不是生产 GO。
+
+本轮已将结束的 Agent Harness 阶段 2/3A/3B/WP-D 记录、Phase 2C 派发计划和轻量工作台旧实施/remediation/L0 审计移入
+`docs/archive/`；活跃入口只保留当前基线、稳定规范和未结束的产品/架构设计。历史记录原文未改写，当前数字和结论以本文件、
+模块 current baseline、正式 contract 与实际代码为准。
+
+> 本节之后的带日期条目是交接历史与证据索引；即使标题保留“当前工作树”，也不得覆盖本节和文件顶部最新事实。
+
+## 2026-10-23 启动器部署失败诊断收口（当前工作树，未部署）
+
+启动器部署仍严格要求后端 CTest 通过；本轮用户提供的后端日志为 **102 项中 16 项失败，`wsl.exe` exit 8**，主要失败信号是仿真路径不可用（`route_unavailable`），并伴随延迟/transfer 统计为 0。启动器现在会把这类失败归类为“后端仿真验证未通过”，直接提示检查 `topology.links`、`domain` 与请求 `participants` 的匹配关系，并明确失败不会替换上一份已验证部署；普通 CTest 失败则提示查看失败测试并修复后端。
+
+启动器同时记录整段操作日志是否出现过 `route_unavailable`，即使该行早于 400 行日志尾部、后来被截断，最终错误仍保持上述分类。启动器 Rust 单测 **16 passed**，工作台 Vitest **12 passed**，启动器 `vue-tsc --noEmit`、`cargo fmt --check` 与改动文件 `git diff --check` 均通过。
+
+这次修改没有跳过 CTest、没有把失败写成部署成功，也没有修改只读的 `D:\tileSim` 后端仓库。要真正完成部署，仍需修复后端仿真测试所使用的拓扑/路由配置，或恢复上一份已验证后端版本后再由启动器重试。
+
+## 2026-10-22 Agent Harness 阶段 5 Local-Dev 收尾事实（工作树，未部署）
+
+阶段 5 的 local-dev 批处理遗留问题已完成收口，结论为 `LOCAL_PHASE5_PASS`（仅本地开发闭合，非生产 GO）。
+本轮修复并回归验证了候选数不得超过 `budget.max_candidates`、`max_failures` 为无条件硬上限、失败计数跨 worker
+重启保留、批次时间预算跨恢复保持、worker lease 释放与暂停期间 heartbeat；批次达到失败上限时即使策略为
+`continue` 也会停止，`stop` 则首个失败即停止。
+
+重试现在只接受明确 `retryable=true` 且没有 `unknown_outcome` 的失败，受 `max_retries` 限制；重试会清理旧执行
+身份、生成新的 Stage-2 draft/validation/approval/idempotency fence，并在重新执行前回到人工批准。未知副作用的
+recovery acknowledgement 不会盲目重提，而是将未决候选和批次转为 `manual_intervention_required`。前端 Batch
+Task Center 已显示该恢复边界；进入人工介入后不再提供批次取消或盲重试入口。SSE 使用共享 lossless framing、API path 和 scope，并拒绝跨 batch、乱序或过期
+detail/event 数据。
+
+定向证据：Bridge Stage 5/相关 Stage 3 tests 为 **21 passed / 0 failed**；前端 Harness 定向套件为 **35 passed / 0 failed**；
+`vue-tsc --noEmit` 通过。未修改 contract/schema-set，因此不需要重新生成客户端。所有结果仍固定为
+`local_dev`、`synthetic_trace`、`exploratory`、`not_for_production`。Provider live acceptance、真实硬件、独立生产
+evidence/citation entailment review、原始研究计划要求的独立 validation run 与生产 GO 仍为
+`production_acceptance_pending`，不随本地闭合升级。
+
 ## 2026-10-19 Agent Harness 阶段 5 Local-Dev 当前事实（工作树，未部署）
 
 阶段 5 已新增受控批量实验 successor contract `2026-10-19.wpe.v1`、tool registry
@@ -151,7 +234,7 @@ Run Intake Lowering 已落地，Bridge 侧 Run Intake v2 **只读预览**端点�
 - Task Center 现在先按当前 run 过滤 operation list，再读取正式 operation detail/events；跨 run operation 不会触发 detail 读取或进入展示。
 - 单个 operation detail 读取失败显示 `unavailable`，不会以列表快照补造阶段；正式事件 sequence 缺口会进入 `recovery_required`，而不是静默跳过。
 - operation card 展示已校验的 workflow event sequence、node、state、created_at 和终态标记；没有新增写按钮、自动 resume 或 run 创建。
-- WP-D durable runtime bake-off 已登记在 [`docs/F9_AGENT_ORCHESTRATION/27_AGENT_HARNESS_WP_D_RUNTIME_BAKEOFF.md`](F9_AGENT_ORCHESTRATION/27_AGENT_HARNESS_WP_D_RUNTIME_BAKEOFF.md)：当前保留 Bridge 自有 SQLite WAL + bounded worker 作为唯一只读 operation source，不引入第二个 workflow runtime。阶段 2 草案/审批写入、阶段 3 可恢复队列 UI、阶段 4 受控执行和阶段 5 自主优化均为 NO-GO。
+- WP-D durable runtime bake-off 已归档在 [`docs/archive/agent-orchestration/phase-records/27_AGENT_HARNESS_WP_D_RUNTIME_BAKEOFF.md`](archive/agent-orchestration/phase-records/27_AGENT_HARNESS_WP_D_RUNTIME_BAKEOFF.md)：其仍有效的决策是保留 Bridge 自有 SQLite WAL + bounded worker，不引入第二个 workflow runtime。阶段 2/3/4/5 的 local-dev successor 已分别落地，但生产 Provider/真实硬件/生产 GO 仍为 pending。
 - 本轮验证：Harness 定向 Vitest **3 files / 19 passed**；全量 Web Vitest **111 files / 1146 passed / 8 skipped**；`vue-tsc --noEmit`、目标 ESLint（0 error）、目标 Prettier、`docs:check`（69 篇）、`deps:check`（333 source files）、`contracts:check`、生产构建和 `git diff --check` 均通过；Bridge `test_server.py + test_agent_harness.py` **208 tests / OK**，Agent Harness Schema Ajv 检查通过。
 - 本批没有修改 Bridge 队列、durable store、ledger、OpenAPI 或 schema；没有操作 `127.0.0.1:5173`。
 
@@ -410,15 +493,15 @@ Run Intake Lowering 已落地，Bridge 侧 Run Intake v2 **只读预览**端点�
 
 本轮只读审查覆盖：当前未提交工作树、前端静态门禁、Bridge Python 门禁、5173 健康状态、4173 真实浏览器路由/主题/窄桌面、助手模型结果分析、localStorage 会话恢复和 Axe 检查。除本节文档登记外未修改实现、未重启或替换 5173、未提交。
 
-| ID                   | 优先级 | 状态         | 复现与证据                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | 影响                                                                                                                                                   |
-| -------------------- | ------ | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `AUDIT-20260928-001` | P1     | **开放**     | `tests/e2e/dashboard.spec.js:54-79` 在当前工作树失败：进入 `/experiment` 且工作区已有一个真实 run 后，提交“说明当前页面能做什么”，期望页面说明“这里可以核对当前实验参数”，实际被 `src/App.vue:1056-1057` 的 `resultQuestion` 路由到结果分析，展示运行结果摘要并调用/回退结果分析模型。根因迹象是 `currentGuidanceBundle()`（`src/App.vue:699`）只校验 run/report 身份，没有限制结果分析只能发生在结果/只读页面。                                                                                                                            | 实验配置页的解释问题会污染为结果分析；模型不可用时仍显示当前 run 的结果，导致配置页行为和既有 Phase 1 合同回归。                                       |
-| `AUDIT-20260928-002` | P1     | **开放**     | `src/stores/agent-sessions.ts:147-217` 将完整可见用户消息、助手消息和 typed blocks 长期写入 `localStorage`；没有 retention/expiry/consent/redaction/export 记录或时间边界，只有删除当前会话。与 `docs/features/lightweight-workbench/SECURITY_RETENTION_AND_FAILURE_SEMANTICS.md:12-16,39-41`、`docs/F9_AGENT_ORCHESTRATION/00_GUARDRAILS_AND_GLOSSARY.md:145-156`、`docs/F9_AGENT_ORCHESTRATION/05_CONVERSATION_AND_DRAFT_CONTRACTS.md:16,199-230` 的“不得保存完整对话/不得把 localStorage 当正式 conversation store/先发布留存契约”冲突。 | 用户问题和模型整理结果可能在本机浏览器永久留存；多会话数量和 block 体积也没有总上限。现有 2026-09-28 会话说明中“不会保存完整对话”的表述与实现不一致。  |
-| `AUDIT-20260928-003` | P1     | **环境阻塞** | 当前 `http://127.0.0.1:5173/api/health` 返回 `execution_ready=false`、`state_digests_match=false`、`versions_match=false`，`deployment_mode=local_worktree_snapshot`；实测 `source_revision=cb2cd0bdef2a88e9ac5756ac5e739dc1495fb18d`，`build_revision=ba11e6fdb69af046dc7597e5ef5732cce029cfbe`。                                                                                                                                                                                                                                          | 当前 5173 服务不能作为可执行实验后端；页面可浏览、模型 descriptor/catalogue 可读，但提交运行应继续被阻止。需要通过既有部署流程恢复一致性，本轮未执行。 |
-| `AUDIT-20260928-004` | P2     | **开放**     | 在 `D:\tileSim-web\bridge` 执行 `python -m unittest`，共发现 278 项但 `contracts.agent_orchestration_phase2.tests.test_registry` 导入失败：`ModuleNotFoundError: No module named 'bridge'`；其余测试完成。按仓库规定的定向 `python -m unittest test_server.py` 门禁可通过，故这是 discovery/包路径问题，不等同于 Bridge 业务失败。                                                                                                                                                                                                          | 全量 Bridge discovery 不能作为可靠绿灯；不同入口会得到不同结果。                                                                                       |
-| `AUDIT-20260928-005` | P2     | **开放**     | `pnpm format:check` 失败，报告 26 个文件不符合 Prettier；其中包含当前改动涉及的 `src/App.vue`、`scripts/generate-bridge-client.mjs`、`docs/F9_AGENT_ORCHESTRATION/16_RIGHT_SIDE_AGENT_COPILOT_PANEL.md`、`docs/features/lightweight-workbench/AGENT_INTEGRATION_BOUNDARY.md`，以及多份契约/文档 JSON。`pnpm lint` 无 error，但有 2 条既有 `vue/one-component-per-file` warning。                                                                                                                                                            | 当前工作树不能通过完整格式门禁；是否全部由本批引入尚未拆分。                                                                                           |
-| `AUDIT-20260928-006` | P2     | **开放**     | 对已打开的 `#tilesim-agent-copilot` 执行 Axe 4.13，发现 `aria-allowed-role` minor violation：`src/features/agent-copilot-shell/AgentCopilotShell.vue:413` 的 `<footer role="status" aria-live="polite">` 被判定为该元素不允许使用 `status` role。概览页面本身 Axe 无 violation。                                                                                                                                                                                                                                                            | 助手状态播报的语义角色不符合当前无障碍检查规则，可能影响辅助技术识别；不阻塞普通鼠标操作。                                                             |
-| `AUDIT-20260928-007` | P2     | **待优化**   | 真实 run `run-20260923-164653-94a0e483` 的结果分析会先并发读取 manifest 中 9 个 artifact（包含约 1.2 MB 的 `metrics.json`），证据打包完成后才开始 SSE；期间只显示空的流式回答/“正在分析”状态，没有已读取数量、等待阶段或超时进度。当前一次浏览器调用最终返回 200，模型回答正确，未判定为功能失败。                                                                                                                                                                                                                                          | 大 artifact 或 Provider 较慢时用户无法区分“仍在读取证据”“等待模型”和“已卡住”，会误以为助手没有调用模型。                                               |
+| ID                   | 优先级 | 状态         | 复现与证据                                                                                                                                                                                                                                                                                                                                                                                                                                   | 影响                                                                                                                                                   |
+| -------------------- | ------ | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `AUDIT-20260928-001` | P1     | **开放**     | `tests/e2e/dashboard.spec.js:54-79` 在当前工作树失败：进入 `/experiment` 且工作区已有一个真实 run 后，提交“说明当前页面能做什么”，期望页面说明“这里可以核对当前实验参数”，实际被 `src/App.vue:1056-1057` 的 `resultQuestion` 路由到结果分析，展示运行结果摘要并调用/回退结果分析模型。根因迹象是 `currentGuidanceBundle()`（`src/App.vue:699`）只校验 run/report 身份，没有限制结果分析只能发生在结果/只读页面。                             | 实验配置页的解释问题会污染为结果分析；模型不可用时仍显示当前 run 的结果，导致配置页行为和既有 Phase 1 合同回归。                                       |
+| `AUDIT-20260928-002` | P1     | **开放**     | `src/stores/agent-sessions.ts:147-217` 将完整可见用户消息、助手消息和 typed blocks 长期写入 `localStorage`；没有 retention/expiry/consent/redaction/export 记录或时间边界，只有删除当前会话。与 `docs/F9_AGENT_ORCHESTRATION/00_GUARDRAILS_AND_GLOSSARY.md:145-156`、`docs/F9_AGENT_ORCHESTRATION/05_CONVERSATION_AND_DRAFT_CONTRACTS.md:16,199-230` 的“不得保存完整对话/不得把 localStorage 当正式 conversation store/先发布留存契约”冲突。 | 用户问题和模型整理结果可能在本机浏览器永久留存；多会话数量和 block 体积也没有总上限。现有 2026-09-28 会话说明中“不会保存完整对话”的表述与实现不一致。  |
+| `AUDIT-20260928-003` | P1     | **环境阻塞** | 当前 `http://127.0.0.1:5173/api/health` 返回 `execution_ready=false`、`state_digests_match=false`、`versions_match=false`，`deployment_mode=local_worktree_snapshot`；实测 `source_revision=cb2cd0bdef2a88e9ac5756ac5e739dc1495fb18d`，`build_revision=ba11e6fdb69af046dc7597e5ef5732cce029cfbe`。                                                                                                                                           | 当前 5173 服务不能作为可执行实验后端；页面可浏览、模型 descriptor/catalogue 可读，但提交运行应继续被阻止。需要通过既有部署流程恢复一致性，本轮未执行。 |
+| `AUDIT-20260928-004` | P2     | **开放**     | 在 `D:\tileSim-web\bridge` 执行 `python -m unittest`，共发现 278 项但 `contracts.agent_orchestration_phase2.tests.test_registry` 导入失败：`ModuleNotFoundError: No module named 'bridge'`；其余测试完成。按仓库规定的定向 `python -m unittest test_server.py` 门禁可通过，故这是 discovery/包路径问题，不等同于 Bridge 业务失败。                                                                                                           | 全量 Bridge discovery 不能作为可靠绿灯；不同入口会得到不同结果。                                                                                       |
+| `AUDIT-20260928-005` | P2     | **开放**     | `pnpm format:check` 失败，报告 26 个文件不符合 Prettier；其中包含当前改动涉及的 `src/App.vue`、`scripts/generate-bridge-client.mjs`、`docs/F9_AGENT_ORCHESTRATION/16_RIGHT_SIDE_AGENT_COPILOT_PANEL.md`，以及多份契约/文档 JSON。`pnpm lint` 无 error，但有 2 条既有 `vue/one-component-per-file` warning。                                                                                                                                  | 当前工作树不能通过完整格式门禁；是否全部由本批引入尚未拆分。                                                                                           |
+| `AUDIT-20260928-006` | P2     | **开放**     | 对已打开的 `#tilesim-agent-copilot` 执行 Axe 4.13，发现 `aria-allowed-role` minor violation：`src/features/agent-copilot-shell/AgentCopilotShell.vue:413` 的 `<footer role="status" aria-live="polite">` 被判定为该元素不允许使用 `status` role。概览页面本身 Axe 无 violation。                                                                                                                                                             | 助手状态播报的语义角色不符合当前无障碍检查规则，可能影响辅助技术识别；不阻塞普通鼠标操作。                                                             |
+| `AUDIT-20260928-007` | P2     | **待优化**   | 真实 run `run-20260923-164653-94a0e483` 的结果分析会先并发读取 manifest 中 9 个 artifact（包含约 1.2 MB 的 `metrics.json`），证据打包完成后才开始 SSE；期间只显示空的流式回答/“正在分析”状态，没有已读取数量、等待阶段或超时进度。当前一次浏览器调用最终返回 200，模型回答正确，未判定为功能失败。                                                                                                                                           | 大 artifact 或 Provider 较慢时用户无法区分“仍在读取证据”“等待模型”和“已卡住”，会误以为助手没有调用模型。                                               |
 
 ### 审查门禁摘要
 
@@ -492,7 +575,8 @@ Run Intake Lowering 已落地，Bridge 侧 Run Intake v2 **只读预览**端点�
 - 以下文件引用了**已不可解析**的提交号 `446f21d` / `290d1c8` / `9b2d39b`，应作为历史证据阅读，**不要**用它们做
   `git` 定位：本文件、`AGENTS.md`、`docs/getting-started/AI_DEPLOYMENT_AND_HANDOFF.md`、
   `docs/architecture/BACKEND_SIMULATION_FLOW_UI_COVERAGE.md`、`docs/F9_AGENT_ORCHESTRATION/` 下的 `01`、`12`、
-  `14`、`24` 与 `README.md`，以及 `docs/archive/agent-orchestration/phase-records/` 下的 `21`、`22`。
+  `14` 与 `README.md`，以及归档的 `docs/archive/plans/F9_PHASE2C_WORK_PACKAGE_PROMPTS_2026-09.md` 和
+  `docs/archive/agent-orchestration/phase-records/` 下的 `21`、`22`。
   其中 `4d7f9fa`（`origin/main` 在 2026-09-19 之前的位置）与 `11cef6b`（恢复线）**仍可解析**，可以照常使用。
 
 ### 2026-09-19 实测门禁（本机，工作树 clean；测量点在重建线上，接回 `origin/main` 只新增文档改动，未触碰代码与契约）
@@ -557,11 +641,14 @@ Run Intake Lowering 已落地，Bridge 侧 Run Intake v2 **只读预览**端点�
 - 失败产物已复制到仓库外留存：`C:\Users\mapanwang\_tilesim_rescue\e2e-failure-20260919-1316`
   （`error-context.md`、`test-failed-1.png`、`trace.zip`）。
 
-## 双工作台方案状态
+## 双工作台方案状态（历史方案记录；2026-09-19）
 
-`docs/features/lightweight-workbench/LIGHTWEIGHT_WORKBENCH_PLAN.md` 是当前唯一轻量工作台产品基线。轻量版必须支持新建实验、必要配置、校验、正式 run、运行状态、结果摘要和真实图表；相比专业版只减少复杂信息，不减少工作台闭环。L6R fixture 只证明 UI/路由/状态机/契约映射，不构成 Provider、live、calibration、held-out 证据。现有 Agent、Bridge、Provider、schema、权限和失败语义边界保持不变；专业版现有路由、表单、Agent、Evidence 和 run 状态仍是回归基线。
+本节保留轻量工作台在 2026-09-19 的产品与验收记录，**不是当前代码或路线的事实来源**。原产品基线已归档至
+`docs/archive/plans/LIGHTWEIGHT_WORKBENCH_IMPLEMENTATION_PLAN_2026-09-13.md`，当前页面、路由和 feature 清单以本文件顶部、
+`docs/README.md` 与 `getting-started/AI_FRONTEND_DEVELOPMENT_REFERENCE.md` 的代码复核为准。历史记录中的 fixture 只证明当时的
+UI/路由/状态机/契约映射，不构成 Provider、live、calibration、held-out 证据。
 
-L6R 后续 UI remediation 已完成 P0/P1/P2/P3：`/lightweight` 负责开始/继续，`/lightweight/prepare` 直接承接新建实验，独立“任务”和“学习”入口已从主导航移除；旧 `/lightweight/tasks` 仅兼容重定向到配置页，旧 `/lightweight/learn` 仅兼容重定向到轻量首页，并且只携带合法工作台 query。教程、字段解释和证据边界收敛到右上角“页面帮助”；轻量版和专业版复用帮助基础设施，但 topic、搜索分组和路由定位按 workspace scope 完全分域，任何一侧都不得显示或跳转到另一侧的帮助主题。运行页突出后端状态、下一步动作和恢复元信息，结果页按结论→证据→细节展示并保留 resolved fidelity、provenance、artifact/schema 身份。首页已移除教程式副文案，主流程只保留状态、证据和可执行动作。fixture 桌面 E2E 已恢复为可执行用例，验证提交、状态推进、刷新恢复、artifact 校验、合法 0 与 missing、失败边界和专业版往返；当前全量 frontend（639 passed/8 skipped）、Bridge（91 tests）和完整桌面 fixture E2E（63 passed/6 skipped）门禁通过，skipped 项均为 live deployment/Provider 能力相关，fixture 仍不构成 live/calibration/held-out 证据。
+L6R 后续 UI remediation 已完成 P0/P1/P2/P3（**历史记录；轻量页面随后已从当前代码移出**）：`/lightweight` 负责开始/继续，`/lightweight/prepare` 直接承接新建实验，独立“任务”和“学习”入口已从主导航移除；旧 `/lightweight/tasks` 仅兼容重定向到配置页，旧 `/lightweight/learn` 仅兼容重定向到轻量首页，并且只携带合法工作台 query。教程、字段解释和证据边界收敛到右上角“页面帮助”；轻量版和专业版复用帮助基础设施，但 topic、搜索分组和路由定位按 workspace scope 完全分域，任何一侧都不得显示或跳转到另一侧的帮助主题。运行页突出后端状态、下一步动作和恢复元信息，结果页按结论→证据→细节展示并保留 resolved fidelity、provenance、artifact/schema 身份。首页已移除教程式副文案，主流程只保留状态、证据和可执行动作。fixture 桌面 E2E 已恢复为可执行用例，验证提交、状态推进、刷新恢复、artifact 校验、合法 0 与 missing、失败边界和专业版往返；当前全量 frontend（639 passed/8 skipped）、Bridge（91 tests）和完整桌面 fixture E2E（63 passed/6 skipped）门禁通过，skipped 项均为 live deployment/Provider 能力相关，fixture 仍不构成 live/calibration/held-out 证据。
 
 轻量 run/results 深链统一等待共享 Bridge manifest/schema bootstrap；bootstrap 失败时 fail closed，不在缺少 manifest/schema 上下文时走 legacy evidence 读取路径。共享 readiness promise 会去重 App shell 与页面自身的并发 bootstrap 请求。
 
@@ -721,7 +808,7 @@ scripts bridge` / `vite build` / `contracts:check` / `docs:check`（43 篇）/ `
   结论：`WP-2C-02` 收窄为服务层调用与失败语义（不接线端点），端点接线另立 `WP-2C-02b`，前置是后端补 serializer
   （**已裁决：走独立后端工作包 `WP-2C-02a`**，见下文「契约窗口重开计划」）或由指挥方重新授权契约窗口；
   `WP-2C-05` 的「三个 lowering 标志分开显示」同样依赖该缺口关闭。
-  详见 `docs/F9_AGENT_ORCHESTRATION/24_PHASE2C_WORK_PACKAGE_PROMPTS.md` §4.2 / §4.2.1。
+  详见归档的 `docs/archive/plans/F9_PHASE2C_WORK_PACKAGE_PROMPTS_2026-09.md` §4.2 / §4.2.1。
 - **工作台展示覆盖度缺口（2026-09-17 审计）**：后端一次 `run` 产出十个规范 artifact 与九段跨层契约链，但
   Bridge 只请求 **7 个报告**；四个运行期工件（`--runtime-events-out` / `--runtime-summary-out` /
   `--runtime-requests-out` / `--runtime-analysis-out`）从未被采集，且 Bridge SSE 只有「运行中/终态」两种事件，
@@ -761,7 +848,7 @@ scripts bridge` / `vite build` / `contracts:check` / `docs:check`（43 篇）/ `
 
 Agent 编排模块的当前状态见 `docs/F9_AGENT_ORCHESTRATION/README.md` 与
 `docs/F9_AGENT_ORCHESTRATION/01_CURRENT_BASELINE_AND_GAPS.md`；下一批工作包见
-`docs/F9_AGENT_ORCHESTRATION/23_PHASE2C_WEB_INTEGRATION_PLAN.md`。已归档的阶段记录在
+归档的 `docs/archive/plans/F9_PHASE2C_WEB_INTEGRATION_PLAN_2026-09.md`。已归档的阶段记录在
 `docs/archive/agent-orchestration/phase-records/`。
 
 ## 3. 不可破坏边界
@@ -803,14 +890,26 @@ docs/archive/                    历史记录
 - `runtime/`、`runs/`、`dist/`、`node_modules/` 都不进入 Git。
 - 部署脚本使用 immutable `bridge + dist` snapshot；health 必须绑定 source/build/release/schema identity。
 
-## 6. 当前优先级
+## 6. 当前优先级（2026-10-24）
+
+1. 维护阶段 5 local-dev 优化/批处理的 bounded、人工批准和 fail-closed recovery 语义；任何预算、lease、SSE、重试或
+   人工介入改动，都要同步更新阶段 5 current baseline、Bridge 定向测试和前端 Harness 测试。
+2. 保持 `2026-10-19.wpd.v1` / `2026-10-19.wpe.v1`、generated client 与当前 schema-set revision
+   `sha256:dd9fad27c1d5591a79a16211f701f5725a711163bb284d960b99cca020064b4e` 一致；正式 contract 变更前先取得发布授权。
+3. 五类 Profile records 继续为 `0/unavailable`；Run Intake v2 继续是只读预览，不得把 local-dev synthetic 结果描述为真实硬件、
+   calibration、held-out validation 或生产 GO。
+4. 启动器部署仍以后端 CTest 为硬门禁；最近的 `route_unavailable` 失败必须先修复后端 topology/domain/participants 路由匹配，
+   或恢复已验证版本，不能跳过 CTest 或替换已验证部署。
+5. 活跃文档只保留当前基线和未结束规范；已结束阶段、旧计划和已移除轻量工作台材料继续放在 `docs/archive/`，不要把历史数字当当前门禁。
+
+### 历史路线快照（2026-09-19；仅供追溯）
 
 1. 推进 Phase 2C Web 集成：把已发布的 Run Intake v2 契约接到 Bridge 与后端 lowering 之间。第一批（WP-2C-01a/01b）
    已完成严格路由与只读预览，**不创建 run**；下一批是 `WP-2C-02`，只交付 **Bridge 服务层**的 lowering 只读调用与
    失败语义（须遵守 Week 7 单槽约束：调用方注入同一把锁，`acquire(blocking=False)` 失败即容量已满）。**不接线端点**，
    因为已复核出后端 CLI 的 issue 序列化只有五字段中的三个（见 §2 的表示性缺口）；端点接线属 `WP-2C-02b`，需先关闭
-   该缺口。提示词与验收清单见 `docs/F9_AGENT_ORCHESTRATION/24_PHASE2C_WORK_PACKAGE_PROMPTS.md` §4.2 / §6.3，
-   工作包见 `docs/F9_AGENT_ORCHESTRATION/23_PHASE2C_WEB_INTEGRATION_PLAN.md`。
+   该缺口。提示词与验收清单见归档的 `docs/archive/plans/F9_PHASE2C_WORK_PACKAGE_PROMPTS_2026-09.md` §4.2 / §6.3，
+   工作包见归档的 `docs/archive/plans/F9_PHASE2C_WEB_INTEGRATION_PLAN_2026-09.md`。
 2. 不启动 Profile 数据工作、calculator 实现与 Web receipt UI：Phase 2 的数据侧与执行侧仍为 `blocked_*`。先关闭
    `GAP-PROFILE-SUCCESSOR-001`、`GAP-CALCULATOR-001`、`GAP-VALIDATE-001` 及并行、KV、工作负载、网络的累计执行 Gap，
    再重新审计 DoR。
@@ -1089,7 +1188,7 @@ Provider acceptance 仍为 `live_acceptance_pending`。自主优化、自动候�
 新增机器可校验的 release-gate 入口 `bridge/run_agent_harness_stage3_release_gate.py`、
 `bridge/agent_harness/release_gate.py`、`bridge/agent_harness/hosted_smoke.py` 和
 `bridge/test_agent_harness_stage3_release_gate.py`，完整清单见
-[`docs/F9_AGENT_ORCHESTRATION/28_AGENT_HARNESS_STAGE3A_RELEASE_GATE.md`](F9_AGENT_ORCHESTRATION/28_AGENT_HARNESS_STAGE3A_RELEASE_GATE.md)。入口只产生仓外临时 manifest，不读取、保存或输出 Provider credential、raw response 或 hidden reasoning，也不触碰 5173。
+归档的 [`docs/archive/agent-orchestration/phase-records/28_AGENT_HARNESS_STAGE3A_RELEASE_GATE.md`](archive/agent-orchestration/phase-records/28_AGENT_HARNESS_STAGE3A_RELEASE_GATE.md)。入口只产生仓外临时 manifest，不读取、保存或输出 Provider credential、raw response 或 hidden reasoning，也不触碰 5173。
 
 独立复核通过 `AH3-F01`–`AH3-F26`（26/26），并使用当前源码 CLI 在仓外临时 Bridge 完成 draft → validation → approval → execution → `/api/runs` → polling/SSE → result → manifest smoke：run `run-20261018-185914-e40329ea`，event sequence `1..5`，单 run，同 key replay 不增加 run，不同 payload 为 `409 payload_conflict`；synthetic provenance 仍为 `synthetic_trace` / `exploratory`。Provider acceptance 仍为 `live_acceptance_pending`，人工 citation/evidence review 为 `not_run`；因此阶段 3A 独立发布审查结论仍为 **NO-GO**，暂不允许进入前端 execution UI 阶段。自主优化、自动候选、多工具自主循环和无人值守实验继续保持 `unavailable`/`not_exposed`。
 
@@ -1097,7 +1196,7 @@ Provider acceptance 仍为 `live_acceptance_pending`。自主优化、自动候�
 
 新增仓外 redacted preparation 入口 `bridge/run_agent_harness_stage3_acceptance_prep.py`、
 `bridge/agent_harness/acceptance_prep.py` 和定向测试；准备资产说明见
-[`29_AGENT_HARNESS_STAGE3A_ACCEPTANCE_PREFLIGHT.md`](F9_AGENT_ORCHESTRATION/29_AGENT_HARNESS_STAGE3A_ACCEPTANCE_PREFLIGHT.md)。Provider
+归档的 [`29_AGENT_HARNESS_STAGE3A_ACCEPTANCE_PREFLIGHT.md`](archive/agent-orchestration/phase-records/29_AGENT_HARNESS_STAGE3A_ACCEPTANCE_PREFLIGHT.md)。Provider
 manifest identity 为 `tilesim.agent_harness.provider_acceptance_manifest.v1` /
 `2026-10-18.3a.acceptance.v1`，人工 review package identity 为
 `tilesim.agent_harness.evidence_citation_review_package.v1` / `2026-10-18.3a.review.v1`。

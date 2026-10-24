@@ -12,12 +12,6 @@ import { overviewGuide } from "./guides/overview";
 import { rawEvidenceGuide } from "./guides/raw-evidence";
 import { unsupportedSchemaGuide } from "./guides/unsupported-schema";
 import { validationGuide } from "./guides/validation";
-import {
-  lightweightGuide,
-  lightweightPrepareGuide,
-  lightweightResultsGuide,
-  lightweightRunGuide,
-} from "./guides/lightweight";
 
 export const guideRegistry = Object.freeze({
   overview: overviewGuide,
@@ -32,10 +26,6 @@ export const guideRegistry = Object.freeze({
   raw_evidence: rawEvidenceGuide,
   evidence_agent: evidenceAgentGuide,
   evidence_lab: evidenceLabGuide,
-  lightweight: lightweightGuide,
-  lightweight_prepare: lightweightPrepareGuide,
-  lightweight_run: lightweightRunGuide,
-  lightweight_results: lightweightResultsGuide,
   unsupported_schema: unsupportedSchemaGuide,
 }) satisfies Readonly<Record<GuideId, GuideDefinition>>;
 
@@ -52,10 +42,6 @@ export const viewGuides = Object.freeze({
   raw_evidence: rawEvidenceGuide,
   evidence_agent: evidenceAgentGuide,
   evidence_lab: evidenceLabGuide,
-  lightweight: lightweightGuide,
-  lightweight_prepare: lightweightPrepareGuide,
-  lightweight_run: lightweightRunGuide,
-  lightweight_results: lightweightResultsGuide,
 }) satisfies Readonly<Record<RoutedGuideId, GuideDefinition>>;
 
 export function guideFor(id: string | null | undefined): GuideDefinition | null {

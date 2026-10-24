@@ -1,5 +1,15 @@
 <script setup>
-import { Braces, Cpu, Database, Network, PackageSearch, RotateCcw, SlidersHorizontal, Table2 } from "@lucide/vue";
+import {
+  Braces,
+  Cpu,
+  Database,
+  Gauge,
+  Network,
+  PackageSearch,
+  RotateCcw,
+  SlidersHorizontal,
+  Table2,
+} from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { useI18n } from "../../i18n";
 import InlineHelp from "../../components/InlineHelp.vue";
@@ -39,6 +49,7 @@ const props = defineProps({
   fieldPath: { type: String, default: "" },
   errorMessage: { type: String, default: "" },
   compact: { type: Boolean, default: false },
+  modelIds: { type: Array, default: () => [] },
 });
 defineEmits([
   "reset-controls",
@@ -55,6 +66,99 @@ const pairingPrompt = ref(null);
 const structuredNotice = ref("");
 const structuredNoticeTone = ref("info");
 const controlFields = computed(() => (props.controlGroups || []).flatMap((group) => group.fields));
+const moduleOrder = ["workload", "runtime", "requests", "topology", "fabric"];
+const moduleSubsystem = {
+  workload: "S0",
+  runtime: "S1",
+  fabric: "S6",
+};
+const moduleCopy = {
+  workload: {
+    label: "工作负载",
+    description: "通信负载输入",
+    structured: false,
+    status: "快捷参数",
+    structuredStatus: "快捷参数",
+  },
+  runtime: {
+    label: "运行策略",
+    description: "调度、批处理与 KV 准入",
+    structured: true,
+    status: "运行时参数",
+    structuredStatus: "含进阶策略",
+  },
+  requests: {
+    label: "请求",
+    description: "请求行、模型与参与设备",
+    structured: true,
+    status: "需要完整输入",
+    structuredStatus: "可编辑请求表",
+  },
+  topology: {
+    label: "拓扑",
+    description: "显卡、网络域与连线",
+    structured: true,
+    status: "需要完整输入",
+    structuredStatus: "可编辑拓扑",
+  },
+  fabric: {
+    label: "互联参数",
+    description: "Scale-up 与 Scale-out",
+    structured: false,
+    status: "快捷参数",
+    structuredStatus: "快捷参数",
+  },
+};
+const activeModule = ref("runtime");
+const activeControlGroups = computed(() => {
+  const subsystem = moduleSubsystem[activeModule.value];
+  return subsystem ? props.controlGroups.filter((group) => group.subsystem === subsystem) : [];
+});
+const moduleCards = computed(() =>
+  moduleOrder.map((id) => {
+    const group = props.controlGroups.find((item) => item.subsystem === moduleSubsystem[id]);
+    const fieldCount = group?.fields.length || 0;
+    const needsStructuredInput = moduleCopy[id].structured;
+    return {
+      id,
+      ...moduleCopy[id],
+      fieldCount,
+      status: needsStructuredInput && structuredInput.value ? moduleCopy[id].structuredStatus : moduleCopy[id].status,
+      available: needsStructuredInput ? props.surface.inputModes.includes("json") : fieldCount > 0,
+      hasError: fieldPathBelongsToModule(props.fieldPath, id),
+    };
+  }),
+);
+
+function fieldPathBelongsToModule(path, module) {
+  if (!path) return false;
+  const subsystem = moduleSubsystem[module];
+  if (
+    subsystem &&
+    props.controlGroups.some(
+      (group) => group.subsystem === subsystem && group.fields.some((field) => field.requestJsonPointer === path),
+    )
+  ) {
+    return true;
+  }
+  if (module === "runtime") return path.startsWith("/custom_inputs/runtime_trace/policy") || path.includes("/engine_");
+  if (module === "requests") return path.startsWith("/custom_inputs/runtime_trace/requests");
+  if (module === "topology") return path.startsWith("/custom_inputs/topology");
+  return false;
+}
+
+function selectModule(module) {
+  activeModule.value = module;
+}
+
+watch(
+  () => props.fieldPath,
+  (path) => {
+    const module = moduleOrder.find((item) => fieldPathBelongsToModule(path, item));
+    if (module) activeModule.value = module;
+  },
+  { immediate: true },
+);
 const NUMERIC_PRESETS = {
   "s0.workload.message_size_multiplier": [0.5, 1, 2, 4],
   "s1.runtime.max_batch_size": [1, 4, 8, 16, 32, 64],
@@ -316,201 +420,277 @@ watch(mode, (next) => {
       </button>
     </div>
 
-    <div v-if="mode === 'controls'" class="control-sections">
-      <section v-for="group in controlGroups" :key="group.subsystem" class="schema-control-group">
-        <header>
-          <Cpu v-if="group.subsystem === 'S1'" :size="17" />
-          <Database v-else-if="group.subsystem === 'S0'" :size="17" />
-          <Network v-else :size="17" />
-          <div>
-            <strong>{{ group.title }}</strong>
-            <InlineHelp v-if="!props.compact" :text="`${group.subsystem} · ${t(group.detail)}`" />
-          </div>
-          <button v-if="group.subsystem === 'S1'" class="text-button" @click="$emit('reset-controls')">
-            <RotateCcw :size="14" />{{ t("清除可选参数") }}
-          </button>
-        </header>
-        <div class="form-grid">
-          <label
-            v-for="field in group.fields"
-            :key="field.fieldId"
-            class="field"
-            :class="{ 'field--invalid': fieldPath === field.requestJsonPointer }"
-            :data-field-id="field.fieldId"
-            :data-field-path="field.requestJsonPointer"
-          >
-            <span
-              >{{ t(field.label) }} <small v-if="field.unit">{{ field.unit }}</small></span
-            >
-            <select
-              v-if="field.kind === 'select'"
-              v-model="form.parameterValues[field.fieldId]"
-              :disabled="
-                !field.available ||
-                (structuredInput && engineMode !== 'generic' && field.fieldId === 's1.runtime.batch_scheduler')
-              "
-              :aria-invalid="fieldPath === field.requestJsonPointer"
-            >
-              <option v-if="!field.explicitDefaultAvailable" :value="undefined">{{ t("未设置（省略字段）") }}</option>
-              <option v-for="option in field.options" :key="option" :value="option">{{ option }}</option>
-            </select>
-            <input
-              v-else
-              v-model.number="form.parameterValues[field.fieldId]"
-              type="number"
-              :list="numericListId(field)"
-              :disabled="
-                !field.available ||
-                (structuredInput && engineMode !== 'generic' && field.fieldId === 's1.runtime.batch_scheduler')
-              "
-              :min="field.minimum"
-              :max="field.maximum"
-              :step="field.step"
-              :placeholder="field.explicitDefaultAvailable ? undefined : t('未设置（省略字段）')"
-              :aria-invalid="fieldPath === field.requestJsonPointer"
-            />
-            <datalist v-if="field.kind !== 'select' && numericListId(field)" :id="numericListId(field)">
-              <option v-for="value in numericPresetValues(field)" :key="value" :value="value" />
-            </datalist>
-            <small v-if="showFieldContracts || fieldPath === field.requestJsonPointer" class="field-help"
-              ><code>{{ field.fieldId }}</code> · <code>{{ field.requestJsonPointer }}</code></small
-            >
-            <small v-if="!field.available" class="field-error">{{ field.unavailableReason }}</small>
-            <small v-if="fieldPath === field.requestJsonPointer" class="field-error">{{
-              field.requestJsonPointer
-            }}</small>
-          </label>
+    <section v-if="mode === 'controls'" class="structured-area experiment-module-layout">
+      <header class="structured-block__header structured-area__header">
+        <SlidersHorizontal :size="17" />
+        <div>
+          <strong>{{ t("输入模块") }}</strong>
+          <small>{{ t("按模块切换，逐步完成运行策略、请求与拓扑。") }}</small>
         </div>
-        <small v-if="showFieldContracts" class="schema-source-note">
-          {{ group.fields[0]?.contractStatus }} ·
-          {{
-            group.fields[0]?.contractStatus === "backend_descriptor" ? t("正式后端参数描述契约") : t("旧版兼容参数描述")
-          }}
-        </small>
-      </section>
-
-      <section class="structured-area">
-        <header class="structured-block__header structured-area__header">
-          <Table2 :size="17" />
-          <div>
-            <strong>{{ t("每个请求 / 显卡数量 / 拓扑连线") }}</strong>
-            <InlineHelp
-              :text="
-                t('需要配置请求、设备或拓扑时，打开完整输入。', {
-                  count: controlFields.length,
-                })
-              "
-            />
-          </div>
-          <button
-            v-if="!structuredInput"
-            type="button"
-            class="button button--secondary structured-entry-button"
-            :disabled="!surface.inputModes.includes('json')"
-            @click="$emit('use-structured-input')"
-          >
-            <Table2 :size="15" />{{ t("用表单配置全部输入 →") }}
-          </button>
-          <button v-else type="button" class="text-button" @click="$emit('disable-structured-input')">
-            <RotateCcw :size="14" />{{ t("停用，回到只用旋钮") }}
-          </button>
-        </header>
-
-        <p v-if="structuredInput" class="structured-note structured-note--info" role="status">
-          {{ t("完整输入已启用。上方参数会同步到对应的输入文档。") }}
-        </p>
-        <p
-          v-if="structuredNotice"
-          class="structured-note"
-          :class="`structured-note--${structuredNoticeTone}`"
-          role="status"
+        <button
+          v-if="!structuredInput"
+          type="button"
+          class="button button--secondary structured-entry-button"
+          :disabled="!surface.inputModes.includes('json')"
+          @click="$emit('use-structured-input')"
         >
-          {{ structuredNotice }}
-        </p>
-        <div v-if="pairingPrompt" class="structured-note structured-note--warning" role="alert">
-          <p>
-            {{
-              t("设备清单现在是 {count} 张卡。只加卡而不改请求不会改变结果，请选择如何处理请求表：", {
-                count: pairingPrompt.ids.length,
-              })
-            }}
-          </p>
-          <div class="structured-actions">
-            <button type="button" class="button button--secondary" @click="applyPairing('parallelism')">
-              {{ t("① 同步 TP 与参与设备到新集合") }}
-            </button>
-            <button type="button" class="button button--secondary" @click="applyPairing('participants')">
-              {{ t("② 保留原 TP，按新集合选择参与设备") }}
-            </button>
-            <button type="button" class="button button--secondary" @click="applyPairing('clear')">
-              {{ t("③ 清空参与设备，保留并行卡数") }}
-            </button>
-            <button type="button" class="text-button" @click="setPairingPrompt([])">{{ t("稍后再说") }}</button>
-          </div>
-        </div>
+          <Table2 :size="15" />{{ t("启用完整输入") }}
+        </button>
+        <button v-else type="button" class="text-button" @click="$emit('disable-structured-input')">
+          <RotateCcw :size="14" />{{ t("停用，回到只用旋钮") }}
+        </button>
+      </header>
 
-        <div v-if="structuredInput" class="structured-stack">
-          <template v-if="runtimeJson.trim()">
-            <RuntimeEngineForm v-model="runtimeJson" :field-path="fieldPath" />
-            <RuntimePolicyForm v-model="runtimeJson" :field-path="fieldPath" />
+      <p v-if="structuredInput" class="structured-note structured-note--info" role="status">
+        {{ t("完整输入已启用。上方参数会同步到对应的输入文档。") }}
+      </p>
+      <p
+        v-if="structuredNotice"
+        class="structured-note"
+        :class="`structured-note--${structuredNoticeTone}`"
+        role="status"
+      >
+        {{ structuredNotice }}
+      </p>
+      <div v-if="pairingPrompt" class="structured-note structured-note--warning" role="alert">
+        <p>
+          {{
+            t("设备清单现在是 {count} 张卡。只加卡而不改请求不会改变结果，请选择如何处理请求表：", {
+              count: pairingPrompt.ids.length,
+            })
+          }}
+        </p>
+        <div class="structured-actions">
+          <button type="button" class="button button--secondary" @click="applyPairing('parallelism')">
+            {{ t("① 同步 TP 与参与设备到新集合") }}
+          </button>
+          <button type="button" class="button button--secondary" @click="applyPairing('participants')">
+            {{ t("② 保留原 TP，按新集合选择参与设备") }}
+          </button>
+          <button type="button" class="button button--secondary" @click="applyPairing('clear')">
+            {{ t("③ 清空参与设备，保留并行卡数") }}
+          </button>
+          <button type="button" class="text-button" @click="setPairingPrompt([])">{{ t("稍后再说") }}</button>
+        </div>
+      </div>
+
+      <div class="experiment-module-navigation" role="tablist" :aria-label="t('输入模块')">
+        <button
+          v-for="card in moduleCards"
+          :key="card.id"
+          type="button"
+          role="tab"
+          class="experiment-module-card"
+          :class="{ 'is-active': activeModule === card.id, 'has-error': card.hasError, 'is-disabled': !card.available }"
+          :aria-selected="activeModule === card.id"
+          :aria-controls="`experiment-module-panel-${card.id}`"
+          :data-module="card.id"
+          @click="selectModule(card.id)"
+        >
+          <span class="experiment-module-card__icon" aria-hidden="true">
+            <Database v-if="card.id === 'workload'" :size="18" />
+            <Cpu v-else-if="card.id === 'runtime'" :size="18" />
+            <Table2 v-else-if="card.id === 'requests'" :size="18" />
+            <Network v-else-if="card.id === 'topology'" :size="18" />
+            <Gauge v-else :size="18" />
+          </span>
+          <span class="experiment-module-card__body">
+            <strong>{{ t(card.label) }}</strong>
+            <small>{{ t(card.description) }}</small>
+          </span>
+          <span class="experiment-module-card__meta" :class="{ 'is-error': card.hasError }">
+            {{ card.hasError ? t("需要检查") : t(card.status) }}
+          </span>
+        </button>
+      </div>
+
+      <Transition name="module-panel" mode="out-in">
+        <div
+          :id="`experiment-module-panel-${activeModule}`"
+          :key="activeModule"
+          class="experiment-module-stage"
+          role="tabpanel"
+          :aria-label="t(moduleCopy[activeModule].label)"
+        >
+          <div class="experiment-module-stage__heading">
+            <div>
+              <span class="section-kicker">{{ t("当前调整模块") }}</span>
+              <h3>{{ t(moduleCopy[activeModule].label) }}</h3>
+              <p>{{ t(moduleCopy[activeModule].description) }}</p>
+            </div>
+            <span v-if="moduleCopy[activeModule].structured && !structuredInput" class="module-state-chip">
+              {{ t("需要完整输入") }}
+            </span>
+            <span v-else class="module-state-chip module-state-chip--ready">{{ t("可直接调整") }}</span>
+          </div>
+
+          <div v-if="activeControlGroups.length" class="control-sections">
+            <section v-for="group in activeControlGroups" :key="group.subsystem" class="schema-control-group">
+              <header>
+                <Cpu v-if="group.subsystem === 'S1'" :size="17" />
+                <Database v-else-if="group.subsystem === 'S0'" :size="17" />
+                <Network v-else :size="17" />
+                <div>
+                  <strong>{{ group.title }}</strong>
+                  <InlineHelp v-if="!props.compact" :text="`${group.subsystem} · ${t(group.detail)}`" />
+                </div>
+                <button v-if="group.subsystem === 'S1'" class="text-button" @click="$emit('reset-controls')">
+                  <RotateCcw :size="14" />{{ t("清除可选参数") }}
+                </button>
+              </header>
+              <div class="form-grid">
+                <label
+                  v-for="field in group.fields"
+                  :key="field.fieldId"
+                  class="field"
+                  :class="{ 'field--invalid': fieldPath === field.requestJsonPointer }"
+                  :data-field-id="field.fieldId"
+                  :data-field-path="field.requestJsonPointer"
+                >
+                  <span
+                    >{{ t(field.label) }} <small v-if="field.unit">{{ field.unit }}</small></span
+                  >
+                  <select
+                    v-if="field.kind === 'select'"
+                    v-model="form.parameterValues[field.fieldId]"
+                    :disabled="
+                      !field.available ||
+                      (structuredInput && engineMode !== 'generic' && field.fieldId === 's1.runtime.batch_scheduler')
+                    "
+                    :aria-invalid="fieldPath === field.requestJsonPointer"
+                  >
+                    <option v-if="!field.explicitDefaultAvailable" :value="undefined">
+                      {{ t("未设置（省略字段）") }}
+                    </option>
+                    <option v-for="option in field.options" :key="option" :value="option">{{ option }}</option>
+                  </select>
+                  <input
+                    v-else
+                    v-model.number="form.parameterValues[field.fieldId]"
+                    type="number"
+                    :list="numericListId(field)"
+                    :disabled="
+                      !field.available ||
+                      (structuredInput && engineMode !== 'generic' && field.fieldId === 's1.runtime.batch_scheduler')
+                    "
+                    :min="field.minimum"
+                    :max="field.maximum"
+                    :step="field.step"
+                    :placeholder="field.explicitDefaultAvailable ? undefined : t('未设置（省略字段）')"
+                    :aria-invalid="fieldPath === field.requestJsonPointer"
+                  />
+                  <datalist v-if="field.kind !== 'select' && numericListId(field)" :id="numericListId(field)">
+                    <option v-for="value in numericPresetValues(field)" :key="value" :value="value" />
+                  </datalist>
+                  <small v-if="showFieldContracts || fieldPath === field.requestJsonPointer" class="field-help"
+                    ><code>{{ field.fieldId }}</code> · <code>{{ field.requestJsonPointer }}</code></small
+                  >
+                  <small v-if="!field.available" class="field-error">{{ field.unavailableReason }}</small>
+                  <small v-if="fieldPath === field.requestJsonPointer" class="field-error">{{
+                    field.requestJsonPointer
+                  }}</small>
+                </label>
+              </div>
+              <small v-if="showFieldContracts" class="schema-source-note">
+                {{ group.fields[0]?.contractStatus }} ·
+                {{
+                  group.fields[0]?.contractStatus === "backend_descriptor"
+                    ? t("正式后端参数描述契约")
+                    : t("旧版兼容参数描述")
+                }}
+              </small>
+            </section>
+          </div>
+
+          <div v-if="!structuredInput && moduleCopy[activeModule].structured" class="module-input-gate">
+            <div class="module-input-gate__icon"><Table2 :size="20" /></div>
+            <div>
+              <strong>{{ t("这个模块需要完整输入") }}</strong>
+              <p>{{ t("请求、设备和拓扑会写入 custom_inputs；启用后仍会保留当前快捷参数。") }}</p>
+            </div>
+            <button
+              type="button"
+              class="button button--secondary"
+              :disabled="!surface.inputModes.includes('json')"
+              @click="$emit('use-structured-input')"
+            >
+              {{ t("启用并继续") }}
+            </button>
+          </div>
+
+          <div v-if="structuredInput" class="structured-stack">
+            <template v-if="activeModule === 'runtime'">
+              <template v-if="runtimeJson.trim()">
+                <RuntimeEngineForm v-model="runtimeJson" :field-path="fieldPath" />
+                <RuntimePolicyForm v-model="runtimeJson" :field-path="fieldPath" />
+              </template>
+              <p v-else class="structured-note structured-note--warning" role="alert">
+                {{ t("runtime trace 还是空的。请先加载场景模板，或到 JSON 输入页签粘贴内容。") }}
+              </p>
+            </template>
+
             <RequestTableForm
+              v-else-if="activeModule === 'requests' && runtimeJson.trim()"
               v-model="runtimeJson"
               :topology-json="topologyJson"
+              :model-ids="props.modelIds"
               :field-path="fieldPath"
               :error-message="errorMessage"
             />
-          </template>
-          <p v-else class="structured-note structured-note--warning" role="alert">
-            {{ t("runtime trace 还是空的。请先点「用表单配置全部输入」载入场景模板，或到「JSON 输入」页签粘贴内容。") }}
-          </p>
-          <section class="topology-connection-entry" :aria-label="t('显卡连接')">
-            <header class="topology-connection-entry__header">
-              <div>
-                <strong>{{ t("显卡连接") }}</strong>
-                <InlineHelp :text="t('最常用的拓扑操作：把一张显卡拖到另一张显卡，添加一条仿真连接。')" />
-              </div>
-              <span class="topology-status-chip topology-status-chip--simulation">{{ t("仿真输入") }}</span>
-            </header>
-            <!-- Mouse-only: the quick-control tab never shows a raw JSON box. -->
-            <TopologyGraphEditor
-              v-model="topologyJson"
-              :field-path="fieldPath"
-              :show-json="false"
-              :show-module-bindings="topologyAdvancedOpen"
-              @device-count-change="onDeviceCountChange"
-              @notice="onBlockNotice"
-            />
-          </section>
-          <button
-            type="button"
-            class="topology-advanced-toggle"
-            :aria-expanded="topologyAdvancedOpen"
-            @click="topologyAdvancedOpen = !topologyAdvancedOpen"
-          >
-            <span>
-              <strong>{{ t("高级拓扑设置") }}</strong>
-              <InlineHelp :text="t('需要改卡数、domain 成员或网络模型时再展开')" :interactive="false" />
-            </span>
-            <span class="topology-advanced-disclosure__hint">{{
-              topologyAdvancedOpen ? t("收起") : t("默认收起")
-            }}</span>
-          </button>
-          <DeviceInventoryForm
-            v-show="topologyAdvancedOpen"
-            v-model="topologyJson"
-            :field-path="fieldPath"
-            @notice="onBlockNotice"
-            @device-count-change="onDeviceCountChange"
-          />
-          <DomainInventoryForm
-            v-show="topologyAdvancedOpen"
-            v-model="topologyJson"
-            :field-path="fieldPath"
-            @notice="onBlockNotice"
-          />
+            <p v-else-if="activeModule === 'requests'" class="structured-note structured-note--warning" role="alert">
+              {{ t("runtime trace 还是空的。请先加载场景模板，或到 JSON 输入页签粘贴内容。") }}
+            </p>
+
+            <template v-else-if="activeModule === 'topology'">
+              <section class="topology-connection-entry" :aria-label="t('显卡连接')">
+                <header class="topology-connection-entry__header">
+                  <div>
+                    <strong>{{ t("显卡连接") }}</strong>
+                    <InlineHelp :text="t('最常用的拓扑操作：把一张显卡拖到另一张显卡，添加一条仿真连接。')" />
+                  </div>
+                  <span class="topology-status-chip topology-status-chip--simulation">{{ t("仿真输入") }}</span>
+                </header>
+                <TopologyGraphEditor
+                  v-model="topologyJson"
+                  :field-path="fieldPath"
+                  :show-json="false"
+                  :show-module-bindings="topologyAdvancedOpen"
+                  @device-count-change="onDeviceCountChange"
+                  @notice="onBlockNotice"
+                />
+              </section>
+              <button
+                type="button"
+                class="topology-advanced-toggle"
+                :aria-expanded="topologyAdvancedOpen"
+                @click="topologyAdvancedOpen = !topologyAdvancedOpen"
+              >
+                <span>
+                  <strong>{{ t("高级拓扑设置") }}</strong>
+                  <InlineHelp :text="t('需要改卡数、domain 成员或网络模型时再展开')" :interactive="false" />
+                </span>
+                <span class="topology-advanced-disclosure__hint">{{
+                  topologyAdvancedOpen ? t("收起") : t("默认收起")
+                }}</span>
+              </button>
+              <DeviceInventoryForm
+                v-show="topologyAdvancedOpen"
+                v-model="topologyJson"
+                :field-path="fieldPath"
+                @notice="onBlockNotice"
+                @device-count-change="onDeviceCountChange"
+              />
+              <DomainInventoryForm
+                v-show="topologyAdvancedOpen"
+                v-model="topologyJson"
+                :field-path="fieldPath"
+                @notice="onBlockNotice"
+              />
+            </template>
+          </div>
         </div>
-      </section>
-    </div>
+      </Transition>
+    </section>
 
     <div v-else-if="mode === 'json'" class="json-editor-section">
       <div class="json-toolbar">

@@ -48,9 +48,9 @@ describe("agent command registry", () => {
   it("answers through the page that declared itself live", () => {
     const registry = createAgentCommandRegistry();
     registry.register("experiment", handler("experiment"));
-    registry.register("lightweight-prepare", handler("lightweight-prepare"));
+    registry.register("overview", handler("overview"));
 
-    expect(registry.apply([edit]).note).toBe("lightweight-prepare");
+    expect(registry.apply([edit]).note).toBe("overview");
     registry.activate("experiment");
     expect(registry.apply([edit]).note).toBe("experiment");
   });
@@ -59,7 +59,7 @@ describe("agent command registry", () => {
     const registry = createAgentCommandRegistry();
     registry.register("experiment", handler("experiment"));
 
-    registry.activate("lightweight-prepare");
+    registry.activate("experiment");
 
     // The caller must be able to trust `available()`: staying truthful here is
     // what keeps the edit entry point from being offered with nothing behind it.
@@ -70,16 +70,16 @@ describe("agent command registry", () => {
   it("falls back to the remaining page when the live one releases", () => {
     const registry = createAgentCommandRegistry();
     const releaseExperiment = registry.register("experiment", handler("experiment"));
-    registry.register("lightweight-prepare", handler("lightweight-prepare"));
+    registry.register("overview", handler("overview"));
     registry.activate("experiment");
 
     releaseExperiment();
 
-    expect(registry.apply([edit]).note).toBe("lightweight-prepare");
+    expect(registry.apply([edit]).note).toBe("overview");
     // Activating a released page must not manufacture a live owner again.
     registry.activate("experiment");
     expect(registry.available()).toBe(true);
-    expect(registry.apply([edit]).note).toBe("lightweight-prepare");
+    expect(registry.apply([edit]).note).toBe("overview");
   });
 
   it("does not call a page with an empty edit list", () => {

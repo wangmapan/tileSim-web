@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   guideRegistry,
   isGuideInScope,
-  lightweightGuideIds,
   professionalGuideIds,
   type GuideDefinition,
   routedGuideIds,
@@ -46,13 +45,8 @@ describe("guided help catalog", () => {
     }
   });
 
-  it("partitions lightweight and professional help without shared topics", () => {
-    expect(new Set([...professionalGuideIds].filter((id) => lightweightGuideIds.includes(id as never))).size).toBe(0);
+  it("keeps the professional help catalog in one scope", () => {
     expect([...professionalGuideIds].every((id) => isGuideInScope(id, "professional"))).toBe(true);
-    expect([...professionalGuideIds].every((id) => !isGuideInScope(id, "lightweight"))).toBe(true);
-    expect([...lightweightGuideIds].every((id) => isGuideInScope(id, "lightweight"))).toBe(true);
-    expect([...lightweightGuideIds].every((id) => !isGuideInScope(id, "professional"))).toBe(true);
-    expect(guideRegistry).not.toHaveProperty("lightweight_tasks");
   });
 
   it("keeps architecture and evidence boundaries explicit", () => {

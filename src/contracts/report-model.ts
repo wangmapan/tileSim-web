@@ -893,7 +893,11 @@ export interface RuntimeTraceInput {
     priority_class?: string;
     collective_type?: string;
     tp_degree?: number;
+    participants?: string[];
     message_size_bytes?: LosslessInteger;
+    placement_group_id?: string;
+    disaggregation_group_id?: string;
+    kv_handoff_id?: string;
   }>;
   [key: string]: unknown;
 }

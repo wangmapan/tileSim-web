@@ -1,6 +1,6 @@
 # TileSim Web：前端开发 AI 参考（接手一页图）
 
-> **事实日期**：2026-09-23（本文所有数字为当日实测；旧文档里的数字不可与此相减）
+> **代码地图复核日期**：2026-10-24。门禁结果仍以 [`docs/AI_HANDOFF.md`](../AI_HANDOFF.md) 的最新 dated 条目为准，本文不复制实时测试账本。
 >
 > **本文定位**：给「接下来要改前端代码的 AI」的一份**路由 + 硬约束 + 可跑命令**速查。
 >
@@ -12,17 +12,17 @@
 > - [`getting-started/AI_DEPLOYMENT_AND_HANDOFF.md`](AI_DEPLOYMENT_AND_HANDOFF.md)：干净克隆、部署、启动器。
 > - [`F9_AGENT_ORCHESTRATION/15_MODULE_BOUNDARIES_AND_PARALLEL_DEVELOPMENT.md`](../F9_AGENT_ORCHESTRATION/15_MODULE_BOUNDARIES_AND_PARALLEL_DEVELOPMENT.md)：多 Agent 并行时的独占范围与合并顺序。
 
-## 当前复核覆盖（2026-10-13）
+## 当前复核覆盖（2026-10-24）
 
-- 本文中的路由、代码规模和 2026-09-23 门禁表是历史接手快照；当前事实以 [`docs/AI_HANDOFF.md`](../AI_HANDOFF.md) 的第十二阶段及 2026-10-13 文档复核为准。
+- 本文的路由、代码规模和边界已按当前源码复核；门禁数字只保留为 dated 快照，当前事实以 [`docs/AI_HANDOFF.md`](../AI_HANDOFF.md) 为准。
 - 当前前端已对齐并展示后端已提供的 S0–S5 package 边界：S0 dense attribution、S1 四类 runtime 工件、S2 execution/kernel、S3 memory、S4 device、S5 collective。页面只展示 Bridge/CLI 返回的 boundary、provenance、fidelity、Fabric 和 artifact 状态，不推断未提供的指标。
 - 当前未完成的项目不等同于前端契约错位：全仓格式红、Bridge discovery 导入错误、后端 CTest 回归和全量 E2E snapshot drift 分别按门禁责任边界记录；S2–S5 完整深链/刷新/原始证据入口若未重新复跑，必须标为 `not-run`。
-- 轻量/专业配置页的“可编辑目录”与后端实际执行能力分开：前端可以为结构化输入提供安全的草案、集合规模和标量叶字段，但不得暗示后端尚未接入的 Profile、真实 GPU 或 Run Intake v2 已可执行。
+- 专业配置页的“可编辑目录”与后端实际执行能力分开：前端可以为结构化输入提供安全的草案、集合规模和标量叶字段，但不得暗示后端尚未接入的 Profile、真实 GPU 或 Run Intake v2 已可执行。
 
 ## 0. 30 秒上手（本机实测）
 
-- **本机没有 pnpm**（`pnpm ABSENT`）。文档与 `package.json` 里的 `pnpm xxx` 要看懂，但**执行时用 `node` 直调**
-  （§6 给了逐条等价命令）。不要为了跑门禁去装 pnpm。
+- 当前环境可直接使用 Corepack/pnpm（本次复核 `pnpm --version` 为 `11.25.0`）；`package.json` 脚本是权威入口。
+  若换到没有 pnpm 的环境，再使用 §6 的 `node` 直调等价命令，不要改写仓库脚本。
 - **前端不依赖后端即可开发**：`node_modules/` 已就绪，直接起 Vite 或跑 fixture 即可；只有需要真数据时才碰 5173。
 - **改动前后至少跑这四条**（只查你动过的文件，见 §6.2）：`vitest` → `vue-tsc` → `eslint` → `prettier --check`。
 - **两个"看着像坏了、其实不是"的坑**先记住：PATH 顺序（§8.1）、`prettier` 全仓既有红（§8.2）。
@@ -36,85 +36,77 @@
 | 全局壳      | `src/App.vue`（含右侧助手侧栏的全局挂载与页面上下文发布）                      |
 | 应用内 i18n | `src/i18n/`（`index.ts` + `english-catalog.ts` + `workstreams/`）              |
 | 主题        | `src/theme/`、`src/styles/`、`src/components/ThemeSwitcher.vue`                |
-| 源码规模    | `src/` 共 **309 个** `.ts/.vue/.js` 文件、约 **111,354** 行（2026-09-23 实测） |
+| 源码规模    | `src/` 共 **312 个** `.ts/.vue/.js` 文件、约 **121,992** 行（2026-10-24 复核） |
 
 ## 2. 代码地图（`src/`）
 
 | 目录                                    | 职责                                                                                                                              | 谁能被谁引用                                                        |
 | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `views/`                                | 页面编排（19 个 view）。**只编排**                                                                                                | 可 import `features` 的**公共 `index.ts`**，不直连 `bridgeApi`      |
-| `features/`                             | 18 个业务模块，**每个都有公共 `index.ts`**（已实测 18/18）                                                                        | feature 之间只经对方 `index.ts` 协作                                |
+| `views/`                                | 页面编排（13 个 view）。**只编排**                                                                                                | 可 import `features` 的**公共 `index.ts`**，不直连 `bridgeApi`      |
+| `features/`                             | 18 个业务模块，**每个都有公共 `index.ts`**（已实测 18/18；空的 legacy 目录不计）                                                  | feature 之间只经对方 `index.ts` 协作                                |
 | `components/`                           | 跨页面通用组件                                                                                                                    | `ui/` 子目录**不得**访问 store / feature / Bridge API / 报告 schema |
 | `store/`                                | `dashboard*.ts` = **兼容 controller**                                                                                             | `src/store/dashboard.ts` 是兼容层，**不要把状态重新集中进去**       |
-| `stores/`                               | Pinia stores（见 §4）                                                                                                             | workspace / session / history / bridge / lightweight / evidence-*   |
+| `stores/`                               | Pinia stores（见 §4）                                                                                                             | workspace / session / history / bridge / evidence-*                 |
 | `lib/`                                  | `api.ts`（Bridge 客户端）、`query-client.ts`（TanStack Query）、`format.js`、`reports.ts`                                         | —                                                                   |
 | `contracts/`                            | `bridge-api.ts`、`report-model.ts`、`lossless-json.ts`、`generated/`（生成物）、`schemas/`                                        | `lossless-json.ts` 负责 64 位 ps/bytes 的无损 JSON 路径             |
 | `entities/`                             | 领域模型与本地 typed 契约（`agent-context`、`agent-command`、`agent-orchestration`、`dashboard`、`evidence-agent`、`navigation`） | —                                                                   |
 | `adapters/`、`data/`、`app/`、`assets/` | 适配层、静态数据、应用装配、资源                                                                                                  | —                                                                   |
 
-### 2.1 feature 模块清单与规模（2026-09-23 实测，按行数降序）
+### 2.1 feature 模块清单与规模（2026-10-24 复核，按行数降序）
 
 | feature                     | 文件/行数  | 一句话职责                                                            |
 | --------------------------- | ---------- | --------------------------------------------------------------------- |
-| `run-experiment`            | 28 / 7,879 | 实验设置页；参数面、结构化输入、拓扑编辑器                            |
-| `execution-inspector`       | 15 / 2,771 | 执行检视                                                              |
-| `report-coverage`           | 15 / 2,617 | 报告覆盖度                                                            |
-| `lightweight-workbench`     | 22 / 2,403 | 轻量工作台（Learn/Tasks/Prepare/Run/Results）                         |
-| `evidence-agent`            | 15 / 2,175 | Evidence Agent 前端                                                   |
-| `agent-copilot-shell`       | 7 / 2,027  | 右侧助手栏壳（Entry 懒加载 + Shell 四态 + Composer + TypedBlockList） |
-| `agent-intent-compiler`     | 10 / 1,907 | 确定性意图编译、别名、单位归一、澄清                                  |
-| `run-bound-evidence`        | 14 / 1,816 | run 维度证据                                                          |
-| `guided-help`               | 24 / 1,630 | 页面引导（**归属这里**，不要写回 navigation model）                   |
-| `structured-report`         | 6 / 1,048  | 结构化报告导出                                                        |
-| `inspect-artifact`          | 7 / 955    | artifact 查看                                                         |
-| `f7-analysis`               | 3 / 679    | F7 fabric 分析                                                        |
-| `experiment-draft`          | 3 / 477    | 实验草案                                                              |
-| `agent-copilot-integration` | 4 / 368    | 能力投影、block 组装、stale 标记                                      |
-| `bridge-status`             | 3 / 136    | Bridge 状态                                                           |
-| `run-evidence`              | 2 / 115    | 证据入口                                                              |
-| `week7-evidence`            | 2 / 73     | Week 7 证据                                                           |
+| `run-experiment`            | 32 / 9,487 | 实验设置页；参数面、结构化输入、拓扑编辑器                            |
+| `execution-inspector`       | 19 / 3,623 | 执行检视                                                              |
+| `agent-harness`             | 16 / 2,857 | Agent Harness 状态、优化与批处理展示                                  |
+| `report-coverage`           | 15 / 2,776 | 报告覆盖度                                                            |
+| `agent-copilot-shell`       | 7 / 2,510  | 右侧助手栏壳（Entry 懒加载 + Shell 四态 + Composer + TypedBlockList） |
+| `evidence-agent`            | 15 / 2,089 | Evidence Agent 前端                                                   |
+| `agent-intent-compiler`     | 10 / 1,799 | 确定性意图编译、别名、单位归一、澄清                                  |
+| `run-bound-evidence`        | 14 / 1,772 | run 维度证据                                                          |
+| `guided-help`               | 23 / 1,343 | 页面引导（**归属这里**，不要写回 navigation model）                   |
+| `structured-report`         | 6 / 989    | 结构化报告导出                                                        |
+| `inspect-artifact`          | 7 / 863    | artifact 查看                                                         |
+| `agent-copilot-integration` | 5 / 832    | 能力投影、block 组装、stale 标记                                      |
+| `f7-analysis`               | 3 / 645    | F7 fabric 分析                                                        |
+| `experiment-draft`          | 3 / 452    | 实验草案                                                              |
+| `bridge-status`             | 3 / 126    | Bridge 状态                                                           |
+| `run-evidence`              | 2 / 107    | 证据入口                                                              |
+| `week7-evidence`            | 2 / 64     | Week 7 证据                                                           |
 | `run-history`               | 2 / 29     | 历史入口                                                              |
 
 ## 3. 页面 ↔ 路由 ↔ view
 
-| 路由                       | view                                                  | 备注                                      |
-| -------------------------- | ----------------------------------------------------- | ----------------------------------------- |
-| `/`                        | （重定向）                                            | —                                         |
-| `/overview`                | `OverviewView.vue`                                    | 兜底路由也指向它                          |
-| `/execution`               | `ExecutionView.vue`                                   | 旧 `evidence_*` 深链转向原始证据          |
-| `/raw-evidence`            | `RawEvidenceView.vue`                                 | 独立完整 JSON 与 Pointer 定位             |
-| `/metrics`                 | `MetricsView.vue`                                     | —                                         |
-| `/fabric`                  | `FabricView.vue`                                      | —                                         |
-| `/attribution`             | `AttributionView.vue`                                 | —                                         |
-| `/validation`              | `ValidationView.vue`                                  | —                                         |
-| `/evidence-agent`          | `EvidenceAgentView.vue`                               | 旧深链兼容，不在主导航                    |
-| `/evidence-lab`            | `Week7EvidenceView.vue`                               | —                                         |
-| `/design-space`            | `DesignSpaceView.vue`                                 | —                                         |
-| `/history`                 | `HistoryView.vue`                                     | —                                         |
-| `/experiment`              | `ExperimentView.vue`                                  | **实验设置页**；有页面级 agent 上下文发布 |
-| `/lightweight`             | `LightweightWorkbenchView.vue`                        | 轻量工作台                                |
-| `/lightweight/learn`       | `LightweightLearnView.vue`                            | —                                         |
-| `/lightweight/tasks`       | `LightweightTasksView.vue`                            | —                                         |
-| `/lightweight/prepare`     | `LightweightPrepareView.vue`                          | **也有**页面级 agent 上下文发布           |
-| `/lightweight/results`     | `LightweightResultsView.vue`                          | —                                         |
-| `/lightweight/runs/:runId` | `LightweightRunView.vue`                              | —                                         |
-| `/lightweight/status`      | `LightweightRunView.vue`                              | —                                         |
-| `/lightweight-workbench`   | （重定向 → `lightweight`）                            | 旧链兼容                                  |
-| `/:pathMatch(.*)*`         | （重定向 → `overview`）                               | 兜底                                      |
-| —                          | `WorkbenchEntryView.vue`、`UnsupportedSchemaView.vue` | 非路由或特殊态                            |
+| 路由               | view                        | 备注                                      |
+| ------------------ | --------------------------- | ----------------------------------------- |
+| `/`                | （重定向 → `overview`）     | legacy `?view=` 仍可恢复旧路由            |
+| `/overview`        | `OverviewView.vue`          | 兜底路由也指向它                          |
+| `/execution`       | `ExecutionView.vue`         | 旧 `evidence_*` 深链转向原始证据          |
+| `/raw-evidence`    | `RawEvidenceView.vue`       | 独立完整 JSON 与 Pointer 定位             |
+| `/metrics`         | `MetricsView.vue`           | —                                         |
+| `/fabric`          | `FabricView.vue`            | —                                         |
+| `/attribution`     | `AttributionView.vue`       | —                                         |
+| `/validation`      | `ValidationView.vue`        | —                                         |
+| `/evidence-agent`  | `EvidenceAgentView.vue`     | 旧深链兼容，不在主导航                    |
+| `/evidence-lab`    | `Week7EvidenceView.vue`     | —                                         |
+| `/design-space`    | `DesignSpaceView.vue`       | —                                         |
+| `/history`         | `HistoryView.vue`           | —                                         |
+| `/experiment`      | `ExperimentView.vue`        | **实验设置页**；有页面级 agent 上下文发布 |
+| `/:pathMatch(.*)*` | （重定向 → `overview`）     | 兜底                                      |
+| —                  | `UnsupportedSchemaView.vue` | 非路由或特殊态                            |
 
-> ⚠️ **改实验设置页或轻量准备页时，注意它们各自发布「页面上下文」给右侧助手栏**。
+> ⚠️ **改实验设置页时，注意它发布「页面上下文」给右侧助手栏**。
 > 通用投影与页面发布**共用 provider id `app-shell`**，路由每次变化都会发一次**无参数目录**的通用投影 ⇒
-> 两个 publisher **必须每次都发布**（revision 由 keeper 钉住），否则面板会退化成「只解释」。
+> publisher **必须每次都发布**（revision 由 keeper 钉住），否则面板会退化成「只解释」。
 > 细节见 [`16_RIGHT_SIDE_AGENT_COPILOT_PANEL.md`](../F9_AGENT_ORCHESTRATION/16_RIGHT_SIDE_AGENT_COPILOT_PANEL.md) 末尾三条修订。
 
 ## 4. 状态归属（放错地方就是架构问题）
 
-| 状态类型                                         | 归属                                       | 具体文件                                                                                               |
-| ------------------------------------------------ | ------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| server state（远端数据）                         | **TanStack Query**                         | `src/lib/query-client.ts`                                                                              |
-| workspace / session / history / bridge / 轻量 UI | **Pinia**                                  | `src/stores/{workspace,session,history,bridge,lightweight,evidence-agent,evidence-selection,pinia}.ts` |
-| 兼容 controller                                  | `src/store/`（**只兼容，不新增集中状态**） | `dashboard.ts` / `dashboard-state.ts` / `dashboard-runs.ts` / `dashboard-persistence.ts`               |
+| 状态类型                               | 归属                                       | 具体文件                                                                                   |
+| -------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| server state（远端数据）               | **TanStack Query**                         | `src/lib/query-client.ts`                                                                  |
+| workspace / session / history / bridge | **Pinia**                                  | `src/stores/{workspace,session,history,bridge,evidence-agent,evidence-selection,pinia}.ts` |
+| 兼容 controller                        | `src/store/`（**只兼容，不新增集中状态**） | `dashboard.ts` / `dashboard-state.ts` / `dashboard-runs.ts` / `dashboard-persistence.ts`   |
 
 - Query key **必须**保留 run ID、backend identity、schema-set revision 和 artifact SHA-256。
 - Week 7 的 backend-global query **必须**保留 backend identity 与 schema-set revision；三个固定 CLI 操作共享 Bridge 单槽，前端按 `evidence map → calibration → orchestration` 顺序请求。
@@ -139,7 +131,7 @@
   再 `--check` 两遍确认 0（**`--check` 静默 exit 0 = 通过**）。
 - **前端可用能力 = Bridge descriptor 与生成类型的交集**。descriptor 与文档冲突时，运行时能力 fail closed 并登记 drift。
 
-## 6. 可跑命令（本机无 pnpm 的等价写法）
+## 6. 可跑命令（无 pnpm 环境的等价写法）
 
 所有命令在仓库根执行，并**先修正 PATH**（§8.1）：
 
@@ -149,7 +141,7 @@ export PATH="/c/Windows/System32:/usr/bin:/bin:$PATH"
 
 ### 6.1 全门禁等价命令
 
-| `package.json` 脚本    | 本机等价命令                                                                                          |
+| `package.json` 脚本    | 无 pnpm 等价命令                                                                                      |
 | ---------------------- | ----------------------------------------------------------------------------------------------------- |
 | `pnpm test`            | `node node_modules/vitest/vitest.mjs run`                                                             |
 | `pnpm typecheck`       | `node node_modules/vue-tsc/bin/vue-tsc.js --noEmit`                                                   |
@@ -183,7 +175,7 @@ git diff --check -- <你改的文件…>
 
 ### 6.3 e2e（Playwright）
 
-**不要**用 `pnpm test:e2e`（`webServer.command` 是 `pnpm dev`，本机没有 pnpm）。要点：
+当前环境可直接用 `pnpm test:e2e`；若在没有 pnpm 的环境运行，先按下列方式起 fixture，再直接调用 Playwright CLI。`webServer.command` 是 `pnpm dev`，因此不要让 Playwright 在该环境自动拉起 web server。要点：
 
 1. 自己把 Vite fixture 起在 **4173**（`vite.config.js` 固定端口 + strictPort），Playwright 会因
    `reuseExistingServer: true` 复用它。
@@ -196,7 +188,7 @@ git diff --check -- <你改的文件…>
 > 以及 `<根>/.workbuddy/memory/MEMORY.md` 的 e2e 小节。**权威条数用
 > `node node_modules/@playwright/test/cli.js test --list` 现取**，不要凭记忆报总数。
 
-## 7. 当前门禁基线（2026-09-23 实测）
+## 7. 最近已记录门禁（2026-09-23 dated snapshot；不是当前测试账本）
 
 | 门禁                         | 实测结果                                                                                     |
 | ---------------------------- | -------------------------------------------------------------------------------------------- |
@@ -214,7 +206,7 @@ git diff --check -- <你改的文件…>
 
 `8 skipped` 里含需要**已部署 Bridge** 的 deployed/live 用例——**skip 不得计作 passed**。
 
-### 最近阶段记录（2026-10-13 文档复核）
+### 更早阶段记录（2026-10-13 文档复核；仅供追溯）
 
 - 最近工作树记录的 Web Vitest 为 `1123 passed / 8 skipped`；`typecheck`、`lint`（0 error、2 既有 warning）、`build`、`contracts:check`、`docs:check`、`deps:check` 和 `git diff --check` 通过。该数字来自第十二阶段之后的配置助手/结构化输入批次，不是本次文档复核重新执行的结果。
 - 最近记录的定向 CTest 为 `13/13 passed`，Bridge 定向套件为 `275 passed`；Bridge 全量 discovery 仍有 1 项既有 registry 导入错误，全仓 `format:check` 仍有 24 个既有文件失败。
@@ -232,7 +224,7 @@ git diff --check -- <你改的文件…>
 ### 8.2 prettier 全仓既有红
 
 全仓 `prettier --check .` 本就有约 24 个文件报红（phase2 schema、`bridge-api.schema.json`、
-`docs/features/lightweight-workbench/*.md`、`generate-bridge-client.mjs` 等），**不是你造成的**。
+`generate-bridge-client.mjs` 等），**不是你造成的**。
 自己新增的长行超 `printWidth: 120` 时用 `--write <单个文件>`，再 `git diff` 复核只有预期那几行变化。
 
 ### 8.3 其他硬约束与陷阱
@@ -259,7 +251,6 @@ git diff --check -- <你改的文件…>
 | 右侧助手栏、跨页面助手、上下文与 typed blocks        | [`16_RIGHT_SIDE_AGENT_COPILOT_PANEL.md`](../F9_AGENT_ORCHESTRATION/16_RIGHT_SIDE_AGENT_COPILOT_PANEL.md)                                                                                                                            |
 | 拆多 Agent 并行开发 / 模块边界与合并顺序             | [`15_MODULE_BOUNDARIES_AND_PARALLEL_DEVELOPMENT.md`](../F9_AGENT_ORCHESTRATION/15_MODULE_BOUNDARIES_AND_PARALLEL_DEVELOPMENT.md)、[`17_..._EXECUTION_PLAYBOOK.md`](../F9_AGENT_ORCHESTRATION/17_DEVELOPER_AI_EXECUTION_PLAYBOOK.md) |
 | 后端仿真流程在前端的展示覆盖度（谁显示了、谁没显示） | [`architecture/BACKEND_SIMULATION_FLOW_UI_COVERAGE.md`](../architecture/BACKEND_SIMULATION_FLOW_UI_COVERAGE.md)                                                                                                                     |
-| 轻量工作台（Learn/Tasks/Prepare/Run/Results）        | [`features/lightweight-workbench/`](../features/lightweight-workbench/README.md)                                                                                                                                                    |
 | 部署、启动器、干净克隆                               | [`getting-started/AI_DEPLOYMENT_AND_HANDOFF.md`](AI_DEPLOYMENT_AND_HANDOFF.md)；技能 `tilesim-local-deploy`                                                                                                                         |
 | 跑/判 e2e                                            | 技能 `tilesim-e2e-run`                                                                                                                                                                                                              |
 | 验收别的 Agent 交付的工作包                          | 技能 `tilesim-wp-verify`                                                                                                                                                                                                            |

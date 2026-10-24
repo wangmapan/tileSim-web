@@ -79,20 +79,24 @@ function moduleBinding(value: string | undefined) {
         </div>
         <dl class="fabric-stage__support">
           <div>
-            <dt>{{ t("通信资源占用") }}</dt>
+            <dt>
+              <span>{{ t("通信资源占用") }}</span>
+              <InlineHelp :text="t('所有活跃通信范围的总体占用')" />
+            </dt>
             <dd>
               <UtilizationMeasure
                 :value="systemSummary.fabric_utilization_ratio"
                 :text="formatPercent(systemSummary.fabric_utilization_ratio)"
               />
-              <small>{{ t("所有活跃通信范围的总体占用") }}</small>
             </dd>
           </div>
           <div>
-            <dt>{{ t("通信范围数量") }}</dt>
+            <dt>
+              <span>{{ t("通信范围数量") }}</span>
+              <InlineHelp :text="t('本次实验涉及的通信范围')" />
+            </dt>
             <dd>
               {{ formatNumber(domains.length, 0) }}
-              <small>{{ t("本次实验涉及的通信范围") }}</small>
             </dd>
           </div>
         </dl>
@@ -100,8 +104,13 @@ function moduleBinding(value: string | undefined) {
       <article class="analysis-stage__secondary fabric-hotspot-panel" data-help-anchor="fabric-hotspot">
         <header class="panel-header panel-header--row">
           <div>
-            <h2>{{ t(hasReportedHotspot ? "当前主要通信瓶颈" : "主要通信瓶颈信息不完整") }}</h2>
-            <p v-if="!hasReportedHotspot">{{ t("主导域或延迟类型未报告；请查看逐域指标，不按利用率猜测瓶颈。") }}</p>
+            <h2>
+              {{ t(hasReportedHotspot ? "当前主要通信瓶颈" : "主要通信瓶颈信息不完整") }}
+              <InlineHelp
+                v-if="!hasReportedHotspot"
+                :text="t('主导域或延迟类型未报告；请查看逐域指标，不按利用率猜测瓶颈。')"
+              />
+            </h2>
           </div>
           <ArtifactEvidenceLink source-path="metrics:/system_summary" />
         </header>
@@ -264,8 +273,10 @@ function moduleBinding(value: string | undefined) {
       <header class="panel-header">
         <div>
           <p class="section-kicker">{{ t("逐项比较") }}</p>
-          <h2>{{ t("通信范围明细") }}</h2>
-          <p>{{ t("利用率描述模拟 Fabric 的占用，不等同于真实集群链路计数器。") }}</p>
+          <h2>
+            {{ t("通信范围明细") }}
+            <InlineHelp :text="t('利用率描述模拟 Fabric 的占用，不等同于真实集群链路计数器。')" />
+          </h2>
         </div>
       </header>
       <div class="table-wrap fabric-table-scroll" role="region" :aria-label="t('通信范围明细')" tabindex="0">
@@ -311,10 +322,12 @@ function moduleBinding(value: string | undefined) {
       <header class="panel-header panel-header--row">
         <div>
           <p class="section-kicker">{{ t("请求与主导阶段") }}</p>
-          <h2>{{ t("请求级 Fabric contribution") }}</h2>
-          <p>
-            {{ t("按后端报告顺序展示 request；dominant phase 只通过 request_id 和 phase_id 的唯一稳定匹配连接。") }}
-          </p>
+          <h2>
+            {{ t("请求级 Fabric contribution") }}
+            <InlineHelp
+              :text="t('按后端报告顺序展示 request；dominant phase 只通过 request_id 和 phase_id 的唯一稳定匹配连接。')"
+            />
+          </h2>
         </div>
         <div class="panel-count">{{ requests.length }} requests</div>
       </header>

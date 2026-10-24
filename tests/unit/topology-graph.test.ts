@@ -6,7 +6,7 @@ const valid = {
   devices: [{ device_id: "gpu-0", device_type: "gpu" }, { device_id: "gpu-1" }],
   module_bindings: [{ module_name: "nvlink", module_kind: "scale_up" }],
   domains: [{ domain_id: "d0", domain_type: "scale_up", member_devices: ["gpu-0", "gpu-1"], module_binding: "nvlink" }],
-  links: [{ src_device: "gpu-0", dst_device: "gpu-1", domain_id: "d0", latency_us: 0 }],
+  links: [{ link_id: "nvlink-0", src_device: "gpu-0", dst_device: "gpu-1", domain_id: "d0", latency_us: 0 }],
 };
 const validEnvelope = {
   scenario_name: "demo",
@@ -24,7 +24,13 @@ describe("topology graph model", () => {
     const result = parseTopologyDocument(JSON.stringify(validEnvelope));
     expect(result.error).toBe("");
     expect(result.document?.links?.[0]).toEqual(expect.objectContaining({ latency_us: 0 }));
+    expect(result.document?.links?.[0]?.link_id).toBe("nvlink-0");
     expect(result.document?.links?.[0]).not.toHaveProperty("bandwidth_gbps");
+  });
+  it("preserves an empty link list instead of creating inferred connections", () => {
+    const result = parseTopologyDocument(JSON.stringify({ ...validEnvelope, topology: { ...valid, links: [] } }));
+    expect(result.error).toBe("");
+    expect(result.document?.links).toEqual([]);
   });
   it("accepts canonical topology-request envelope and preserves non-topology sections", () => {
     const result = parseTopologyDocument(

@@ -1411,7 +1411,7 @@
       },
       "CatalogResponse": {
         "type": "object",
-        "required": ["scenarios", "fidelity_policies", "input_modes", "design_space_modes", "gpu_participation_modes"],
+        "required": ["scenarios", "fidelity_policies", "input_modes", "design_space_modes", "gpu_participation_modes", "model_ids"],
         "properties": {
           "scenarios": {
             "type": "array",
@@ -1440,6 +1440,11 @@
           "gpu_participation_modes": {
             "type": "array",
             "items": { "const": "gpu_free" },
+            "uniqueItems": true
+          },
+          "model_ids": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
             "uniqueItems": true
           }
         },

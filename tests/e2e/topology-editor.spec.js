@@ -128,6 +128,7 @@ async function installTopologyApi(page) {
         input_modes: ["controls", "json", "trace_package"],
         design_space_modes: ["built_in_synthetic", "strict_s6_manifest"],
         gpu_participation_modes: ["gpu_free"],
+        model_ids: ["llama3-8b"],
       };
     } else if (path === "/api/capabilities") body = f8Capabilities;
     else if (path === "/api/experiment-schema") body = createF8ExperimentDescriptor();

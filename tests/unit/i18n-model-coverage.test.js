@@ -12,7 +12,6 @@ import { attributionReviewEnglishCatalog } from "../../src/i18n/workstreams/attr
 import { workbenchReviewEnglishCatalog } from "../../src/i18n/workstreams/workbench-review";
 import { semanticGlossaryEnglishCatalog } from "../../src/i18n/workstreams/semantic-glossary";
 import { reportCoverageEnglishCatalog } from "../../src/i18n/workstreams/report-coverage";
-import { lightweightWorkbenchEnglishCatalog } from "../../src/i18n/workstreams/lightweight-workbench";
 
 const modelFiles = [
   "src/features/execution-inspector/model/records.ts",
@@ -31,7 +30,6 @@ const catalogs = {
   workbenchReview: workbenchReviewEnglishCatalog,
   semanticGlossary: semanticGlossaryEnglishCatalog,
   reportCoverage: reportCoverageEnglishCatalog,
-  lightweightWorkbench: lightweightWorkbenchEnglishCatalog,
 };
 
 function chineseStringLiterals(file) {

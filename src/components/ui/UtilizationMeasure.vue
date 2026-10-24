@@ -37,7 +37,7 @@ const width = computed(() =>
   background: var(--accent);
 }
 .utilization-measure > strong {
-  color: var(--ink);
+  color: var(--accent-hover);
   font: 550 var(--text-lg) var(--font-mono);
   text-align: right;
   overflow-wrap: anywhere;

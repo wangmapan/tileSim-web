@@ -109,12 +109,13 @@ describe("TopologyGraphEditor", () => {
   it("draws existing links on the same canvas", () => {
     const value = structuredClone(topology);
     value.topology.links = [
-      { src_device: "gpu0", dst_device: "gpu1", domain_id: "su0" },
+      { link_id: "l-gpu0-gpu1", src_device: "gpu0", dst_device: "gpu1", domain_id: "su0" },
       { src_device: "gpu2", dst_device: "gpu3", domain_id: "su0" },
     ];
     const wrapper = mountEditor(value);
     expect(wrapper.findAll(".topology-link")).toHaveLength(2);
     expect(wrapper.findAll(".topology-link--inside")).toHaveLength(2);
+    expect(wrapper.text()).toContain("l-gpu0-gpu1");
     expect(wrapper.find(".topology-summary").text()).toContain("2");
     expect(wrapper.text()).not.toContain("关系图（辅助）");
     expect(wrapper.text()).not.toContain("仿真域内连接");

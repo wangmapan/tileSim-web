@@ -103,7 +103,8 @@ pub fn write_self_check(output_path: &Path) -> Result<(), PublicError> {
         resolved_from_executable_directory,
         required_scripts_present: missing_files.is_empty(),
         missing_files,
-        deployment_manifest_present: web_root.join("runtime/backend-current.json").is_file(),
+        deployment_manifest_present: web_root.join("runtime/backend-current.json").is_file()
+            || web_root.join("../release.json").is_file(),
         bundled_node_runtime,
         bundled_node_sha256: bundled_node_digest(),
         node_without_path,

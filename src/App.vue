@@ -79,9 +79,7 @@ import {
   streamAssistantResultAnalysis,
   type AssistantChatMessage,
 } from "./lib/api/assistant-model";
-import { LightweightWorkbenchShell } from "./features/lightweight-workbench";
 import type { EvidenceQueryContext } from "./features/run-evidence";
-import { useLightweightStore } from "./stores/lightweight";
 import { useAgentSessionsStore } from "./stores/agent-sessions";
 import {
   buildCompleteResultAnalysisContext,
@@ -95,8 +93,7 @@ import {
 
 const activeRoute = useRoute();
 const router = useRouter();
-const { state, initialize, synchronizeNavigation, ensureBridgeReady } = useDashboard();
-const lightweightStore = useLightweightStore();
+const { state, initialize, synchronizeNavigation } = useDashboard();
 const agentSessions = useAgentSessionsStore();
 const {
   activeSessionId: agentActiveSessionId,
@@ -109,8 +106,6 @@ const {
   editSequence: agentEditSequence,
   persistenceError: agentPersistenceError,
 } = storeToRefs(agentSessions);
-const isEntryRoute = computed(() => activeRoute.meta.layout === "entry");
-const isLightweightRoute = computed(() => activeRoute.meta.workspace === "lightweight");
 const dashboardInitialized = ref(false);
 const unsupported = computed(() => unsupportedSchemaReports(state.bundle));
 const rejectedUnsupported = computed(
@@ -119,7 +114,7 @@ const rejectedUnsupported = computed(
 const showUnsupported = computed(
   () =>
     (unsupported.value.length > 0 || rejectedUnsupported.value.length > 0) &&
-    !["experiment", "history", "evidence_lab", "lightweight"].includes(state.view),
+    !["experiment", "history", "evidence_lab"].includes(state.view),
 );
 const { t, isEnglish } = useI18n();
 const evidenceSelection = useEvidenceSelectionStore();
@@ -150,15 +145,7 @@ const agentStructuredInputs = shallowRef<ExperimentAgentContextPublication["stru
 const agentCanEditParameters = computed(
   () => agentParameterCatalog.value.length > 0 && agentCommandRegistry.available(),
 );
-let pendingResultAnalysisRunId: string | null = null;
-let pendingResultAnalysisTimer: ReturnType<typeof setTimeout> | null = null;
 let resultAnalysisFallbackReason = "";
-
-function clearPendingResultAnalysis(): void {
-  pendingResultAnalysisRunId = null;
-  if (pendingResultAnalysisTimer) clearTimeout(pendingResultAnalysisTimer);
-  pendingResultAnalysisTimer = null;
-}
 const agentPanelState = ref<AgentCopilotPanelState>("closed");
 const agentPanelWidth = ref(420);
 const agentStatus = ref("可以开始");
@@ -219,13 +206,7 @@ const batchPending = computed(() =>
     batchCancelMutation,
   ].some((mutation) => mutation.isPending.value),
 );
-const agentHarnessAvailable = computed(
-  () =>
-    agentHarnessCapabilitiesQuery.isSuccess.value ||
-    Object.values(state.bridge.manifest?.endpoints || {}).some((endpoint) =>
-      endpoint.includes("/agent/harness-capabilities"),
-    ),
-);
+const agentHarnessAvailable = computed(() => agentHarnessCapabilitiesQuery.isSuccess.value);
 const agentHarnessTaskCenter = computed<readonly AgentHarnessTaskCenterItem[]>(() => {
   if (agentHarnessOperationsQuery.isError.value) {
     return [
@@ -557,8 +538,7 @@ const agentDockStyle = computed(() => {
 
 function genericPageContext(): PageContextEnvelope {
   const routeName = typeof activeRoute.name === "string" ? activeRoute.name : "overview";
-  const lightweightRunId = isLightweightRoute.value ? lightweightAgentRunId() : null;
-  const contextRunId = isLightweightRoute.value ? lightweightRunId : state.runId;
+  const contextRunId = state.runId;
   const bridgeReady = Boolean(state.bridge.connected && state.bridge.manifest && state.bridge.available);
   const contextAvailability: PageContextEnvelope["availability"] = bridgeReady
     ? "available"
@@ -568,14 +548,6 @@ function genericPageContext(): PageContextEnvelope {
   const pageLabel =
     (
       {
-        lightweight: "轻量工作台",
-        lightweight_prepare: "轻量实验配置",
-        lightweight_run: "轻量运行状态",
-        // `/lightweight/status` is a legacy alias for the run view. Keep its
-        // shared Agent context label aligned with the canonical run route so
-        // the assistant never exposes an internal route name to users.
-        lightweight_status: "轻量运行状态",
-        lightweight_results: "轻量结果摘要",
         raw_evidence: "原始证据",
       } as Record<string, string>
     )[routeName] || routeName;
@@ -597,7 +569,7 @@ function genericPageContext(): PageContextEnvelope {
   // prefix covers the parts of the envelope the prefix does not name.
   const { revision } = appContextRevision(
     `context:${routeName}:${routeRevision}:${contextRunId || "no-run"}:${schemaRevision}:${backendRevision}:${contextAvailability}`,
-    [pageLabel, contextRunId, contextAvailability, isLightweightRoute.value, state.runName || ""],
+    [pageLabel, contextRunId, contextAvailability, state.runName || ""],
   );
   return {
     contract_revision: PHASE1_LOCAL_CONTRACT_REVISION,
@@ -613,7 +585,7 @@ function genericPageContext(): PageContextEnvelope {
             resource_type: "run",
             resource_id: contextRunId,
             revision: contextRunId,
-            display_label: isLightweightRoute.value ? contextRunId : state.runName || contextRunId,
+            display_label: state.runName || contextRunId,
             availability: contextAvailability,
           },
         ]
@@ -622,18 +594,9 @@ function genericPageContext(): PageContextEnvelope {
     data_classification: contextRunId ? "workspace_internal" : "public",
     allowed_purposes: ["explain"],
     expires_at: null,
-    display_label: contextRunId
-      ? `${pageLabel} · ${isLightweightRoute.value ? contextRunId : state.runName || contextRunId}`
-      : pageLabel,
+    display_label: contextRunId ? `${pageLabel} · ${state.runName || contextRunId}` : pageLabel,
     availability: contextAvailability,
   };
-}
-
-function lightweightAgentRunId(): string | null {
-  const routeParam = Array.isArray(activeRoute.params.runId) ? activeRoute.params.runId[0] : activeRoute.params.runId;
-  const queryValue = Array.isArray(activeRoute.query.run) ? activeRoute.query.run[0] : activeRoute.query.run;
-  const value = typeof routeParam === "string" ? routeParam : queryValue;
-  return typeof value === "string" && /^run-[\w-]+$/.test(value) ? value : null;
 }
 
 function synchronizeAgentRouteContext(): void {
@@ -651,12 +614,12 @@ function refreshAgentContextAfterBridgeChange(): void {
   // registry provider. Their surface watcher will refresh that publication
   // when bootstrap changes; do not overwrite it with the generic route
   // projection while the descriptor is settling.
-  if (["experiment", "lightweight_prepare"].includes(String(activeRoute.name))) return;
+  if (activeRoute.name === "experiment") return;
   synchronizeAgentRouteContext();
 }
 
 function publishExperimentAgentContext(publication: ExperimentAgentContextPublication): void {
-  if (!["experiment", "lightweight_prepare"].includes(String(activeRoute.name))) return;
+  if (activeRoute.name !== "experiment") return;
   agentCurrentValues.value = { ...publication.current_values };
   agentParameterCatalog.value = publication.parameter_catalog;
   agentStructuredInputs.value = publication.structured_inputs;
@@ -1126,38 +1089,6 @@ function currentGuidanceBundle(): {
   const querySchema = Array.isArray(activeRoute.query.schema_set_revision)
     ? activeRoute.query.schema_set_revision[0]
     : activeRoute.query.schema_set_revision;
-  const querySha = Array.isArray(activeRoute.query.artifact_sha256)
-    ? activeRoute.query.artifact_sha256[0]
-    : activeRoute.query.artifact_sha256;
-  if (isLightweightRoute.value) {
-    const runId =
-      lightweightAgentRunId() ||
-      (activeRoute.name === "lightweight_results" ? lightweightStore.run.value?.runId : null);
-    const manifest = lightweightStore.reports.artifactManifest;
-    const manifestRunId = manifest?.run_id;
-    const bundle = lightweightStore.reports.bundle;
-    if (!runId || !bundle || (manifestRunId && manifestRunId !== runId)) return null;
-    if (lightweightStore.run.value && lightweightStore.run.value.runId !== runId) return null;
-    if (querySchema && manifest?.schema_set_revision !== querySchema) return null;
-    if (
-      querySha &&
-      !manifest?.artifacts.some((item) =>
-        [String(item.sha256).toLowerCase(), `sha256:${String(item.sha256).toLowerCase()}`].includes(
-          querySha.toLowerCase(),
-        ),
-      )
-    )
-      return null;
-    const reportIds = [bundle.run?.run_id, bundle.metrics?.run_id].filter(Boolean);
-    if ((!manifestRunId && !reportIds.length) || reportIds.some((value) => value !== runId)) return null;
-    if (
-      manifest?.rejected_artifacts.length ||
-      manifest?.artifacts.some((item) => !["supported", "not_applicable"].includes(item.contract_status))
-    )
-      return null;
-    if (Object.values(bundle.compatibility || {}).some((item) => item && !item.supported)) return null;
-    return { bundle, runId, artifactManifest: manifest, evidenceQueryContext: queryContext() };
-  }
   const runId = state.runId;
   const manifestRunId = state.artifactManifest?.run_id;
   if (!runId || state.isDemo || !state.bundle || (manifestRunId && manifestRunId !== runId)) return null;
@@ -1423,11 +1354,10 @@ function clearAllAgentSessions(): void {
 }
 
 async function handleAgentStart(task: "configure" | "analyze" | "learn"): Promise<void> {
-  clearPendingResultAnalysis();
   if (task === "configure") {
     agentSessions.createSession("实验配置");
     agentStatus.value = "正在打开实验配置";
-    void router.push({ name: isLightweightRoute.value ? "lightweight_prepare" : "experiment" });
+    void router.push({ name: "experiment" });
     return;
   }
   if (task === "learn") {
@@ -1441,28 +1371,6 @@ async function handleAgentStart(task: "configure" | "analyze" | "learn"): Promis
     return;
   }
   const result = currentGuidanceBundle();
-  if (!result && isLightweightRoute.value && activeRoute.name !== "lightweight_results") {
-    const runId = lightweightAgentRunId() || lightweightStore.run.value?.runId;
-    if (runId) {
-      pendingResultAnalysisRunId = runId;
-      agentStatus.value = "正在打开当前运行的结果页…";
-      pendingResultAnalysisTimer = setTimeout(() => {
-        if (pendingResultAnalysisRunId !== runId) return;
-        clearPendingResultAnalysis();
-        appendGuidance("（分析实验结果）", [
-          {
-            title: "报告暂不可用",
-            body: "结果页未能载入当前 run 的可分析报告。请核对结果页的错误状态，稍后重新点击分析。",
-          },
-        ]);
-      }, 15_000);
-      void router.push({ name: "lightweight_results", query: { run: runId } }).catch(() => {
-        clearPendingResultAnalysis();
-        agentStatus.value = "结果页未能打开";
-      });
-      return;
-    }
-  }
   if (!result) {
     appendGuidance("（分析实验结果）", [
       {
@@ -1475,35 +1383,7 @@ async function handleAgentStart(task: "configure" | "analyze" | "learn"): Promis
   await presentResultAnalysis("（分析实验结果）", result);
 }
 
-watch(
-  () => [activeRoute.name, lightweightStore.reports.bundle, lightweightStore.reports.artifactManifest] as const,
-  () => {
-    const pendingRunId = pendingResultAnalysisRunId;
-    if (!pendingRunId) return;
-    if (activeRoute.name !== "lightweight_results") {
-      if (activeRoute.name !== "lightweight") clearPendingResultAnalysis();
-      return;
-    }
-    const result = currentGuidanceBundle();
-    if (!result || result.runId !== pendingRunId) {
-      if (lightweightStore.reports.artifactManifest?.run_id === pendingRunId && lightweightStore.reports.bundle) {
-        clearPendingResultAnalysis();
-        appendGuidance("（分析实验结果）", [
-          {
-            title: "暂时不能分析",
-            body: "当前报告的身份、schema 或 artifact 状态不符合分析条件；请在结果页核对报告状态。",
-          },
-        ]);
-      }
-      return;
-    }
-    clearPendingResultAnalysis();
-    observeBackground(presentResultAnalysis("（分析实验结果）", result), "结果分析未完成，请重试");
-  },
-);
-
 async function submitAgentInstruction(payload: AgentCopilotSubmitPayload): Promise<void> {
-  clearPendingResultAnalysis();
   const context = agentContext.value;
   if (!context || payload.context_revision !== context.context_revision) {
     appendAgentAnswerBlocks(openAgentTurn(payload.instruction), [
@@ -1747,12 +1627,7 @@ const navigationUnavailable = computed(
 function navigationSnapshot() {
   const value = Array.isArray(activeRoute.query.run) ? activeRoute.query.run[0] : activeRoute.query.run;
   return {
-    view:
-      activeRoute.meta.workspace === "lightweight"
-        ? "lightweight"
-        : typeof activeRoute.name === "string"
-          ? activeRoute.name
-          : "overview",
+    view: typeof activeRoute.name === "string" ? activeRoute.name : "overview",
     runId: typeof value === "string" && /^run-[\w-]+$/.test(value) ? value : null,
   };
 }
@@ -1760,26 +1635,11 @@ function navigationSnapshot() {
 watch(
   () => activeRoute.fullPath,
   () => {
-    if (isEntryRoute.value) return;
     // A route change does not destroy the local conversation. The active session
     // remains available for explicit follow-up, while the context watcher below
     // marks plans and drafts stale when they no longer match this page.
     cancelAgentStream();
     synchronizeAgentRouteContext();
-    if (isLightweightRoute.value) {
-      // The lightweight shell owns its URL navigation, but a changed legal
-      // run deep link still needs the existing read-only evidence restore.
-      // Never reset the professional workspace merely because a lightweight
-      // section has no run query; only an explicit new run triggers loading.
-      if (!state.bridge.connected) {
-        observeBackground(ensureBridgeReady());
-      }
-      // Run-bound lightweight views restore their own state through the
-      // lightweight store/query adapters. Do not ask the professional
-      // dashboard coordinator to reconcile the same URL; that coordinator
-      // would treat the lightweight run as foreign and redirect to /lightweight.
-      return;
-    }
     const navigation = navigationSnapshot();
     if (!dashboardInitialized.value) {
       dashboardInitialized.value = true;
@@ -1806,18 +1666,16 @@ const bridgeContextSignature = computed(() =>
   ].join("|"),
 );
 watch(bridgeContextSignature, () => {
-  if (isEntryRoute.value) return;
   refreshAgentContextAfterBridgeChange();
 });
 watch(
   () => [state.runId, state.runName] as const,
   () => {
-    if (isEntryRoute.value) return;
     // Experiment pages publish the richer typed form envelope themselves.
     // Every other professional route uses the generic envelope, which must
     // be refreshed after asynchronous deep-link restoration updates the
     // dashboard run identity.
-    if (["experiment", "lightweight_prepare"].includes(String(activeRoute.name))) return;
+    if (activeRoute.name === "experiment") return;
     synchronizeAgentRouteContext();
   },
 );
@@ -1844,19 +1702,6 @@ watch(
   { immediate: true },
 );
 onMounted(() => {
-  if (isEntryRoute.value) {
-    // Keep the neutral entry page independent from Bridge/capability bootstrap.
-    // Professional and run-bound routes perform their existing initialization
-    // when the user explicitly enters a workspace.
-    return;
-  }
-  if (isLightweightRoute.value) {
-    // Lightweight content is local-only, but direct result/deep links still
-    // need the existing Bridge health state to distinguish "no run" from
-    // "Bridge unavailable". This does not create a run or call a Provider.
-    observeBackground(ensureBridgeReady());
-    return;
-  }
   dashboardInitialized.value = true;
   const navigation = navigationSnapshot();
   observeBackground(
@@ -1865,7 +1710,6 @@ onMounted(() => {
   );
 });
 onBeforeUnmount(() => {
-  clearPendingResultAnalysis();
   cancelAgentStream();
   unsubscribeAgentContext();
   unregisterAgentContext();
@@ -1874,23 +1718,7 @@ onBeforeUnmount(() => {
 
 <template>
   <RouterView v-slot="{ Component, route }">
-    <component :is="Component" v-if="isEntryRoute" :key="String(route.name)" />
-    <LightweightWorkbenchShell
-      v-else-if="isLightweightRoute"
-      :style="agentDockStyle"
-      :data-agent-copilot-state="agentPanelState"
-    >
-      <component
-        :is="Component"
-        :key="route.fullPath"
-        v-bind="
-          route.name === 'lightweight_prepare'
-            ? { agentContextPublisher: publishExperimentAgentContext, agentCommandRegistry }
-            : {}
-        "
-      />
-    </LightweightWorkbenchShell>
-    <div v-else class="app-shell" :style="agentDockStyle" :data-agent-copilot-state="agentPanelState">
+    <div class="app-shell" :style="agentDockStyle" :data-agent-copilot-state="agentPanelState">
       <AppSidebar />
       <main class="app-main">
         <AppHeader>
@@ -1925,7 +1753,6 @@ onBeforeUnmount(() => {
     </div>
   </RouterView>
   <AgentCopilotEntry
-    v-if="!isEntryRoute"
     v-model="agentPanelState"
     :context="agentContext"
     :blocks="agentBlocks"

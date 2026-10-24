@@ -1,0 +1,654 @@
+src/components\AppSidebar.vue:70:        <strong>TileSim</strong><small>{{ t("仿真实验台") }}</small>
+src/components\AppSidebar.vue:84:        <p class="nav-caption">{{ t(group.label) }}</p>
+src/components\AppSidebar.vue:111:        ><small>{{ bridgeDetail }}</small></span
+src/components\AppHeader.vue:49:      <p>{{ t(headerKicker) }}</p>
+src/components\JsonArtifactPanel.vue:374:        <small>{{ t("当前可查看 {count} 类工件", { count: availableDefinitions.length }) }}</small>
+src/components\JsonArtifactPanel.vue:381:          <small>{{ t("选择工件") }}</small>
+src/components\JsonArtifactPanel.vue:389:          <small>{{ t("搜索字段或值") }}</small>
+src/views\WorkbenchEntryView.vue:49:          <small>{{ t("TileSim 仿真实验台") }}</small>
+src/views\WorkbenchEntryView.vue:55:        <p class="workbench-entry__lede">
+src/views\WorkbenchEntryView.vue:58:        <p v-if="recentLabel" class="workbench-entry__recent" role="status" aria-live="polite">
+src/views\WorkbenchEntryView.vue:68:              <p class="workbench-choice-card__kicker">{{ t("适合刚开始接触 TileSim 的用户") }}</p>
+src/views\WorkbenchEntryView.vue:71:            <dl class="workbench-choice-card__details">
+src/views\WorkbenchEntryView.vue:95:              <p class="workbench-choice-card__kicker">{{ t("适合需要完整参数与证据链的用户") }}</p>
+src/views\WorkbenchEntryView.vue:98:            <dl class="workbench-choice-card__details">
+src/views\WorkbenchEntryView.vue:119:      <p class="workbench-entry__footnote">
+src/components\EvidenceStrip.vue:24:        <small>{{ t("当前实验") }}</small
+src/components\EvidenceStrip.vue:33:        <small>{{ t(evidenceLimited ? "不代表真实硬件表现" : "校准与验证范围见技术边界") }}</small>
+src/views\Week7EvidenceView.vue:62:        <p>
+src/views\Week7EvidenceView.vue:80:        <p>
+src/views\Week7EvidenceView.vue:98:      <p>{{ t("正在运行固定的只读证据工作流…") }}</p>
+src/views\Week7EvidenceView.vue:107:            <p>{{ t("模型选择与 held-out fixture 评估相互隔离；资产 ID 和哈希保持可审计。") }}</p>
+src/views\Week7EvidenceView.vue:149:                  <small>{{ operatingRegion(scope.operating_region) }}</small>
+src/views\Week7EvidenceView.vue:150:                  <small>{{ scope.input_unit }} → {{ scope.observed_unit }}</small>
+src/views\Week7EvidenceView.vue:154:                  <small>slope {{ formatNumber(scope.selected_model.slope) }}</small>
+src/views\Week7EvidenceView.vue:155:                  <small>intercept {{ formatNumber(scope.selected_model.intercept) }}</small>
+src/views\Week7EvidenceView.vue:159:                  <small>{{ t("留出 {count}", { count: scope.held_out_sample_count }) }}</small>
+src/views\Week7EvidenceView.vue:163:                  <small>{{ t("最大 {value}", { value: formatPercent(scope.held_out_max_relative_error) }) }}</small>
+src/views\Week7EvidenceView.vue:164:                  <small>{{ t("预算 {value}", { value: formatPercent(scope.relative_error_budget) }) }}</small>
+src/views\Week7EvidenceView.vue:195:            <p>{{ t("逐字段说明来源对象、计算规则、验证门禁和允许声明；这是一张关系表，不是性能数值图。") }}</p>
+src/views\Week7EvidenceView.vue:234:            <p>{{ t("这是可复现的五步结构化编排，不是生成具体原因或优化建议的自然语言 Agent。") }}</p>
+src/views\Week7EvidenceView.vue:267:              <small>{{ call.status }}</small>
+src/views\Week7EvidenceView.vue:270:              <p>{{ call.output_reference }}</p>
+src/views\ValidationView.vue:47:        <small>
+src/views\ValidationView.vue:51:        <InlineHelp
+src/views\ValidationView.vue:65:        <small>
+src/views\ValidationView.vue:69:        <InlineHelp
+src/views\ValidationView.vue:76:        <small>{{ t("证据完整度") }}</small>
+src/views\ValidationView.vue:78:        <InlineHelp class="provenance-help" :text="t('字段覆盖，非准确率')" :label="t('证据完整度说明')" />
+src/views\ValidationView.vue:92:            <small>{{ backendExplanation(gap).label }}</small>
+src/views\ValidationView.vue:109:          <p>{{ t("请求精度 → 实际精度") }}</p>
+src/views\ValidationView.vue:132:          <p>
+src/views\ValidationView.vue:133:            <small>{{ backendExplanation(entry.detail).label }}</small>
+src/views\ValidationView.vue:163:            <small>{{ executionLayerName(check.subsystem) }}</small
+src/views\ValidationView.vue:165:            <p>
+src/views\ValidationView.vue:166:              <small>{{ backendExplanation(check.detail).label }}</small>
+src/components\EmptyState.vue:17:    <p>{{ t(description || "请先打开一次完整运行或导入对应报告。") }}</p>
+src/views\UnsupportedSchemaView.vue:25:          <p>
+src/views\UnsupportedSchemaView.vue:38:          <small v-if="item.issues.length">{{ item.issues.join("；") }}</small>
+src/views\UnsupportedSchemaView.vue:43:          <small>{{ item.reason }} · {{ item.json_pointer || "/" }}</small>
+src/views\UnsupportedSchemaView.vue:46:      <p v-if="rejected.length && !reports.length">
+src/views\UnsupportedSchemaView.vue:53:    <p class="scope-callout" data-help-anchor="unsupported_schema-next">
+src/components\ComparisonPanel.vue:98:    <p>
+src/components\ComparisonPanel.vue:107:        <small>BASELINE · A</small><strong>{{ selected[0].run?.run_name || selected[0].id }}</strong>
+src/components\ComparisonPanel.vue:111:        <small>VARIANT · B</small><strong>{{ selected[1].run?.run_name || selected[1].id }}</strong>
+src/components\ComparisonPanel.vue:129:          <small>{{ t("端到端延迟") }}</small
+src/components\ComparisonPanel.vue:133:          <p>{{ t("B 相对 A") }}</p>
+src/components\ComparisonPanel.vue:146:          <small>{{ t("吞吐") }}</small
+src/components\ComparisonPanel.vue:148:          <p>{{ t("B 相对 A") }}</p>
+src/components\ComparisonPanel.vue:154:          <small>{{ t("Fabric 背压变化") }}</small
+src/components\ComparisonPanel.vue:156:          <p>B - A</p>
+src/components\ComparisonPanel.vue:190:    <details class="detail-section" open>
+src/components\ComparisonPanel.vue:218:    <details class="detail-section">
+src/components\ComparisonPanel.vue:246:    <details class="detail-section">
+src/components\ComparisonPanel.vue:250:          <small>{{ index ? "B" : "A" }}</small>
+src/components\ComparisonPanel.vue:273:    <p class="comparison-scope">{{ t("比较只描述两次模拟输出的差异，不等同于真实系统性能承诺。") }}</p>
+src/views\RawEvidenceView.vue:10:    <p class="raw-evidence-note">
+src/features\agent-harness\components\AgentHarnessApprovalBlock.vue:13:        <p class="agent-harness-eyebrow">Manual approval</p>
+src/features\agent-harness\components\AgentHarnessApprovalBlock.vue:18:    <p class="agent-harness-approval__notice">审批只改变草案/审批状态，不会启动实验或创建 TileSim run。</p>
+src/features\agent-harness\components\AgentHarnessApprovalBlock.vue:63:    <p v-if="approval?.single_use">单次使用审批；已消费：{{ approval.consumed ? "是" : "否" }}</p>
+src/views\OverviewView.vue:92:      <p>{{ failedRun.error || failedRun.stderr_summary || t("执行服务未提供错误详情。") }}</p>
+src/views\OverviewView.vue:93:      <small>CLI exit_code: {{ failedRun.exit_code ?? t("未知") }} · {{ failedRun.finished_at }}</small>
+src/views\OverviewView.vue:118:            ><small v-if="dashboardView.overview.endToEndLatencyUs.availability === 'available'">µs</small>
+src/views\OverviewView.vue:134:          <p class="section-kicker">{{ t("主要瓶颈 · 后端报告") }}</p>
+src/views\OverviewView.vue:142:            <p>{{ state.bundle.run.bottleneck_report.detail }}</p>
+src/views\OverviewView.vue:146:          <p class="section-kicker">{{ t("瓶颈归因") }}</p>
+src/views\OverviewView.vue:154:          <p>{{ dashboardView.overview.claimSummary.value }}</p>
+src/views\OverviewView.vue:213:                  <th scope="col">{{ t("利用率") }}<small>0–100%</small></th>
+src/views\OverviewView.vue:214:                  <th scope="col" class="numeric">{{ t("队列延迟") }}<small>µs</small></th>
+src/views\OverviewView.vue:215:                  <th scope="col" class="numeric">{{ t("拥塞延迟") }}<small>µs</small></th>
+src/views\OverviewView.vue:233:          <p class="workbench-note">
+src/views\OverviewView.vue:239:          <p>{{ t("尚无通信域占用记录") }}</p>
+src/views\OverviewView.vue:250:            ><small>{{ t("按需打开本次运行的 JSON 证据") }}</small></span
+src/views\OverviewView.vue:266:            ><small>{{ t(artifact.kind) }} · {{ formatNumber(artifact.bytes, 0) }} bytes</small></span
+src/views\OverviewView.vue:281:        <p>{{ t("这两个字段由后端原样给出，前端不改写、不摘编、不降级为提示文案。") }}</p>
+src/views\MetricsView.vue:336:          <p class="section-kicker">{{ t("指标来源与声明范围") }}</p>
+src/views\MetricsView.vue:339:            <InlineHelp :text="t('以下字段由后端报告直接提供；缺失时保持未知，不推断采集或校准状态。')" />
+src/views\MetricsView.vue:376:          <p class="section-kicker">{{ t("逐个请求") }}</p>
+src/views\MetricsView.vue:378:          <InlineHelp :text="t('比较每个请求第一次开始响应、连续生成和全部完成所需的时间。')" />
+src/views\MetricsView.vue:407:                ><small>{{ t(requestSampleState(request, "ttft_ps")) }}</small>
+src/views\MetricsView.vue:411:                ><small>{{ t(requestSampleState(request, "tpot_ps")) }}</small>
+src/views\MetricsView.vue:416:                  ><small>{{ t(requestSampleState(request, "end_to_end_latency_ps")) }}</small></span
+src/views\MetricsView.vue:447:          <p class="section-kicker">{{ t("请求级等待与归因") }}</p>
+src/views\MetricsView.vue:449:          <p>{{ t("这些字段由后端直接报告；KV、设备和网络分项可能重叠，不能相加替代父级等待或请求延迟。") }}</p>
+src/views\MetricsView.vue:476:                }}<small v-if="isLosslessInteger(request.network_backpressure_ps)">
+src/views\MetricsView.vue:482:                }}<small>
+src/views\MetricsView.vue:494:                }}<small v-if="request.dominant_kv_wait_reason"> · KV {{ request.dominant_kv_wait_reason }}</small>
+src/views\MetricsView.vue:502:                <small
+src/views\MetricsView.vue:512:                <small
+src/views\MetricsView.vue:520:                <small
+src/views\MetricsView.vue:538:          <p class="section-kicker">{{ t("模型化设备与虚拟 Fabric") }}</p>
+src/views\MetricsView.vue:541:            <InlineHelp
+src/views\MetricsView.vue:556:        <p>{{ deviceParticipationDescription }}</p>
+src/views\MetricsView.vue:584:      <details class="metrics-detail-disclosure">
+src/views\MetricsView.vue:587:          <small>{{ t("未映射任务、忙碌时间、拥塞和设备采集状态") }}</small>
+src/views\MetricsView.vue:612:      <p v-if="hasDeviceMappingWarning" class="metric-footnote metrics-device-warning">
+src/views\MetricsView.vue:638:                <small>{{ device.device_type || "—" }} · {{ device.group_id || "—" }}</small>
+src/views\MetricsView.vue:644:                <small>{{
+src/views\MetricsView.vue:650:                <small
+src/views\MetricsView.vue:680:                <small v-if="domain.topology_domain_ref?.json_pointer">
+src/views\MetricsView.vue:690:                  <small>queue</small>
+src/views\MetricsView.vue:698:                  <small>congestion</small>
+src/views\MetricsView.vue:713:      <p v-if="resourceConvergence" class="metric-footnote">
+src/views\MetricsView.vue:718:      <details v-if="pdDisaggregation" class="metrics-detail-disclosure metrics-pd-detail">
+src/views\MetricsView.vue:721:          <small>{{ t("交接证据、源/目的 placement group 和请求参与设备") }}</small>
+src/views\MetricsView.vue:755:              <InlineHelp
+src/views\MetricsView.vue:764:              <InlineHelp
+src/views\MetricsView.vue:774:    <section class="metric-footnote" data-help-anchor="metrics-interpretation">
+src/views\MetricsView.vue:776:      <p>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:129:          <p class="agent-block__eyebrow">用户</p>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:134:        <p class="agent-block__body agent-block__utterance">{{ block.text }}</p>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:140:          <p class="agent-block__eyebrow">{{ block.model_id ? `小拓 · ${block.model_id}` : "小拓" }}</p>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:145:        <p v-if="block.text" class="agent-block__body agent-block__answer">{{ block.text }}</p>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:146:        <p v-else-if="block.streaming" class="agent-block__body agent-block__answer agent-block__answer--waiting">
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:149:        <p v-if="block.streaming" class="agent-block__streaming" role="status" aria-live="off">正在写回答…</p>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:150:        <p v-else-if="block.error" class="agent-block__body agent-block__answer-note">{{ block.error }}</p>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:154:        <p class="agent-block__eyebrow">理解结果</p>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:156:        <p class="agent-block__body agent-block__body--guidance">{{ block.body }}</p>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:160:        <p class="agent-block__eyebrow">理解结果</p>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:183:        <details class="agent-block__details">
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:201:        <p class="agent-block__eyebrow">建议修改</p>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:203:        <p class="agent-block__draft-notice">这是草案，尚未创建运行。</p>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:209:              {{ valueText(item.proposed_value) }}<small v-if="item.unit"> · {{ item.unit }}</small>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:219:        <details class="agent-block__details">
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:259:        <p class="agent-block__eyebrow">限制和下一步</p>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:261:        <p v-if="!block.issues.length" class="agent-block__body">当前没有校验问题；草案仍不会自动创建运行。</p>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:278:        <p class="agent-block__eyebrow">下一步</p>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:282:            <p>{{ question.prompt }}</p>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:299:            <details class="agent-block__details">
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:308:        <p class="agent-block__eyebrow">{{ block.title ? "推荐方案" : "参数改动" }}</p>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:319:        <p v-if="block.rationale" class="agent-block__body">{{ block.rationale }}</p>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:320:        <details v-if="block.jsonPreview" class="agent-block__details agent-block__json-preview">
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:322:          <p class="agent-block__body">这是当前页面校验后的输入草案；尚未写入，也不会创建运行。</p>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:325:            <pre tabindex="0"><code>{{ block.jsonPreview.overridesJson }}</code></pre>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:329:            <pre tabindex="0"><code>{{ block.jsonPreview.runtimeJson }}</code></pre>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:333:            <pre tabindex="0"><code>{{ block.jsonPreview.topologyJson }}</code></pre>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:342:        <p v-if="block.incomplete?.length" class="agent-block__draft-notice" role="alert">
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:364:          <p class="agent-block__draft-notice">
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:367:          <p v-if="block.channelMoved" class="agent-block__draft-notice">
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:376:              <small>{{ item.path }}</small>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:431:        <p v-if="block.receipts && block.note" class="agent-block__body">{{ block.note }}</p>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:447:        <p class="agent-block__eyebrow">限制</p>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:449:        <p class="agent-block__body">{{ block.message }}</p>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:452:          <p>{{ block.safe_next_action }}</p>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:454:        <details class="agent-block__details">
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:461:        <p class="agent-block__eyebrow">限制</p>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:463:        <p class="agent-block__body">返回内容不属于当前冻结的类型集合，已安全忽略。</p>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:464:        <p class="agent-block__next">下一步：刷新能力快照或联系集成负责人核对契约版本。</p>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:474:    <p>你好，需要小拓帮忙做些什么？可以配置实验、分析实验结果，或先学习怎么看报告。</p>
+src/features\agent-copilot-shell\AgentTypedBlockList.vue:480:    <small>分析只读取当前运行的报告；参数仅在确认后写入，不会自动创建运行。</small>
+src/views\LightweightWorkbenchView.vue:85:        <p class="section-kicker">{{ t("轻量工作台") }}</p>
+src/views\LightweightWorkbenchView.vue:106:        <span><strong>配置实验</strong><small>选择场景与运行参数</small></span>
+src/views\LightweightWorkbenchView.vue:110:        <span><strong>运行并观察</strong><small>跟踪阶段进度与执行状态</small></span>
+src/views\LightweightWorkbenchView.vue:114:        <span><strong>分析结果</strong><small>整理重点并核对证据边界</small></span>
+src/views\LightweightWorkbenchView.vue:121:          <p class="section-kicker">{{ t("当前实验 / 最近运行") }}</p>
+src/views\LightweightWorkbenchView.vue:143:        <p class="section-kicker">{{ t("结果摘要") }}</p>
+src/features\agent-copilot-shell\AgentCopilotShell.vue:460:      <p v-if="retentionNotice" class="agent-copilot-shell__retention">{{ retentionNotice }}</p>
+src/views\LightweightTasksView.vue:31:      <p class="section-kicker">{{ t("任务") }}</p>
+src/features\agent-copilot-shell\AgentCopilotErrorBoundary.vue:21:    <p>限制</p>
+src/features\guided-help\components\TermHelp.vue:42:        >{{ t(label) }}<small v-if="count !== undefined">{{ count }}</small></span
+src/views\LightweightRunView.vue:195:      <p class="section-kicker">{{ t("运行状态") }}</p>
+src/views\LightweightRunView.vue:219:      <p v-if="current?.error" class="lightweight-error" role="alert">{{ current.error }}</p>
+src/views\LightweightRunView.vue:220:      <p class="lightweight-state__detail">{{ statusDetail }}</p>
+src/views\LightweightRunView.vue:268:      <p class="lightweight-polling" role="status" aria-live="polite">{{ pollingLabel }}</p>
+src/features\evidence-agent\components\EvidenceAgentSubmissionLeaseNotice.vue:65:      <p>{{ t("当前请求不会以该 key 重试，也不会自动换 key 调用 Provider；只有显式放弃后才能创建新的分析请求。") }}</p>
+src/features\evidence-agent\components\EvidenceAgentSubmissionLeaseNotice.vue:73:      <p>
+src/features\agent-copilot-shell\AgentContextBar.vue:43:    <p v-if="attachmentStatus.state === 'stale'" class="agent-context-bar__stale" role="status" aria-live="polite">
+src/features\agent-copilot-shell\AgentContextBar.vue:47:    <details v-if="context" class="agent-context-bar__details">
+src/features\guided-help\components\GuidedStepPanel.vue:152:        <p v-if="!filteredGroups.length" role="status" class="help-documentation-no-results">
+src/features\guided-help\components\GuidedStepPanel.vue:158:          <p class="help-documentation-context">{{ guide.id === contextGuideId ? t("当前页面") : t("产品文档") }}</p>
+src/features\guided-help\components\GuidedStepPanel.vue:160:          <p>{{ t(guide.description) }}</p>
+src/features\guided-help\components\GuidedStepPanel.vue:178:          <p>{{ t(section.body) }}</p>
+src/features\guided-help\components\GuidedStepPanel.vue:199:          <p>{{ t(guide.takeaway) }}</p>
+src/features\guided-help\components\GuidedStepPanel.vue:203:          <p>{{ t(guide.advanced.body) }}</p>
+src/features\execution-inspector\components\RuntimeEvidencePanel.vue:97:          <InlineHelp :text="t('按需读取当前运行已登记的后端证据工件。')" />
+src/features\execution-inspector\components\RuntimeEvidencePanel.vue:103:        <span>{{ t("工件") }}<InlineHelp :text="t(activeDefinition.description)" /></span>
+src/features\execution-inspector\components\RuntimeEvidencePanel.vue:114:    <p v-if="!artifactManifest" role="status">{{ t("当前运行没有可信工件清单，不能读取运行期证据。") }}</p>
+src/features\execution-inspector\components\RuntimeEvidencePanel.vue:115:    <p v-else-if="rejected" role="alert">
+src/features\execution-inspector\components\RuntimeEvidencePanel.vue:118:    <p v-else-if="!entry" role="status">
+src/features\execution-inspector\components\RuntimeEvidencePanel.vue:122:      <p class="runtime-evidence-identity">
+src/features\execution-inspector\components\RuntimeEvidencePanel.vue:128:      <p v-if="error" role="alert">{{ t("读取或校验失败") }}：{{ error }}</p>
+src/features\execution-inspector\components\RuntimeEvidencePanel.vue:129:      <p v-if="tooLarge" role="status">{{ t("大工件不在此页解析；请到原始证据查看器按需索引和分页查看。") }}</p>
+src/features\execution-inspector\components\RuntimeEvidencePanel.vue:130:      <p v-if="entry.content_status === 'expected_absence' && record" role="status">
+src/features\execution-inspector\components\RuntimeEvidencePanel.vue:159:          <p v-if="!events.length">{{ t("事件集合为空（后端已提供空数组），不是工件缺失。") }}</p>
+src/features\execution-inspector\components\RuntimeEvidencePanel.vue:177:                  ><small>{{ value(object(item).batch_request_ids) }}</small>
+src/features\execution-inspector\components\RuntimeEvidencePanel.vue:197:          <p v-if="!requests.length">{{ t("逐请求集合为空（后端已提供空数组），不是工件缺失。") }}</p>
+src/views\LightweightResultsView.vue:190:      <p class="section-kicker">{{ t("结果摘要") }}</p>
+src/views\LightweightResultsView.vue:214:            <small>run.summary.end_to_end_latency_us</small>
+src/views\LightweightResultsView.vue:219:            <small>metrics.summary.throughput_requests_per_second</small>
+src/views\LightweightResultsView.vue:224:            <small>metrics.tail_latency_summary.ttft_ps.p95_ps</small>
+src/views\LightweightResultsView.vue:229:            <small>metrics.tail_latency_summary.tpot_ps.p95_ps</small>
+src/views\LightweightResultsView.vue:242:            <small>metrics.system_summary.fabric_utilization_ratio</small>
+src/views\LightweightResultsView.vue:247:            <small>run.bottleneck_report.primary_subsystem</small>
+src/views\LightweightResultsView.vue:271:            <p class="section-kicker">{{ t("必要图表") }}</p>
+src/views\LightweightResultsView.vue:300:            <p class="section-kicker">{{ t("执行阶段时间线") }}</p>
+src/views\LightweightResultsView.vue:309:            ><small>{{ stage.detail || t("无阶段说明") }}</small>
+src/views\LightweightResultsView.vue:319:            <p class="section-kicker">{{ t("证据索引") }}</p>
+src/views\LightweightResultsView.vue:344:        <p v-if="rejectedArtifacts.length" class="lightweight-integrity__warning" role="alert">
+src/features\agent-harness\components\AgentHarnessOperationCard.vue:28:        <p class="agent-harness-eyebrow">{{ title || "Agent Harness 只读任务" }}</p>
+src/features\agent-harness\components\AgentHarnessOperationCard.vue:33:    <p class="agent-harness-notice">正式 v1 只读观察；不会创建运行、修改实验或开放写工具。</p>
+src/features\agent-harness\components\AgentHarnessOperationCard.vue:68:    <p v-if="projection.stale_reason" class="agent-harness-error" role="alert">
+src/features\agent-harness\components\AgentHarnessOperationCard.vue:71:    <p v-else-if="projection.requires_recovery" class="agent-harness-error" role="alert">
+src/features\agent-harness\components\AgentHarnessOperationCard.vue:74:    <p v-else-if="projection.error" class="agent-harness-error" role="alert">
+src/features\agent-copilot-shell\AgentComposer.vue:72:      <p>
+src/features\evidence-agent\components\EvidenceAgentServiceDetails.vue:18:        <small>{{ t("Descriptor") }}</small
+src/features\evidence-agent\components\EvidenceAgentServiceDetails.vue:22:        <small>{{ t("Schema revision") }}</small
+src/features\evidence-agent\components\EvidenceAgentServiceDetails.vue:26:        <small>{{ t("Descriptor revision") }}</small
+src/features\evidence-agent\components\EvidenceAgentServiceDetails.vue:30:        <small>{{ t("Provider / model") }}</small
+src/features\evidence-agent\components\EvidenceAgentServiceDetails.vue:34:        <small>{{ t("Model revision") }}</small
+src/features\agent-harness\components\AgentHarnessDraftCard.vue:33:        <p class="agent-harness-eyebrow">Agent Harness · WP-B</p>
+src/features\agent-harness\components\AgentHarnessDraftCard.vue:40:    <p class="agent-harness-draft-card__notice" role="note">
+src/features\agent-harness\components\AgentHarnessDraftCard.vue:43:    <p v-if="hasRunSideEffect" class="agent-harness-draft-card__error" role="alert">
+src/features\agent-harness\components\AgentHarnessDraftCard.vue:129:      <pre v-if="Object.keys(draft.budget_request).length">{{ JSON.stringify(draft.budget_request, null, 2) }}</pre>
+src/features\agent-harness\components\AgentHarnessDraftCard.vue:131:    <p v-if="validation" class="agent-harness-draft-card__binding" role="status">
+src/features\agent-harness\components\AgentHarnessDraftCard.vue:134:    <p v-if="approval" class="agent-harness-draft-card__binding" role="status">
+src/views\LightweightPrepareView.vue:482:      <p class="section-kicker">{{ t("新建实验") }}</p>
+src/views\LightweightPrepareView.vue:499:        <p class="section-kicker">{{ t("输入与 fidelity") }}</p>
+src/views\LightweightPrepareView.vue:512:            <small v-if="!option.available">{{ option.reason || t("当前契约未开放") }}</small>
+src/views\LightweightPrepareView.vue:560:          <p class="section-kicker">{{ t("校验与确认") }}</p>
+src/views\LightweightPrepareView.vue:593:      <p class="lightweight-confirm__note">
+src/features\agent-harness\components\AgentHarnessValidationBlock.vue:13:        <p class="agent-harness-eyebrow">Deterministic validation</p>
+src/features\agent-harness\components\AgentHarnessValidationBlock.vue:18:    <p class="agent-harness-validation__notice">校验只产生报告，不执行运行；<code>would_create_run = false</code>。</p>
+src/features\agent-harness\components\AgentHarnessValidationBlock.vue:62:    <p v-if="validation.unsupported_fields.length">
+src/features\agent-harness\components\AgentHarnessValidationBlock.vue:65:    <p v-if="validation.stale_reasons.length">失效原因：{{ validation.stale_reasons.join("、") }}</p>
+src/features\agent-harness\components\AgentHarnessValidationBlock.vue:66:    <p v-if="validation.risk_flags.length">风险：{{ validation.risk_flags.join("、") }}</p>
+src/features\agent-harness\components\AgentHarnessValidationBlock.vue:67:    <pre v-if="Object.keys(validation.budget_estimate).length">
+src/features\agent-harness\components\AgentHarnessExecutionCard.vue:43:        <p class="agent-harness-eyebrow">Agent Harness · WPC controlled execution</p>
+src/features\agent-harness\components\AgentHarnessExecutionCard.vue:50:    <p class="agent-harness-execution-card__boundary" role="note">
+src/features\agent-harness\components\AgentHarnessExecutionCard.vue:78:    <p v-if="projection.error" class="agent-harness-execution-card__error" role="alert">
+src/features\agent-harness\components\AgentHarnessExecutionCard.vue:81:    <p v-if="projection.requires_recovery" class="agent-harness-execution-card__error" role="alert">
+src/features\agent-harness\components\AgentHarnessExecutionCard.vue:104:      <p>run/artifact manifest 已通过 schema、run、SHA-256、bytes 和 provenance 绑定校验。</p>
+src/features\execution-inspector\components\RequestAttributionPanel.vue:125:        <p class="section-kicker">{{ t("校准验证与指标归因模块") }}</p>
+src/features\execution-inspector\components\RequestAttributionPanel.vue:127:        <p>{{ t("仅展示后端 dense DES 的原因链和证据引用；共享批次时间不是可加总的独立资源成本。") }}</p>
+src/features\execution-inspector\components\RequestAttributionPanel.vue:132:      <p>
+src/features\execution-inspector\components\RequestAttributionPanel.vue:135:      <p>{{ t("请求 ID 重复，归因输入未通过校验。") }}</p>
+src/features\execution-inspector\components\RequestAttributionPanel.vue:136:      <p v-if="attributionFailure.path">
+src/features\execution-inspector\components\RequestAttributionPanel.vue:139:      <p v-if="attributionFailure.cause">
+src/features\execution-inspector\components\RequestAttributionPanel.vue:142:      <p>{{ attributionFailure.nextAction }}</p>
+src/features\execution-inspector\components\RequestAttributionPanel.vue:143:      <p>{{ t("当前 run 未产生逐请求归因工件；没有部分成功的原因链可供查看。") }}</p>
+src/features\execution-inspector\components\RequestAttributionPanel.vue:146:    <p v-else-if="!artifactManifest" role="status">{{ t("没有可信工件清单，无法读取归因。") }}</p>
+src/features\execution-inspector\components\RequestAttributionPanel.vue:147:    <p v-else-if="rejected" role="alert">
+src/features\execution-inspector\components\RequestAttributionPanel.vue:150:    <p v-else-if="!entry && declared?.state === 'unavailable'" role="status">
+src/features\execution-inspector\components\RequestAttributionPanel.vue:153:    <p v-else-if="!entry" role="status">
+src/features\execution-inspector\components\RequestAttributionPanel.vue:162:      <p class="runtime-evidence-identity">
+src/features\execution-inspector\components\RequestAttributionPanel.vue:168:      <p v-if="tooLarge" role="status">
+src/features\execution-inspector\components\RequestAttributionPanel.vue:175:      <p v-if="error" role="alert">{{ t("归因读取失败") }}：{{ error }}</p>
+src/features\execution-inspector\components\RequestAttributionPanel.vue:176:      <p v-if="payload?.state === 'expected_absence'" role="status">
+src/features\execution-inspector\components\RequestAttributionPanel.vue:179:      <p v-else-if="payload && !reports.length" class="callout callout--error" role="alert">
+src/features\execution-inspector\components\RequestAttributionPanel.vue:197:        <p v-if="selectionIssue" class="callout callout--error" role="alert">
+src/features\execution-inspector\components\RequestAttributionPanel.vue:204:          <p>
+src/features\execution-inspector\components\RequestAttributionPanel.vue:226:                      <small class="attribution-associations">
+src/features\execution-inspector\components\RequestAttributionPanel.vue:237:                      <small class="attribution-associations">
+src/features\execution-inspector\components\RequestAttributionPanel.vue:256:                        <small
+src/features\agent-harness\components\AgentHarnessBatchPanel.vue:92:        <p>Agent Harness · Stage 5</p>
+src/features\agent-harness\components\AgentHarnessBatchPanel.vue:97:    <p class="batch-panel__notice">
+src/features\agent-harness\components\AgentHarnessBatchPanel.vue:115:    <p v-if="!activeBatch" class="batch-panel__empty">
+src/features\agent-harness\components\AgentHarnessBatchPanel.vue:150:          ><small>{{ candidate.candidate_digest }}</small>
+src/features\agent-harness\components\AgentHarnessBatchPanel.vue:151:          <small v-if="candidate.operation_id">operation: {{ candidate.operation_id }}</small>
+src/features\agent-harness\components\AgentHarnessBatchPanel.vue:152:          <small v-if="candidate.run_id">run: {{ candidate.run_id }}</small>
+src/features\agent-harness\components\AgentHarnessBatchPanel.vue:153:          <small v-if="candidate.artifact_manifest_digest">artifact: {{ candidate.artifact_manifest_digest }}</small>
+src/features\agent-harness\components\AgentHarnessBatchPanel.vue:154:          <small v-if="candidate.result?.objective">objective: {{ candidateObjective(candidate) }}</small>
+src/features\agent-harness\components\AgentHarnessBatchPanel.vue:157:      <p v-if="bestCandidate" class="batch-panel__notice">
+src/features\agent-harness\components\AgentHarnessBatchPanel.vue:160:      <p v-if="detail?.checkpoint" class="batch-panel__notice">
+src/features\agent-harness\components\AgentHarnessBatchPanel.vue:212:      <p v-if="state === 'recovery_required'" class="batch-panel__notice">
+src/features\agent-harness\components\AgentHarnessBatchPanel.vue:215:      <p v-if="stopReason" class="batch-panel__notice">停止原因：{{ stopReason }}</p>
+src/features\evidence-agent\components\EvidenceAgentResultPanel.vue:105:        <p>
+src/features\evidence-agent\components\EvidenceAgentResultPanel.vue:176:        <p>{{ t("run、backend、schema revision 或 snapshot digest 已变化；旧 claims 已隐藏。") }}</p>
+src/features\evidence-agent\components\EvidenceAgentResultPanel.vue:181:      <p>{{ t(resultBoundary) }}</p>
+src/features\evidence-agent\components\EvidenceAgentResultPanel.vue:187:        <p>{{ agentResult.response.refusal.detail }}</p>
+src/features\evidence-agent\components\EvidenceAgentResultPanel.vue:210:            <p class="evidence-agent-claim-text">{{ entry.claim.text }}</p>
+src/features\evidence-agent\components\EvidenceAgentResultPanel.vue:337:        <p v-else class="evidence-agent-claim-group-empty">{{ emptyGroupLabel() }}</p>
+src/views\LightweightLearnView.vue:17:      <p class="section-kicker">{{ t("学习") }}</p>
+src/views\LightweightLearnView.vue:20:        <InlineHelp :text="t('这里是可选参考，不是运行前置步骤；你可以随时回到配置或结果页面。')" />
+src/views\LightweightLearnView.vue:28:        <p class="section-kicker">{{ t("运行状态") }}</p>
+src/views\LightweightLearnView.vue:54:        <p class="section-kicker">{{ t("证据边界") }}</p>
+src/features\agent-harness\components\AgentHarnessTaskCenter.vue:40:        <p class="agent-harness-eyebrow">Agent Harness</p>
+src/features\agent-harness\components\AgentHarnessTaskCenter.vue:45:    <p class="agent-harness-task-center__notice">
+src/features\agent-harness\components\AgentHarnessTaskCenter.vue:49:    <p v-if="!items.length && !drafts.length && !executions.length" class="agent-harness-task-center__empty">
+src/features\agent-harness\components\AgentHarnessTaskCenter.vue:60:        <p v-if="item.unavailableReason" class="agent-harness-task-center__reason" role="status">
+src/features\agent-harness\components\AgentHarnessTaskCenter.vue:64:        <p v-else class="agent-harness-task-center__reason" role="status">
+src/features\agent-harness\components\AgentHarnessTaskCenter.vue:82:        <p v-if="item.unavailableReason" class="agent-harness-task-center__reason" role="status">
+src/features\agent-harness\components\AgentHarnessTaskCenter.vue:98:        <p v-if="item.unavailableReason" class="agent-harness-task-center__reason" role="status">
+src/features\execution-inspector\components\LayerRecordTable.vue:68:            ><small v-if="record.subtitle">{{ record.subtitle }}</small>
+src/features\agent-harness\components\AgentHarnessOptimizationPanel.vue:73:        <p class="optimization-panel__eyebrow">Agent Harness · Stage 4</p>
+src/features\agent-harness\components\AgentHarnessOptimizationPanel.vue:78:    <p class="optimization-panel__notice">
+src/features\agent-harness\components\AgentHarnessOptimizationPanel.vue:82:    <p v-if="!activeSession" class="optimization-panel__empty">
+src/features\agent-harness\components\AgentHarnessOptimizationPanel.vue:102:        <small>配置会先经过正式参数 validator；保存的是 digest，不保存模型回答或 credential。</small>
+src/features\agent-harness\components\AgentHarnessOptimizationPanel.vue:217:            ><small>{{ iteration.candidate_id }}</small>
+src/features\agent-harness\components\AgentHarnessOptimizationPanel.vue:221:      <p v-if="sessionErrorCode" class="optimization-panel__error" role="alert">{{ sessionErrorCode }}</p>
+src/features\evidence-agent\components\EvidenceAgentPanel.vue:292:        <p>{{ t("当前后端没有提供可用的 AI 解释能力。你仍可查看实验结果，稍后再试或检查服务配置。") }}</p>
+src/features\evidence-agent\components\EvidenceAgentPanel.vue:293:        <details class="evidence-agent-error-detail">
+src/features\evidence-agent\components\EvidenceAgentPanel.vue:295:          <p>{{ descriptor?.degradation.detail || descriptorError }}</p>
+src/features\evidence-agent\components\EvidenceAgentPanel.vue:322:          <small v-if="!['ready', 'select'].includes(snapshotReadiness.state)">{{ t(snapshotReadiness.detail) }}</small>
+src/features\evidence-agent\components\EvidenceAgentPanel.vue:369:          <p>
+src/features\agent-harness\components\AgentHarnessToolTimeline.vue:45:    <p v-if="!items.length" class="agent-harness-tool-timeline__empty">尚未读取工具结果。</p>
+src/features\agent-harness\components\AgentHarnessToolTimeline.vue:120:        <p v-if="item.error_code" role="alert">
+src/components\ThemeColorEditor.vue:116:    <p v-if="error" class="theme-color-error" role="alert">{{ t(error) }}</p>
+src/components\ThemeColorEditor.vue:124:    <p class="theme-color-note">{{ t("颜色应用于导航、按钮和选中区域；告警与图表颜色保持不变。") }}</p>
+src/features\agent-harness\components\AgentHarnessStatusCard.vue:17:        <p class="agent-harness-eyebrow">{{ props.title || "Agent Harness 契约预览" }}</p>
+src/features\agent-harness\components\AgentHarnessStatusCard.vue:22:    <p class="agent-harness-notice">
+src/features\agent-harness\components\AgentHarnessStatusCard.vue:43:    <p v-if="props.projection.error" class="agent-harness-error" role="alert">
+src/features\evidence-agent\components\EvidenceAgentContractPolicy.vue:102:              <small>{{ t("内存、设备与集合通信") }}</small>
+src/features\evidence-agent\components\EvidenceAgentContractPolicy.vue:109:              <small>{{ t("统一仿真执行") }}</small>
+src/features\evidence-agent\components\EvidenceAgentContractPolicy.vue:116:              <small>{{ t("校准、验证与归因输出") }}</small>
+src/features\evidence-agent\components\EvidenceAgentContractPolicy.vue:139:              <span class="evidence-agent-contract-detail">{{
+src/features\evidence-agent\components\EvidenceAgentContractPolicy.vue:148:              <span class="evidence-agent-contract-detail">{{
+src/features\evidence-agent\components\EvidenceAgentContractPolicy.vue:160:              <span class="evidence-agent-contract-detail">{{
+src/features\evidence-agent\components\EvidenceAgentContractPolicy.vue:172:              <span class="evidence-agent-contract-detail">{{
+src/features\evidence-agent\components\EvidenceAgentContractPolicy.vue:184:              <span class="evidence-agent-contract-detail">{{ t("不可恢复分支禁止重新调用 Provider。") }}</span>
+src/features\evidence-agent\components\EvidenceAgentContractPolicy.vue:218:        <strong class="evidence-agent-contract-subtitle">{{ t("全部禁止留存项") }}</strong>
+src/features\run-bound-evidence\components\Week8StreamRecords.vue:22:    <p v-if="props.truncated === true" class="week8-stream-records__warning">
+src/features\run-bound-evidence\components\Week8StreamRecords.vue:25:    <p v-else-if="props.truncated === false" class="week8-stream-records__note">
+src/features\run-bound-evidence\components\Week8StreamRecords.vue:28:    <p v-else class="week8-stream-records__note">{{ t("后端未写出 stream_records_truncated。") }}</p>
+src/features\run-bound-evidence\components\Week8StreamRecords.vue:47:              <small v-if="entry.windowStartPs !== null">{{ formatPicoseconds(entry.windowStartPs) }}</small>
+src/features\run-bound-evidence\components\Week8StreamRecords.vue:52:              <small v-if="entry.windowEndPs !== null">{{ formatPicoseconds(entry.windowEndPs) }}</small>
+src/features\run-bound-evidence\components\Week8StreamRecords.vue:73:    <p v-else class="week8-stream-records__note">{{ t("后端未提供逐窗口 stream_records。") }}</p>
+src/views\HistoryView.vue:103:      <small v-if="state.history.runs.length">{{ t("保留上次加载的记录；请刷新重试。") }}</small>
+src/views\HistoryView.vue:109:    <p v-if="historyPending" class="history-loading" role="status">{{ t("正在加载运行记录…") }}</p>
+src/views\HistoryView.vue:162:                  ><small>{{ run.run_id }}</small></button
+src/views\HistoryView.vue:167:                  <StatusPill :value="run.status || 'unknown'" /><small>{{ inputModeLabel(run.input_mode) }}</small>
+src/views\HistoryView.vue:233:          <InlineHelp :text="t('先选择基线 A，再选择变体 B。')" />
+src/views\HistoryView.vue:253:        <p>{{ t("运行结果和工件会从本地记录目录永久删除。") }}</p>
+src/features\execution-inspector\components\ExecutionVisualizationPanel.vue:105:      <p v-if="visualization.rows.length > 12" class="visualization-limit-note">
+src/features\execution-inspector\components\ExecutionVisualizationPanel.vue:110:          <small>{{ t("已选择图表项") }}</small>
+src/features\execution-inspector\components\ExecutionVisualizationPanel.vue:113:          <small v-if="selectedRow.status" class="semantic-technical">status = {{ selectedRow.status }}</small>
+src/features\execution-inspector\components\ExecutionVisualizationPanel.vue:114:          <p v-if="selectedRow.detail">{{ selectedRow.detail }}</p>
+src/features\execution-inspector\components\ExecutionVisualizationPanel.vue:124:        <small v-else>{{ t("该图表项没有可导航的精确 evidence pointer。") }}</small>
+src/features\execution-inspector\components\ExecutionVisualizationPanel.vue:133:        <InlineHelp
+src/features\execution-inspector\components\ExecutionVisualizationPanel.vue:151:    <p class="visualization-caption">{{ t(visualization.description) }}</p>
+src/features\execution-inspector\components\ExecutionVisualizationPanel.vue:152:    <p v-if="showBoundary && visualization.boundary" class="visualization-boundary">
+src/features\execution-inspector\components\ExecutionVisualizationPanel.vue:163:        <small v-if="dataIssues.length > 5">{{
+src/features\execution-inspector\components\ExecutionVisualizationPanel.vue:177:        ><small>{{ t("{count} 行", { count: visualization.rows.length }) }}</small>
+src/features\execution-inspector\components\ExecutionVisualizationPanel.vue:191:              <p v-if="semanticField('derivation', visualization.derivation).valueDescription">
+src/features\execution-inspector\components\ExecutionVisualizationPanel.vue:222:                    <small>{{ row.label }}</small>
+src/features\execution-inspector\components\ExecutionVisualizationPanel.vue:229:                    <small>{{ semanticField(row.label, value).technicalText }}</small>
+src/features\execution-inspector\components\ExecutionVisualizationPanel.vue:232:                  <small v-if="row.rawValues?.[index]">
+src/features\execution-inspector\components\ExecutionVisualizationPanel.vue:236:                  <small v-if="row.valueStatuses?.[index]" class="semantic-technical">
+src/features\execution-inspector\components\ExecutionVisualizationPanel.vue:247:                  <small v-if="row.status">status = {{ row.status }}</small>
+src/features\execution-inspector\components\ExecutionVisualizationPanel.vue:248:                  <small v-if="row.detail">{{ row.detail }}</small>
+src/features\lightweight-workbench\components\LightweightAgentConversation.vue:57:        <p class="section-kicker">第二步</p>
+src/features\lightweight-workbench\components\LightweightAgentConversation.vue:83:    <p class="lightweight-conversation__hint">Enter 不会意外提交中文输入法；使用 Ctrl/⌘ + Enter 或提交按钮。</p>
+src/features\run-bound-evidence\components\PercentileSubjects.vue:29:      <p>{{ t("请求关联以报告记录为准。") }}</p>
+src/features\run-bound-evidence\components\PercentileSubjects.vue:64:              <p v-if="!['available', 'not_applicable'].includes(subject.availability)" class="percentile-warning">
+src/components\StatCard.vue:13:    <p>{{ label }}</p>
+src/components\StatCard.vue:15:    <small v-if="hint">{{ hint }}</small>
+src/views\FabricView.vue:71:        <p class="section-kicker">{{ t("网络观测") }}</p>
+src/views\FabricView.vue:76:            ><small>µs</small>
+src/views\FabricView.vue:84:              <InlineHelp :text="t('所有活跃通信范围的总体占用')" />
+src/views\FabricView.vue:96:              <InlineHelp :text="t('本次实验涉及的通信范围')" />
+src/views\FabricView.vue:108:            <p v-if="!hasReportedHotspot">{{ t("主导域或延迟类型未报告；请查看逐域指标，不按利用率猜测瓶颈。") }}</p>
+src/views\FabricView.vue:147:          <InlineHelp :text="t('需要审计或排查问题时，再查看 Schema、SHA-256 和精确证据链接。')" :interactive="false" />
+src/views\FabricView.vue:157:            <small v-if="semanticField('availability', analysis.artifactAvailability).valueDescription">
+src/views\FabricView.vue:183:          <small>{{ t("专业详情") }}</small>
+src/views\FabricView.vue:198:              <small>FABRIC DOMAIN</small>
+src/views\FabricView.vue:229:            <small v-else>
+src/views\FabricView.vue:258:          <small v-else class="domain-topology-status">
+src/views\FabricView.vue:270:          <p class="section-kicker">{{ t("逐项比较") }}</p>
+src/views\FabricView.vue:272:          <p>{{ t("利用率描述模拟 Fabric 的占用，不等同于真实集群链路计数器。") }}</p>
+src/views\FabricView.vue:302:                /><small v-else>
+src/views\FabricView.vue:317:          <p class="section-kicker">{{ t("请求与主导阶段") }}</p>
+src/views\FabricView.vue:319:          <p>
+src/views\FabricView.vue:356:                <small>{{ statusLabel(request.dominant_delay_kind) }}</small>
+src/views\FabricView.vue:360:                <small>{{ request.dominant_collective_id || t("不适用") }}</small>
+src/views\FabricView.vue:374:                  <small v-if="!request.evidence.sourcePath">
+src/views\FabricView.vue:384:      <p v-else class="panel-empty-copy">{{ t("没有 request_fabric_contributions") }}</p>
+src/views\FabricView.vue:398:        <p v-if="analysis.topologyJoinAvailability === 'available'">
+src/views\FabricView.vue:405:        <p v-else>
+src/features\run-bound-evidence\components\RunBoundEvidencePanel.vue:152:      <p>{{ t("当前内容没有 Bridge run ID，不能建立带 SHA-256 的 run-bound 证据链。") }}</p>
+src/features\run-bound-evidence\components\RunBoundEvidencePanel.vue:156:      <p>{{ t("选择一个后端 request_id 后查看可验证的关联；前端不会自行挑选 P99 request。") }}</p>
+src/features\run-bound-evidence\components\RunBoundEvidencePanel.vue:191:          <small>{{ t("并列资源语义") }}</small>
+src/features\run-bound-evidence\components\RunBoundEvidencePanel.vue:208:        <p class="run-bound-output-boundary">
+src/features\run-bound-evidence\components\RunBoundEvidencePanel.vue:237:        <p>{{ t(chain.week8Execution.detail) }}</p>
+src/features\run-bound-evidence\components\RunBoundEvidencePanel.vue:273:            <p v-if="chain.week8Execution.fallback.reason">{{ chain.week8Execution.fallback.reason }}</p>
+src/features\run-bound-evidence\components\RunBoundEvidencePanel.vue:346:              <p v-if="chain.week8Execution.differential.mismatchCode">
+src/features\run-bound-evidence\components\EvidenceNode.vue:34:      <small :class="`availability--${node.availability}`">{{ statusLabel }}</small>
+src/features\run-bound-evidence\components\EvidenceNode.vue:37:      <p v-if="node.availability !== 'available'" class="run-bound-node-reason">{{ t(node.detail) }}</p>
+src/features\run-bound-evidence\components\EvidenceNode.vue:61:        <p>{{ t(node.detail) }}</p>
+src/views\ExperimentView.vue:619:          <p>{{ t(state.bridge.title) }}。{{ t("仍可编辑输入，版本同步后即可提交。") }}</p>
+src/views\ExperimentView.vue:626:          <p>
+src/views\ExperimentView.vue:635:          <p>
+src/views\ExperimentView.vue:639:          <p>{{ intakeRejection.message }}</p>
+src/views\ExperimentView.vue:640:          <p>{{ t("请修正 Trace package 后重试；本次没有运行状态或归因工件可读取。") }}</p>
+src/features\run-experiment\DomainInventoryForm.vue:350:          ><InlineHelp
+src/features\run-experiment\DomainInventoryForm.vue:366:    <p v-if="!parsed.ok" class="structured-note structured-note--warning" role="alert">{{ parsed.error }}</p>
+src/features\run-experiment\DomainInventoryForm.vue:367:    <p v-else-if="!domains" class="structured-note structured-note--warning" role="alert">
+src/features\run-experiment\DomainInventoryForm.vue:370:    <p v-else-if="!domains.length" class="structured-note">
+src/features\run-experiment\DomainInventoryForm.vue:440:            <small>{{
+src/features\run-experiment\DomainInventoryForm.vue:455:          <small v-if="!deviceIds.length" class="domain-member-empty">{{
+src/features\run-experiment\DomainInventoryForm.vue:467:        <p v-if="bindingMismatch(index)" class="structured-note structured-note--warning">
+src/features\run-experiment\DomainInventoryForm.vue:476:        <p v-else-if="!domainMembers(index).length" class="structured-note">
+src/features\run-experiment\DomainInventoryForm.vue:482:    <p v-if="localError" class="structured-note structured-note--error" role="alert">{{ localError }}</p>
+src/features\run-experiment\DomainInventoryForm.vue:483:    <p v-else-if="unrenderedFields.length" class="structured-note structured-note--warning">
+src/features\lightweight-workbench\components\LightweightEmptyState.vue:38:    <p class="section-kicker">{{ t("空状态") }}</p>
+src/features\lightweight-workbench\components\LightweightEmptyState.vue:40:    <p>{{ t(props.detail ?? copy[props.kind].detail) }}</p>
+src/features\run-experiment\DesignSpaceInputPanel.vue:37:        <InlineHelp
+src/features\run-experiment\DesignSpaceInputPanel.vue:44:        <small>{{ manifestSummary.candidateCount }} / 256 {{ t("候选") }}</small>
+src/features\run-experiment\DesignSpaceInputPanel.vue:69:          <small v-if="manifestSummary.mode === 'built_in'">
+src/features\run-experiment\DesignSpaceInputPanel.vue:72:          <small v-else-if="manifestSummary.error">{{
+src/features\run-experiment\DesignSpaceInputPanel.vue:75:          <small v-else>tilesim.design_space.candidates.v1</small>
+src/views\DesignSpaceView.vue:82:        <p>{{ t("其他环节的配置没有在本轮执行，不能用这张表判断完整系统的最优方案。") }}</p>
+src/views\DesignSpaceView.vue:83:        <small v-if="unresolvedKnobs.length">
+src/views\DesignSpaceView.vue:98:          <InlineHelp :text="t('排名直接来自后端报告；先比较 P95、P99，再按需查看进一步模拟和专业证据。')" />
+src/views\DesignSpaceView.vue:124:                    ><small>{{ candidate.candidate_id }}</small>
+src/views\DesignSpaceView.vue:130:                <small class="candidate-run-id">{{
+src/views\DesignSpaceView.vue:138:                <small v-if="candidate.promotion_hint">hint: {{ candidate.promotion_hint }}</small>
+src/views\DesignSpaceView.vue:142:                <small>Analytical #{{ candidate.analytical_rank || "—" }}</small>
+src/views\DesignSpaceView.vue:150:                <small>{{ candidate.dominance_reason_code || t("未报告") }}</small>
+src/views\DesignSpaceView.vue:158:                <small v-else>{{ candidateEvidence(candidateIndex)?.availability || "legacy_compatibility" }}</small>
+src/views\DesignSpaceView.vue:169:                <small>{{ candidate.stop_reason || "unknown" }}</small>
+src/views\DesignSpaceView.vue:181:          <InlineHelp
+src/views\DesignSpaceView.vue:207:          <InlineHelp
+src/views\DesignSpaceView.vue:219:          <p>{{ capabilityDetail(capability) }}</p>
+src/views\DesignSpaceView.vue:221:          <small v-if="capability.opaqueValues.length">
+src/views\DesignSpaceView.vue:228:    <section class="candidate-detail-list" :aria-label="t('候选完整证据')">
+src/views\DesignSpaceView.vue:232:        class="panel candidate-detail"
+src/views\DesignSpaceView.vue:235:          <span class="candidate-detail-rank">#{{ candidate.final_rank || "—" }}</span>
+src/views\DesignSpaceView.vue:238:            <small>{{ candidate.candidate_id }} · Analytical #{{ candidate.analytical_rank || "—" }}</small>
+src/views\DesignSpaceView.vue:241:          <span class="candidate-detail-tail">P99 {{ metricValue(candidate.projected_p99_latency_us, "µs") }}</span>
+src/views\DesignSpaceView.vue:244:        <div class="candidate-detail-body">
+src/views\DesignSpaceView.vue:285:            <p class="candidate-detail-note">
+src/views\DesignSpaceView.vue:325:            <p v-if="candidate.first_state_divergence?.state_schema" class="candidate-detail-note">
+src/views\DesignSpaceView.vue:355:            <p class="candidate-detail-note">
+src/views\DesignSpaceView.vue:394:            <p class="candidate-detail-note">
+src/views\DesignSpaceView.vue:476:            <p class="candidate-detail-note">
+src/views\DesignSpaceView.vue:491:              <p>{{ item.detail }}</p>
+src/views\DesignSpaceView.vue:504:            <small>{{ t("查看 provenance、manifest、fidelity 解析与 Analytical/DES 排名变化") }}</small>
+src/views\DesignSpaceView.vue:565:            <p v-for="item in report.analytical_vs_des_disagreements" :key="item.candidate_id">
+src/views\DesignSpaceView.vue:568:              <small>{{ item.detail }}</small>
+src/views\DesignSpaceView.vue:571:          <p v-else class="design-empty-note">{{ t("本次候选没有报告 Analytical/DES 排名变化。") }}</p>
+src/views\ExecutionView.vue:200:        class="structured-note"
+src/views\ExecutionView.vue:225:          <small>{{ friendlyHeadline(layerById.get(id)) }}</small>
+src/views\ExecutionView.vue:232:          <small>{{ t("三个并列资源环节") }}</small>
+src/views\ExecutionView.vue:243:            <small>{{ friendlyHeadline(layerById.get(id)) }}</small>
+src/views\ExecutionView.vue:255:          <small>{{ friendlyHeadline(layerById.get("S6")) }}</small>
+src/views\ExecutionView.vue:260:    <section class="execution-detail-layout">
+src/views\ExecutionView.vue:261:      <article id="execution-layer-detail" class="panel layer-detail-panel" data-help-anchor="execution-detail">
+src/views\ExecutionView.vue:262:        <header class="layer-detail-header">
+src/views\ExecutionView.vue:265:            <p>{{ selected.role }}</p>
+src/views\ExecutionView.vue:267:          <div class="layer-detail-status">
+src/views\ExecutionView.vue:275:            <small>{{ semanticField("actual_fidelity", selected.resolution?.actual_fidelity).fieldLabel }}</small>
+src/views\ExecutionView.vue:277:            <p v-if="semanticField('actual_fidelity', selected.resolution?.actual_fidelity).valueDescription">
+src/views\ExecutionView.vue:283:            <small>{{ semanticField("evidenceState", selected.evidenceState).fieldLabel }}</small>
+src/views\ExecutionView.vue:285:            <p v-if="semanticField('evidenceState', selected.evidenceState).valueDescription">
+src/views\ExecutionView.vue:299:            <small>{{
+src/views\ExecutionView.vue:331:            <small>{{ t(evidenceLabels[selected.evidenceState] || selected.evidenceState) }}</small>
+src/views\ExecutionView.vue:339:              <p>{{ backendExplanation(selected.detail).text }}</p>
+src/views\ExecutionView.vue:340:              <small v-if="backendExplanation(selected.detail).mapped" class="backend-raw"
+src/views\ExecutionView.vue:350:              <p>{{ backendExplanation(selected.implementation?.evidence).text }}</p>
+src/views\ExecutionView.vue:351:              <small v-if="backendExplanation(selected.implementation?.evidence).mapped" class="backend-raw"
+src/views\ExecutionView.vue:361:              <p>{{ backendExplanation(selected.implementation?.gap).text }}</p>
+src/views\ExecutionView.vue:362:              <small v-if="backendExplanation(selected.implementation?.gap).mapped" class="backend-raw"
+src/views\ExecutionView.vue:373:                <small v-if="semanticField('evidenceState', selected.evidenceState).valueDescription">
+src/views\ExecutionView.vue:396:            <small>{{ t("{count} 项", { count: selected.checks.length }) }}</small>
+src/views\ExecutionView.vue:404:                <p>{{ backendExplanation(check.detail).text }}</p>
+src/views\ExecutionView.vue:405:                <small>{{ backendExplanation(check.detail).label }}</small>
+src/views\ExecutionView.vue:413:              <small>{{ checkLabel(check.status) }}</small>
+src/views\ExecutionView.vue:421:            <small>{{ t("{count} 项", { count: selected.attribution.length }) }}</small>
+src/views\ExecutionView.vue:429:                <p>{{ backendExplanation(item.detail).text }}</p>
+src/views\ExecutionView.vue:430:                <small>{{ backendExplanation(item.detail).label }}</small>
+src/views\ExecutionView.vue:434:                <small>{{ item.evidence_link }}</small>
+src/views\ExecutionView.vue:447:            <small>{{
+src/views\ExecutionView.vue:461:            <p class="section-kicker">{{ t("仿真执行与控制平面") }}</p>
+src/views\ExecutionView.vue:464:              <InlineHelp :text="t('这里记录各环节在同一模拟时间线上的开始和结束。')" :interactive="false" />
+src/views\ExecutionView.vue:478:                <small v-if="semanticField('stage_kind', stageKind(stage)).valueDescription">
+src/views\ExecutionView.vue:482:                <p>{{ backendExplanation(stage.detail).text }}</p>
+src/views\ExecutionView.vue:483:                <small>{{ backendExplanation(stage.detail).label }}</small>
+src/views\ExecutionView.vue:488:              <small>{{ durationUs(stage) }} µs</small>
+src/views\ExecutionView.vue:494:          <p v-else class="panel-empty-copy">{{ t("当前报告包没有 execution envelope 阶段记录。") }}</p>
+src/views\ExecutionView.vue:511:            <p>
+src/views\ExecutionView.vue:512:              <small>{{ backendExplanation(result.resourceConvergence.summary).label }}</small>
+src/views\ExecutionView.vue:537:          <p v-else>{{ t("当前报告没有资源语义汇合摘要。") }}</p>
+src/views\ExecutionView.vue:542:    <section class="execution-boundary-note">
+src/views\ExecutionView.vue:544:      <p>
+src/features\lightweight-workbench\components\LightweightEntryCards.vue:12:      <p class="section-kicker">TileSim 工作台</p>
+src/features\lightweight-workbench\components\LightweightEntryCards.vue:14:      <p>两种入口使用同一个 Agent、能力目录和校验规则；区别只在信息呈现方式。</p>
+src/features\lightweight-workbench\components\LightweightEntryCards.vue:19:        <span><strong>轻量工作台</strong><small>用必要配置和共享 Agent，校验并提交当前支持的正式 run。</small></span>
+src/features\lightweight-workbench\components\LightweightEntryCards.vue:24:        <span><strong>专业工作台</strong><small>直接使用完整导航、实验表单、运行结果和证据详情。</small></span>
+src/views\AttributionView.vue:136:            <p class="section-kicker">{{ t("归因对象") }}</p>
+src/views\AttributionView.vue:164:          <p class="attribution-reading-note">{{ t("置信度与完整度是报告字段，不代表真实系统准确率。") }}</p>
+src/views\AttributionView.vue:172:              <p class="section-kicker">{{ t("报告贡献项") }}</p>
+src/views\AttributionView.vue:174:              <p>{{ t("保留报告顺序与原始排名；份额条使用固定 0–100% 范围，不重新归一化。") }}</p>
+src/views\AttributionView.vue:198:                    <small>{{ executionLayerName(item.subsystem) }} · {{ item.subsystem }}</small
+src/views\AttributionView.vue:200:                    <p v-if="item.detail">
+src/views\AttributionView.vue:201:                      <small>{{ backendExplanation(item.detail).label }}</small>
+src/views\AttributionView.vue:211:                    <small v-if="shareOutOfRange(item.share)" class="attribution-share-warning">{{
+src/views\AttributionView.vue:227:          <p v-else class="attribution-no-records">
+src/views\AttributionView.vue:242:              <p class="section-kicker">{{ t("报告审计") }}</p>
+src/views\AttributionView.vue:244:              <p>{{ t("直接展示归因报告的审计结论；守恒通过不代表传播链完整。") }}</p>
+src/views\AttributionView.vue:265:                  <small
+src/views\AttributionView.vue:351:              <p class="section-kicker">{{ t("有序解释") }}</p>
+src/views\AttributionView.vue:353:              <p>{{ t("这是报告提供的有序解释，不应单独视为现实因果证明。") }}</p>
+src/views\AttributionView.vue:363:                  <small>{{ executionLayerName(cause.subsystem) }}</small
+src/views\AttributionView.vue:368:                  <p>
+src/views\AttributionView.vue:369:                    <small>{{ backendExplanation(cause.evidence).label }}</small>
+src/views\AttributionView.vue:384:        <section v-if="outputPlaneAttributions.length" class="scope-callout attribution-scope-note">
+src/views\AttributionView.vue:386:          <p>
+src/views\AttributionView.vue:399:              <p class="section-kicker">{{ t("非因果输出记录") }}</p>
+src/views\AttributionView.vue:401:              <p>{{ t("这些记录仅供审计，并与上方的延迟原因排序分开显示。") }}</p>
+src/views\AttributionView.vue:434:                    <small>{{ backendExplanation(item.detail).label }}</small>
+src/views\AttributionView.vue:452:        <div class="scope-callout attribution-scope-note">
+src/views\AttributionView.vue:454:          <p>
+src/features\run-experiment\DeviceInventoryForm.vue:245:          ><InlineHelp
+src/features\run-experiment\DeviceInventoryForm.vue:269:    <p v-if="!parsed.ok" class="structured-note structured-note--warning" role="alert">{{ parsed.error }}</p>
+src/features\run-experiment\DeviceInventoryForm.vue:270:    <p v-else-if="!devices" class="structured-note structured-note--warning" role="alert">
+src/features\run-experiment\DeviceInventoryForm.vue:273:    <p v-else-if="!devices.length" class="structured-note">{{ t("当前没有设备。把「卡数」改为大于 0 即可新增。") }}</p>
+src/features\run-experiment\DeviceInventoryForm.vue:319:    <p v-if="localError" class="structured-note structured-note--error" role="alert">{{ localError }}</p>
+src/features\run-experiment\DeviceInventoryForm.vue:320:    <p v-else-if="unrenderedFields.length" class="structured-note structured-note--warning">
+src/features\run-experiment\ExperimentCapabilityPanel.vue:39:        <InlineHelp v-if="!props.compact" :text="t('必要时查看执行门槛与版本信息。')" :interactive="false" />
+src/features\run-experiment\ExperimentCapabilityPanel.vue:48:        <small v-if="unavailableDependencyCount">
+src/features\run-experiment\ExperimentCapabilityPanel.vue:60:          <small>{{ capabilities.dependencies?.gpu_hardware?.reason || t("尚未发现") }}</small>
+src/features\run-experiment\ExperimentCapabilityPanel.vue:67:          <small>{{
+src/features\run-experiment\ExperimentCapabilityPanel.vue:78:          <small>{{ capabilities.dependencies?.astra_sim?.reason || t("未配置真实 executable/Chakra root") }}</small>
+src/features\run-experiment\ExperimentCapabilityPanel.vue:81:      <p class="capability-boundary-note">
+src/features\run-experiment\ExperimentCapabilityPanel.vue:92:            <InlineHelp :text="t('顶层选项来自 create-run schema 与运行时 capabilities 的交集。')" />
+src/features\run-experiment\ExperimentCapabilityPanel.vue:137:            <InlineHelp :text="t('resolved fidelity 仅从运行后的 execution envelope 与 validation 读取。')" />
+src/features\run-experiment\ExperimentCapabilityPanel.vue:157:            <InlineHelp :text="t('运行门禁同时校验源码版本、CLI 构建和工作树状态摘要。')" />
+src/features\run-experiment\ExperimentCapabilityPanel.vue:168:              <small>{{ identity.deployment_ref || identity.backend_branch || t("未知") }}</small>
+src/features\run-experiment\ExperimentCapabilityPanel.vue:175:              <small>{{ identity.deployed_at || t("时间未知") }}</small>
+src/features\run-experiment\ExperimentCapabilityPanel.vue:182:              <small :title="identity.source_state_digest">
+src/features\run-experiment\ExperimentCapabilityPanel.vue:191:              <small :title="identity.build_state_digest">
+src/features\run-experiment\ExperimentCapabilityPanel.vue:202:              <small>{{ t("源码 revision 与 CLI build revision") }}</small>
+src/features\run-experiment\ExperimentCapabilityPanel.vue:211:              <small>{{ t("源码变化后 execution_ready 会自动关闭") }}</small>
+src/features\run-experiment\ExperimentIdentityPanel.vue:19:        <InlineHelp v-if="!props.compact" :text="t('用于历史记录和结果回溯。')" />
+src/features\run-experiment\ExperimentIdentityPanel.vue:25:          >{{ t("实验名称") }} <small>{{ t("可选") }}</small></span
+src/features\run-experiment\ExperimentIdentityPanel.vue:37:          }}<InlineHelp
+src/features\run-experiment\ExperimentIdentityPanel.vue:54:        <small v-if="!props.compact" class="field-help">{{ t("以运行后的验证报告为准") }}</small>
+src/features\run-experiment\ExperimentIdentityPanel.vue:63:        <small v-if="!props.compact" class="field-help">{{ t("真实网络观测仅作为证据") }}</small>
+src/features\run-experiment\ExperimentInputPanel.vue:386:        <InlineHelp v-if="!props.compact" :text="t('先选输入方式，再调整需要的参数。')" />
+src/features\run-experiment\ExperimentInputPanel.vue:428:          <small>{{ t("按模块切换，逐步完成运行策略、请求与拓扑。") }}</small>
+src/features\run-experiment\ExperimentInputPanel.vue:444:      <p v-if="structuredInput" class="structured-note structured-note--info" role="status">
+src/features\run-experiment\ExperimentInputPanel.vue:449:        class="structured-note"
+src/features\run-experiment\ExperimentInputPanel.vue:450:        :class="`structured-note--${structuredNoticeTone}`"
+src/features\run-experiment\ExperimentInputPanel.vue:455:      <div v-if="pairingPrompt" class="structured-note structured-note--warning" role="alert">
+src/features\run-experiment\ExperimentInputPanel.vue:456:        <p>
+src/features\run-experiment\ExperimentInputPanel.vue:499:            <small>{{ t(card.description) }}</small>
+src/features\run-experiment\ExperimentInputPanel.vue:519:              <p>{{ t(moduleCopy[activeModule].description) }}</p>
+src/features\run-experiment\ExperimentInputPanel.vue:535:                  <InlineHelp v-if="!props.compact" :text="`${group.subsystem} · ${t(group.detail)}`" />
+src/features\run-experiment\ExperimentInputPanel.vue:551:                    >{{ t(field.label) }} <small v-if="field.unit">{{ field.unit }}</small></span
+src/features\run-experiment\ExperimentInputPanel.vue:585:                  <small v-if="showFieldContracts || fieldPath === field.requestJsonPointer" class="field-help"
+src/features\run-experiment\ExperimentInputPanel.vue:588:                  <small v-if="!field.available" class="field-error">{{ field.unavailableReason }}</small>
+src/features\run-experiment\ExperimentInputPanel.vue:589:                  <small v-if="fieldPath === field.requestJsonPointer" class="field-error">{{
+src/features\run-experiment\ExperimentInputPanel.vue:594:              <small v-if="showFieldContracts" class="schema-source-note">
+src/features\run-experiment\ExperimentInputPanel.vue:609:              <p>{{ t("请求、设备和拓扑会写入 custom_inputs；启用后仍会保留当前快捷参数。") }}</p>
+src/features\run-experiment\ExperimentInputPanel.vue:627:              <p v-else class="structured-note structured-note--warning" role="alert">
+src/features\run-experiment\ExperimentInputPanel.vue:640:            <p v-else-if="activeModule === 'requests'" class="structured-note structured-note--warning" role="alert">
+src/features\run-experiment\ExperimentInputPanel.vue:649:                    <InlineHelp :text="t('最常用的拓扑操作：把一张显卡拖到另一张显卡，添加一条仿真连接。')" />
+src/features\run-experiment\ExperimentInputPanel.vue:670:                  <InlineHelp :text="t('需要改卡数、domain 成员或网络模型时再展开')" :interactive="false" />
+src/features\run-experiment\ExperimentInputPanel.vue:672:                <span class="topology-advanced-disclosure__hint">{{
+src/features\run-experiment\ExperimentInputPanel.vue:724:          <small
+src/features\lightweight-workbench\components\LightweightLearningCards.vue:46:        <p class="section-kicker">{{ t("概念卡") }}</p>
+src/features\lightweight-workbench\components\LightweightLearningCards.vue:54:        <p>{{ t(card.summary) }}</p>
+src/features\lightweight-workbench\components\LightweightLearningCards.vue:55:        <p class="lightweight-learning__takeaway">
+src/features\lightweight-workbench\components\LightweightHelpPanel.vue:18:      <p>{{ t("页面说明已移至右上角页面帮助。") }}</p>
+src/features\lightweight-workbench\components\LightweightHelpPanel.vue:19:      <p class="lightweight-help-panel__boundary">{{ t("主流程只保留配置、提交、运行状态和结果。") }}</p>
+src/features\run-experiment\ExperimentSubmitCard.vue:101:      <pre v-if="requestPreview.text" tabindex="0" role="region" :aria-label="t('等价 JSON request')">{{
+src/features\run-experiment\ExperimentSubmitCard.vue:104:      <p v-else class="request-preview-error">
+src/features\run-experiment\ExperimentSubmitCard.vue:114:    <p v-if="!canRun && !runStatus && !bridgeAvailable" class="run-submit__disabled-note">
+src/features\run-experiment\ExperimentSubmitCard.vue:117:    <p v-if="runStatus" class="run-progress">{{ runStatus }}</p>
+src/features\run-experiment\RequestTableForm.vue:369:          ><InlineHelp
+src/features\run-experiment\RequestTableForm.vue:377:        <small>{{ t("{count} 行", { count: rowCount }) }}</small>
+src/features\run-experiment\RequestTableForm.vue:384:    <p v-if="!parsed.ok" class="structured-note structured-note--warning" role="alert">{{ parsed.error }}</p>
+src/features\run-experiment\RequestTableForm.vue:385:    <p v-else-if="!requests" class="structured-note structured-note--warning" role="alert">
+src/features\run-experiment\RequestTableForm.vue:399:          <InlineHelp
+src/features\run-experiment\RequestTableForm.vue:410:      <p v-if="catalogModelIds.length" class="structured-note">
+src/features\run-experiment\RequestTableForm.vue:426:                <InlineHelp v-if="boundsHint(field)" :text="boundsHint(field)" :label="t('查看字段范围')" />
+src/features\run-experiment\RequestTableForm.vue:461:                    <small>{{ t("点击选择") }}</small>
+src/features\run-experiment\RequestTableForm.vue:528:                <small
+src/features\run-experiment\RequestTableForm.vue:567:      <p v-if="hiddenKeys.length" class="structured-note">
+src/features\run-experiment\RequestTableForm.vue:576:      <p v-if="localError" class="structured-note structured-note--error" role="alert">{{ localError }}</p>
+src/features\lightweight-workbench\components\LightweightLimitations.vue:7:      <p class="section-kicker">第四步</p>
+src/features\lightweight-workbench\components\LightweightLimitations.vue:13:    <p>轻量工作台只改变呈现方式，不会把 unavailable、unknown 或 stale 变成可用。</p>
+src/features\run-experiment\RuntimeEngineForm.vue:94:      <InlineHelp
+src/features\run-experiment\RuntimeEngineForm.vue:102:    <p v-if="!parsed.ok" role="alert">{{ parsed.error }}</p>
+src/features\run-experiment\RuntimeEngineForm.vue:107:          }}<InlineHelp
+src/features\run-experiment\RuntimeEngineForm.vue:131:          }}<InlineHelp :text="t('vllm.0.6.tilesim_pd.v1 未开放：缺少完整放置、handoff 与 dense host 前置。')"
+src/features\run-experiment\RuntimeEngineForm.vue:149:      <p v-if="error || dynamicIssue || fieldPath?.startsWith('/custom_inputs/runtime_trace/engine_')" role="alert">
+src/features\run-experiment\RuntimePolicyForm.vue:202:        <InlineHelp
+src/features\run-experiment\RuntimePolicyForm.vue:215:    <p v-if="!parsed.ok" class="structured-note structured-note--warning" role="alert">{{ parsed.error }}</p>
+src/features\run-experiment\RuntimePolicyForm.vue:216:    <p v-else-if="!policy" class="structured-note structured-note--warning" role="alert">
+src/features\run-experiment\RuntimePolicyForm.vue:241:            <InlineHelp :text="boundsHint(field).text" :label="t('查看字段范围')" />
+src/features\run-experiment\RuntimePolicyForm.vue:242:            <small v-if="isOmitted(field)">{{
+src/features\run-experiment\RuntimePolicyForm.vue:284:      <p v-if="localError" class="structured-note structured-note--error" role="alert">{{ localError }}</p>
+src/features\lightweight-workbench\components\LightweightOnboarding.vue:23:          <p class="section-kicker">{{ t("首次使用") }}</p>
+src/features\lightweight-workbench\components\LightweightOnboarding.vue:42:      <p class="lightweight-onboarding__note">
+src/features\lightweight-workbench\components\LightweightNextStep.vue:14:      <p class="section-kicker">第五步</p>
+src/features\lightweight-workbench\components\LightweightNextStep.vue:16:      <p>这是草案，尚未创建运行。你可以回到专业工作台查看完整参数和证据。</p>
+src/features\run-experiment\TopologyGraphEditor.vue:982:        <InlineHelp
+src/features\run-experiment\TopologyGraphEditor.vue:999:        <InlineHelp :text="t('只调整画布位置，不修改拓扑 JSON。')" />
+src/features\run-experiment\TopologyGraphEditor.vue:1028:    <p v-if="parsed.error" class="topology-editor__error" role="alert">{{ parsed.error }}</p>
+src/features\run-experiment\TopologyGraphEditor.vue:1145:            <small>{{ t("这里的修改会直接写入当前拓扑输入") }}</small>
+src/features\run-experiment\TopologyGraphEditor.vue:1181:        <InlineHelp
+src/features\run-experiment\TopologyGraphEditor.vue:1185:        <InlineHelp
+src/features\run-experiment\TopologyGraphEditor.vue:1189:        <small v-if="arrangementApplied" class="topology-direct-canvas__arranged-note">
+src/features\run-experiment\TopologyGraphEditor.vue:1230:                <path v-else class="topology-link__hit" :d="linkPath(link)" />
+src/features\run-experiment\TopologyGraphEditor.vue:1238:                <path v-else :d="linkPath(link)" />
+src/features\run-experiment\TopologyGraphEditor.vue:1277:        <span class="topology-direct-canvas__legend-note">{{ t("卡片下方的域标签用于核对归属") }}</span>
+src/features\run-experiment\TopologyGraphEditor.vue:1298:          ><InlineHelp :text="t('只有需要改模型或连接参数时再展开')" :interactive="false" /></span
+src/features\run-experiment\TopologyGraphEditor.vue:1305:            ><InlineHelp
+src/features\run-experiment\TopologyGraphEditor.vue:1317:        <p v-if="!moduleBindings.length" class="structured-note">
+src/features\run-experiment\TopologyGraphEditor.vue:1367:            <InlineHelp :text="t('以下几项写进 module_bindings[].override_params；留空表示省略该键。')" />
+src/features\run-experiment\TopologyGraphEditor.vue:1373:                >{{ overrideLabel(field) }} <small>{{ overrideHint(field) }}</small></span
+src/features\run-experiment\TopologyGraphEditor.vue:1398:          class="structured-note"
+src/features\run-experiment\TopologyGraphEditor.vue:1418:      /><small v-if="topologyFieldError" :id="jsonErrorId" class="topology-editor__field-error">{{
+src/features\run-experiment\TopologyGraphEditor.vue:1422:    <p v-else-if="topologyFieldError" class="topology-editor__error" role="alert">
+src/features\run-experiment\TopologyGraphEditor.vue:1425:    <div v-if="!readOnly" class="topology-editor__hint">
+src/features\run-experiment\TopologyGraphEditor.vue:1426:      <Unlink :size="13" /><InlineHelp
+src/features\report-coverage\components\AvailabilityBadge.vue:15:    <span v-if="!props.compact && description" class="availability-badge__detail">{{ description }}</span>
+src/features\run-experiment\TopologyLinkProperties.vue:40:    <small>{{ props.link.src_device }} ↔ {{ props.link.dst_device }}</small>
+src/features\run-experiment\TopologyLinkProperties.vue:43:      <InlineHelp :text="t('根据该连接所属 domain 的类型判断：scale_up 为域内，scale_out 为跨域')" />
+src/features\report-coverage\components\CoverageListTable.vue:34:        <p v-if="props.list.description">{{ t(props.list.description) }}</p>
+src/features\report-coverage\components\CoverageListTable.vue:70:      <p>{{ t(props.list.emptyNote) }}</p>
+src/features\run-experiment\TracePackageInputPanel.vue:43:        <InlineHelp :text="t('从 Bridge 受控目录选择已经过 TileSimCLI 检查的语义 Trace 包。')" />
+src/features\run-experiment\TracePackageInputPanel.vue:57:        <p>{{ error }}</p>
+src/features\run-experiment\TracePackageInputPanel.vue:64:        <p>
+src/features\run-experiment\TracePackageInputPanel.vue:71:      <small v-if="catalog.discovery_errors.length">
+src/features\run-experiment\TracePackageInputPanel.vue:87:              <small>{{ item.producer?.name || t("身份不可用") }} · {{ item.producer?.version || "—" }}</small>
+src/features\run-experiment\TracePackageInputPanel.vue:96:      <section v-if="selectedPackage" class="trace-package-detail">
+src/features\run-experiment\TracePackageInputPanel.vue:100:            <small>{{ t("检查状态") }} · {{ selectedPackage.inspect_status }}</small>
+src/features\run-experiment\TracePackageInputPanel.vue:125:            <dt>{{ t("生成工具") }} <small>producer</small></dt>
+src/features\run-experiment\TracePackageInputPanel.vue:129:            <dt>{{ t("实验标识") }} <small>experiment_id</small></dt>
+src/features\run-experiment\TracePackageInputPanel.vue:133:            <dt>{{ t("物理运行标识") }} <small>physical_run_id</small></dt>
+src/features\run-experiment\TracePackageInputPanel.vue:137:            <dt>{{ t("入口边界") }} <small>boundary</small></dt>
+src/features\run-experiment\TracePackageInputPanel.vue:141:            <dt>{{ t("入口 Trace 类型") }} <small>trace kind</small></dt>
+src/features\run-experiment\TracePackageInputPanel.vue:152:          <p>
+src/features\run-experiment\TracePackageInputPanel.vue:157:            <small>
+src/features\run-experiment\TracePackageInputPanel.vue:174:        <p class="trace-integrity-scope">{{ t("完整性检查不代表校准或验证通过。") }}</p>
+src/features\run-experiment\TracePackageInputPanel.vue:175:        <p class="trace-contract-gap" role="status">
+src/features\run-experiment\TracePackageInputPanel.vue:182:        <p v-if="!selectedPackage.submission_available" class="field-error">
+src/features\run-experiment\TracePackageInputPanel.vue:185:        <p v-for="item in selectedPackage.inspect_errors" :key="item.code" class="field-error">
+src/features\run-experiment\TracePackageInputPanel.vue:188:        <p v-if="inspectError" class="field-error">{{ inspectError }}</p>
+src/features\run-experiment\TracePackageInputPanel.vue:189:        <p v-if="fieldPath === '/trace_package_id'" class="field-error">/trace_package_id</p>
+src/features\lightweight-workbench\components\LightweightRunSummary.vue:105:        <p class="section-kicker">结果摘要</p>
+src/features\lightweight-workbench\components\LightweightRunSummary.vue:110:    <p class="lightweight-run-summary__detail">{{ t(stateCopy[state].detail) }}</p>
+src/features\report-coverage\components\CoveragePanel.vue:25:        <p class="section-kicker">{{ t("报告字段覆盖") }}</p>
+src/features\report-coverage\components\CoveragePanel.vue:27:        <p v-if="props.description">{{ t(props.description) }}</p>
+src/features\report-coverage\components\CoveragePanel.vue:42:            <p v-if="group.description">{{ t(group.description) }}</p>
+src/features\lightweight-workbench\components\LightweightTaskCards.vue:28:          <p>{{ t(category.description) }}</p>
+src/features\lightweight-workbench\components\LightweightTaskCards.vue:65:            <span v-if="template.exampleLabel" class="lightweight-task-card__example-note">{{
+src/features\lightweight-workbench\components\LightweightUnderstandingSummary.vue:35:      <p class="section-kicker">第三步</p>
+src/features\lightweight-workbench\components\LightweightUnderstandingSummary.vue:38:      <p class="lightweight-summary__status" :data-status="result.status">{{ copy.label }}</p>
+src/features\lightweight-workbench\components\LightweightUnderstandingSummary.vue:39:      <p>{{ result.summary || copy.detail }}</p>
+src/features\lightweight-workbench\components\LightweightUnderstandingSummary.vue:47:        ><small
+src/features\lightweight-workbench\components\LightweightUnderstandingSummary.vue:56:      <p>当前没有可验证的字段依据；unknown、unsupported、unavailable 或 stale 不会被解释为成功。</p>
+src/features\lightweight-workbench\components\LightweightUnderstandingSummary.vue:87:        <p>
+src/features\lightweight-workbench\components\LightweightWorkbenchShell.vue:30:          ><strong>TileSim</strong><small>{{ t("轻量工作台") }}</small></span

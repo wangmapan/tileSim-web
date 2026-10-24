@@ -2,6 +2,14 @@
 
 本目录是当前 Windows 工作台的 Tauri 2 + Vue 3 + TypeScript + Vite + Rust 源码。它只负责本地状态呈现、输入校验和调用固定 PowerShell 入口；部署、immutable release、manifest、DPAPI、WSL worktree 与构建缓存语义仍由 `scripts/` 拥有。
 
+这里构建出的 NSIS/EXE 目前仍是开发者 checkout 启动器：它依赖旁边的 `scripts/`、Web checkout、WSL deployment
+manifest 和后端工作树，不能单独发送给没有开发环境的测试人员。真正的安装器、同源离线 ZIP 和预构建 runtime
+方案见 [`docs/deployment/WINDOWS_DISTRIBUTION_AND_INSTALLER_PLAN_2026-10-24.md`](../../docs/deployment/WINDOWS_DISTRIBUTION_AND_INSTALLER_PLAN_2026-10-24.md)。
+
+启动器保存模型服务配置时，开发 checkout 继续使用 `runtime/evidence-agent.local.json`；检测到 packaged release
+（或设置 `TILESIM_PACKAGE_ROOT`）后改写到 `%LocalAppData%\TileSim\config\evidence-agent.local.json`，API Key
+仍只以当前 Windows 用户 DPAPI 密文保存。当前 ZIP payload 仍标记 `runtime_zip_only_installer_pending`，不能当作完整安装器发送。
+
 ## Web fixture
 
 fixture 固定使用 `127.0.0.1:4187`，不连接、停止或替换 5173：

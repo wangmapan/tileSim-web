@@ -1,5 +1,4 @@
 import { createRouter, createWebHistory, type RouteLocationNormalized, type RouteLocationRaw } from "vue-router";
-import { preserveWorkbenchQuery } from "../features/lightweight-workbench";
 
 export const routeViewIds = [
   "overview",
@@ -30,7 +29,7 @@ function firstQueryString(value: unknown): string | null {
   return null;
 }
 
-export function restoredLegacyRoute(to: RouteLocationNormalized): RouteLocationRaw | true {
+export function restoredLegacyRoute(to: Pick<RouteLocationNormalized, "query">): RouteLocationRaw | true {
   const legacyView = firstQueryString(to.query.view);
   if (!isRouteViewId(legacyView)) return true;
 
@@ -55,10 +54,11 @@ export const router = createRouter({
   routes: [
     {
       path: "/",
-      name: "workbench_entry",
-      component: () => import("../views/WorkbenchEntryView.vue"),
-      meta: { layout: "entry" },
-      beforeEnter: restoredLegacyRoute,
+      name: "root",
+      redirect: (to) => {
+        const restored = restoredLegacyRoute(to);
+        return restored === true ? { name: "overview" } : restored;
+      },
     },
     {
       path: "/overview",
@@ -72,7 +72,7 @@ export const router = createRouter({
       component: () => import("../views/ExecutionView.vue"),
       meta: { workspace: "professional" },
       beforeEnter: (to) =>
-        Object.keys(to.query).some((key) => key.startsWith("evidence_"))
+        Object.keys(to.query).some((key) => key.startsWith("evidence_") && key !== "evidence_request")
           ? { name: "raw_evidence", query: to.query, hash: to.hash, replace: true }
           : true,
     },
@@ -136,48 +136,7 @@ export const router = createRouter({
       component: () => import("../views/ExperimentView.vue"),
       meta: { workspace: "professional" },
     },
-    {
-      path: "/lightweight",
-      name: "lightweight",
-      component: () => import("../views/LightweightWorkbenchView.vue"),
-      meta: { workspace: "lightweight" },
-    },
-    {
-      path: "/lightweight/learn",
-      name: "lightweight_learn",
-      redirect: (to) => ({ name: "lightweight", query: preserveWorkbenchQuery(to.query) }),
-    },
-    {
-      path: "/lightweight/tasks",
-      name: "lightweight_tasks",
-      redirect: (to) => ({ name: "lightweight_prepare", query: preserveWorkbenchQuery(to.query) }),
-    },
-    {
-      path: "/lightweight/prepare",
-      name: "lightweight_prepare",
-      component: () => import("../views/LightweightPrepareView.vue"),
-      meta: { workspace: "lightweight" },
-    },
-    {
-      path: "/lightweight/results",
-      name: "lightweight_results",
-      component: () => import("../views/LightweightResultsView.vue"),
-      meta: { workspace: "lightweight" },
-    },
-    {
-      path: "/lightweight/runs/:runId",
-      name: "lightweight_run",
-      component: () => import("../views/LightweightRunView.vue"),
-      meta: { workspace: "lightweight" },
-    },
-    {
-      path: "/lightweight/status",
-      name: "lightweight_status",
-      component: () => import("../views/LightweightRunView.vue"),
-      meta: { workspace: "lightweight" },
-    },
-    { path: "/lightweight-workbench", redirect: { name: "lightweight" } },
-    { path: "/:pathMatch(.*)*", redirect: { name: "overview" } },
+    { path: "/:pathMatch(.*)*", redirect: "/overview" },
   ],
 });
 
@@ -186,7 +145,6 @@ export function routeForView(
   runId: string | null,
   evidenceRequestId: string | null = null,
 ): RouteLocationRaw {
-  if (view === "lightweight") return { name: "lightweight", query: runId ? { run: runId } : undefined };
   if (!isRouteViewId(view)) return { name: "overview" };
   if (view === "evidence_lab") return { name: view };
   return {

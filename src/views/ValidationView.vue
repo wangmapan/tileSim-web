@@ -6,6 +6,7 @@ import { formatPercent } from "../lib/format";
 import { useDashboard } from "../store/dashboard";
 import { useI18n } from "../i18n";
 import ArtifactEvidenceLink from "../components/ArtifactEvidenceLink.vue";
+import InlineHelp from "../components/InlineHelp.vue";
 import { validationCheckSource } from "../features/execution-inspector";
 import {
   backendExplanationPresentation,
@@ -23,6 +24,13 @@ function semanticField(field: string, value: unknown) {
 function backendExplanation(value: string | null | undefined) {
   return backendExplanationPresentation(value);
 }
+
+function semanticHelp(field: string, value: unknown) {
+  const presentation = semanticField(field, value);
+  return [presentation.fieldDescription, presentation.valueDescription, presentation.technicalText]
+    .filter(Boolean)
+    .join(" · ");
+}
 </script>
 
 <template>
@@ -36,12 +44,15 @@ function backendExplanation(value: string | null | undefined) {
   <div v-else class="view-stack">
     <section class="provenance-grid" data-help-anchor="validation-scope">
       <article data-help-anchor="validation-provenance" class="provenance-semantic">
-        <small>{{ semanticField("source_mode", evidence.sourceMode).fieldLabel }}</small>
+        <small>
+          {{ semanticField("source_mode", evidence.sourceMode).fieldLabel }}
+        </small>
         <strong>{{ semanticField("source_mode", evidence.sourceMode).valueLabel }}</strong>
-        <p v-if="semanticField('source_mode', evidence.sourceMode).valueDescription">
-          {{ semanticField("source_mode", evidence.sourceMode).valueDescription }}
-        </p>
-        <code>{{ semanticField("source_mode", evidence.sourceMode).technicalText }}</code>
+        <InlineHelp
+          class="provenance-help"
+          :text="semanticHelp('source_mode', evidence.sourceMode)"
+          :label="t('输入来源模式说明')"
+        />
       </article>
       <article
         v-for="item in [
@@ -51,17 +62,20 @@ function backendExplanation(value: string | null | undefined) {
         :key="item.field"
         class="provenance-semantic"
       >
-        <small>{{ semanticField(item.field, item.value).fieldLabel }}</small>
+        <small>
+          {{ semanticField(item.field, item.value).fieldLabel }}
+        </small>
         <strong>{{ semanticField(item.field, item.value).valueLabel }}</strong>
-        <p v-if="semanticField(item.field, item.value).valueDescription">
-          {{ semanticField(item.field, item.value).valueDescription }}
-        </p>
-        <code>{{ semanticField(item.field, item.value).technicalText }}</code>
+        <InlineHelp
+          class="provenance-help"
+          :text="semanticHelp(item.field, item.value)"
+          :label="`${semanticField(item.field, item.value).fieldLabel}${t('说明')}`"
+        />
       </article>
       <article>
-        <small>{{ t("证据完整度") }}</small
-        ><strong>{{ formatPercent(state.bundle.validation.completeness) }}</strong>
-        <p>{{ t("字段覆盖，非准确率") }}</p>
+        <small>{{ t("证据完整度") }}</small>
+        <strong>{{ formatPercent(state.bundle.validation.completeness) }}</strong>
+        <InlineHelp class="provenance-help" :text="t('字段覆盖，非准确率')" :label="t('证据完整度说明')" />
       </article>
     </section>
 

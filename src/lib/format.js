@@ -94,6 +94,8 @@ export function statusLabel(value) {
     observed: "观测值",
     inferred: "推断值",
     modelled: "模型估算",
+    no_device_tasks: "无设备任务",
+    not_collected: "未采集",
     fallback: "fallback 结果",
     externally_specified: "外部指定值",
     user_supplied: "用户提供值",

@@ -1,5 +1,9 @@
 # Agent Harness 阶段 0 / WP-A 当前基线与提案
 
+> 本文件的阶段 0/WP-A 章节和阶段 2/3A dated 增量是历史契约基线；当前 local-dev 优化/批处理不在这些旧章节中。
+> 当前阶段 5 事实见 [`31_AGENT_HARNESS_STAGE5_LOCAL_BATCH_CURRENT_BASELINE.md`](31_AGENT_HARNESS_STAGE5_LOCAL_BATCH_CURRENT_BASELINE.md)、
+> [`docs/AI_HANDOFF.md`](../AI_HANDOFF.md) 和 Bridge generated contract。不要从本文件旧段落推断当前“只读/未开放”状态。
+
 ## 2026-10-18 阶段 2 Bridge 增量
 
 阶段 2 正式 successor revision 为 `2026-10-18.wpb.v1`，新增 `experiment_draft.v2`、
@@ -237,7 +241,7 @@ Task Center 现在先按当前 run 过滤 operation list，再读取正式 opera
 读取。单个 detail 读取失败保持 `unavailable`，事件 sequence 缺口进入 `recovery_required`；operation card 展示已校验
 的 sequence、node、state、created_at 和终态标记。前端仍无 cancel/resume/retry/checkpoint/approval 写入。
 
-WP-D 的比较矩阵和决策见 [`27_AGENT_HARNESS_WP_D_RUNTIME_BAKEOFF.md`](27_AGENT_HARNESS_WP_D_RUNTIME_BAKEOFF.md)：
+WP-D 的比较矩阵和决策见归档的 [`27_AGENT_HARNESS_WP_D_RUNTIME_BAKEOFF.md`](../archive/agent-orchestration/phase-records/27_AGENT_HARNESS_WP_D_RUNTIME_BAKEOFF.md)：
 当前只保留 Bridge 自有 SQLite WAL + bounded worker 作为只读 operation source，不引入第二个 workflow runtime。
 
 本轮验证：Harness 定向 Vitest **3 files / 18 passed**；全量 Web Vitest **111 files / 1145 passed / 8 skipped**；Bridge

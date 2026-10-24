@@ -188,7 +188,7 @@ describe("request metric sample validity", () => {
     expect(wrapper.text()).toContain("fallback 结果");
   });
 
-  it("shows modelled GPU-free activity, virtual fabric usage, and unmapped-task diagnostics", () => {
+  it("shows modelled device activity, virtual fabric usage, and unmapped-task diagnostics", () => {
     applyBundle({
       metrics: {
         report_id: "metrics-gpu-free",
@@ -244,16 +244,47 @@ describe("request metric sample validity", () => {
         },
       },
     });
-    expect(wrapper.text()).toContain("GPU-free 仿真中的卡使用与拓扑连接");
+    expect(wrapper.text()).toContain("仿真设备参与与拓扑通信");
     expect(wrapper.text()).toContain("代表性设备任务");
     expect(wrapper.text()).toContain("未映射设备任务");
     expect(wrapper.text()).toContain("设备归属需要后端修复");
-    expect(wrapper.text()).toContain("当前每张卡的 0 不能解释为 GPU 未参与");
+    expect(wrapper.text()).toContain("当前每张卡的 0 不能解释为设备未参与");
     expect(wrapper.text()).toContain("模型显存");
     expect(wrapper.text()).toContain("虚拟 Fabric 域");
     expect(wrapper.text()).toContain("Fabric 利用率");
     expect(wrapper.text()).toContain("0 bytes");
     expect(wrapper.text()).toContain("0 ps");
-    expect(wrapper.text()).toContain("GPU-free 不采集");
+    expect(wrapper.text()).toContain("未采集");
+  });
+
+  it("explains that no device-task rows are not the same as GPU participation being zero", () => {
+    applyBundle({
+      metrics: {
+        report_id: "metrics-device-no-tasks",
+        summary: { request_count: 1, completed_request_count: 1, throughput_requests_per_second: 1 },
+        request_metrics: [],
+        system_summary: {
+          device_metrics: [
+            { device_id: "gpu-0", evidence_state: "no_device_tasks", task_count: 0 },
+            { device_id: "gpu-1", evidence_state: "no_device_tasks", task_count: 0 },
+          ],
+        },
+      },
+    });
+    const wrapper = mount(MetricsView, {
+      global: {
+        stubs: {
+          RequestEvidenceAction: true,
+          RouterLink: { template: "<a><slot /></a>" },
+          ArtifactEvidenceLink: true,
+          ExecutionVisualizationPanel: true,
+          ReportCoveragePanel: true,
+        },
+      },
+    });
+    expect(wrapper.text()).toContain("本次没有设备任务记录");
+    expect(wrapper.text()).toContain("这里的 0 表示没有可归属的设备任务");
+    expect(wrapper.find(".metrics-detail-disclosure").exists()).toBe(true);
+    expect(wrapper.find(".metrics-detail-disclosure").attributes("open")).toBeUndefined();
   });
 });

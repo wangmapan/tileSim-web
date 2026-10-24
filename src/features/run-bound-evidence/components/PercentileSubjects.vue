@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ArtifactEvidenceLink from "../../../components/ArtifactEvidenceLink.vue";
+import InlineHelp from "../../../components/InlineHelp.vue";
 import { useI18n } from "../../../i18n";
 import { formatNumber } from "../../../lib/format";
 import type { PercentileNavigation } from "../types";
@@ -20,13 +21,18 @@ function canNavigate(subject: PercentileNavigation, member: string) {
     subject.selectedRequestId === member
   );
 }
+function requestLabel(index: number) {
+  return t("请求 {index}", { index });
+}
 </script>
 
 <template>
   <section v-if="subjects.length" class="percentile-subjects" :aria-label="t('后端选择的 P99 对象')">
     <header>
-      <h3>{{ t("后端选择的 P99 对象") }}</h3>
-      <p>{{ t("请求关联以报告记录为准。") }}</p>
+      <h3>
+        {{ t("后端选择的 P99 对象") }}
+        <InlineHelp :text="t('请求关联以报告记录为准。')" />
+      </h3>
     </header>
     <div class="percentile-table-scroll" role="region" :aria-label="t('P99 请求关联表')" tabindex="0">
       <table>
@@ -45,17 +51,22 @@ function canNavigate(subject: PercentileNavigation, member: string) {
             <td class="percentile-value">{{ formatNumber(subject.valuePs) }}</td>
             <td>
               <ul v-if="subject.memberRequestIds.length" class="percentile-members">
-                <li v-for="member in subject.memberRequestIds" :key="member">
+                <li v-for="(member, index) in subject.memberRequestIds" :key="member">
                   <button
                     v-if="canNavigate(subject, member)"
                     type="button"
                     :aria-current="member === selectedRequestId ? 'true' : undefined"
                     @click="emit('requestSelected', member)"
                   >
-                    {{ member }}
+                    {{ requestLabel(index + 1) }}
                   </button>
-                  <code v-else>{{ member }}</code>
-                  <span v-if="member === selectedRequestId">{{ t("当前请求") }}</span>
+                  <span v-else>{{ requestLabel(index + 1) }}</span>
+                  <span v-if="member === selectedRequestId" class="percentile-current">{{ t("当前请求") }}</span>
+                  <InlineHelp
+                    :interactive="false"
+                    :text="member"
+                    :label="t('查看请求 {index} 的技术标识', { index: index + 1 })"
+                  />
                 </li>
               </ul>
               <span v-else class="percentile-unavailable">{{ t("无关联请求") }}</span>
@@ -224,7 +235,7 @@ td.percentile-value {
 .percentile-members button:hover {
   text-decoration-color: currentColor;
 }
-.percentile-members span,
+.percentile-members li > span:not(.inline-help),
 .percentile-unavailable {
   color: var(--muted);
   font-size: var(--text-micro);

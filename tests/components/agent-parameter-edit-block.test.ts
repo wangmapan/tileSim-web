@@ -46,7 +46,7 @@ const plan: PlanBlock = {
   note: "",
   title: "",
   rationale: "",
-  plan_revision: "context:lightweight_prepare:1",
+  plan_revision: "context:experiment:1",
 };
 
 function section(wrapper: ReturnType<typeof mount>, type: string) {
@@ -244,7 +244,7 @@ describe("stale parameter plans", () => {
     // press whatever the page's values said. A republication is not evidence
     // that the values this plan names moved, so the block keeps its revision
     // and the apply step judges the addresses themselves.
-    const [marked] = markAgentBlocksStale([plan], "context:lightweight_prepare:2");
+    const [marked] = markAgentBlocksStale([plan], "context:experiment:2");
 
     expect(marked).toBe(plan);
     const wrapper = mount(AgentTypedBlockList, { props: { blocks: [marked] } });
@@ -261,7 +261,7 @@ describe("stale parameter plans", () => {
       body: "这里用于配置受控仿真实验。",
     };
 
-    const [marked] = markAgentBlocksStale([explanation], "context:lightweight_prepare:2");
+    const [marked] = markAgentBlocksStale([explanation], "context:experiment:2");
 
     expect(marked).toBe(explanation);
   });
@@ -274,7 +274,7 @@ describe("stale parameter plans", () => {
       issues: [],
     };
 
-    const [marked] = markAgentBlocksStale([draft], "context:lightweight_prepare:2");
+    const [marked] = markAgentBlocksStale([draft], "context:experiment:2");
 
     expect(marked.block_type === "validation_result" && marked.overall).toBe("stale");
   });

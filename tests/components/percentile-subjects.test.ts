@@ -76,12 +76,12 @@ describe("P99 evidence table", () => {
       }),
     ]);
     expect(wrapper.get("summary").text()).toBe("并列请求");
-    expect(wrapper.findAll(".percentile-members code").map((member) => member.text())).toEqual([
-      "request-7",
-      "request-2",
-    ]);
-    expect(wrapper.findAll("button")).toHaveLength(0);
-    expect(wrapper.get(".percentile-members span").text()).toBe("当前请求");
+    expect(
+      wrapper.findAll(".percentile-members > li").map((member) => member.element.firstElementChild?.textContent),
+    ).toEqual(["请求 1", "请求 2"]);
+    expect(wrapper.findAll(".percentile-members .inline-help")).toHaveLength(2);
+    expect(wrapper.findAll(".percentile-members button")).toHaveLength(0);
+    expect(wrapper.get(".percentile-current").text()).toBe("当前请求");
   });
 
   it.each(["contract_gap", "artifact_identity_missing", "ambiguous_reference"] as const)(
@@ -90,7 +90,7 @@ describe("P99 evidence table", () => {
       const wrapper = render([subject({ availability, reference: null })]);
       expect(wrapper.get(".percentile-warning").text()).toBe("关联未通过校验");
       expect(wrapper.text()).toContain("引用不可用");
-      expect(wrapper.findAll("button, .evidence-stub")).toHaveLength(0);
+      expect(wrapper.findAll(".percentile-members button, .evidence-stub")).toHaveLength(0);
     },
   );
 
@@ -110,12 +110,15 @@ describe("P99 evidence table", () => {
     expect(render([]).find("section").exists()).toBe(false);
   });
 
-  it("translates display labels without translating raw request IDs or selection rules", () => {
+  it("translates display labels while keeping raw request IDs in technical help", () => {
     setLocale("en-US");
     const wrapper = render([subject({ metricKind: "end_to_end_latency_ps" })]);
     expect(wrapper.text()).toContain("Single request");
     expect(wrapper.text()).toContain("Linked request");
-    expect(wrapper.text()).toContain("request-7");
+    expect(wrapper.find(".percentile-members .inline-help__trigger").attributes("aria-label")).toContain(
+      "technical identifier",
+    );
+    expect(wrapper.find(".percentile-members .inline-help__bubble").text()).toBe("request-7");
     expect(wrapper.text()).toContain("nearest_rank; stable exact-value ties");
   });
 });

@@ -3,7 +3,7 @@ import { ArrowUpRight, Search, X } from "@lucide/vue";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "../../../i18n";
 import { guideRegistry } from "../catalog";
-import { lightweightGuideIds, type GuideDefinition, type GuideId, type GuideScope, type HelpAnchor } from "../schema";
+import { type GuideDefinition, type GuideId, type GuideScope, type HelpAnchor } from "../schema";
 
 const props = withDefaults(
   defineProps<{
@@ -34,8 +34,7 @@ const professionalGroups: readonly HelpGroup[] = [
   { title: "证据与校准", ids: ["validation", "raw_evidence", "evidence_lab"] },
   { title: "参考资料", ids: ["unsupported_schema"] },
 ];
-const lightweightGroups: readonly HelpGroup[] = [{ title: "轻量工作台", ids: lightweightGuideIds }];
-const groups = computed(() => (props.scope === "lightweight" ? lightweightGroups : professionalGroups));
+const groups = computed(() => professionalGroups);
 const filteredGroups = computed(() => {
   const query = search.value.trim().toLocaleLowerCase();
   return groups.value
@@ -117,7 +116,7 @@ onBeforeUnmount(() => {
   >
     <header class="help-documentation-header">
       <span
-        >TileSim <strong>{{ t(scope === "lightweight" ? "轻量版页面帮助" : "专业版页面帮助") }}</strong></span
+        >TileSim <strong>{{ t("专业版页面帮助") }}</strong></span
       >
       <button
         class="icon-button help-documentation-close"

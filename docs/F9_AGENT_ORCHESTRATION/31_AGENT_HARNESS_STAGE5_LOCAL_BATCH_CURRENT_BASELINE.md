@@ -1,5 +1,28 @@
 # Agent Harness 阶段 5 Local-Dev 当前基线
 
+## 2026-10-24 当前工作树修正
+
+本文件下方的 2026-10-22 收尾证据保留为 dated 记录。当前工作树已有 Bridge contract/generated 文件改动，
+`python bridge/check_schema_set_revision.py` 实测 schema-set 为
+`sha256:dd9fad27c1d5591a79a16211f701f5725a711163bb284d960b99cca020064b4e`；因此“未修改 JSON contract/schema-set、未触发生成物更新”
+只适用于 2026-10-22 收尾批次，不能用于当前工作树。任何后续 contract 修改仍须运行 `pnpm contracts:generate` 与 drift check。
+
+## 2026-10-22 收尾判定
+
+本地开发阶段已闭合，判定为 `LOCAL_PHASE5_PASS`，不构成生产 GO。收尾范围覆盖以下遗留安全语义：
+
+- `candidate_set` 数量不得超过 `budget.max_candidates`；`max_runs`、`max_seconds`、`max_failures` 和 `max_retries` 均按硬边界执行，失败计数和批次起始时间不会因 worker 重启被清零。
+- `on_failure=continue` 只允许在失败数低于硬上限时继续；`on_failure=stop` 在首个已知失败后停止。
+- 显式 retry 只允许明确可重试且非未知结果的失败，受 `max_retries` 限制；每次 retry 清理旧 execution identity，生成新的 draft/validation/approval/idempotency fence，并重新等待人工批准。
+- `recovery_required` 的确认不会盲目重提未知副作用；确认后转为 `manual_intervention_required`，前端提供明确提示，进入人工介入后不再显示取消或盲重试入口。
+- worker 在暂停和正式 execution 等待期间持续 heartbeat，结束时释放 lease；超时或非终态执行结果进入 recovery，而不是伪造失败或完成。
+- Batch API 验证 detail/event 的 batch identity，SSE 复用共享 framing、lossless JSON 和正式 API root；查询流切换时会中止旧 stream，避免旧事件污染新 batch。
+
+收尾证据：Bridge Stage 5/相关 Stage 3 定向测试 **21 passed / 0 failed**，前端 Harness 定向测试 **35 passed / 0 failed**，
+`vue-tsc --noEmit` 通过。没有修改 JSON contract/schema-set，未触发生成物更新。`tests/fixtures/agent-harness/phase5-local-evaluation-manifest.json`
+仍是声明性 fixture，不是 live evidence；Provider live acceptance、真实硬件、独立生产 evidence/citation review、独立 validation
+run 与生产 GO 继续保持 pending。
+
 ## 范围
 
 阶段 5 在本地个人使用范围提供受控批量实验编排。contract revision 为

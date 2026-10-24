@@ -28,7 +28,7 @@ export const metricsGuide = defineGuide({
       id: "interpret",
       title: "结果解释",
       body: "使用绝对延迟或吞吐进行规划前，应核对结果可信度、校准条件和未覆盖行为。合成一致性检查不能替代独立真实轨迹验证。",
-      anchor: "metrics-interpretation",
+      anchor: "metrics-provenance",
     },
   ],
   terms: [

@@ -12,6 +12,12 @@ import { fetchVerifiedArtifact } from "../../run-evidence";
 import { RouterLink } from "vue-router";
 import { analyzeNetworkIntervals } from "../model/network-intervals";
 import type { NetworkWaitInterval } from "../../../contracts/report-model";
+import {
+  buildFabricRouteEvidence,
+  executionEventCount,
+  linkEndpointEntries,
+  routePathText,
+} from "../model/fabric-routes";
 
 const props = defineProps<{
   runId: string | null;
@@ -60,6 +66,9 @@ const matchingReports = computed(() =>
 );
 const selected = computed(() =>
   requestedRequestId.value && matchingReports.value.length === 1 ? matchingReports.value[0] : null,
+);
+const fabricEvidence = computed(() =>
+  payload.value ? buildFabricRouteEvidence(payload.value, requestedRequestId.value || null) : null,
 );
 const selectionIssue = computed(() => {
   if (!reports.value.length) return "empty";
@@ -298,8 +307,161 @@ async function load() {
             </table>
           </div>
           <RecordPager v-if="pages > 1" v-model:page="page" :pages="pages" :label="t('逐请求原因链分页')" />
+          <section class="fabric-route-evidence" aria-label="真实 Fabric 路径证据">
+            <header>
+              <h3>{{ t("真实 Fabric 路径证据") }}</h3>
+              <span class="fabric-route-state" :data-state="fabricEvidence?.state">
+                {{ fabricEvidence?.state || t("不可用") }}
+              </span>
+            </header>
+            <p v-if="fabricEvidence?.state === 'route_unavailable'" class="callout callout--error" role="alert">
+              <strong>{{ t("后端未找到可用路由，已停止补造路径") }}</strong>
+              <span v-if="fabricEvidence.fallbackReasons.length">
+                · {{ fabricEvidence.fallbackReasons.join("；") }}</span
+              >
+            </p>
+            <p v-else-if="fabricEvidence?.state === 'unavailable'" role="status">
+              {{ t("当前请求没有 Fabric 路径记录；页面不会根据拓扑配置推断连接") }}
+            </p>
+            <template v-if="fabricEvidence?.records.length">
+              <div
+                v-for="(route, routeIndex) in fabricEvidence.records"
+                :key="`${label(route.phase_id)}-${routeIndex}`"
+                class="fabric-route-record"
+              >
+                <div class="fabric-route-record__heading">
+                  <strong
+                    >{{ label(route.phase_id) }}
+                    <ArtifactEvidenceLink
+                      :source-path="`request-attribution:/evidence/fabric/timeline/${fabricEvidence.recordIndexes[routeIndex] ?? routeIndex}`"
+                    />
+                  </strong>
+                  <span
+                    >{{ label(route.module_id) }} · {{ label(route.domain_id) }} ·
+                    {{ label(route.fidelity_level) }}</span
+                  >
+                </div>
+                <dl class="fabric-route-facts">
+                  <div>
+                    <dt>{{ t("实际路径") }}</dt>
+                    <dd>
+                      <code>{{ routePathText(route.actual_path) || t("未报告") }}</code>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>{{ t("传输次数") }}</dt>
+                    <dd>{{ label(route.transfers_executed) }}</dd>
+                  </div>
+                  <div>
+                    <dt>{{ t("端到端延迟（us）") }}</dt>
+                    <dd>{{ label(route.end_to_end_latency_us) }}</dd>
+                  </div>
+                  <div>
+                    <dt>{{ t("逐跳事件") }}</dt>
+                    <dd>{{ executionEventCount(route.execution_events) }}</dd>
+                  </div>
+                </dl>
+                <ul v-if="linkEndpointEntries(route.link_endpoints).length" class="fabric-route-endpoints">
+                  <li v-for="endpoint in linkEndpointEntries(route.link_endpoints)" :key="endpoint.id">
+                    <code>{{ endpoint.id }}</code> · {{ endpoint.source || t("未报告") }} →
+                    {{ endpoint.destination || t("未报告") }}
+                  </li>
+                </ul>
+                <details v-if="executionEventCount(route.execution_events)">
+                  <summary>{{ t("查看逐跳事件") }}</summary>
+                  <ul class="fabric-route-events">
+                    <li
+                      v-for="(event, eventIndex) in Array.isArray(route.execution_events) ? route.execution_events : []"
+                      :key="eventIndex"
+                    >
+                      <code>{{ label(object(event).kind) }}</code> · link={{ label(object(event).link_id) }} · port={{
+                        label(object(event).port_id)
+                      }}
+                      · time={{ label(object(event).time_ps) }} ps
+                    </li>
+                  </ul>
+                </details>
+              </div>
+            </template>
+            <div v-if="fabricEvidence?.moduleStats.length" class="fabric-module-stats">
+              <h4>{{ t("Fabric 模块汇总") }}</h4>
+              <ul>
+                <li
+                  v-for="(stat, statIndex) in fabricEvidence.moduleStats"
+                  :key="`${label(stat.module_id)}-${statIndex}`"
+                >
+                  <code>{{ label(stat.module_id) }}</code> · {{ label(stat.domain_id) }} · transfers={{
+                    label(stat.transfers_executed)
+                  }}
+                  · bytes={{ label(stat.total_bytes) }} · runtime_us={{ label(stat.total_runtime_us) }}
+                </li>
+              </ul>
+            </div>
+            <p
+              v-if="fabricEvidence?.fallbackReasons.length && fabricEvidence.state !== 'route_unavailable'"
+              class="fabric-route-fallback"
+            >
+              {{ t("后端回退原因") }}：{{ fabricEvidence.fallbackReasons.join("；") }}
+            </p>
+          </section>
         </template>
       </template>
     </template>
   </section>
 </template>
+
+<style scoped>
+.fabric-route-evidence {
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid var(--border-subtle, #d6dce5);
+  border-radius: 10px;
+}
+.fabric-route-evidence > header,
+.fabric-route-record__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.fabric-route-state {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.8rem;
+}
+.fabric-route-record {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle, #d6dce5);
+}
+.fabric-route-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px 16px;
+  margin: 10px 0;
+}
+.fabric-route-facts div {
+  min-width: 0;
+}
+.fabric-route-facts dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.fabric-route-facts dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+.fabric-route-endpoints,
+.fabric-route-events,
+.fabric-module-stats {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+.fabric-route-evidence h3,
+.fabric-route-evidence h4 {
+  margin: 0;
+}
+.fabric-route-fallback {
+  color: var(--muted);
+}
+</style>

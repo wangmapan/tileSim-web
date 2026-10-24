@@ -36,7 +36,7 @@ function buildS1Node(context: BuildContext): RunBoundEvidenceNode {
         `/requests/${runtime.index}`,
         "request",
         context.requestId,
-        "运行时输入请求",
+        "运行输入",
       ),
     );
   }
@@ -49,7 +49,7 @@ function buildS1Node(context: BuildContext): RunBoundEvidenceNode {
         `/request_metrics/${metrics.index}`,
         "request",
         context.requestId,
-        "S9 请求指标",
+        "请求指标",
       ),
     );
   }
@@ -117,7 +117,7 @@ function peerNode(
         `/system_summary/phase_fabric_contributions/${phase.index}`,
         field.replace(/_id$/, ""),
         entityId,
-        "网络阶段资源引用",
+        "网络阶段资源",
       ),
     ],
   };
@@ -227,11 +227,15 @@ function outputNode(subsystem: "S7" | "S8" | "S9", title: string, context: Build
         entry.pointer,
         subsystem === "S7" ? "stage" : subsystem === "S8" ? "check" : "cause_or_attribution",
         stableId,
-        `${subsystem} stable record`,
+        subsystem === "S7" ? "执行记录" : subsystem === "S8" ? "验证记录" : "归因记录",
       ),
     );
     for (const evidence of entry.evidenceRefs || []) {
-      const checked = structuredReference(context, evidence, `${subsystem} EvidenceRef`);
+      const checked = structuredReference(
+        context,
+        evidence,
+        subsystem === "S7" ? "执行来源" : subsystem === "S8" ? "验证来源" : "归因来源",
+      );
       if (checked.reference) references.push(checked.reference);
       if (checked.availability === "partial") availability = "partial";
       else if (!["available", "not_applicable"].includes(checked.availability)) {

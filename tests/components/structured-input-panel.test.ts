@@ -86,6 +86,13 @@ async function editNumber(
   await control.trigger("change");
 }
 
+async function openModule(
+  wrapper: { get: (selector: string) => { trigger: (event: string) => Promise<void> } },
+  module: string,
+) {
+  await wrapper.get(`[role="tab"][data-module="${module}"]`).trigger("click");
+}
+
 function mountPanel(
   options: {
     mode?: string;
@@ -197,7 +204,7 @@ describe("structured input panel", () => {
     const { wrapper } = mountPanel({ mode: "json" });
     const textareas = wrapper.findAll(".json-grid textarea");
     expect(textareas).toHaveLength(2);
-    // Runtime first, topology second — the order the lightweight-pages spec
+    // Runtime first, topology second — the order the experiment page uses
     // reads (`findAll("textarea")[0]/[1]`).
     expect(textareas[0].element.closest(".topology-editor")).toBeNull();
     expect(textareas[0].element.closest(".json-grid")).not.toBeNull();
@@ -247,7 +254,7 @@ describe("structured input panel", () => {
     const { wrapper } = mountPanel({ structuredInput: false });
     expect(wrapper.find(".structured-area").exists()).toBe(true);
     expect(wrapper.find(".structured-stack").exists()).toBe(false);
-    expect(wrapper.find(".structured-entry-button").text()).toContain("用表单配置全部输入");
+    expect(wrapper.find(".structured-entry-button").text()).toContain("启用完整输入");
   });
 
   it("emits the hand-off request when the entry button is clicked", async () => {
@@ -262,17 +269,36 @@ describe("structured input panel", () => {
     expect(panel().emitted("disable-structured-input")).toHaveLength(1);
   });
 
-  it("shows the four blocks in the quick-control tab without adding a textarea", async () => {
+  it("uses module cards to show one structured editor at a time", async () => {
     const { wrapper } = mountPanel({ structuredInput: true });
+    expect(wrapper.get('[role="tab"][data-module="runtime"]').attributes("aria-selected")).toBe("true");
     expect(wrapper.find(".structured-block--policy").exists()).toBe(true);
+    expect(wrapper.find(".structured-block--requests").exists()).toBe(false);
+
+    await openModule(wrapper, "requests");
+    expect(wrapper.get('[role="tabpanel"]').attributes("aria-label")).toBe("请求");
+    expect(wrapper.find(".structured-block--policy").exists()).toBe(false);
     expect(wrapper.find(".structured-block--requests").exists()).toBe(true);
+
+    await openModule(wrapper, "topology");
+    expect(wrapper.find(".structured-block--requests").exists()).toBe(false);
+    expect(wrapper.find(".topology-editor .topology-canvas--direct").exists()).toBe(true);
     // Mouse-only: the quick-control tab owns no raw JSON box at all, so the
     // topology editor is mounted without its own textarea and stays editable.
     expect(wrapper.findAll(".structured-stack textarea")).toHaveLength(0);
     expect(wrapper.find(".json-grid").exists()).toBe(false);
     expect(wrapper.find(".topology-editor .topology-module-bindings").exists()).toBe(false);
-    expect(wrapper.find(".topology-editor .topology-canvas--direct").exists()).toBe(true);
     expect(wrapper.find(".topology-editor--readonly").exists()).toBe(false);
+  });
+
+  it("shows a complete-input gate for request and topology modules until enabled", async () => {
+    const { wrapper } = mountPanel({ structuredInput: false });
+    await openModule(wrapper, "requests");
+    expect(wrapper.find(".module-input-gate").exists()).toBe(true);
+    expect(wrapper.find(".structured-block--requests").exists()).toBe(false);
+    await openModule(wrapper, "topology");
+    expect(wrapper.find(".module-input-gate").exists()).toBe(true);
+    expect(wrapper.find(".topology-editor").exists()).toBe(false);
   });
 
   it("exposes the complete request contract, including model identity and advanced routing fields", async () => {
@@ -292,6 +318,7 @@ describe("structured input panel", () => {
       ],
     });
     const { wrapper, panel } = mountPanel({ runtime, structuredInput: true });
+    await openModule(wrapper, "requests");
     for (const key of [
       "model_id",
       "priority_class",
@@ -316,6 +343,7 @@ describe("structured input panel", () => {
 
   it("offers topology-backed dropdowns for TP and request participants", async () => {
     const { wrapper, panel } = mountPanel({ structuredInput: true });
+    await openModule(wrapper, "requests");
     const tp = wrapper.get('[data-input-path="/custom_inputs/runtime_trace/requests/0/tp_degree"] select');
     expect(tp.findAll("option").map((option) => option.text())).toContain("4 GPU");
     (tp.element as HTMLSelectElement).value = "4";
@@ -458,6 +486,7 @@ describe("structured input panel", () => {
 
   it("asks how to treat requests when the device count changes", async () => {
     const { wrapper, panel } = mountPanel({ structuredInput: true });
+    await openModule(wrapper, "topology");
     await editNumber(wrapper.get(".device-inventory__count input"), "8");
 
     const prompt = wrapper.get('.structured-note--warning[role="alert"]');
@@ -470,6 +499,7 @@ describe("structured input panel", () => {
 
   it("rewrites participants when the first pairing option is chosen", async () => {
     const { wrapper, panel } = mountPanel({ structuredInput: true });
+    await openModule(wrapper, "topology");
     await editNumber(wrapper.get(".device-inventory__count input"), "8");
     await wrapper
       .findAll('.structured-note--warning[role="alert"] button')
@@ -496,6 +526,7 @@ describe("structured input panel", () => {
       2,
     );
     const { wrapper, panel } = mountPanel({ structuredInput: true, runtime });
+    await openModule(wrapper, "topology");
     await editNumber(wrapper.get(".device-inventory__count input"), "8");
     await wrapper.findAll('.structured-note--warning[role="alert"] button').at(1)?.trigger("click");
 
@@ -512,6 +543,7 @@ describe("structured input panel", () => {
       requests: runtimeTrace.requests.map((request) => ({ ...request, tp_degree: 4 })),
     });
     const { wrapper } = mountPanel({ structuredInput: true, runtime });
+    await openModule(wrapper, "topology");
     await editNumber(wrapper.get(".device-inventory__count input"), "2");
     const prompt = wrapper.get('.structured-note--warning[role="alert"]');
     await prompt.findAll("button").at(1)?.trigger("click");
@@ -522,6 +554,7 @@ describe("structured input panel", () => {
 
   it("clears participants when the second pairing option is chosen", async () => {
     const { wrapper, panel } = mountPanel({ structuredInput: true });
+    await openModule(wrapper, "topology");
     await editNumber(wrapper.get(".device-inventory__count input"), "2");
     await wrapper
       .findAll('.structured-note--warning[role="alert"] button')
@@ -537,6 +570,7 @@ describe("structured input panel", () => {
 
   it("warns when a deleted device was still referenced", async () => {
     const { wrapper, panel } = mountPanel({ structuredInput: true });
+    await openModule(wrapper, "topology");
     const row = wrapper.findAll(".device-inventory-row")[2];
     await row.get("button.icon-button").trigger("click");
     const notice = wrapper.get('.structured-note--warning[role="status"]');
@@ -553,18 +587,21 @@ describe("structured input panel", () => {
 
   it("refuses a device count below zero with an inline error", async () => {
     const { wrapper } = mountPanel({ structuredInput: true });
+    await openModule(wrapper, "topology");
     await editNumber(wrapper.get(".device-inventory__count input"), "-2");
     expect(wrapper.get(".device-inventory .structured-note--error").text()).toContain("非负整数");
   });
 
   it("refuses a card count above the contract ceiling", async () => {
     const { wrapper } = mountPanel({ structuredInput: true });
+    await openModule(wrapper, "topology");
     await editNumber(wrapper.get(".device-inventory__count input"), "1025");
     expect(wrapper.get(".device-inventory .structured-note--error").text()).toContain("1024");
   });
 
   it("adds exactly one device from the entry button and routes it through the pairing prompt", async () => {
     const { wrapper, panel } = mountPanel({ structuredInput: true });
+    await openModule(wrapper, "topology");
     await wrapper.get(".device-inventory .structured-block__header .button").trigger("click");
     const topoJson = panel().emitted("update:topologyJson")?.at(-1)?.[0] as string;
     expect(JSON.parse(topoJson).topology.devices.map((device: { device_id: string }) => device.device_id)).toEqual([
@@ -580,18 +617,21 @@ describe("structured input panel", () => {
 
   it("hosts the domain list between the device inventory and the graph", () => {
     const { wrapper } = mountPanel({ structuredInput: true });
-    const stack = wrapper.get(".structured-stack");
-    expect(stack.find(".device-inventory").exists()).toBe(true);
-    expect(stack.find(".domain-inventory").exists()).toBe(true);
-    expect(stack.find(".topology-editor").exists()).toBe(true);
-    // Same constraint the device inventory lives under: the graph must be a
-    // sibling so it never nests inside a list block.
-    expect(stack.find(".domain-inventory").element.parentElement).toBe(stack.element);
-    expect(wrapper.findAll(".domain-inventory-row")).toHaveLength(1);
+    return openModule(wrapper, "topology").then(() => {
+      const stack = wrapper.get(".structured-stack");
+      expect(stack.find(".device-inventory").exists()).toBe(true);
+      expect(stack.find(".domain-inventory").exists()).toBe(true);
+      expect(stack.find(".topology-editor").exists()).toBe(true);
+      // Same constraint the device inventory lives under: the graph must be a
+      // sibling so it never nests inside a list block.
+      expect(stack.find(".domain-inventory").element.parentElement).toBe(stack.element);
+      expect(wrapper.findAll(".domain-inventory-row")).toHaveLength(1);
+    });
   });
 
   it("keeps device and domain editors collapsed until advanced topology settings are requested", async () => {
     const { wrapper } = mountPanel({ structuredInput: true });
+    await openModule(wrapper, "topology");
     expect(wrapper.get(".topology-advanced-toggle").attributes("aria-expanded")).toBe("false");
     expect(wrapper.get(".device-inventory").attributes("style")).toContain("display: none");
     expect(wrapper.get(".domain-inventory").attributes("style")).toContain("display: none");

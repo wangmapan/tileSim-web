@@ -10,7 +10,7 @@ export const createRunRequestSchema = {
   required: ["scenario_id"],
   properties: {
     scenario_id: {
-      enum: ["s1_des_example", "dense_des_package"],
+      enum: ["s1_des_example", "dense_des_package", "pd_disaggregation_example"],
     },
     fidelity_policy: {
       enum: ["default", "des"],
@@ -57,6 +57,23 @@ export const createRunRequestSchema = {
       },
       then: {
         required: ["trace_package_id"],
+        properties: {
+          fidelity_policy: {
+            const: "des",
+          },
+        },
+      },
+    },
+    {
+      if: {
+        properties: {
+          scenario_id: {
+            const: "pd_disaggregation_example",
+          },
+        },
+        required: ["scenario_id"],
+      },
+      then: {
         properties: {
           fidelity_policy: {
             const: "des",

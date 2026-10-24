@@ -53,4 +53,58 @@ describe("AgentHarnessBatchPanel", () => {
       .trigger("click");
     expect(wrapper.emitted("approve")?.[0]).toEqual(["batch-test"]);
   });
+
+  it("requires explicit recovery acknowledgement and does not expose cancellation afterward", async () => {
+    const recoveryBatch = { ...(batch as Record<string, unknown>), state: "recovery_required" } as never;
+    const wrapper = mount(AgentHarnessBatchPanel, {
+      props: {
+        batches: [recoveryBatch],
+        detail: {
+          batch: recoveryBatch,
+          candidates: [
+            {
+              candidate_id: "candidate-recovery",
+              candidate_digest: `sha256:${"d".repeat(64)}`,
+              status: "recovery_required",
+              failure: { unknown_outcome: true, retryable: false },
+            },
+          ],
+        } as never,
+      },
+    });
+    expect(wrapper.text()).toContain("确认未知结果并转人工介入");
+    expect(wrapper.text()).toContain("不会盲目重提");
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text().includes("确认未知结果"))!
+      .trigger("click");
+    expect(wrapper.emitted("resume")?.[0]).toEqual(["batch-test"]);
+  });
+
+  it("does not offer retry when any failed candidate is non-retryable", () => {
+    const failedBatch = { ...(batch as Record<string, unknown>), state: "failed" } as never;
+    const wrapper = mount(AgentHarnessBatchPanel, {
+      props: {
+        batches: [failedBatch],
+        detail: {
+          batch: failedBatch,
+          candidates: [
+            {
+              candidate_id: "candidate-retryable",
+              candidate_digest: `sha256:${"e".repeat(64)}`,
+              status: "failed",
+              failure: { unknown_outcome: false, retryable: true },
+            },
+            {
+              candidate_id: "candidate-terminal",
+              candidate_digest: `sha256:${"f".repeat(64)}`,
+              status: "failed",
+              failure: { unknown_outcome: false, retryable: false },
+            },
+          ],
+        } as never,
+      },
+    });
+    expect(wrapper.text()).not.toContain("显式重试");
+  });
 });

@@ -4,6 +4,10 @@
 > 调查范围：当前 `D:\tileSim-web` 工作树、前端构建、Python Bridge、Windows/WSL 部署脚本和现有发布文档。  
 > 结论强度：每条结论标注为【文档明写】、【代码可证】或【本轮实测】。
 
+> **历史调查声明（2026-10-24）**：本文保留 2026-10-15 的调查证据，不是当前发布状态；当前 Windows
+> 安装器、离线 ZIP、预构建 WSL runtime、DPAPI 配置和实现门槛以
+> [`WINDOWS_DISTRIBUTION_AND_INSTALLER_PLAN_2026-10-24.md`](WINDOWS_DISTRIBUTION_AND_INSTALLER_PLAN_2026-10-24.md) 为准。
+
 ## 结论
 
 TileSim Web **可以构建前端静态产物，也具备一套 Windows + WSL 的本地部署流程**；它还没有形成可以直接交给其他人双击安装、迁移到任意服务器，或供多人通过网络访问的独立发行包。

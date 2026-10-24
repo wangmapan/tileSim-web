@@ -38,6 +38,9 @@ function eventValue(event: Event): string {
       </button>
     </header>
     <small>{{ props.link.src_device }} ↔ {{ props.link.dst_device }}</small>
+    <small v-if="props.link.link_id" class="topology-link-panel__identity">
+      link_id=<code>{{ props.link.link_id }}</code>
+    </small>
     <div class="topology-link-kind" :class="`topology-link-kind--${domainType(props.link)}`">
       <span>{{ domainLabel(props.link) }} · {{ props.link.domain_id }}</span>
       <InlineHelp :text="t('根据该连接所属 domain 的类型判断：scale_up 为域内，scale_out 为跨域')" />

@@ -133,21 +133,46 @@ from contracts.validation import (
 from contracts.run_request import validate_run_request
 
 
-WEB_ROOT = Path(__file__).resolve().parents[1]
-STATIC_ROOT = WEB_ROOT / "dist" if (WEB_ROOT / "dist/index.html").is_file() else WEB_ROOT
-STATE_ROOT = Path(os.environ.get("TILESIM_WEB_STATE_ROOT", str(WEB_ROOT)))
-TILESIM_ROOT = Path(os.environ.get("TILESIM_ROOT", "/mnt/d/tileSim"))
-TILESIM_CLI = Path(os.environ.get("TILESIM_CLI", "/home/mapanwang/tilesim-build/TileSimCLI"))
+BRIDGE_ROOT = Path(__file__).resolve().parent
+_package_root_value = os.environ.get("TILESIM_PACKAGE_ROOT", "").strip()
+PACKAGE_ROOT = Path(_package_root_value).resolve() if _package_root_value else None
+_package_manifest_path = PACKAGE_ROOT / "release.json" if PACKAGE_ROOT else None
+_package_manifest = identity.deployment_manifest(_package_manifest_path) if _package_manifest_path else {}
+_packaged_runtime_kind = os.environ.get("TILESIM_RUNTIME_KIND", "") or str(_package_manifest.get("runtime_kind", ""))
+WEB_ROOT = Path(os.environ["TILESIM_WEB_ROOT"]).resolve() if os.environ.get("TILESIM_WEB_ROOT") else (
+    PACKAGE_ROOT / "app/web" if PACKAGE_ROOT else BRIDGE_ROOT.parent
+)
+STATIC_ROOT = Path(os.environ["TILESIM_STATIC_ROOT"]).resolve() if os.environ.get("TILESIM_STATIC_ROOT") else (
+    WEB_ROOT / "dist" if (WEB_ROOT / "dist/index.html").is_file() else WEB_ROOT
+)
+STATE_ROOT = Path(os.environ.get("TILESIM_WEB_STATE_ROOT", str(PACKAGE_ROOT / "user-data" if PACKAGE_ROOT else WEB_ROOT)))
+_default_tilesim_root = (
+    Path("/opt/tilesim/backend/resources")
+    if PACKAGE_ROOT and _packaged_runtime_kind == "wsl-prebuilt"
+    else PACKAGE_ROOT / "app/backend/resources"
+    if PACKAGE_ROOT
+    else Path("/mnt/d/tileSim")
+)
+_default_tilesim_cli = (
+    Path("/opt/tilesim/bin/TileSimCLI")
+    if PACKAGE_ROOT and _packaged_runtime_kind == "wsl-prebuilt"
+    else PACKAGE_ROOT / "runtime/native/TileSimCLI.exe"
+    if PACKAGE_ROOT
+    else Path("/home/mapanwang/tilesim-build/TileSimCLI")
+)
+TILESIM_ROOT = Path(os.environ.get("TILESIM_ROOT", str(_default_tilesim_root)))
+TILESIM_CLI = Path(os.environ.get("TILESIM_CLI", str(_default_tilesim_cli)))
 TRACE_PACKAGE_ROOT = (
     Path(os.environ["TILESIM_TRACE_PACKAGE_ROOT"])
     if os.environ.get("TILESIM_TRACE_PACKAGE_ROOT")
     else None
 )
-DEPLOYMENT_MANIFEST = Path(
-    os.environ.get("TILESIM_DEPLOYMENT_MANIFEST", "/mnt/d/tileSim-web/runtime/backend-current.json")
-)
+DEPLOYMENT_MANIFEST = Path(os.environ.get(
+    "TILESIM_DEPLOYMENT_MANIFEST",
+    str(PACKAGE_ROOT / "release.json" if PACKAGE_ROOT else "/mnt/d/tileSim-web/runtime/backend-current.json"),
+))
 RUNS_ROOT = STATE_ROOT / "runs"
-CONTRACT_ROOT = WEB_ROOT / "bridge/contracts"
+CONTRACT_ROOT = Path(os.environ.get("TILESIM_CONTRACT_ROOT", str(BRIDGE_ROOT / "contracts")))
 
 
 def load_contract_json(path: Path) -> dict:
@@ -180,7 +205,65 @@ SCENARIOS = {
         "trace": TILESIM_ROOT / "docs/examples/dense_timing/workload.json",
         "topology": TILESIM_ROOT / "docs/examples/dense_timing/topology.json",
     },
+    "pd_disaggregation_example": {
+        "label": next(
+            option["label"]
+            for option in SCENARIO_OPTIONS
+            if option["scenario_id"] == "pd_disaggregation_example"
+        ),
+        "from": "S1",
+        "to": "S6",
+        "trace": TILESIM_ROOT / "docs/examples/pd_runtime_trace.json",
+        "topology": TILESIM_ROOT / "docs/examples/modular_fabric_scenario.json",
+        "request_attribution_applicable": True,
+        "runtime_evidence_applicable": True,
+    },
 }
+
+
+MODEL_CATALOG_FILES = (
+    "docs/examples/s1_runtime_trace.json",
+    "docs/examples/s1_runtime_trace_vllm_hosted.json",
+    "docs/examples/s1_runtime_trace_sglang_hosted.json",
+    "docs/examples/s1_runtime_trace_tensorrt_llm_hosted.json",
+    "docs/examples/kernel_efficiency/h100_llama2_portable.json",
+    "docs/examples/pd_runtime_trace.json",
+)
+
+MODEL_CATALOG_IDS = (
+    "qwen3-0.6b",
+    "qwen2.5-math-7b-instruct",
+)
+
+
+def simulation_model_ids() -> list[str]:
+    model_ids: set[str] = set(MODEL_CATALOG_IDS)
+    for relative_path in MODEL_CATALOG_FILES:
+        trace_path = TILESIM_ROOT / relative_path
+        if not trace_path.is_file():
+            continue
+        try:
+            trace = json.loads(trace_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            continue
+        if not isinstance(trace, dict):
+            continue
+        for request in trace.get("requests", []):
+            if isinstance(request, dict):
+                model_id = request.get("model_id")
+                if isinstance(model_id, str) and model_id.strip():
+                    model_ids.add(model_id.strip())
+        dense_execution = trace.get("dense_execution")
+        if isinstance(dense_execution, dict):
+            model_id = dense_execution.get("model_id")
+            if isinstance(model_id, str) and model_id.strip():
+                model_ids.add(model_id.strip())
+        model_id = trace.get("model_id")
+        if isinstance(model_id, str) and model_id.strip():
+            model_ids.add(model_id.strip())
+    return sorted(model_ids)
+
+
 ALLOWED_FIDELITY_POLICIES = {
     option["fidelity_policy"] for option in REQUESTED_FIDELITY_OPTIONS if option["available"]
 }
@@ -318,7 +401,8 @@ def runtime_capabilities() -> dict:
 def agent_orchestration_capability_release_metadata() -> dict:
     catalog = load_catalog()
     release = deployment_manifest()
-    web_source_revision = identity.git_value(WEB_ROOT, "rev-parse", "HEAD")
+    web_git_revision = identity.git_value(WEB_ROOT, "rev-parse", "HEAD")
+    web_source_revision = release.get("web_source_revision") or web_git_revision
     web_build_revision = (
         os.environ.get("TILESIM_WEB_BUILD_REVISION")
         or release.get("web_source_revision")
@@ -1367,11 +1451,13 @@ def _optimization_stage2_records(session: dict[str, Any], candidate: dict[str, A
     request = candidate.get("config") or session.get("execution_request")
     if not isinstance(request, dict) or not request:
         raise OptimizationError("execution_request_unavailable", "This candidate has no formal execution request.")
+    retry_count = int(candidate.get("retry_count", 0))
+    retry_suffix = f":retry-{retry_count}" if retry_count else ""
     status, issues, fields, unsupported, budget, risks = _stage2_validate_payload(request)
     if status != "valid":
         raise OptimizationError("candidate_invalid", "Candidate failed the formal parameter validator.")
-    draft_id = f"opt-draft-{candidate['candidate_id']}"
-    operation_id = f"opt-draft-op-{candidate['candidate_id']}"
+    draft_id = f"opt-draft-{candidate['candidate_id']}{retry_suffix}"
+    operation_id = f"opt-draft-op-{candidate['candidate_id']}{retry_suffix}"
     request_digest = stage3_request_digest(request)
     draft_payload = {
         "draft_id": draft_id, "operation_id": operation_id, "principal": session["principal"], "workspace_id": session["workspace_id"],
@@ -1381,36 +1467,38 @@ def _optimization_stage2_records(session: dict[str, Any], candidate: dict[str, A
         "assumptions": ["local-dev optimization candidate"], "evidence_refs": [], "budget_request": session["budget"], "risk_flags": ["synthetic_trace_not_fidelity_ground_truth"],
         "status": "validated", "created_at": stage2_now(), "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=30)).isoformat(),
         "draft_digest": stage2_draft_digest({"candidate_digest": candidate["candidate_digest"], "input_snapshot_digest": session["input_snapshot_digest"], "schema_set_revision": SCHEMA_SET_REVISION}),
-        "idempotency_key": f"optimization-draft:{candidate['candidate_id']}", "would_create_run": False, "create_run_request_digest": request_digest,
+        "idempotency_key": f"optimization-draft:{candidate['candidate_id']}{retry_suffix}", "would_create_run": False, "create_run_request_digest": request_digest,
         "create_run_request": request,
     }
-    operation, replay = agent_harness_store.create_operation(idempotency_key=f"optimization-draft-op:{candidate['candidate_id']}", request_payload={"candidate_digest": candidate["candidate_digest"]}, schema_set_revision=SCHEMA_SET_REVISION, backend_identity=harness_backend_identity(), principal=session["principal"], operation_kind="draft_validation", operation_id=operation_id)
+    operation, replay = agent_harness_store.create_operation(idempotency_key=f"optimization-draft-op:{candidate['candidate_id']}{retry_suffix}", request_payload={"candidate_digest": candidate["candidate_digest"], "retry_count": retry_count}, schema_set_revision=SCHEMA_SET_REVISION, backend_identity=harness_backend_identity(), principal=session["principal"], operation_kind="draft_validation", operation_id=operation_id)
     if not replay:
         agent_harness_store.transition(operation_id, "draft", expected={"queued"})
         harness_operation_event(operation_id, node="draft", state="draft", payload={"candidate_digest": candidate["candidate_digest"]}, draft_id=draft_id)
     agent_harness_store.save_stage2_draft(draft_payload, operation_id=operation_id, idempotency_key=draft_payload["idempotency_key"], draft_digest=draft_payload["draft_digest"])
     report = stage2_validation_report(draft=draft_payload, validation_id=f"opt-validation-{candidate['candidate_id']}", status="valid", issues=issues, field_results=fields, unsupported_fields=unsupported, stale_reasons=[], budget_estimate=budget, risk_flags=risks, validated_request_digest=request_digest)
-    agent_harness_store.save_stage2_validation(report, idempotency_key=f"optimization-validation:{candidate['candidate_id']}", payload_digest=optimization_digest(request))
+    agent_harness_store.save_stage2_validation(report, idempotency_key=f"optimization-validation:{candidate['candidate_id']}{retry_suffix}", payload_digest=optimization_digest(request))
     approval_payload = {
-        "approval_id": f"opt-wpc-approval-{candidate['candidate_id']}", "draft_id": draft_id, "draft_digest": draft_payload["draft_digest"], "validation_id": report["validation_id"],
+        "approval_id": f"opt-wpc-approval-{candidate['candidate_id']}{retry_suffix}", "draft_id": draft_id, "draft_digest": draft_payload["draft_digest"], "validation_id": report["validation_id"],
         "principal": session["principal"], "workspace_id": session["workspace_id"], "policy_revision": AGENT_HARNESS_POLICY_REVISION, "schema_set_revision": SCHEMA_SET_REVISION,
         "backend_identity": harness_backend_identity(), "status": "approved", "created_at": stage2_now(), "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=30)).isoformat(),
         "approved_at": stage2_now(), "rejected_at": None, "revoked_at": None, "reason": "local-dev candidate approval", "approval_digest": approval["approval_digest"], "single_use": True, "consumed": False,
         "schema_identity": STAGE2_SCHEMA_IDENTITIES["approval"], "contract_revision": SUCCESSOR_CONTRACT_REVISION,
     }
-    agent_harness_store.save_stage2_approval(approval_payload, idempotency_key=f"optimization-wpc-approval:{candidate['candidate_id']}")
+    agent_harness_store.save_stage2_approval(approval_payload, idempotency_key=f"optimization-wpc-approval:{candidate['candidate_id']}{retry_suffix}")
     return {"draft": draft_payload, "validation": report, "approval": approval_payload, "request": request}
 
 
 def _optimization_submit_formal(session: dict[str, Any], candidate: dict[str, Any], approval: dict[str, Any]) -> str:
     records = _optimization_stage2_records(session, candidate, approval)
+    retry_count = int(candidate.get("retry_count", 0))
+    retry_suffix = f":retry-{retry_count}" if retry_count else ""
     body = {
         "schema_identity": EXECUTION_SCHEMA_IDENTITIES["request"], "contract_revision": EXECUTION_CONTRACT_REVISION,
         "draft_id": records["draft"]["draft_id"], "approval_id": records["approval"]["approval_id"], "validation_id": records["validation"]["validation_id"],
         "draft_digest": records["draft"]["draft_digest"], "approval_digest": approval["approval_digest"], "input_snapshot_digest": session["input_snapshot_digest"],
         "schema_set_revision": SCHEMA_SET_REVISION, "backend_identity": harness_backend_identity(), "policy_revision": AGENT_HARNESS_POLICY_REVISION,
         "workflow_revision": EXECUTION_CONTRACT_REVISION, "create_run_request": records["request"], "create_run_request_digest": stage3_request_digest(records["request"]),
-        "principal": session["principal"], "workspace_id": session["workspace_id"], "idempotency_key": f"optimization-execution:{candidate['candidate_id']}",
+        "principal": session["principal"], "workspace_id": session["workspace_id"], "idempotency_key": f"optimization-execution:{candidate['candidate_id']}{retry_suffix}",
     }
     if BRIDGE_SERVER_ADDRESS is None:
         raise OptimizationError("execution_endpoint_unavailable", "The formal execution endpoint is not bound to a Bridge server.", retryable=True)
@@ -1919,21 +2007,26 @@ def _batch_verified_evaluation(batch: dict[str, Any], candidate: dict[str, Any],
     }
 
 
-def _batch_best(batch: dict[str, Any], candidates: list[dict[str, Any]]) -> tuple[str | None, float | None, int]:
+def _batch_best(batch: dict[str, Any], candidates: list[dict[str, Any]]) -> tuple[str | None, int | float | None, int]:
     objective = batch.get("objective") if isinstance(batch.get("objective"), dict) else {}
     direction = objective.get("direction", "minimize")
-    values: list[tuple[str, float]] = []
+    values: list[tuple[str, int | float]] = []
     for candidate in candidates:
         result = candidate.get("result") if isinstance(candidate.get("result"), dict) else {}
         evaluation = result.get("objective") if isinstance(result.get("objective"), dict) else {}
         value = evaluation.get("value")
         if candidate.get("status") == "completed" and isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value)):
-            values.append((candidate["candidate_id"], float(value)))
+            values.append((candidate["candidate_id"], value))
     if not values:
         return None, None, 0
     values.sort(key=lambda item: item[1], reverse=direction == "maximize")
     best_id, best_value = values[0]
     return best_id, best_value, len(values)
+
+
+def _batch_attempt_count(candidates: list[dict[str, Any]]) -> int:
+    attempted_states = {"running", "completed", "failed", "recovery_required", "manual_intervention_required"}
+    return sum(int(candidate.get("retry_count", 0)) + (1 if candidate.get("status") in attempted_states else 0) for candidate in candidates)
 
 
 def _batch_worker(batch_id: str) -> None:
@@ -1945,9 +2038,15 @@ def _batch_worker(batch_id: str) -> None:
         if batch is None:
             return
         batch_store.transition(batch_id, "running", expected={"queued"})
-        failures = 0
-        started_at = time.monotonic()
-        deadline = started_at + min(batch["budget"]["max_seconds"], MAX_BUDGET_SECONDS)
+        runtime = batch.get("runtime") if isinstance(batch.get("runtime"), dict) else {}
+        persisted_failures = runtime.get("failure_count")
+        failures = int(persisted_failures) if isinstance(persisted_failures, (int, float)) and persisted_failures >= 0 else sum(1 for item in batch_store.candidates(batch_id) if item.get("status") == "failed")
+        batch_store.set_runtime_metadata(batch_id, failure_count=failures)
+        started_at_epoch = runtime.get("started_at_epoch")
+        if not isinstance(started_at_epoch, (int, float)):
+            started_at_epoch = time.time()
+            batch_store.set_runtime_metadata(batch_id, started_at_epoch=started_at_epoch)
+        deadline = time.monotonic() + max(0.0, min(batch["budget"]["max_seconds"], MAX_BUDGET_SECONDS) - max(0.0, time.time() - started_at_epoch))
         for candidate in batch_store.candidates(batch_id):
             current = batch_store.get(batch_id)
             if current is None or current.get("state") == "cancelled":
@@ -1961,20 +2060,26 @@ def _batch_worker(batch_id: str) -> None:
             if current.get("state") == "queued":
                 batch_store.transition(batch_id, "running", expected={"queued"})
                 current = batch_store.get(batch_id)
-            attempted = sum(1 for item in batch_store.candidates(batch_id) if item.get("status") in {"running", "completed", "failed", "recovery_required"})
+            current_candidates = batch_store.candidates(batch_id)
+            attempted = _batch_attempt_count(current_candidates)
             if attempted >= batch["budget"]["max_runs"] or time.monotonic() >= deadline:
                 reason = "run_budget_exhausted" if attempted >= batch["budget"]["max_runs"] else "time_budget_exhausted"
                 detail = "The bounded run budget was exhausted." if reason == "run_budget_exhausted" else "The bounded batch time budget was exhausted."
                 batch_store.transition(batch_id, "completed", expected={"running"})
                 batch_store.set_summary(batch_id, batch_store.summary(batch_id), stop_reason=_batch_stop_reason(batch_id, reason, detail))
                 return
-            if candidate.get("status") in {"completed", "cancelled"}:
+            if candidate.get("status") in {"completed", "cancelled", "recovery_required", "manual_intervention_required"}:
                 continue
             request = candidate.get("config") or batch.get("execution_request")
             if not isinstance(request, dict) or not request:
                 failure = {"code": "execution_request_unavailable", "retryable": False, "unknown_outcome": False}
                 batch_store.update_candidate(batch_id, candidate["candidate_id"], status="failed", failure=failure)
                 failures += 1
+                batch_store.set_runtime_metadata(batch_id, failure_count=failures)
+                if batch.get("stop_policy", {}).get("on_failure") == "stop" or failures >= batch["budget"]["max_failures"]:
+                    batch_store.transition(batch_id, "failed", expected={"running"}, error={"code": "failure_budget_exhausted"})
+                    batch_store.set_summary(batch_id, batch_store.summary(batch_id), stop_reason=_batch_stop_reason(batch_id, "failure_budget", "The bounded failure budget was exhausted."))
+                    return
                 continue
             candidate_for_execution = {**candidate, "session_id": batch_id}
             session_for_execution = {**batch, "session_id": batch_id, "constraints": batch.get("constraints", []), "budget": {"max_seconds": batch["budget"]["max_seconds"], "max_runs": batch["budget"]["max_runs"], "max_iterations": batch["budget"]["max_candidates"], "max_failures": batch["budget"]["max_failures"]}}
@@ -1989,22 +2094,49 @@ def _batch_worker(batch_id: str) -> None:
                     if current and current.get("state") == "cancelled":
                         return
                     if current and current.get("state") == "paused":
+                        if not batch_store.heartbeat(batch_id, owner):
+                            raise BatchError("lease_lost", "Batch worker lease was lost.", unknown_outcome=True)
                         time.sleep(0.1); continue
                     execution = agent_harness_store.get_stage3_by_operation(operation_id)
                     if execution and execution.get("state") in EXECUTION_TERMINAL_STATES:
                         break
                     batch_store.heartbeat(batch_id, owner)
                     time.sleep(0.1)
-                if not execution or execution.get("state") == "recovery_required":
+                if not execution or execution.get("state") == "recovery_required" or execution.get("state") not in EXECUTION_TERMINAL_STATES:
                     failure = {"code": "unknown_outcome", "retryable": False, "unknown_outcome": True}
                     batch_store.update_candidate(batch_id, candidate["candidate_id"], status="recovery_required", failure=failure)
                     batch_store.transition(batch_id, "recovery_required", expected={"running"}, error=failure)
                     return
                 if execution.get("state") != "completed":
-                    failure = {"code": (execution.get("error") or {}).get("code", "execution_failed"), "retryable": bool(execution.get("retryable")), "unknown_outcome": False}
+                    execution_error = execution.get("error") if isinstance(execution.get("error"), dict) else {}
+                    unknown_outcome = bool(execution.get("unknown_outcome")) or bool(execution_error.get("unknown_outcome"))
+                    execution_state = execution.get("state")
+                    if execution_state == "manual_intervention_required":
+                        failure = {
+                            "code": execution_error.get("code", "manual_intervention_required"),
+                            "retryable": False,
+                            "unknown_outcome": True,
+                        }
+                        batch_store.update_candidate(batch_id, candidate["candidate_id"], status="manual_intervention_required", failure=failure)
+                        batch_store.transition(batch_id, "manual_intervention_required", expected={"running"}, error=failure)
+                        return
+                    if execution_state == "recovery_required" or unknown_outcome:
+                        failure = {
+                            "code": execution_error.get("code", "unknown_outcome"),
+                            "retryable": False,
+                            "unknown_outcome": True,
+                        }
+                        batch_store.update_candidate(batch_id, candidate["candidate_id"], status="recovery_required", failure=failure)
+                        batch_store.transition(batch_id, "recovery_required", expected={"running"}, error=failure)
+                        return
+                    failure = {"code": execution_error.get("code", "execution_failed"), "retryable": bool(execution.get("retryable")), "unknown_outcome": False}
                     batch_store.update_candidate(batch_id, candidate["candidate_id"], status="failed", failure=failure)
                     failures += 1
+                    batch_store.set_runtime_metadata(batch_id, failure_count=failures)
                 else:
+                    current = batch_store.get(batch_id)
+                    if current is None or current.get("state") == "cancelled":
+                        return
                     evaluated = _batch_verified_evaluation(batch_store.get(batch_id) or batch, candidate, execution)
                     batch_store.update_candidate(batch_id, candidate["candidate_id"], status="completed", run_id=evaluated.get("run_id"), artifact_manifest_digest=evaluated.get("artifact_manifest_digest"), result=evaluated)
             except (OptimizationError, BatchError) as error:
@@ -2014,6 +2146,7 @@ def _batch_worker(batch_id: str) -> None:
                 if failure["unknown_outcome"]:
                     batch_store.transition(batch_id, "recovery_required", expected={"running"}, error=failure); return
                 failures += 1
+                batch_store.set_runtime_metadata(batch_id, failure_count=failures)
             completed = sum(1 for item in batch_store.candidates(batch_id) if item.get("status") == "completed")
             failed = sum(1 for item in batch_store.candidates(batch_id) if item.get("status") == "failed")
             checkpoint = batch_store.save_checkpoint(batch_id, {"candidate_ids": [item["candidate_id"] for item in batch_store.candidates(batch_id) if item.get("status") == "completed"], "completed_count": completed, "failed_count": failed})
@@ -2033,7 +2166,7 @@ def _batch_worker(batch_id: str) -> None:
                 batch_store.transition(batch_id, "completed", expected={"running"})
                 batch_store.set_summary(batch_id, batch_store.summary(batch_id), stop_reason=_batch_stop_reason(batch_id, "no_improvement", "The bounded no-improvement budget was exhausted."), best_candidate_id=best_id)
                 return
-            if failures >= batch["budget"]["max_failures"] and batch.get("stop_policy", {}).get("on_failure") == "stop":
+            if failures >= batch["budget"]["max_failures"] or (failures > 0 and batch.get("stop_policy", {}).get("on_failure") == "stop"):
                 batch_store.transition(batch_id, "failed", expected={"running"}, error={"code": "failure_budget_exhausted"})
                 batch_store.set_summary(batch_id, batch_store.summary(batch_id), stop_reason=_batch_stop_reason(batch_id, "failure_budget", "The bounded failure budget was exhausted."))
                 return
@@ -2046,6 +2179,7 @@ def _batch_worker(batch_id: str) -> None:
         except BatchError:
             pass
     finally:
+        batch_store.release_lease(batch_id, owner)
         with batch_workers_lock:
             batch_workers.pop(batch_id, None)
 
@@ -2069,7 +2203,10 @@ def create_batch(handler: SimpleHTTPRequestHandler) -> None:
         key = handler.headers.get("Idempotency-Key", "").strip()
         if not re.fullmatch(r"[A-Za-z0-9._:-]{8,128}", key):
             raise BatchError("missing_idempotency_key", "Idempotency-Key is required for batch writes.", field_path="/headers/Idempotency-Key")
-        document = validate_batch_request(harness_json_body(handler), principal=principal, workspace_id=workspace, schema_set_revision=SCHEMA_SET_REVISION, backend_identity=harness_backend_identity())
+        raw_body = harness_json_body(handler)
+        if raw_body.get("idempotency_key") not in {None, key}:
+            raise BatchError("idempotency_key_mismatch", "Body idempotency_key must match Idempotency-Key.", field_path="/idempotency_key")
+        document = validate_batch_request(raw_body, principal=principal, workspace_id=workspace, schema_set_revision=SCHEMA_SET_REVISION, backend_identity=harness_backend_identity())
         batch, replay = batch_store.create(document, idempotency_key=key)
         return write_json(handler, HTTPStatus.OK if replay else HTTPStatus.CREATED, {"batch": batch, "detail": batch_store.detail(batch["batch_id"]), "idempotent_replay": replay, "provenance": BATCH_PROVENANCE})
     except BatchError as error:
@@ -2133,6 +2270,8 @@ def batch_approve(handler: SimpleHTTPRequestHandler, batch_id: str) -> None:
         key = handler.headers.get("Idempotency-Key", "").strip()
         if not re.fullmatch(r"[A-Za-z0-9._:-]{8,128}", key): raise BatchError("missing_idempotency_key", "Idempotency-Key is required for batch approval.")
         body = harness_json_body(handler); batch = detail["batch"]
+        if body.get("idempotency_key") not in {None, key}:
+            raise BatchError("idempotency_key_mismatch", "Body idempotency_key must match Idempotency-Key.", field_path="/idempotency_key")
         plan_digest = batch.get("plan", {}).get("plan_digest") if isinstance(batch.get("plan"), dict) else None
         plan_digest = plan_digest or optimization_digest(batch.get("plan"))
         digest = body.get("approval_digest") or optimization_digest({"batch_id": batch_id, "plan_digest": plan_digest, "snapshot_digest": batch["input_snapshot_digest"]})
@@ -2152,6 +2291,8 @@ def batch_action(handler: SimpleHTTPRequestHandler, batch_id: str, action: str) 
         key = handler.headers.get("Idempotency-Key", "").strip()
         if not re.fullmatch(r"[A-Za-z0-9._:-]{8,128}", key): raise BatchError("missing_idempotency_key", "Idempotency-Key is required for batch actions.")
         body = harness_json_body(handler)
+        if body.get("idempotency_key") not in {None, key}:
+            raise BatchError("idempotency_key_mismatch", "Body idempotency_key must match Idempotency-Key.", field_path="/idempotency_key")
         if set(body) - {"batch_id", "action", "recovery_acknowledged", "idempotency_key"} or body.get("batch_id") != batch_id or body.get("action") != action: raise BatchError("payload_conflict", "Batch action payload does not match the path.")
         current = detail["batch"]
         if action == "start":
@@ -2164,18 +2305,20 @@ def batch_action(handler: SimpleHTTPRequestHandler, batch_id: str, action: str) 
                 return write_json(handler, HTTPStatus.OK, {"batch": batch_store.get(batch_id), "detail": batch_store.detail(batch_id), "action": action, "provenance": BATCH_PROVENANCE})
             if current["state"] == "recovery_required": raise BatchError("recovery_acknowledgement_required", "Recovery requires explicit acknowledgement.", unknown_outcome=True)
             if current["state"] in {"queued", "running"}: return write_json(handler, HTTPStatus.OK, {"batch": current, "detail": batch_store.detail(batch_id), "idempotent_replay": True, "provenance": BATCH_PROVENANCE})
-            batch_store.transition(batch_id, "queued", expected={"paused", "failed", "validated"}); _start_batch_worker(batch_id)
+            batch_store.transition(batch_id, "queued", expected={"paused", "validated"}); _start_batch_worker(batch_id)
         elif action == "pause":
             batch_store.transition(batch_id, "paused", expected={"queued", "running"})
         elif action == "cancel":
             batch_store.transition(batch_id, "cancelled", expected=BATCH_ACTIVE_STATES)
         elif action == "retry":
             if current["state"] != "failed": raise BatchError("retry_not_allowed", "Only a failed batch can be explicitly retried.")
-            batch_store.transition(batch_id, "queued", expected={"failed"}); _start_batch_worker(batch_id)
+            batch_store.prepare_retry(batch_id, max_retries=int(current.get("budget", {}).get("max_retries", 1)))
+            batch_store.transition(batch_id, "waiting_approval", expected={"failed"}, allow_retry=True)
         else:
             if current["state"] == "recovery_required":
                 if body.get("recovery_acknowledged") is not True: raise BatchError("recovery_acknowledgement_required", "Recovery requires explicit acknowledgement.", unknown_outcome=True)
-                batch_store.transition(batch_id, "waiting_approval", expected={"recovery_required"})
+                batch_store.mark_recovery_for_manual_intervention(batch_id)
+                batch_store.transition(batch_id, "manual_intervention_required", expected={"recovery_required"})
             else:
                 batch_store.transition(batch_id, "queued", expected={"paused"}); _start_batch_worker(batch_id)
         return write_json(handler, HTTPStatus.OK, {"batch": batch_store.get(batch_id), "detail": batch_store.detail(batch_id), "action": action, "provenance": BATCH_PROVENANCE})
@@ -2714,6 +2857,7 @@ class BridgeHandler(SimpleHTTPRequestHandler):
                     option["design_space_mode"] for option in DESIGN_SPACE_MODES if option["available"]
                 ],
                 "gpu_participation_modes": sorted(ALLOWED_GPU_PARTICIPATION_MODES),
+                "model_ids": simulation_model_ids(),
             })
         if path == "/api/capabilities":
             return write_json(self, HTTPStatus.OK, runtime_capabilities())

@@ -151,7 +151,7 @@ Phase 2C 后端 lowering 状态（2026-09-17）：后端已提交 `parse_run_int
 （`include/Core/RunIntakeLowering.h`、`src/Core/RunIntakeLowering.cpp`、`tests/test_run_intake_lowering.cpp`），
 CLI 提供只读 `validate-run-intake --run-intake <json>` 与 `run-intake-preview`。后端自评 `partial`，执行侧因
 五类 Profile records 为空而 fail closed。**Web/Bridge 尚未调用该 lowering**，两侧之间缺一层显式路由与 typed
-receipt 呈现。当前可安全推进的工作包见 [Phase 2C Web 集成计划](23_PHASE2C_WEB_INTEGRATION_PLAN.md)。
+receipt 呈现。历史工作包见归档的 [Phase 2C Web 集成计划](../archive/plans/F9_PHASE2C_WEB_INTEGRATION_PLAN_2026-09.md)；当前 local-dev 路线以 `docs/AI_HANDOFF.md` 为准。
 
 ## 8. Phase 3：正式多轮与审批（约 2–3 周）
 

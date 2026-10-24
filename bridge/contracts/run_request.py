@@ -83,6 +83,11 @@ def validate_run_request(
             "The dense DES topology scenario requires requested DES fidelity.",
             "/fidelity_policy",
         )
+    if scenario_id == "pd_disaggregation_example" and fidelity_policy != "des":
+        raise RequestValidationError(
+            "The PD disaggregation scenario requires requested DES fidelity.",
+            "/fidelity_policy",
+        )
     if has_overrides and has_custom_inputs:
         raise RequestValidationError("Use either overrides or custom_inputs, not both.", "/custom_inputs")
     if has_trace_package and (has_overrides or has_custom_inputs):

@@ -24,6 +24,29 @@ export const structuredInputEnglishCatalog: Readonly<Record<string, string>> = {
   以运行后的验证报告为准: "The post-run validation report is authoritative.",
   真实网络观测仅作为证据: "Real network observations are evidence only.",
   "先选输入方式，再调整需要的参数。": "Choose an input method, then adjust the parameters you need.",
+  输入模块: "Input modules",
+  "按模块切换，逐步完成运行策略、请求与拓扑。":
+    "Switch modules to configure runtime policy, requests, and topology step by step.",
+  当前调整模块: "Current module",
+  请求: "Requests",
+  拓扑: "Topology",
+  "请求行、模型与参与设备": "Request rows, models, and participating devices",
+  "显卡、网络域与连线": "GPUs, network domains, and links",
+  快捷参数: "Quick parameters",
+  运行时参数: "Runtime parameters",
+  含进阶策略: "Includes advanced policy",
+  可编辑请求表: "Editable request table",
+  可编辑拓扑: "Editable topology",
+  需要检查: "Needs review",
+  需要完整输入: "Full input required",
+  可直接调整: "Ready to adjust",
+  启用完整输入: "Enable full input",
+  这个模块需要完整输入: "This module needs full input",
+  "请求、设备和拓扑会写入 custom_inputs；启用后仍会保留当前快捷参数。":
+    "Requests, devices, and topology are written to custom_inputs; your current quick parameters remain in place.",
+  启用并继续: "Enable and continue",
+  "runtime trace 还是空的。请先加载场景模板，或到 JSON 输入页签粘贴内容。":
+    "The runtime trace is still empty. Load a scenario template first, or paste content in the JSON input tab.",
   "需要配置请求、设备或拓扑时，打开完整输入。":
     "Open full input when you need to configure requests, devices or topology.",
   "完整输入已启用。上方参数会同步到对应的输入文档。":
@@ -44,6 +67,7 @@ export const structuredInputEnglishCatalog: Readonly<Record<string, string>> = {
     "Only network and communication parameters are supported; Bridge validates the final range and execution budget.",
   "运行时 Trace": "runtime Trace",
   运行时输入请求: "Runtime input requests",
+  后端可用模型: "Models available from the backend",
   "加载模板或粘贴运行时 Trace": "Load a template or paste a runtime Trace",
   仅网络与通信: "Network and communication only",
   信用链路热点细化: "Credit-link hotspot refinement",

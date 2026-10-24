@@ -1389,12 +1389,15 @@ class BridgeApiContractTest(unittest.TestCase):
     def test_catalog_and_capabilities_publish_stable_run_surface_types(self) -> None:
         status, catalog, _ = self.request("/api/catalog")
         self.assertEqual(status, 200)
+        self.assertIn("pd_disaggregation_example", {item["scenario_id"] for item in catalog["scenarios"]})
         self.assertEqual(catalog["input_modes"], ["controls", "json", "trace_package"])
         self.assertEqual(
             catalog["design_space_modes"],
             ["built_in_synthetic", "strict_s6_manifest"],
         )
         self.assertEqual(catalog["gpu_participation_modes"], ["gpu_free"])
+        self.assertIsInstance(catalog["model_ids"], list)
+        self.assertTrue(all(isinstance(model_id, str) and model_id for model_id in catalog["model_ids"]))
 
         status, capabilities, _ = self.request("/api/capabilities")
         self.assertEqual(status, 200)
@@ -1404,6 +1407,40 @@ class BridgeApiContractTest(unittest.TestCase):
         self.assertFalse(run_surface["cycle_hotspot_request_available"])
         self.assertFalse(run_surface["real_trace_submission_available"])
         self.assertFalse(run_surface["compatibility_harness_submission_available"])
+
+    def test_simulation_model_catalog_reads_allowlisted_example_inputs(self) -> None:
+        root = Path(self.temporary_directory.name) / "tilesim"
+        examples = root / "docs" / "examples"
+        (examples / "kernel_efficiency").mkdir(parents=True)
+        (examples / "s1_runtime_trace.json").write_text(
+            json.dumps({"requests": [{"model_id": "llama3-8b"}]}), encoding="utf-8"
+        )
+        (examples / "s1_runtime_trace_vllm_hosted.json").write_text(
+            json.dumps({"requests": [{"model_id": "hosted-model"}]}), encoding="utf-8"
+        )
+        (examples / "s1_runtime_trace_sglang_hosted.json").write_text(
+            json.dumps({"requests": [{"model_id": "hosted-model"}]}), encoding="utf-8"
+        )
+        (examples / "s1_runtime_trace_tensorrt_llm_hosted.json").write_text(
+            json.dumps({"requests": [{"model_id": "hosted-model"}]}), encoding="utf-8"
+        )
+        (examples / "kernel_efficiency" / "h100_llama2_portable.json").write_text(
+            json.dumps({"dense_execution": {"model_id": "llama2-7b"}}), encoding="utf-8"
+        )
+        (examples / "pd_runtime_trace.json").write_text(
+            json.dumps({"requests": [{"model_id": "llama3-8b"}]}), encoding="utf-8"
+        )
+        with mock.patch.object(server, "TILESIM_ROOT", root):
+            self.assertEqual(
+                server.simulation_model_ids(),
+                [
+                    "hosted-model",
+                    "llama2-7b",
+                    "llama3-8b",
+                    "qwen2.5-math-7b-instruct",
+                    "qwen3-0.6b",
+                ],
+            )
 
     def test_trace_package_catalog_returns_inspected_synthetic_package_without_paths(self) -> None:
         write_trace_package_candidate(server.TRACE_PACKAGE_ROOT, "synthetic-package")

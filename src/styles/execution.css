@@ -123,7 +123,7 @@
 }
 .resource-peer-group {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   padding: 8px;
   border-top: 1px solid var(--line-strong);
@@ -131,7 +131,6 @@
   background: transparent;
 }
 .resource-peer-group > small {
-  grid-column: 1 / -1;
   color: var(--muted);
   font: 400 var(--text-micro) var(--font-sans);
 }
@@ -582,6 +581,7 @@
   font-weight: 700;
 }
 .layer-status-summary strong {
+  color: var(--accent-hover);
   font-size: var(--text-sm);
 }
 .layer-status-summary p {
@@ -615,11 +615,14 @@
   font-size: var(--text-xs);
 }
 .layer-metric strong {
-  color: var(--ink);
-  font: 500 16px var(--font-sans);
+  color: var(--accent-hover);
+  font: 600 16px var(--font-sans);
   font-variant-numeric: tabular-nums;
   line-height: 1.45;
   overflow-wrap: anywhere;
+}
+.layer-metric--muted strong {
+  color: var(--muted);
 }
 .layer-metric code {
   color: var(--muted);
@@ -686,6 +689,9 @@
   font-size: var(--text-micro);
   font-weight: 650;
 }
+.visualization-title-line .inline-help {
+  margin-left: 0;
+}
 
 .visualization-selection small {
   color: var(--muted);
@@ -713,11 +719,20 @@
   background: var(--line);
 }
 .visualization-matrix > div {
+  position: relative;
   display: grid;
   gap: 4px;
   min-width: 0;
   padding: 9px 10px;
   background: var(--surface-inset);
+}
+.visualization-matrix .semantic-field-heading {
+  padding-right: 24px;
+}
+.visualization-matrix .semantic-field-help {
+  position: absolute;
+  top: 7px;
+  right: 8px;
 }
 .visualization-matrix .semantic-field-label {
   color: var(--ink);

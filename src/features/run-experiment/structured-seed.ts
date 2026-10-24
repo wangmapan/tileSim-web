@@ -1,5 +1,5 @@
 /**
- * "Configure everything with the form" entry (R2) shared by both workbenches.
+ * "Configure everything with the form" entry (R2) for the experiment page.
  *
  * Keeping the template-loading policy here (rather than in each view) means the
  * rule that matters — a failed template load must abort the mode switch instead

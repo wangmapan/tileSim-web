@@ -340,7 +340,7 @@ App shell、router、全局 CSS/i18n、contract/generated client 和 shared E2E 
 > 实现进度（2026-09-17）：Stage 0 已完成；Stage 2 的自然语言草案部分已完成（八字段 compiler、别名/单位归一、澄清、
 > unsupported fail-closed、capability 投影），但 typed blocks 只覆盖 10 类中的 7 类，缺 `approval_request`、
 > `operation_progress`、`evidence_result`、`citation`。Stage 1、3、4 未开始。逐项事实见
-> [当前基线](01_CURRENT_BASELINE_AND_GAPS.md) 与 [Phase 2C Web 集成计划](23_PHASE2C_WEB_INTEGRATION_PLAN.md)。
+> [当前基线](01_CURRENT_BASELINE_AND_GAPS.md) 与归档的 [Phase 2C Web 集成计划](../archive/plans/F9_PHASE2C_WEB_INTEGRATION_PLAN_2026-09.md)。
 
 Stage 0–4 是**实现顺序**，不是能力授权：进入某一 Stage 前，其依赖的 contract 必须先正式发布，且不得用前端模拟补齐尚未
 发布的契约。
@@ -398,8 +398,8 @@ Conversation/Turn/Goal、retention 和 approval contract 发布后，启用可�
 
 侧栏全局装载、Context Envelope、typed blocks、状态 owner、支持动作、approval/cancel、retention 或桌面布局变化时，必须更新本文以及 [产品体验](02_PRODUCT_AND_USER_EXPERIENCE.md)、[目标架构](03_TARGET_ARCHITECTURE_AND_OWNERSHIP.md) 和 [并行开发规范](15_MODULE_BOUNDARIES_AND_PARALLEL_DEVELOPMENT.md)。
 
-> **2026-09-22 修订（已实现）**：「应用到面板」不再因为一次空转的重发布而永久失效。
-> 三处 context publisher（`App.vue` 的通用投影、`ExperimentView`、`LightweightPrepareView`）此前用**单调计数器**
+> **2026-09-22 修订（已实现；历史轻量页面路径）**：「应用到面板」不再因为一次空转的重发布而永久失效。
+> 三处 context publisher（`App.vue` 的通用投影、`ExperimentView`、当时的轻量配置页 publisher）此前用**单调计数器**
 > 生成 `context_revision`，而它们的 watcher 是 `deep: true` ⇒ **任一被监视对象被「碰到」就换号**（对象引用被替换、
 > 深层写入但值不变、keep-alive 页面重入都会触发）。`parameter_edits.plan_revision` 取的是计划生成时的 revision，
 > 这之后一换号，应用守卫就拒；`markAgentBlocksStale` 还会把 `plan_revision` 置 null，使那块计划**再也点不动**
@@ -425,7 +425,7 @@ Conversation/Turn/Goal、retention 和 approval contract 发布后，启用可�
 > 这是另一条独立的失效路径。`AgentContextRegistry` 里通用投影与页面发布用的是**同一个 provider id**（`app-shell`），
 > 谁最后发布谁生效；而 `App.vue` 的路由 watch 每次路由变化都会 `synchronizeAgentRouteContext()` 发一次
 > **无参数目录**的通用投影（`allowed_purposes:["explain"]`、`parameter_catalog:[]`）。
-> `ExperimentView` 在 `<KeepAlive include="ExperimentView">` 里、`LightweightPrepareView` 也在同一 shell 下复用，
+> `ExperimentView` 在 `<KeepAlive include="ExperimentView">` 里，当时的轻量配置页也在同一 shell 下复用，
 > 回到页面时组件**不重新 setup**（keeper 不重置）⇒ 内容与上次相同 ⇒ `changed=false` 直接 return ⇒
 > **页面的富上下文再也没被声明回来**，通用投影一直是生效上下文。
 > 症状有二：面板把带 `参数 = 值` 的句子答成「这里可以说明当前页面状态；参数草案请在新建实验页配置」（draft 不在
@@ -464,10 +464,10 @@ Conversation/Turn/Goal、retention 和 approval contract 发布后，启用可�
 
 > **2026-09-23 对话身份修订（工作树，未部署）**：`AgentTypedBlockList.vue` 的用户/模型消息分别显示 `user-avatar.svg` 中性人物与 `atuo-avatar.svg` 阿拓头像，文字标识是「用户」与「阿拓 · 模型 ID」；头像为装饰，发言者文字仍供读屏识别。侧栏标题显示「阿拓 · TileSim 助手」，对话输入与提示文案不再用「你」指代用户。该 UI 修订不新增个人身份资料、会话权限或 Agent 执行能力。
 
-> **2026-09-23 小拓引导与结果教学（工作树，未部署）**：空会话呈现三项任务选择；「配置实验」导航到当前工作台的新建实验页，「分析实验结果」从身份匹配的当前 run 报告提供三段式速览、后端原文重点与证据边界；轻量工作台首页带 run 时会先进入结果页并在载入后自动整理。「学习怎么看结果」及对应自然语言提问提供指标教学。报告整理为前端只读显示级变换，不调用 Provider、不改报告、不创建运行；无报告、示例、旧 run、unsupported schema 时不作分析。报告字段路径只用于定位，不代表正式 citation。界面称呼由「阿拓」调整为「小拓」，原 SVG 文件名保留。
+> **2026-09-23 小拓引导与结果教学（工作树，未部署）**：空会话呈现三项任务选择；「配置实验」导航到专业工作台的新建实验页，「分析实验结果」从身份匹配的当前 run 报告提供三段式速览、后端原文重点与证据边界。「学习怎么看结果」及对应自然语言提问提供指标教学。报告整理为前端只读显示级变换，不调用 Provider、不改报告、不创建运行；无报告、示例、旧 run、unsupported schema 时不作分析。报告字段路径只用于定位，不代表正式 citation。界面称呼由「阿拓」调整为「小拓」，原 SVG 文件名保留。
 
 > **2026-09-28 结果分析模型通道（工作树，未部署）**：结果分析在保留上述本地确定性回退的基础上，新增独立只读 `POST /api/agent/result-analysis`。调用前逐一读取当前 run manifest 中的 artifact，并复用 verified-artifact 查询的 run/schema/bytes/SHA-256 绑定；模型上下文携带完整 artifact identity、rejected artifact 和 `full`/`summary_only`/`unavailable`/`not_applicable` 覆盖状态。单文件超过 12,000 字符或总证据超过 150,000 字符时只发送结构摘要；因此 UI/模型不得声称无条件读完所有原始文件。模型通道不可用时仍回退到原有三段式本地整理，不创建运行、不改配置、不写报告。
 
-> **2026-09-24 视觉收口（工作树，未部署）**：小拓侧栏增加有限的开合和选择反馈；具体时长使用独立 `--motion-interaction`，不改动 e2e 依赖的颜色过渡时长。轻量工作台空状态增加三步流程说明、accent rule entrance 与状态反馈，均为表现层改动；`prefers-reduced-motion` 会关闭新增动画。
+> **2026-09-24 视觉收口（工作树，未部署）**：小拓侧栏增加有限的开合和选择反馈；具体时长使用独立 `--motion-interaction`，不改动 e2e 依赖的颜色过渡时长。工作台空状态增加三步流程说明、accent rule entrance 与状态反馈，均为表现层改动；`prefers-reduced-motion` 会关闭新增动画。
 
 > **2026-09-24 专业工作台状态组件视觉收口（工作树，未部署）**：侧栏 header、时间线、输入区和 welcome choice 保持窄桌面工作流的轻量密度；本轮补充输入区 focus、提交/停止和控件 hover 的细微反馈，并将状态组件视觉对齐到专业工作台的语义边轨体系。时间使用独立 `--motion-interaction`，沿用全局 reduced-motion 规则；不改变 typed block、context、model selection、草案应用或执行边界。专业工作台的证据范围提示、状态标签和 `AvailabilityBadge` 同步增强层级、边框和状态点，但不添加数据或装饰性插画。定向 dashboard motion/P99、L6 小拓引导/闭环 E2E 共 4 条通过。

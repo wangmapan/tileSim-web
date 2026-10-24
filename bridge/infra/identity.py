@@ -158,11 +158,26 @@ def deployment_manifest(path: Path) -> dict:
 
 def backend_identity(tilesim_root: Path, tilesim_cli: Path, manifest_path: Path) -> dict:
     manifest = deployment_manifest(manifest_path)
-    source_revision = git_value(tilesim_root, "rev-parse", "HEAD")
-    build_revision = os.environ.get("TILESIM_BUILD_REVISION") or manifest.get("build_revision") or "unknown"
+    packaged = bool(
+        os.environ.get("TILESIM_PACKAGE_ROOT")
+        or manifest.get("deployment_mode") == "packaged"
+        or manifest.get("schema_version") == "tilesim.workbench.release.v1"
+    )
+    git_source_revision = git_value(tilesim_root, "rev-parse", "HEAD")
+    source_revision = (
+        str(manifest.get("backend_source_revision"))
+        if packaged and manifest.get("backend_source_revision")
+        else git_source_revision
+    )
+    build_revision = (
+        os.environ.get("TILESIM_BUILD_REVISION")
+        or manifest.get("build_revision")
+        or (manifest.get("backend_source_revision") if packaged else None)
+        or "unknown"
+    )
     declared_state_digest = manifest.get("source_state_digest", "")
     build_state_digest = os.environ.get("TILESIM_BUILD_STATE_DIGEST") or manifest.get("build_state_digest", "")
-    source_state_digest = worktree_state_digest(tilesim_root) if declared_state_digest else ""
+    source_state_digest = worktree_state_digest(tilesim_root) if declared_state_digest and not packaged else ""
     state_digests_match = not declared_state_digest or (
         source_state_digest != "unknown"
         and source_state_digest == declared_state_digest
@@ -174,21 +189,21 @@ def backend_identity(tilesim_root: Path, tilesim_cli: Path, manifest_path: Path)
         and source_revision == build_revision
         and state_digests_match
     )
-    branch = git_value(tilesim_root, "branch", "--show-current")
+    branch = git_value(tilesim_root, "branch", "--show-current") if not packaged else "unknown"
     result = {
         "tilesim_root": str(tilesim_root),
         "tilesim_cli": str(tilesim_cli),
         "backend_revision": source_revision,
-        "backend_branch": branch if branch != "unknown" else manifest.get("source_ref", "detached"),
+        "backend_branch": branch if branch != "unknown" else manifest.get("source_ref", "packaged" if packaged else "detached"),
         "source_revision": source_revision,
         "build_revision": build_revision,
         "source_state_digest": source_state_digest,
         "build_state_digest": build_state_digest,
         "state_digests_match": state_digests_match,
         "versions_match": versions_match,
-        "deployment_mode": manifest.get("deployment_mode", "unmanaged"),
-        "deployment_ref": manifest.get("source_ref", "unknown"),
-        "deployed_at": manifest.get("deployed_at", "unknown"),
+        "deployment_mode": manifest.get("deployment_mode", "packaged" if packaged else "unmanaged"),
+        "deployment_ref": manifest.get("source_ref") or manifest.get("release_id", "unknown"),
+        "deployed_at": manifest.get("deployed_at") or manifest.get("created_at", "unknown"),
         "deployment_manifest": str(manifest_path),
     }
     for field in (
@@ -201,6 +216,9 @@ def backend_identity(tilesim_root: Path, tilesim_cli: Path, manifest_path: Path)
         "web_static_digest",
         "schema_set_revision",
     ):
+        if manifest.get(field):
+            result[field] = manifest[field]
+    for field in ("release_id", "version", "runtime_kind", "tilesim_cli_digest", "rootfs_sha256"):
         if manifest.get(field):
             result[field] = manifest[field]
     return result

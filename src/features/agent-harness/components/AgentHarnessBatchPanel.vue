@@ -58,8 +58,24 @@ function candidateObjective(candidate: AgentHarnessBatchDetail["candidates"][num
   return `${String(value)} (${String(status)})`;
 }
 const canCancel = computed(() =>
-  Boolean(activeBatch.value && !["completed", "failed", "cancelled"].includes(String(state.value))),
+  Boolean(
+    activeBatch.value &&
+    !["completed", "failed", "cancelled", "manual_intervention_required"].includes(String(state.value)),
+  ),
 );
+const canRetry = computed(() => {
+  if (state.value !== "failed" || !activeBatch.value) return false;
+  const maxRetries = Number((activeBatch.value.budget as Record<string, unknown>).max_retries || 0);
+  const failedCandidates = candidates.value.filter((candidate) => candidate.status === "failed");
+  return (
+    failedCandidates.length > 0 &&
+    failedCandidates.every((candidate) => {
+      const failure = candidate.failure || {};
+      const retryCount = Number((candidate as typeof candidate & { retry_count?: number }).retry_count || 0);
+      return failure.retryable === true && failure.unknown_outcome !== true && retryCount < maxRetries;
+    })
+  );
+});
 function submitCreate() {
   emit("create", {
     candidateSetText: candidateSetText.value,
@@ -183,17 +199,23 @@ function submitCreate() {
           恢复
         </button>
         <button
-          v-if="state === 'failed'"
+          v-if="state === 'recovery_required'"
           type="button"
           :disabled="pending"
-          @click="emit('retry', activeBatch.batch_id)"
+          @click="emit('resume', activeBatch.batch_id)"
         >
+          确认未知结果并转人工介入
+        </button>
+        <button v-if="canRetry" type="button" :disabled="pending" @click="emit('retry', activeBatch.batch_id)">
           显式重试
         </button>
         <button v-if="canCancel" type="button" :disabled="pending" @click="emit('cancel', activeBatch.batch_id)">
           取消
         </button>
       </div>
+      <p v-if="state === 'recovery_required'" class="batch-panel__notice">
+        存在未知副作用；确认后不会盲目重提，未决候选将转为人工介入。
+      </p>
       <p v-if="stopReason" class="batch-panel__notice">停止原因：{{ stopReason }}</p>
     </template>
   </section>

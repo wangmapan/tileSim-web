@@ -56,7 +56,7 @@
   display: block;
   max-width: 100%;
   margin: 0;
-  color: var(--stage-text);
+  color: var(--stage-accent);
   font: 400 clamp(40px, 4.1vw, 64px)/1.1 var(--font-sans);
   letter-spacing: -0.035em;
   font-variant-numeric: tabular-nums;
@@ -243,14 +243,18 @@
   color: var(--stage-muted);
   font-size: var(--text-xs);
 }
+.fabric-stage__support dt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.fabric-stage__support dt .inline-help {
+  margin-left: auto;
+}
 .fabric-stage__support dd {
   margin: 10px 0;
   font: 500 22px var(--font-mono);
-}
-.fabric-stage__support dd > small {
-  display: block;
-  margin-top: 10px;
-  font: var(--text-xs)/1.6 var(--font-sans);
 }
 .fabric-stage .fabric-hotspot-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));

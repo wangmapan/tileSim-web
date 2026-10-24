@@ -123,7 +123,7 @@ describe("Phase 1 public page adapter and redaction", () => {
     });
   });
 
-  it("publishes lightweight prepare through the shared typed draft context", () => {
+  it("publishes the experiment page through the shared typed draft context", () => {
     const surface = buildExperimentSurface(
       {
         scenarios: [{ scenario_id: "s1_des_example", label: "S1 → S6" }],
@@ -143,19 +143,19 @@ describe("Phase 1 public page adapter and redaction", () => {
       form,
       surface,
       mode: "controls",
-      contextRevision: "context:lightweight_prepare:run-lightweight-agent:1",
-      runId: "run-lightweight-agent",
-      pageId: "lightweight-prepare",
-      routeName: "lightweight_prepare",
-      displayLabel: "轻量实验配置",
+      contextRevision: "context:experiment:run-experiment-agent:1",
+      runId: "run-experiment-agent",
+      pageId: "experiment",
+      routeName: "experiment",
+      displayLabel: "实验配置",
     });
 
     expect(publication.context).toMatchObject({
-      page_id: "lightweight-prepare",
-      route_name: "lightweight_prepare",
-      display_label: "轻量实验配置",
+      page_id: "experiment",
+      route_name: "experiment",
+      display_label: "实验配置",
       availability: "available",
-      run_ref: { run_id: "run-lightweight-agent", revision: "run-lightweight-agent" },
+      run_ref: { run_id: "run-experiment-agent", revision: "run-experiment-agent" },
       supported_actions: ["explain", "configure_current_subset", "check_capability"],
       allowed_purposes: ["explain", "draft"],
     });
@@ -175,11 +175,11 @@ describe("Phase 1 public page adapter and redaction", () => {
       form,
       surface: unavailableSurface,
       mode: "controls",
-      contextRevision: "context:lightweight_prepare:unavailable-field:3",
+      contextRevision: "context:experiment:unavailable-field:3",
       runId: null,
-      pageId: "lightweight-prepare",
-      routeName: "lightweight_prepare",
-      displayLabel: "轻量实验配置",
+      pageId: "experiment",
+      routeName: "experiment",
+      displayLabel: "实验配置",
     });
     expect(unavailableFieldPublication.context.resources[0]).toMatchObject({
       resource_id: "s0.workload.message_size_multiplier",
@@ -192,11 +192,11 @@ describe("Phase 1 public page adapter and redaction", () => {
       form,
       surface,
       mode: "json",
-      contextRevision: "context:lightweight_prepare:json:2",
+      contextRevision: "context:experiment:json:2",
       runId: null,
-      pageId: "lightweight-prepare",
-      routeName: "lightweight_prepare",
-      displayLabel: "轻量实验配置",
+      pageId: "experiment",
+      routeName: "experiment",
+      displayLabel: "实验配置",
       runtimeJson: JSON.stringify({ trace_name: "current-runtime", requests: [] }),
       topologyJson: JSON.stringify({ topology: { devices: [] } }),
     });
@@ -216,11 +216,11 @@ describe("Phase 1 public page adapter and redaction", () => {
       form,
       surface,
       mode: "trace_package",
-      contextRevision: "context:lightweight_prepare:trace-package:3",
+      contextRevision: "context:experiment:trace-package:3",
       runId: null,
-      pageId: "lightweight-prepare",
-      routeName: "lightweight_prepare",
-      displayLabel: "轻量实验配置",
+      pageId: "experiment",
+      routeName: "experiment",
+      displayLabel: "实验配置",
     });
     expect(unavailable.context.availability).toBe("unavailable");
     expect(unavailable.context.supported_actions).toEqual(["explain"]);

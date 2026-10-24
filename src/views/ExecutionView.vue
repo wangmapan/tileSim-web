@@ -122,6 +122,10 @@ function metricSemantic(metric: ExecutionLayer["stats"][number]) {
   return field ? semanticField(field, metric.value) : null;
 }
 
+function metricValueTone(metric: ExecutionLayer["stats"][number]) {
+  return metric.value === null || metric.value === undefined || metric.value === "" ? "muted" : "accent";
+}
+
 function checkLabel(status: string | undefined) {
   const labels: Record<string, string> = {
     pass: "通过",
@@ -286,7 +290,12 @@ async function exportStructuredReport() {
         </div>
 
         <div class="layer-metric-grid" :aria-label="t('本层关键指标')">
-          <div v-for="metric in selected.stats" :key="metric.label" class="layer-metric">
+          <div
+            v-for="metric in selected.stats"
+            :key="metric.label"
+            class="layer-metric"
+            :class="`layer-metric--${metricValueTone(metric)}`"
+          >
             <small>{{
               selected.id === "S1" &&
               metric.label === "调度器" &&
@@ -452,7 +461,11 @@ async function exportStructuredReport() {
             <p class="section-kicker">{{ t("仿真执行与控制平面") }}</p>
             <span class="panel-title-with-help">
               <h2>{{ t("统一时间轴记录") }}</h2>
-              <InlineHelp :text="t('这里记录各环节在同一模拟时间线上的开始和结束。')" :interactive="false" />
+              <InlineHelp
+                :text="`${t('这里记录各环节在同一模拟时间线上的开始和结束。')} ${t(
+                  '本页只重组当前后端报告。计数去重仅用于避免同一并列资源证据随多个网络阶段重复展示，不改变模拟结果，也不把关联证据升级为独立 trace。',
+                )}`"
+              />
             </span>
           </div>
           <span>{{ t("{count} 个阶段", { count: result.stages.length }) }}</span>
@@ -528,18 +541,6 @@ async function exportStructuredReport() {
           <p v-else>{{ t("当前报告没有资源语义汇合摘要。") }}</p>
         </div>
       </details>
-    </section>
-
-    <section class="execution-boundary-note">
-      <Braces :size="17" />
-      <p>
-        <strong>{{ t("字段边界") }}</strong
-        >{{
-          t(
-            "本页只重组当前后端报告。计数去重仅用于避免同一并列资源证据随多个网络阶段重复展示，不改变模拟结果，也不把关联证据升级为独立 trace。",
-          )
-        }}
-      </p>
     </section>
 
     <ReportCoveragePanel section="execution_envelope" :bundle="state.bundle" />

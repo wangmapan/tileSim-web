@@ -49,10 +49,26 @@ pub fn resolve_web_root() -> Result<PathBuf, PublicError> {
         .ok()
         .and_then(|path| path.parent().map(Path::to_path_buf));
     let configured_root = env::var_os("TILESIM_WEB_ROOT").map(PathBuf::from);
+    let packaged_root = env::var_os("TILESIM_PACKAGE_ROOT")
+        .map(PathBuf::from)
+        .map(|root| root.join("app"));
+    let executable_packaged_root = executable_root
+        .as_ref()
+        .and_then(|root| {
+            root.ancestors()
+                .find(|candidate| candidate.join("app/scripts").is_dir())
+        })
+        .map(|root| root.join("app"));
     let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-    for candidate in [configured_root, executable_root, Some(source_root)]
-        .into_iter()
-        .flatten()
+    for candidate in [
+        configured_root,
+        packaged_root,
+        executable_packaged_root,
+        executable_root,
+        Some(source_root),
+    ]
+    .into_iter()
+    .flatten()
     {
         if valid_web_root(&candidate) {
             if let Ok(canonical) = canonicalize_compatible(&candidate) {
@@ -79,6 +95,25 @@ pub fn process_path_with_node(node: &Path) -> OsString {
         entries.extend(env::split_paths(&existing));
     }
     env::join_paths(entries).unwrap_or_else(|_| env::var_os("PATH").unwrap_or_default())
+}
+
+/// The packaged launcher keeps mutable model settings outside the immutable release.
+/// Development checkouts retain the historical runtime path so local workflows remain compatible.
+pub fn model_config_path(web_root: &Path) -> PathBuf {
+    if let Some(configured) = env::var_os("TILESIM_MODEL_CONFIG_PATH") {
+        return PathBuf::from(configured);
+    }
+    let packaged =
+        env::var_os("TILESIM_PACKAGE_ROOT").is_some() || web_root.join("../release.json").is_file();
+    if packaged {
+        if let Some(local_app_data) = env::var_os("LOCALAPPDATA") {
+            return PathBuf::from(local_app_data)
+                .join("TileSim")
+                .join("config")
+                .join("evidence-agent.local.json");
+        }
+    }
+    web_root.join("runtime/evidence-agent.local.json")
 }
 
 pub fn extract_bundled_node() -> Result<PathBuf, PublicError> {

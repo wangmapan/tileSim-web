@@ -58,7 +58,7 @@ STATES = {
     "recovery_required",
     "manual_intervention_required",
 }
-TERMINAL_STATES = {"completed", "failed", "cancelled"}
+TERMINAL_STATES = {"completed", "failed", "cancelled", "manual_intervention_required"}
 ACTIVE_STATES = {"validated", "waiting_approval", "queued", "running", "paused", "recovery_required"}
 ALLOWED_TRANSITIONS = {
     "draft": {"validated", "cancelled"},
@@ -68,7 +68,7 @@ ALLOWED_TRANSITIONS = {
     "running": {"paused", "completed", "failed", "cancelled", "recovery_required", "manual_intervention_required"},
     "paused": {"queued", "cancelled", "recovery_required"},
     "recovery_required": {"queued", "cancelled", "manual_intervention_required"},
-    "failed": {"queued", "cancelled"},
+    "failed": {"waiting_approval", "queued", "cancelled"},
     "completed": set(),
     "cancelled": set(),
     "manual_intervention_required": set(),
@@ -175,6 +175,8 @@ def validate_batch_request(body: dict[str, Any], *, principal: str, workspace_id
     if execution_request is not None and (not isinstance(execution_request, dict) or not execution_request):
         raise BatchError("invalid_execution_request", "execution_request must be a non-empty object when supplied.", field_path="/execution_request")
     budget = validate_budget(body.get("budget"))
+    if len(candidate_set) > budget["max_candidates"]:
+        raise BatchError("candidate_budget_exceeded", "candidate_set exceeds budget.max_candidates.", field_path="/budget/max_candidates")
     concurrency = body.get("concurrency_policy") or {}
     if not isinstance(concurrency, dict) or set(concurrency) - {"max_concurrency", "queue_policy"}:
         unknown = sorted(set(concurrency) - {"max_concurrency", "queue_policy"}) if isinstance(concurrency, dict) else []
@@ -240,7 +242,12 @@ class BatchStore:
             existing = self.db.execute("SELECT * FROM batches WHERE idempotency_key=? AND deleted_at IS NULL", (idempotency_key,)).fetchone()
             if existing:
                 current = self._batch(existing)
-                if canonical_sha256(current.get("candidate_set")) != canonical_sha256(document.get("candidate_set")):
+                # Replay must bind the complete normalized request, not only the
+                # candidate list.  Otherwise a caller could reuse a key with a
+                # different objective, budget, snapshot, or backend binding and
+                # silently receive the old batch as if it were a valid replay.
+                current_request = {key: current.get(key) for key in document}
+                if canonical_sha256(current_request) != canonical_sha256(document):
                     raise BatchError("idempotency_payload_mismatch", "Idempotency-Key is bound to another batch plan.")
                 return current, True
             batch_id = document.get("batch_id") or f"batch-{uuid.uuid4().hex}"
@@ -287,7 +294,7 @@ class BatchStore:
         with self.lock:
             return [{"schema_identity": SCHEMA_IDENTITIES["event"], "contract_revision": CONTRACT_REVISION, "batch_id": batch_id, "event_id": row["event_id"], "sequence": row["sequence"], "state": row["state"], "node": row["node"], "payload_digest": row["payload_digest"], "created_at": row["created_at"], "provenance": PROVENANCE} for row in self.db.execute("SELECT * FROM batch_events WHERE batch_id=? AND sequence>? ORDER BY sequence", (batch_id, after)).fetchall()]
 
-    def transition(self, batch_id: str, state: str, *, expected: set[str] | None = None, error: dict[str, Any] | None = None) -> dict[str, Any]:
+    def transition(self, batch_id: str, state: str, *, expected: set[str] | None = None, error: dict[str, Any] | None = None, allow_retry: bool = False) -> dict[str, Any]:
         if state not in STATES:
             raise BatchError("invalid_workflow_state", "Unknown batch workflow state.")
         with self.lock, self.db:
@@ -296,7 +303,7 @@ class BatchStore:
                 raise BatchError("batch_not_found", "Batch was not found.")
             if expected and current["state"] not in expected:
                 raise BatchError("invalid_transition", "Batch state transition is not allowed.")
-            if current["state"] in TERMINAL_STATES and state != current["state"]:
+            if current["state"] in TERMINAL_STATES and state != current["state"] and not (allow_retry and current["state"] == "failed" and state == "waiting_approval"):
                 raise BatchError("terminal_mutation", "Terminal batch cannot change state.")
             if state != current["state"] and state not in ALLOWED_TRANSITIONS.get(current["state"], set()):
                 raise BatchError("invalid_transition", "Batch state transition is not allowed.")
@@ -307,47 +314,107 @@ class BatchStore:
             self._event_locked(batch_id, state, "lifecycle", canonical_sha256(error or {"state": state}))
             return payload
 
+    def set_runtime_metadata(self, batch_id: str, **fields: Any) -> dict[str, Any]:
+        with self.lock, self.db:
+            current = self.get(batch_id)
+            if current is None:
+                raise BatchError("batch_not_found", "Batch was not found.")
+            runtime = dict(current.get("runtime") or {})
+            runtime.update(fields)
+            payload = dict(current)
+            payload["runtime"] = runtime
+            payload["updated_at"] = now()
+            self.db.execute("UPDATE batches SET document_json=?,updated_at=? WHERE batch_id=?", (_json(payload), payload["updated_at"], batch_id))
+            return payload
+
+    def release_lease(self, batch_id: str, owner: str) -> bool:
+        with self.lock, self.db:
+            result = self.db.execute("DELETE FROM batch_leases WHERE batch_id=? AND owner=?", (batch_id, owner))
+            return result.rowcount == 1
+
+    def prepare_retry(self, batch_id: str, *, max_retries: int) -> int:
+        with self.lock, self.db:
+            batch = self.get(batch_id)
+            if batch is None:
+                raise BatchError("batch_not_found", "Batch was not found.")
+            failed = [item for item in self.candidates(batch_id) if item.get("status") == "failed"]
+            if not failed:
+                raise BatchError("retry_not_allowed", "No failed candidate is available for retry.")
+            for candidate in failed:
+                failure = candidate.get("failure") if isinstance(candidate.get("failure"), dict) else {}
+                retry_count = int(candidate.get("retry_count", 0))
+                if failure.get("unknown_outcome"):
+                    raise BatchError("unknown_side_effect", "Unknown outcome cannot be blindly retried.", unknown_outcome=True)
+                if not failure.get("retryable"):
+                    raise BatchError("retry_not_allowed", "Only retryable candidate failures may be retried.")
+                if retry_count >= max_retries:
+                    raise BatchError("retry_budget_exhausted", "The candidate retry budget was exhausted.")
+            for candidate in failed:
+                retry_count = int(candidate.get("retry_count", 0)) + 1
+                candidate.update({"status": "waiting_approval", "retry_count": retry_count, "operation_id": None, "run_id": None, "artifact_manifest_digest": None, "result": None, "failure": None, "updated_at": now()})
+                self.db.execute("UPDATE batch_candidates SET document_json=?,status=?,retry_count=?,updated_at=? WHERE batch_id=? AND candidate_id=?", (_json(candidate), candidate["status"], retry_count, candidate["updated_at"], batch_id, candidate["candidate_id"]))
+                self._event_locked(batch_id, "waiting_approval", "retry", canonical_sha256({"candidate_id": candidate["candidate_id"], "retry_count": retry_count}))
+            runtime = dict(batch.get("runtime") or {})
+            # max_seconds is a batch-wide wall-clock budget.  A retry gets a
+            # fresh approval and execution identity, but it must not buy a new
+            # time window by resetting the original start timestamp.
+            refreshed = dict(batch); refreshed["runtime"] = runtime; refreshed["updated_at"] = now()
+            self.db.execute("UPDATE batches SET document_json=?,updated_at=? WHERE batch_id=?", (_json(refreshed), refreshed["updated_at"], batch_id))
+            return len(failed)
+
+    def mark_recovery_for_manual_intervention(self, batch_id: str) -> int:
+        with self.lock, self.db:
+            candidates = [item for item in self.candidates(batch_id) if item.get("status") == "recovery_required"]
+            for candidate in candidates:
+                candidate["status"] = "manual_intervention_required"
+                candidate["updated_at"] = now()
+                self.db.execute("UPDATE batch_candidates SET document_json=?,status=?,updated_at=? WHERE batch_id=? AND candidate_id=?", (_json(candidate), candidate["status"], candidate["updated_at"], batch_id, candidate["candidate_id"]))
+                self._event_locked(batch_id, "manual_intervention_required", "recovery", canonical_sha256({"candidate_id": candidate["candidate_id"]}))
+            return len(candidates)
+
     def approve(self, batch_id: str, *, approval_digest: str, expires_at: str) -> dict[str, Any]:
-        batch = self.get(batch_id)
-        if batch is None:
-            raise BatchError("batch_not_found", "Batch was not found.")
-        if batch["state"] != "waiting_approval":
-            raise BatchError("approval_stale", "Only a waiting batch can be approved.")
-        plan_digest = batch.get("plan", {}).get("plan_digest") if isinstance(batch.get("plan"), dict) else None
-        plan_digest = plan_digest or canonical_sha256(batch.get("plan"))
-        expected_digests = {
-            canonical_sha256({"batch_id": batch_id, "plan_digest": plan_digest, "snapshot_digest": batch["input_snapshot_digest"]}),
-            canonical_sha256({"batch_id": batch_id, "plan_digest": canonical_sha256(batch.get("plan")), "snapshot_digest": batch["input_snapshot_digest"]}),
-        }
-        if approval_digest not in expected_digests:
-            raise BatchError("approval_digest_mismatch", "Approval digest does not bind the batch plan.")
-        try:
-            if datetime.fromisoformat(expires_at.replace("Z", "+00:00")) <= datetime.now(timezone.utc):
-                raise BatchError("approval_expired", "Approval is already expired.")
-        except ValueError as error:
-            raise BatchError("invalid_expiry", "Approval expiry is not ISO-8601.", field_path="/expires_at") from error
-        approval = {"schema_identity": "tilesim.agent_harness.batch_approval.v1", "contract_revision": CONTRACT_REVISION, "approval_id": f"batch-approval-{uuid.uuid4().hex}", "batch_id": batch_id, "approval_digest": approval_digest, "status": "approved", "single_use": True, "consumed": False, "expires_at": expires_at, "created_at": now(), "provenance": PROVENANCE}
-        payload = dict(batch); payload["approval"] = approval
-        self.db.execute("UPDATE batches SET document_json=?,updated_at=? WHERE batch_id=?", (_json(payload), payload["updated_at"], batch_id))
-        return approval
+        with self.lock, self.db:
+            batch = self.get(batch_id)
+            if batch is None:
+                raise BatchError("batch_not_found", "Batch was not found.")
+            if batch["state"] != "waiting_approval":
+                raise BatchError("approval_stale", "Only a waiting batch can be approved.")
+            plan_digest = batch.get("plan", {}).get("plan_digest") if isinstance(batch.get("plan"), dict) else None
+            plan_digest = plan_digest or canonical_sha256(batch.get("plan"))
+            expected_digests = {
+                canonical_sha256({"batch_id": batch_id, "plan_digest": plan_digest, "snapshot_digest": batch["input_snapshot_digest"]}),
+                canonical_sha256({"batch_id": batch_id, "plan_digest": canonical_sha256(batch.get("plan")), "snapshot_digest": batch["input_snapshot_digest"]}),
+            }
+            if approval_digest not in expected_digests:
+                raise BatchError("approval_digest_mismatch", "Approval digest does not bind the batch plan.")
+            try:
+                if datetime.fromisoformat(expires_at.replace("Z", "+00:00")) <= datetime.now(timezone.utc):
+                    raise BatchError("approval_expired", "Approval is already expired.")
+            except ValueError as error:
+                raise BatchError("invalid_expiry", "Approval expiry is not ISO-8601.", field_path="/expires_at") from error
+            approval = {"schema_identity": "tilesim.agent_harness.batch_approval.v1", "contract_revision": CONTRACT_REVISION, "approval_id": f"batch-approval-{uuid.uuid4().hex}", "batch_id": batch_id, "approval_digest": approval_digest, "status": "approved", "single_use": True, "consumed": False, "expires_at": expires_at, "created_at": now(), "provenance": PROVENANCE}
+            updated_at = now()
+            payload = dict(batch); payload["approval"] = approval; payload["updated_at"] = updated_at
+            self.db.execute("UPDATE batches SET document_json=?,updated_at=? WHERE batch_id=?", (_json(payload), updated_at, batch_id))
+            return approval
 
     def consume_approval(self, batch_id: str) -> dict[str, Any]:
-        batch = self.get(batch_id); approval = (batch or {}).get("approval")
-        if not isinstance(approval, dict):
-            raise BatchError("approval_not_found", "Batch approval was not found.")
-        if approval.get("consumed") or approval.get("status") != "approved":
-            raise BatchError("approval_replayed", "Batch approval is single-use.")
-        try:
-            if datetime.fromisoformat(str(approval["expires_at"]).replace("Z", "+00:00")) <= datetime.now(timezone.utc):
-                raise BatchError("approval_expired", "Batch approval has expired.")
-        except (KeyError, ValueError) as error:
-            raise BatchError("invalid_expiry", "Batch approval expiry is invalid.") from error
-        approval = {**approval, "status": "consumed", "consumed": True, "consumed_at": now()}
-        payload = dict(batch); payload["approval"] = approval; payload["updated_at"] = now()
         with self.lock, self.db:
+            batch = self.get(batch_id); approval = (batch or {}).get("approval")
+            if not isinstance(approval, dict):
+                raise BatchError("approval_not_found", "Batch approval was not found.")
+            if approval.get("consumed") or approval.get("status") != "approved":
+                raise BatchError("approval_replayed", "Batch approval is single-use.")
+            try:
+                if datetime.fromisoformat(str(approval["expires_at"]).replace("Z", "+00:00")) <= datetime.now(timezone.utc):
+                    raise BatchError("approval_expired", "Batch approval has expired.")
+            except (KeyError, ValueError) as error:
+                raise BatchError("invalid_expiry", "Batch approval expiry is invalid.") from error
+            approval = {**approval, "status": "consumed", "consumed": True, "consumed_at": now()}
+            payload = dict(batch); payload["approval"] = approval; payload["updated_at"] = now()
             self.db.execute("UPDATE batches SET document_json=?,updated_at=? WHERE batch_id=?", (_json(payload), payload["updated_at"], batch_id))
             self._event_locked(batch_id, "queued", "approval", canonical_sha256({"approval_id": approval["approval_id"]}))
-        return approval
+            return approval
 
     def update_candidate(self, batch_id: str, candidate_id: str, **fields: Any) -> dict[str, Any]:
         with self.lock, self.db:
@@ -399,6 +466,31 @@ class BatchStore:
             rows = self.db.execute("SELECT batch_id FROM batches WHERE deleted_at IS NULL AND state IN ('queued','running')").fetchall()
             for row in rows:
                 batch_id = row["batch_id"]
+                # A restart fences every candidate that was not already terminal.
+                # The worker may have submitted a formal execution between its
+                # last durable update and process loss, so leaving a candidate in
+                # waiting/running would make the UI look retryable and permit a
+                # blind re-submit after recovery acknowledgement.
+                for candidate in self.candidates(batch_id):
+                    if candidate.get("status") in {"completed", "failed", "cancelled", "manual_intervention_required"}:
+                        continue
+                    failure = {
+                        "schema_identity": SCHEMA_IDENTITIES["failure"],
+                        "contract_revision": CONTRACT_REVISION,
+                        "batch_id": batch_id,
+                        "candidate_id": candidate["candidate_id"],
+                        "code": "worker_restarted",
+                        "retryable": False,
+                        "unknown_outcome": True,
+                        "field_path": "/state",
+                        "provenance": PROVENANCE,
+                    }
+                    candidate.update({"status": "recovery_required", "failure": failure, "updated_at": now()})
+                    self.db.execute(
+                        "UPDATE batch_candidates SET document_json=?,status=?,updated_at=? WHERE batch_id=? AND candidate_id=?",
+                        (_json(candidate), candidate["status"], candidate["updated_at"], batch_id, candidate["candidate_id"]),
+                    )
+                    self._event_locked(batch_id, "recovery_required", "recovery", canonical_sha256(failure))
                 self.transition(batch_id, "recovery_required", expected={"queued", "running"}, error={"code": "worker_restarted", "unknown_outcome": True})
                 changed += 1
         return changed
@@ -407,7 +499,7 @@ class BatchStore:
         batch = self.get(batch_id); candidates = self.candidates(batch_id)
         if batch is None:
             raise BatchError("batch_not_found", "Batch was not found.")
-        counts = {state: sum(1 for item in candidates if item.get("status") == state) for state in {"waiting_approval", "queued", "running", "completed", "failed", "recovery_required", "cancelled"}}
+        counts = {state: sum(1 for item in candidates if item.get("status") == state) for state in {"waiting_approval", "queued", "running", "completed", "failed", "recovery_required", "manual_intervention_required", "cancelled"}}
         return {"schema_identity": SCHEMA_IDENTITIES["summary"], "contract_revision": CONTRACT_REVISION, "batch_id": batch_id, "state": batch["state"], "counts": counts, "best_candidate_id": batch.get("best_candidate_id"), "best_value": batch.get("best_value"), "no_improvement_count": int(batch.get("no_improvement_count", 0)), "evaluated_count": int(batch.get("evaluated_count", 0)), "stop_reason": batch.get("stop_reason"), "checkpoint_id": (self.latest_checkpoint(batch_id) or {}).get("checkpoint_id"), "provenance": PROVENANCE}
 
     def set_summary(self, batch_id: str, summary: dict[str, Any], *, best_candidate_id: str | None = None, stop_reason: dict[str, Any] | None = None) -> None:

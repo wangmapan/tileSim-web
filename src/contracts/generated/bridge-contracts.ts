@@ -3,7 +3,7 @@
 export type CreateRunRequest = {
   [k: string]: unknown;
 } & {
-  scenario_id: "s1_des_example" | "dense_des_package";
+  scenario_id: "s1_des_example" | "dense_des_package" | "pd_disaggregation_example";
   fidelity_policy?: "default" | "des";
   gpu_participation_mode?: "gpu_free";
   run_name?: string | null;
@@ -895,6 +895,7 @@ export interface ControlledPreMaterializationS6TopologyRequestInput {
      * @maxItems 100000
      */
     links?: {
+      link_id?: string;
       src_device: string;
       dst_device: string;
       domain_id: string;
@@ -3581,6 +3582,7 @@ export interface CatalogResponse {
   input_modes: ("controls" | "json" | "trace_package")[];
   design_space_modes: ("built_in_synthetic" | "strict_s6_manifest")[];
   gpu_participation_modes: "gpu_free"[];
+  model_ids: string[];
 }
 
 export interface CapabilitiesResponse {

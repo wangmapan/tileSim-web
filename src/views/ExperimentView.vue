@@ -657,6 +657,7 @@ async function loadBundle(event) {
         :form="form"
         :surface="surface"
         :control-groups="surface.controlGroups"
+        :model-ids="state.catalog?.model_ids || []"
         :field-path="inputFieldPath"
         :error-message="inputErrorMessage"
         @reset-controls="resetControls"

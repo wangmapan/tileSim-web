@@ -1,6 +1,19 @@
 # Local bridge contract
 
-## 阶段 4 Local-Dev 受控优化
+## 阶段 5 Local-Dev 受控批处理（2026-10-24 当前事实）
+
+Bridge 当前同时提供 `2026-10-19.wpd.v1` 受控优化和 `2026-10-19.wpe.v1` 批处理入口。批处理 tool registry 为
+`2026-10-19.tools.v3`，优化 tool registry 为 `2026-10-19.tools.v2`；两者都只接受显式 `local_dev=true`、单并发和人工批准。
+批处理使用独立 SQLite WAL 保存有界的 batch/candidate/approval/checkpoint/event/lease/summary 元数据，所有副作用仍委托
+正式 `POST /api/agent/executions`，不新增 `/api/runs`、shell、任意路径/URL、外部 MCP/A2A 或无人值守生产入口。
+
+阶段 5 收尾判定为 `LOCAL_PHASE5_PASS`，仅表示 local-dev 语义闭合，不是生产 GO。候选、失败/时间/运行/重试预算、暂停恢复、
+lease/heartbeat、SSE contiguous replay、unknown outcome 的 `recovery_required` 与 `manual_intervention_required` 边界均保持
+fail-closed；结果固定为 `local_dev` / `synthetic_trace` / `exploratory` / `not_for_production`。当前 schema-set revision 为
+`sha256:dd9fad27c1d5591a79a16211f701f5725a711163bb284d960b99cca020064b4e`，Provider live acceptance、真实硬件、独立
+evidence/citation review 和生产 GO 仍为 `production_acceptance_pending`。
+
+## 阶段 4 Local-Dev 受控优化（已由阶段 5 扩展）
 
 Bridge 的 `2026-10-19.wpd.v1` 优化入口只接受显式 `local_dev=true` 和人工批准，使用独立 SQLite WAL 保存有界 session/candidate/
 approval/iteration/evaluation/checkpoint/event/summary 记录。候选经现有 Stage-2 validator 后才可提交正式 `/api/agent/executions`；不允许
@@ -8,7 +21,9 @@ approval/iteration/evaluation/checkpoint/event/summary 记录。候选经现有 
 JSON Pointer 和 synthetic provenance 校验，未知结果 fail closed 为 `recovery_required`。所有结果标记
 `local_dev` / `synthetic_trace` / `exploratory` / `not_for_production`，生产 acceptance 仍为 `production_acceptance_pending`。
 
-## Agent Harness 阶段 2（2026-10-18）
+## Agent Harness 阶段 2（2026-10-18，历史记录）
+
+> 本节及“代码职责”下的阶段 0/3A/3B 段落保留 dated contract 事实；它们不覆盖上方 2026-10-24 当前事实。
 
 Bridge 发布 draft/validation/approval successor revision `2026-10-18.wpb.v1`，保留 WP-A
 `2026-10-17.wpa.v1` 的兼容读取语义。正式 identity 为
@@ -50,6 +65,13 @@ bridge 在 `127.0.0.1:5173` 上托管构建后的前端和受控 API。它不会
 - `POST /api/runs/{id}/name`：修改本地实验名称。
 - `POST /api/runs/{id}/agent/evidence-analyses`：针对当前 run 的已验证 artifact snapshot 提交同步终态 evidence analysis；要求独立 `Idempotency-Key`。
 - `GET /api/runs`：列出最近 20 次运行。
+- `POST /api/agent/optimization/sessions`、`GET /api/agent/optimization/sessions`：创建或列出 local-dev 优化 session。
+- `GET /api/agent/optimization/sessions/{session_id}`、`/events`：读取优化 session detail 和事件回放。
+- `POST /api/agent/optimization/sessions/{session_id}/candidates/{candidate_id}/approve`：批准单个候选。
+- `POST /api/agent/optimization/sessions/{session_id}/{action}`：执行受控 pause/resume/cancel/retry。
+- `POST /api/agent/batches`、`GET /api/agent/batches`、`GET /api/agent/batches/{batch_id}`：创建、列出和读取批处理。
+- `GET /api/agent/batches/{batch_id}/events`：读取批处理事件，可用 `Last-Event-ID` 进行连续回放。
+- `POST /api/agent/batches/{batch_id}/approve`、`POST /api/agent/batches/{batch_id}/{action}`：批准并执行受控 start/pause/resume/cancel/retry。
 
 请求体最大 2.1 MB；单份自定义输入最大 1 MB。跨域只允许本地 Vite 开发地址，生产页面与 API 使用同源访问。
 
@@ -314,7 +336,7 @@ Provider/Bridge 终态映射固定为：`502 -> completion_state=failed`、
 `fidelity_scope_violation`、`unsafe_tool_request`、`prompt_injection`、`input_too_large`、
 `output_truncated`、`provider_unavailable`、`timeout`、`cancelled` 和 `concurrency_limit`。
 
-## 代码职责
+## 代码职责与历史阶段记录
 
 ### Agent Harness 阶段 0 / WP-A（2026-10-17）
 
@@ -327,9 +349,9 @@ Bridge 已发布 `tilesim.agent_harness.*.v1` successor contract，revision 为
 
 只读能力入口为 `/api/agent/harness-capabilities`、`/api/agent/tools` 和四个 allow-listed tools；
 operation/checkpoint/approval/event routes 仅接受闭合结构化输入，scope、principal、run/snapshot、manifest
-SHA/bytes/Pointer 均 fail closed。Harness 不调用 TileSimCLI，不创建或修改 run，不开放写工具、自主优化、shell、
-任意路径、任意 URL 或网络。前端生成客户端尚未同步，后续同步清单登记在
-`docs/F9_AGENT_ORCHESTRATION/26_AGENT_HARNESS_PHASE0_WP_A_CURRENT_BASELINE.md`。
+SHA/bytes/Pointer 均 fail closed。阶段 0 只读工具不调用 TileSimCLI；阶段 2/3/4/5 的正式写入边界由各 successor
+contract 约束。前端生成客户端位于 `src/contracts/generated/agent-harness.ts`，其 revision 必须与 Bridge 模块和
+schema-set drift check 保持一致。
 
 - `server.py`：配置、兼容 wrapper、HTTP 路由和端点协调。
 - `api/responses.py`：版本 headers、错误 envelope、CORS、JSON artifact 与 SSE 序列化。
@@ -347,7 +369,9 @@ SHA/bytes/Pointer 均 fail closed。Harness 不调用 TileSimCLI，不创建或�
 
 新端点只在 `server.py` 做路由；校验、持久化、执行或基础设施逻辑应进入对应模块。保留 `server` wrapper 是为了兼容部署脚本和现有故障注入测试，不应在 wrapper 中重新实现业务逻辑。
 
-当前 Python Bridge 回归基线为 76 个测试（64 个 server、9 个 Provider adapter、3 个 canonical digest），全部使用临时 HTTP 端口或纯函数路径，不操作正在运行的 5173 服务。Week 7 操作不接受请求正文中的路径、命令或参数，并要求 source/build identity 一致；同一时刻最多执行一个 Week 7 操作。CLI 输出会按登记的响应 Schema 校验必需字段、类型、最小值和有限数，同 schema_version 的畸形报告也会失败关闭。
+Bridge 回归包含基础 server/Provider/canonical 测试以及 Agent Harness 阶段 3/4/5 定向测试；精确数字只在对应 dated
+交接记录中登记，不在本 README 重复维护。测试使用临时 HTTP 端口或纯函数路径，不操作正在运行的 5173 服务。Week 7
+操作不接受请求正文中的路径、命令或参数，并要求 source/build identity 一致；同一时刻最多执行一个 Week 7 操作。CLI 输出会按登记的响应 Schema 校验必需字段、类型、最小值和有限数，同 schema_version 的畸形报告也会失败关闭。
 
 F7 另有 `bridge/test_f7_schemas.mjs`，使用 Ajv 8 的 Draft 2020-12 实现编译
 design-space、topology 和 metrics schema，并运行正反例；该测试不生成或修改前端代码。
@@ -368,7 +392,7 @@ source/build digest 和 schema-set revision 后才停止旧服务，并从不可
 使 `runs/` 保持在 snapshot 外。启动失败时 previous manifest 原子恢复，并尝试从 previous snapshot 重启。部署身份可用
 `pnpm release:identity` 与正式 artifact manifest 组合输出；该工具不会读取 Provider 环境变量值。
 
-# Agent Harness 阶段 3A：人工批准后的单次受控执行
+### Agent Harness 阶段 3A：人工批准后的单次受控执行（历史记录）
 
 Bridge 发布 `2026-10-18.wpc.v1` execution successor contract。唯一提交入口为
 `POST /api/agent/executions`；它只接受当前 `validated` 草案、`valid` validation、未过期且未消费的
@@ -405,7 +429,7 @@ execution → run → result，仅一个 run，事件 sequence `1..5`，manifest
 阶段 3A 仍为 **NO-GO**，直到独立发布审查完成；自主优化、自动候选、多工具自主循环和无人值守实验保持
 `unavailable`/`not_exposed`。
 
-## 阶段 3A 独立发布门禁（2026-10-18）
+### 阶段 3A 独立发布门禁（2026-10-18，历史记录）
 
 正式入口：`python bridge/run_agent_harness_stage3_release_gate.py`；若需复跑仓外 synthetic smoke，附加
 `--run-hosted-smoke --tilesim-root <D:\\tileSim> --tilesim-cli <TileSimCLI.exe> --deployment-manifest <manifest>`。
@@ -415,7 +439,7 @@ execution → run → result，仅一个 run，事件 sequence `1..5`，manifest
 polling/SSE、单 run、replay/conflict、manifest identity/SHA/bytes。Provider acceptance 仍为
 `live_acceptance_pending`，人工 evidence/citation review `not_run`，因此不允许进入前端 execution UI。
 
-## 阶段 3A Provider acceptance / 人工 review 准备（2026-10-18）
+### 阶段 3A Provider acceptance / 人工 review 准备（2026-10-18，历史记录）
 
 `run_agent_harness_stage3_acceptance_prep.py` 只向仓外目录生成 redacted Provider acceptance manifest 和
 evidence/citation review package；默认不调用 Provider、不创建 run、不触碰 5173。manifest/package identity、
@@ -423,7 +447,7 @@ revision、敏感字段拒绝和 accepted/completed hard gate 由 `agent_harness
 Provider `live_acceptance_pending`、capability probe `not_run`/`not_configured`、人工 review `not_run`，所以阶段
 3A 仍 **NO-GO**，不得启动阶段 3B execution UI 或阶段 4。
 
-## 2026-10-19 阶段 3 local-dev / 3B 当前事实
+### 2026-10-19 阶段 3 local-dev / 3B（已由阶段 5 扩展的历史记录）
 
 本地个人使用路径通过独立 `local_dev` deployment manifest 完成 `LOCAL_ONLY_PASS`：manifest 由当前 TileSim
 checkout、Bridge schema-set、生成客户端和 Windows MSVC CLI 自动生成，identity matching，且不覆盖旧的
@@ -439,7 +463,7 @@ run、不以 localStorage/Pinia 保存 operation 真相，不自动重试 unknow
 自动优化、无人值守批量实验和外部 MCP/A2A 继续保持关闭；本地 bounded optimization 见下节。生产 release-gate 仍应保持 `NO-GO`，即使本地 gate 为
 `LOCAL_ONLY_PASS`。
 
-## 2026-10-19 阶段 4 Local-Dev 受控优化
+### 2026-10-19 阶段 4 Local-Dev 受控优化（已由阶段 5 扩展的历史记录）
 
 优化协调器使用 `2026-10-19.wpd.v1` 和独立 SQLite WAL store，仅接受显式
 `local_dev=true` 的 session；每个 candidate 都要人工 approval，预算、迭代、运行、时间、失败次数和并发均有界。

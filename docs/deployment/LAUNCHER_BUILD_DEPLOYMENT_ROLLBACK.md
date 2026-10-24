@@ -4,6 +4,11 @@
 `tools/workbench-launcher/`。`tools/launcher/tilesim_launcher.py` 是历史 Tk 实现，
 不能再用 PyInstaller 将它覆盖到根目录。旧 `tools/launcher/build-launcher.ps1` 已转发到 Tauri 构建入口。
 
+本文件描述的是**开发者 checkout 启动器**，不是可发送给测试人员的完整安装包：启动器会从 EXE 旁定位
+`scripts/`、Web checkout、WSL deployment manifest 和后端工作树，并只把 Node 嵌入自身。普通用户交付的安装器、
+离线 ZIP、预构建 WSL runtime、用户数据目录、DPAPI 配置和升级回滚以
+[`WINDOWS_DISTRIBUTION_AND_INSTALLER_PLAN_2026-10-24.md`](WINDOWS_DISTRIBUTION_AND_INSTALLER_PLAN_2026-10-24.md) 为准。
+
 ## 构建
 
 需要 Windows 10/11、Node.js 20+、pnpm 11.19.0、Rust stable MSVC、Visual Studio C++ Build Tools / Windows SDK

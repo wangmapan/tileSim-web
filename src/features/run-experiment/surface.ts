@@ -36,6 +36,7 @@ const groupPresentation = {
 const scenarioLabels: Readonly<Record<string, string>> = {
   s1_des_example: "标准运行时示例",
   dense_des_package: "Dense DES Trace package（仅 package 输入）",
+  pd_disaggregation_example: "PD 分离运行时示例",
 };
 
 function friendlyScenarioLabel(value: string, label: string) {

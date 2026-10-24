@@ -120,6 +120,66 @@ class BatchHttpTests(unittest.TestCase):
         self.assertEqual(snapshot["detail"]["summary"]["best_value"], 5.0)
         self.assertEqual(snapshot["detail"]["summary"]["best_candidate_id"], snapshot["detail"]["candidates"][1]["candidate_id"])
 
+    def test_failure_budget_is_hard_even_when_failure_policy_continues(self):
+        identity = self.server.harness_backend_identity()
+        body = {"schema_identity": "tilesim.agent_harness.batch_session.v1", "contract_revision": "2026-10-19.wpe.v1", "input_snapshot_digest": canonical_sha256({"batch": "failure-budget"}), "schema_set_revision": self.server.SCHEMA_SET_REVISION, "backend_identity": identity, "plan": {"kind": "failure-budget"}, "candidate_set": [{}, {"variant": 1}], "objective": {"metric_path": "/metrics/p95", "direction": "minimize"}, "budget": {"max_candidates": 2, "max_runs": 2, "max_failures": 1}, "stop_policy": {"on_failure": "continue", "on_no_improvement": "stop"}, "local_dev": True, "approval_required": True, "auto_execute": True}
+        _, created = self.call("/api/agent/batches", body, "batch-failure-budget-create")
+        batch_id = created["batch"]["batch_id"]
+        digest = canonical_sha256({"batch_id": batch_id, "plan_digest": canonical_sha256(body["plan"]), "snapshot_digest": body["input_snapshot_digest"]})
+        self.call(f"/api/agent/batches/{batch_id}/approve", {"approval_digest": digest}, "batch-failure-budget-approve")
+        import time
+        deadline = time.monotonic() + 3
+        snapshot = None
+        while time.monotonic() < deadline:
+            _, snapshot = self.call(f"/api/agent/batches/{batch_id}")
+            if snapshot["batch"]["state"] in {"completed", "failed", "recovery_required", "manual_intervention_required"}:
+                break
+            time.sleep(0.05)
+        self.assertIsNotNone(snapshot)
+        self.assertEqual(snapshot["batch"]["state"], "failed")
+        self.assertEqual(snapshot["detail"]["summary"]["stop_reason"]["reason"], "failure_budget")
+        self.assertEqual(sum(candidate["status"] == "failed" for candidate in snapshot["detail"]["candidates"]), 1)
+
+    def test_manual_intervention_execution_is_not_downgraded_to_retryable_failure(self):
+        self.server._optimization_submit_formal = lambda _session, candidate, _approval: f"op-manual-{candidate['candidate_id']}"
+        self.server.agent_harness_store.get_stage3_by_operation = lambda operation_id: {
+            "operation_id": operation_id,
+            "state": "manual_intervention_required",
+            "unknown_outcome": True,
+            "error": {"code": "provider_unknown_outcome", "unknown_outcome": True},
+        }
+        identity = self.server.harness_backend_identity()
+        body = {
+            "schema_identity": "tilesim.agent_harness.batch_session.v1",
+            "contract_revision": "2026-10-19.wpe.v1",
+            "input_snapshot_digest": canonical_sha256({"batch": "manual-intervention"}),
+            "schema_set_revision": self.server.SCHEMA_SET_REVISION,
+            "backend_identity": identity,
+            "plan": {"kind": "manual-intervention"},
+            "candidate_set": [{"scenario_id": "s1_des_example"}],
+            "objective": {"metric_path": "/metrics/p95", "direction": "minimize"},
+            "local_dev": True,
+            "approval_required": True,
+            "auto_execute": True,
+        }
+        _, created = self.call("/api/agent/batches", body, "batch-manual-create")
+        batch_id = created["batch"]["batch_id"]
+        digest = canonical_sha256({"batch_id": batch_id, "plan_digest": canonical_sha256(body["plan"]), "snapshot_digest": body["input_snapshot_digest"]})
+        self.call(f"/api/agent/batches/{batch_id}/approve", {"approval_digest": digest}, "batch-manual-approve")
+        import time
+        deadline = time.monotonic() + 3
+        snapshot = None
+        while time.monotonic() < deadline:
+            _, snapshot = self.call(f"/api/agent/batches/{batch_id}")
+            if snapshot["batch"]["state"] in {"completed", "failed", "recovery_required", "manual_intervention_required"}:
+                break
+            time.sleep(0.05)
+        self.assertIsNotNone(snapshot)
+        self.assertEqual(snapshot["batch"]["state"], "manual_intervention_required")
+        candidate = snapshot["detail"]["candidates"][0]
+        self.assertEqual(candidate["status"], "manual_intervention_required")
+        self.assertTrue(candidate["failure"]["unknown_outcome"])
+
 
 if __name__ == "__main__":
     unittest.main()

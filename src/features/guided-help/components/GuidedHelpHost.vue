@@ -22,38 +22,8 @@ const availableAnchors = ref<HelpAnchor[]>([]);
 const route = useRoute();
 const router = useRouter();
 
-function firstString(value: unknown): string | null {
-  if (typeof value === "string") return value;
-  if (Array.isArray(value) && typeof value[0] === "string") return value[0];
-  return null;
-}
-
-function lightweightQuery(): Record<string, string> {
-  const query: Record<string, string> = {};
-  const run = firstString(route.query.run);
-  // Run-bound lightweight pages may encode the run only in the canonical
-  // `/lightweight/runs/:runId` path.  Carry that path identity into related
-  // help destinations (especially Results) so opening a help link never
-  // drops the run context and falls back to the empty state.
-  const paramRun = firstString(route.params.runId);
-  const carriedRun = run && /^run-[\w-]+$/.test(run) ? run : paramRun;
-  if (carriedRun && /^run-[\w-]+$/.test(carriedRun)) query.run = carriedRun;
-  for (const key of ["artifact_sha256", "schema_set_revision", "from"] as const) {
-    const value = firstString(route.query[key]);
-    if (value) query[key] = value;
-  }
-  return query;
-}
-
 function destination(name: RoutedGuideId): RouteLocationRaw | null {
   if (!isGuideInScope(name, props.scope)) return null;
-  if (name.startsWith("lightweight")) {
-    const query = lightweightQuery();
-    if (name !== "lightweight_run") return { name, query };
-    const runId = firstString(route.params.runId) || firstString(route.query.run);
-    if (!runId || !/^run-[\w-]+$/.test(runId)) return null;
-    return { name, params: { runId }, query };
-  }
   const query = ["experiment", "history", "evidence_lab"].includes(name)
     ? {}
     : {

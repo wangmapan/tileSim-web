@@ -33,8 +33,10 @@ describe("release traceability digest", () => {
   it("excludes release-irrelevant directories by name", async () => {
     const root = await fixtureDirectory();
     const before = await directoryDigest(root);
-    await mkdir(path.join(root, "dist"));
-    await writeFile(path.join(root, "dist", "bundle.js"), "generated", "utf8");
+    for (const directory of ["dist", "target", "output", ".workbuddy"]) {
+      await mkdir(path.join(root, directory));
+      await writeFile(path.join(root, directory, "generated.txt"), "generated", "utf8");
+    }
     expect(await directoryDigest(root)).toBe(before);
   });
 

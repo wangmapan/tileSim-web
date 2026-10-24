@@ -114,6 +114,67 @@ describe("request attribution failure contract", () => {
     expect(wrapper.find("table").exists()).toBe(false);
   });
 
+  it("shows backend-selected fabric hops and keeps route_unavailable fail-closed", async () => {
+    const wrapper = mountLoaded("r1", [
+      {
+        report_id: "r1-report",
+        explained_entity: { kind: "request", id: "r1" },
+        cause_chain: [],
+      },
+    ]);
+    fetchVerifiedArtifact.mockResolvedValueOnce({
+      requests: [
+        {
+          report_id: "r1-report",
+          explained_entity: { kind: "request", id: "r1" },
+          cause_chain: [],
+        },
+      ],
+      evidence: {
+        fabric: {
+          timeline: [
+            {
+              request_id: "r1",
+              phase_id: "phase-1",
+              module_id: "flow_des",
+              domain_id: "su0",
+              actual_path: ["gpu0", "gpu1"],
+              link_endpoints: { l0: { source: "gpu0", destination: "gpu1" } },
+              transfers_executed: "18446744073709551615",
+              end_to_end_latency_us: "9007199254740993",
+              execution_events: [{ kind: "enqueue", link_id: "l0", time_ps: "9007199254740994" }],
+            },
+          ],
+          module_stats: [],
+          fallback_reasons: [],
+        },
+      },
+    });
+    await wrapper.get("button.button--secondary").trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("gpu0 → gpu1");
+    expect(wrapper.text()).toContain("18446744073709551615");
+    expect(wrapper.text()).toContain("9007199254740993");
+    expect(wrapper.text()).toContain("l0");
+
+    const unavailable = mountLoaded("r1", [
+      { report_id: "r1-report", explained_entity: { kind: "request", id: "r1" }, cause_chain: [] },
+    ]);
+    fetchVerifiedArtifact.mockResolvedValueOnce({
+      requests: [{ report_id: "r1-report", explained_entity: { kind: "request", id: "r1" }, cause_chain: [] }],
+      evidence: {
+        fabric: {
+          timeline: [{ request_id: "r1", fallback_reason: "route_unavailable" }],
+          fallback_reasons: ["route_unavailable"],
+        },
+      },
+    });
+    await unavailable.get("button.button--secondary").trigger("click");
+    await flushPromises();
+    expect(unavailable.text()).toContain("route_unavailable");
+    expect(unavailable.text()).toContain("后端未找到可用路由");
+  });
+
   it("reports an empty attribution payload without inventing a request", async () => {
     const wrapper = mountLoaded("r1", []);
     await wrapper.get("button.button--secondary").trigger("click");

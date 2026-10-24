@@ -26,6 +26,13 @@ export { default as LayerRecordTable } from "./components/LayerRecordTable.vue";
 export { default as RuntimeEvidencePanel } from "./components/RuntimeEvidencePanel.vue";
 export { default as RequestAttributionPanel } from "./components/RequestAttributionPanel.vue";
 export {
+  buildFabricRouteEvidence,
+  executionEventCount,
+  linkEndpointEntries,
+  routePathText,
+} from "./model/fabric-routes";
+export type { FabricModuleStat, FabricRouteEvidence, FabricRouteRecord, FabricRouteState } from "./model/fabric-routes";
+export {
   backendExplanationPresentation,
   executionLayerDetail,
   executionLayerHeadline,

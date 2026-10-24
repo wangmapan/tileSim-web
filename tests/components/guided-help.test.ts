@@ -12,7 +12,7 @@ import {
   TermHelp,
   openGuidedHelp,
 } from "../../src/features/guided-help";
-import { lightweightGuideIds, professionalGuideIds, routedGuideIds } from "../../src/features/guided-help/schema";
+import { professionalGuideIds, routedGuideIds } from "../../src/features/guided-help/schema";
 import { setLocale } from "../../src/i18n";
 
 const router = createRouter({
@@ -24,12 +24,6 @@ const Harness = defineComponent({
   setup: () => ({ guide: guideRegistry.overview }),
   template:
     '<PagePrimer :guide="guide" /><details><section data-help-anchor="overview-status">status</section></details><GuidedHelpHost default-guide-id="overview" />',
-});
-const LightweightHarness = defineComponent({
-  components: { GuidedHelpHost, PagePrimer },
-  setup: () => ({ guide: guideRegistry.lightweight }),
-  template:
-    '<PagePrimer :guide="guide" /><section data-help-anchor="lightweight-start-primary">start</section><GuidedHelpHost default-guide-id="lightweight" scope="lightweight" />',
 });
 const wrappers: ReturnType<typeof mount>[] = [];
 async function openDocument(harness: Component = Harness) {
@@ -76,9 +70,7 @@ describe("help documentation", () => {
     expect(panel.open).toBe(true);
     const topicIds = [...panel.querySelectorAll<HTMLElement>("[data-guide-id]")].map((topic) => topic.dataset.guideId);
     expect(topicIds.sort()).toEqual([...professionalGuideIds].filter((id) => id !== "evidence_agent").sort());
-    expect(topicIds).not.toEqual(expect.arrayContaining([...lightweightGuideIds]));
     expect(panel.textContent).toContain("专业版页面帮助");
-    expect(panel.textContent).not.toContain("轻量版页面帮助");
     for (const section of guideRegistry.overview.steps) expect(panel.textContent).toContain(section.body);
     expect(panel.textContent).toContain("术语与定义");
     expect(panel.textContent).toContain("适用范围与证据边界");
@@ -91,19 +83,6 @@ describe("help documentation", () => {
     expect(document.querySelector("dialog")).toBeNull();
     expect(document.activeElement).toBe(trigger.element);
     expect(document.body.style.overflow).toBe("auto");
-  });
-  it("keeps lightweight and professional help topics in separate catalogs", async () => {
-    const { panel } = await openDocument(LightweightHarness);
-    const topicIds = [...panel.querySelectorAll<HTMLElement>("[data-guide-id]")].map((topic) => topic.dataset.guideId);
-    expect(topicIds.sort()).toEqual([...lightweightGuideIds].sort());
-    expect(topicIds).not.toEqual(expect.arrayContaining([...professionalGuideIds]));
-    expect(panel.textContent).toContain("轻量版页面帮助");
-    expect(panel.textContent).not.toContain("专业版页面帮助");
-    expect(panel.textContent).not.toContain("实验与输入");
-
-    openGuidedHelp("overview");
-    await nextTick();
-    expect(document.querySelector("dialog")).toBeNull();
   });
   it("searches and changes topics without navigating or exposing unavailable anchors", async () => {
     const { panel } = await openDocument();

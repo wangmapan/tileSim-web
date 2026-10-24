@@ -28,6 +28,12 @@ SCENARIO_OPTIONS = (
         "available": True,
         "unavailable_reason": None,
     },
+    {
+        "scenario_id": "pd_disaggregation_example",
+        "label": "PD disaggregation runtime example",
+        "available": True,
+        "unavailable_reason": None,
+    },
 )
 
 REQUESTED_FIDELITY_OPTIONS = (

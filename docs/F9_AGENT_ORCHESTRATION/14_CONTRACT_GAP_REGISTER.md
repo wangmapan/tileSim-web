@@ -100,7 +100,7 @@ Phase 2 checkpoint（复核日期：2026-09-17）：
 - `GAP-RUN-INTAKE-001` 最小剩余工作包：Bridge 侧显式 nested routing 与 runtime validator 接线已在 WP-2C-01a/01b
   以**只读预览**形态交付，因此剩余为 —— 经 `WP-2C-02` 把后端 lowering 只读接进 Bridge 并原样透出 typed issue
   （遵守 Week 7 单槽约束）、retained-run recovery，以及从 intake Pointer 到后端执行与 observable evidence 的累计测试。
-  详见 [Phase 2C Web 集成计划](23_PHASE2C_WEB_INTEGRATION_PLAN.md)。
+  详见归档的 [Phase 2C Web 集成计划](../archive/plans/F9_PHASE2C_WEB_INTEGRATION_PLAN_2026-09.md)。
 
 新增 Gap 必须补充：
 

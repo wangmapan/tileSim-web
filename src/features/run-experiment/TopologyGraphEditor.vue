@@ -716,7 +716,7 @@ function linkLabel(link: TopologyLink) {
     src: link.src_device,
     dst: link.dst_device,
     domain: link.domain_id,
-    kind: linkKindLabel(link),
+    kind: link.link_id ? `${linkKindLabel(link)}，link_id ${link.link_id}` : linkKindLabel(link),
   });
 }
 function linkKind(link: TopologyLink): "inside" | "cross" {
@@ -727,7 +727,7 @@ function linkKindLabel(link: TopologyLink) {
   return t(linkKind(link) === "inside" ? "域内通信" : "跨域通信");
 }
 function linkKindText(link: TopologyLink) {
-  return `${linkKindLabel(link)} · ${link.domain_id}`;
+  return `${linkKindLabel(link)} · ${link.domain_id}${link.link_id ? ` · ${link.link_id}` : ""}`;
 }
 function linkBadgeWidth(link: TopologyLink) {
   return Math.min(190, Math.max(92, [...linkKindText(link)].length * 7 + 18));

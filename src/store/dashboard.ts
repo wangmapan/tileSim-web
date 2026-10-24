@@ -24,11 +24,8 @@ export { navItems };
 
 let routeSynchronizationRevision = 0;
 let navigateDashboard: ((view: string, runId: string | null, replace?: boolean) => void) | null = null;
-// Bootstrap is shared by the app shell and run-bound lightweight pages. A
-// direct deep link mounts the child view before App.vue's onMounted hook, so
-// keep one in-flight promise that both callers can await. Without this gate a
-// child could request status/evidence before the manifest and schema context
-// had been established and accidentally take the legacy API path.
+// Keep one in-flight bootstrap promise so concurrent shell consumers share the
+// same manifest and schema context instead of taking the legacy API path.
 let bridgeCheckPromise: Promise<boolean> | null = null;
 
 export function configureDashboardNavigation(

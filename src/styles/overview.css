@@ -44,12 +44,25 @@
   font-weight: 400;
   letter-spacing: 0;
 }
+.stat-card__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+}
+.stat-card__label .inline-help {
+  margin-left: 2px;
+}
 .stat-card strong {
   display: block;
+  color: var(--accent-hover);
   font: 500 clamp(20px, 1.7vw, 26px)/1.25 var(--font-sans);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.035em;
   overflow-wrap: anywhere;
+}
+.stat-card--muted strong {
+  color: var(--muted);
 }
 .stat-card small {
   display: block;
@@ -82,6 +95,7 @@
 }
 .fact-list dd {
   margin: 0;
+  color: var(--accent-hover);
   font: 600 var(--text-base) var(--font-mono);
 }
 .next-action-panel {
@@ -230,6 +244,7 @@
   white-space: nowrap;
 }
 .recent-metric {
+  color: var(--accent-hover);
   font: 600 var(--text-base) var(--font-mono);
 }
 
@@ -238,6 +253,264 @@
   max-width: 100%;
   min-width: 0;
   overflow-x: auto;
+}
+.metrics-pd-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 var(--space-panel) var(--space-panel);
+  padding: 0;
+}
+.metrics-summary-item {
+  min-width: 0;
+  padding: 13px 14px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-inset);
+}
+.metrics-summary-item dt {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.025em;
+}
+.metrics-summary-item dd {
+  min-height: 1.6em;
+  margin: 6px 0 0;
+  color: var(--accent-hover);
+  font-size: var(--text-base);
+  font-weight: 650;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.metrics-summary-item--muted {
+  border-color: color-mix(in srgb, var(--line-strong) 70%, var(--warning));
+  background: color-mix(in srgb, var(--warning-soft) 42%, var(--surface-inset));
+}
+.metrics-summary-item--muted dd {
+  color: var(--warning-ink);
+}
+.metrics-summary-item dd.metric-value--missing {
+  color: var(--muted);
+}
+.metrics-summary-item--muted dd.metric-value--missing {
+  color: var(--warning-ink);
+}
+.metrics-provenance .panel-header,
+.metrics-device-summary .panel-header {
+  padding-bottom: 12px;
+}
+.metrics-device-summary > .metrics-device-overview {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.metrics-device-participation {
+  display: grid;
+  gap: 5px;
+  margin: 0 var(--space-panel) var(--space-panel);
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--warning) 35%, var(--line));
+  border-left: 3px solid var(--warning);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--warning-soft) 42%, var(--surface-inset));
+}
+.metrics-device-participation--positive {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+  border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--accent-soft) 38%, var(--surface-inset));
+}
+.metrics-device-participation--muted {
+  border-color: var(--line);
+  border-left-color: var(--muted);
+  background: var(--surface-inset);
+}
+.metrics-device-participation__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.metrics-device-participation__heading strong {
+  color: var(--ink);
+  font-size: var(--text-sm);
+}
+.metrics-device-participation__heading span {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.metrics-device-participation p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+.metrics-device-overview--primary {
+  margin-bottom: 10px;
+}
+.metrics-device-overview--secondary {
+  margin-top: 10px;
+  margin-bottom: 0;
+}
+.metrics-detail-disclosure {
+  margin: 0 var(--space-panel) var(--space-panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-inset);
+}
+.metrics-detail-disclosure summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 14px;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  cursor: pointer;
+  list-style-position: inside;
+}
+.metrics-detail-disclosure summary::marker {
+  color: var(--accent);
+}
+.metrics-detail-disclosure summary small {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  text-align: right;
+}
+.metrics-detail-disclosure[open] summary {
+  border-bottom: 1px solid var(--line);
+}
+.metrics-detail-disclosure .metrics-pd-summary,
+.metrics-detail-disclosure .metrics-pd-placement-grid {
+  margin-inline: 12px;
+}
+.metrics-pd-detail {
+  margin-bottom: var(--space-panel);
+}
+.metrics-device-warning {
+  margin: 0 var(--space-panel) var(--space-panel);
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--warning) 32%, var(--line));
+  background: var(--warning-soft);
+}
+.metrics-device-warning strong {
+  color: var(--warning-ink);
+}
+.metrics-device-table-wrap {
+  width: auto;
+  margin: 0 var(--space-panel) var(--space-panel);
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-strong);
+}
+.metrics-device-table {
+  min-width: 980px;
+}
+.metrics-device-table th {
+  border-top: 0;
+  background: var(--surface-muted);
+  text-transform: none;
+  letter-spacing: 0.015em;
+}
+.metrics-device-table td {
+  vertical-align: top;
+}
+.metrics-device-table .numeric {
+  color: var(--accent-hover);
+  font-weight: 600;
+}
+.metrics-device-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.metrics-device-table .metrics-device-identity,
+.metrics-device-table .metrics-device-status,
+.metrics-device-table .metrics-device-tasks {
+  min-width: 130px;
+}
+.metrics-device-identity strong,
+.metrics-device-tasks strong {
+  display: block;
+  font-weight: 700;
+}
+.metrics-device-identity small,
+.metrics-device-status small,
+.metrics-device-tasks small {
+  display: block;
+  margin-top: 4px;
+  line-height: 1.35;
+  white-space: normal;
+}
+.metrics-device-status > span {
+  display: inline-flex;
+  max-width: 100%;
+  padding: 3px 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  color: var(--neutral-ink);
+  background: var(--surface-muted);
+  font-size: var(--text-xs);
+  font-weight: 650;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.metrics-device-status small {
+  color: var(--muted);
+}
+.metrics-device-tasks strong,
+.metrics-device-value {
+  font-variant-numeric: tabular-nums;
+}
+.metrics-device-value {
+  min-width: 112px;
+}
+.metrics-fabric-table {
+  min-width: 760px;
+}
+.metrics-fabric-table td.numeric {
+  font-family: var(--font-mono);
+}
+.metrics-fabric-queue {
+  min-width: 170px;
+}
+.metrics-fabric-queue > span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.metrics-fabric-queue > span + span {
+  margin-top: 4px;
+}
+.metrics-fabric-queue small {
+  color: var(--muted);
+}
+.metrics-fabric-queue strong {
+  color: var(--accent-hover);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.metrics-pd-summary--handoff {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.metrics-pd-summary--handoff dd {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+.metrics-pd-placement-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 var(--space-panel) var(--space-panel);
+}
+.metrics-pd-placement-grid .metrics-summary-item dd {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+.metrics-device-summary > .metric-footnote:not(.metrics-device-warning) {
+  margin: 0 var(--space-panel) var(--space-panel);
 }
 table {
   width: 100%;
@@ -283,6 +556,10 @@ td small {
   text-align: right;
   white-space: nowrap;
 }
+.overview-domain-list td.numeric {
+  color: var(--accent-hover);
+  font-weight: 600;
+}
 .metric-footnote {
   display: grid;
   grid-template-columns: 18px 1fr 18px;
@@ -311,4 +588,33 @@ td small {
 }
 .overview-view > .stat-grid > .stat-card + .stat-card {
   border-left: 1px solid var(--line);
+}
+@media (max-width: 1080px) {
+  .metrics-pd-summary,
+  .metrics-device-summary > .metrics-device-overview,
+  .metrics-pd-summary--handoff {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .metrics-pd-placement-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 680px) {
+  .metrics-pd-summary,
+  .metrics-device-summary > .metrics-device-overview,
+  .metrics-pd-summary--handoff {
+    grid-template-columns: 1fr;
+  }
+  .metrics-device-participation__heading,
+  .metrics-detail-disclosure summary {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .metrics-detail-disclosure summary small {
+    text-align: left;
+  }
+  .metrics-device-table-wrap {
+    margin-inline: 12px;
+  }
 }

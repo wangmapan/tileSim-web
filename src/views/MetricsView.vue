@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowDown, ArrowUp, TimerReset } from "@lucide/vue";
+import { TimerReset } from "@lucide/vue";
 import { computed } from "vue";
 import EmptyState from "../components/EmptyState.vue";
 import InlineHelp from "../components/InlineHelp.vue";
@@ -132,6 +132,37 @@ function provenanceLabel(value: unknown) {
 
 const deviceMetrics = computed(() => state.bundle.metrics?.system_summary?.device_metrics || []);
 const pdDisaggregation = computed(() => state.bundle.metrics?.system_summary?.pd_disaggregation);
+const pdPlacementAssignments = computed(() => {
+  const requests = state.inputs.runtime_trace?.requests || [];
+  const assignments = new Map<
+    string,
+    { phase: string; placementGroupId: string; devices: Set<string>; requestIds: Set<string> }
+  >();
+  for (const request of requests) {
+    const phase = request.phase === "prefill" || request.phase === "decode" ? request.phase : "";
+    const placementGroupId = request.placement_group_id?.trim() || "";
+    if (!phase || !placementGroupId) continue;
+    const key = `${phase}:${placementGroupId}`;
+    const assignment = assignments.get(key) || {
+      phase,
+      placementGroupId,
+      devices: new Set<string>(),
+      requestIds: new Set<string>(),
+    };
+    for (const deviceId of request.participants || []) {
+      if (deviceId.trim()) assignment.devices.add(deviceId.trim());
+    }
+    if (request.request_id) assignment.requestIds.add(request.request_id);
+    assignments.set(key, assignment);
+  }
+  return [...assignments.values()].map((assignment) => ({
+    ...assignment,
+    devices: [...assignment.devices],
+    requestIds: [...assignment.requestIds],
+  }));
+});
+const pdPrefillAssignments = computed(() => pdPlacementAssignments.value.filter((item) => item.phase === "prefill"));
+const pdDecodeAssignments = computed(() => pdPlacementAssignments.value.filter((item) => item.phase === "decode"));
 const systemSummary = computed(() => state.bundle.metrics?.system_summary || {});
 const fabricDomainUtilization = computed(() => systemSummary.value.fabric_domain_utilization || []);
 const phaseFabricContributions = computed(() => systemSummary.value.phase_fabric_contributions || []);
@@ -163,6 +194,58 @@ const hasDeviceMappingWarning = computed(() => {
   return hasUnmappedTasks && (allDevicesHaveNoTasks || tasksExistWithoutDeviceRows);
 });
 
+type DeviceParticipationState = "active" | "unmapped" | "no_tasks" | "reported_zero" | "fabric_only" | "unavailable";
+
+const deviceParticipationState = computed<DeviceParticipationState>(() => {
+  const rows = deviceMetrics.value;
+  const hasUnmappedTasks =
+    hasPositiveInteger(unmappedDeviceTaskCount.value) || hasPositiveInteger(missingDeviceTaskCount.value);
+  const hasPositiveDeviceTasks = rows.some((device) => hasPositiveInteger(device.task_count));
+  const allRowsExplicitlyHaveNoTasks =
+    rows.length > 0 && rows.every((device) => device.evidence_state === "no_device_tasks");
+  const allRowsReportZero =
+    rows.length > 0 && rows.every((device) => isLosslessInteger(device.task_count) && BigInt(device.task_count) === 0n);
+
+  if (hasUnmappedTasks || (hasPositiveInteger(representativeDeviceTaskCount.value) && !rows.length)) return "unmapped";
+  if (hasPositiveDeviceTasks) return "active";
+  if (allRowsExplicitlyHaveNoTasks) return "no_tasks";
+  if (allRowsReportZero) return "reported_zero";
+  if (hasFabricEvidence.value) return "fabric_only";
+  return "unavailable";
+});
+
+const deviceParticipationTitle = computed(() => {
+  const titles: Record<DeviceParticipationState, string> = {
+    active: "已生成设备任务",
+    unmapped: "设备任务未映射到 GPU",
+    no_tasks: "本次没有设备任务记录",
+    reported_zero: "后端报告设备任务为 0",
+    fabric_only: "已有 Fabric 通信记录，缺少设备任务明细",
+    unavailable: "没有设备活动证据",
+  };
+  return t(titles[deviceParticipationState.value]);
+});
+
+const deviceParticipationDescription = computed(() => {
+  const descriptions: Record<DeviceParticipationState, string> = {
+    active: "后端已生成模型化设备任务；下方卡片显示本次仿真的设备活动。",
+    unmapped:
+      "报告中存在设备任务，但没有映射到这些 GPU 行。当前卡上的 0 不能解释为 GPU 未参与，请检查请求 participants、placement_group 和 Fabric 路由。",
+    no_tasks: "GPU 和拓扑只是仿真输入；本次报告没有设备任务记录。这里的 0 表示没有可归属的设备任务。",
+    reported_zero:
+      "后端明确报告设备任务数为 0，表示本次请求没有在设备层形成任务；请结合请求 participants 和 Fabric 记录判断。",
+    fabric_only: "拓扑已产生虚拟 Fabric 通信记录，但后端没有提供设备任务明细，因此暂时不能把通信活动分摊到每张 GPU。",
+    unavailable: "后端没有提供设备任务或 Fabric 活动记录，无法判断每张 GPU 的参与情况。",
+  };
+  return t(descriptions[deviceParticipationState.value]);
+});
+
+const deviceParticipationTone = computed(() => {
+  if (deviceParticipationState.value === "active") return "positive";
+  if (deviceParticipationState.value === "unavailable") return "muted";
+  return "warning";
+});
+
 function metricCountValue(value: unknown) {
   return isLosslessInteger(value) ? formatNumber(value, 0) : availabilityLabel("missing");
 }
@@ -177,6 +260,25 @@ function metricBytesValue(value: unknown) {
 
 function metricRatioValue(value: unknown) {
   return typeof value === "number" ? `${formatNumber(value * 100)}%` : availabilityLabel("missing");
+}
+
+function metricValueClass(value: unknown) {
+  return isLosslessInteger(value) || typeof value === "number" ? "metric-value--available" : "metric-value--missing";
+}
+
+function provenanceValueClass(value: unknown) {
+  return typeof value === "string" && value ? "metric-value--available" : "metric-value--missing";
+}
+
+function placementAssignmentLabel(assignments: typeof pdPlacementAssignments.value) {
+  return assignments.length
+    ? assignments
+        .map(
+          (assignment) =>
+            `${assignment.placementGroupId} · ${assignment.devices.length ? assignment.devices.join(", ") : t("未报告设备")}`,
+        )
+        .join(" / ")
+    : availabilityLabel("missing");
 }
 </script>
 
@@ -194,22 +296,26 @@ function metricRatioValue(value: unknown) {
         :label="t('吞吐')"
         :value="metricValue(dashboardView.metrics.throughputRequestsPerSecond, 'req/s')"
         :hint="completionHint(dashboardView.metrics.completedRequestCount, dashboardView.metrics.requestCount)"
+        :tone="dashboardView.metrics.throughputRequestsPerSecond.availability === 'available' ? 'accent' : 'muted'"
         accent
       />
       <StatCard
         :label="t('首 Token 延迟（TTFT）P95')"
         :value="readablePicoseconds(dashboardView.metrics.ttftP95Ps)"
         :hint="`P99 ${readablePicoseconds(dashboardView.metrics.ttftP99Ps)}`"
+        :tone="dashboardView.metrics.ttftP95Ps.availability === 'available' ? 'accent' : 'muted'"
       />
       <StatCard
         :label="t('每 Token 延迟（TPOT）P95')"
         :value="readablePicoseconds(dashboardView.metrics.tpotP95Ps)"
         :hint="`P99 ${readablePicoseconds(dashboardView.metrics.tpotP99Ps)}`"
+        :tone="dashboardView.metrics.tpotP95Ps.availability === 'available' ? 'accent' : 'muted'"
       />
       <StatCard
         :label="`${t('端到端')} P95`"
         :value="readablePicoseconds(dashboardView.metrics.endToEndP95Ps)"
         :hint="`P99 ${readablePicoseconds(dashboardView.metrics.endToEndP99Ps)}`"
+        :tone="dashboardView.metrics.endToEndP95Ps.availability === 'available' ? 'accent' : 'muted'"
       />
     </section>
     <nav class="metric-evidence-links" :aria-label="t('汇总指标证据')" data-help-anchor="metrics-evidence">
@@ -228,26 +334,36 @@ function metricRatioValue(value: unknown) {
       <header class="panel-header">
         <div>
           <p class="section-kicker">{{ t("指标来源与声明范围") }}</p>
-          <h2>{{ t("Trace provenance") }}</h2>
-          <p>{{ t("以下字段由后端报告直接提供；缺失时不推断真实采集或校准状态。") }}</p>
+          <h2>
+            {{ t("Trace provenance") }}
+            <InlineHelp :text="t('以下字段由后端报告直接提供；缺失时保持未知，不推断采集或校准状态。')" />
+          </h2>
         </div>
       </header>
-      <dl class="metrics-pd-summary">
-        <div>
+      <dl class="metrics-pd-summary metrics-provenance-grid">
+        <div class="metrics-summary-item">
           <dt>{{ t("来源模式") }}</dt>
-          <dd>{{ provenanceLabel(metricsTraceProvenance.source_mode) }}</dd>
+          <dd :class="provenanceValueClass(metricsTraceProvenance.source_mode)">
+            {{ provenanceLabel(metricsTraceProvenance.source_mode) }}
+          </dd>
         </div>
-        <div>
+        <div class="metrics-summary-item">
           <dt>{{ t("校准级别") }}</dt>
-          <dd>{{ provenanceLabel(metricsTraceProvenance.calibration_level) }}</dd>
+          <dd :class="provenanceValueClass(metricsTraceProvenance.calibration_level)">
+            {{ provenanceLabel(metricsTraceProvenance.calibration_level) }}
+          </dd>
         </div>
-        <div>
+        <div class="metrics-summary-item">
           <dt>{{ t("声明范围") }}</dt>
-          <dd>{{ provenanceLabel(metricsTraceProvenance.allowed_claim_scope) }}</dd>
+          <dd :class="provenanceValueClass(metricsTraceProvenance.allowed_claim_scope)">
+            {{ provenanceLabel(metricsTraceProvenance.allowed_claim_scope) }}
+          </dd>
         </div>
-        <div>
+        <div class="metrics-summary-item">
           <dt>{{ t("Trace 类型") }}</dt>
-          <dd>{{ provenanceLabel(metricsTraceProvenance.trace_kind) }}</dd>
+          <dd :class="provenanceValueClass(metricsTraceProvenance.trace_kind)">
+            {{ provenanceLabel(metricsTraceProvenance.trace_kind) }}
+          </dd>
         </div>
       </dl>
     </section>
@@ -329,8 +445,12 @@ function metricRatioValue(value: unknown) {
       <header class="panel-header">
         <div>
           <p class="section-kicker">{{ t("请求级等待与归因") }}</p>
-          <h2>{{ t("网络、KV、设备与集合通信等待") }}</h2>
-          <p>{{ t("这些字段由后端直接报告；KV、设备和网络分项可能重叠，不能相加替代父级等待或请求延迟。") }}</p>
+          <h2>
+            {{ t("网络、KV、设备与集合通信等待") }}
+            <InlineHelp
+              :text="t('这些字段由后端直接报告；KV、设备和网络分项可能重叠，不能相加替代父级等待或请求延迟。')"
+            />
+          </h2>
         </div>
       </header>
       <div class="table-wrap">
@@ -420,60 +540,91 @@ function metricRatioValue(value: unknown) {
       <header class="panel-header">
         <div>
           <p class="section-kicker">{{ t("模型化设备与虚拟 Fabric") }}</p>
-          <h2>{{ t("GPU-free 仿真中的卡使用与拓扑连接") }}</h2>
-          <p>
-            {{
-              t(
-                "GPU-free 表示不依赖真实 GPU；下方只展示后端报告的模型化设备活动和虚拟 Fabric 记录，不把硬件计数器缺失解释为仿真未执行。",
-              )
-            }}
-          </p>
+          <h2>
+            {{ t("仿真设备参与与拓扑通信") }}
+            <InlineHelp
+              :text="t('这里只展示后端报告的模型化设备任务和虚拟 Fabric 记录；设备采集状态缺失不等于仿真未执行。')"
+            />
+          </h2>
         </div>
       </header>
-      <dl class="metrics-pd-summary">
-        <div>
+      <div
+        class="metrics-device-participation"
+        :class="`metrics-device-participation--${deviceParticipationTone}`"
+        role="status"
+      >
+        <div class="metrics-device-participation__heading">
+          <strong>{{ deviceParticipationTitle }}</strong>
+          <span>{{ t("报告解释") }}</span>
+        </div>
+        <p>{{ deviceParticipationDescription }}</p>
+      </div>
+      <dl class="metrics-pd-summary metrics-device-overview metrics-device-overview--primary">
+        <div class="metrics-summary-item">
           <dt>{{ t("代表性设备任务") }}</dt>
-          <dd>{{ metricCountValue(representativeDeviceTaskCount) }}</dd>
+          <dd :class="metricValueClass(representativeDeviceTaskCount)">
+            {{ metricCountValue(representativeDeviceTaskCount) }}
+          </dd>
         </div>
-        <div>
-          <dt>{{ t("未映射设备任务") }}</dt>
-          <dd>{{ metricCountValue(unmappedDeviceTaskCount) }}</dd>
-        </div>
-        <div>
+        <div class="metrics-summary-item">
           <dt>{{ t("Fabric 记录") }}</dt>
-          <dd>{{ metricCountValue(systemSummary.fabric_record_count) }}</dd>
+          <dd :class="metricValueClass(systemSummary.fabric_record_count)">
+            {{ metricCountValue(systemSummary.fabric_record_count) }}
+          </dd>
         </div>
-        <div>
+        <div class="metrics-summary-item">
           <dt>{{ t("活跃 Fabric 域") }}</dt>
-          <dd>{{ metricCountValue(systemSummary.active_fabric_domain_count) }}</dd>
+          <dd :class="metricValueClass(systemSummary.active_fabric_domain_count)">
+            {{ metricCountValue(systemSummary.active_fabric_domain_count) }}
+          </dd>
         </div>
-        <div>
+        <div class="metrics-summary-item">
           <dt>{{ t("Fabric 利用率") }}</dt>
-          <dd>{{ metricRatioValue(systemSummary.fabric_utilization_ratio) }}</dd>
-        </div>
-        <div>
-          <dt>{{ t("Fabric 忙碌时间") }}</dt>
-          <dd>{{ metricTimeValue(systemSummary.fabric_busy_time_ps) }}</dd>
-        </div>
-        <div>
-          <dt>{{ t("拥塞事件") }}</dt>
-          <dd>{{ metricCountValue(systemSummary.fabric_backpressure_event_count) }}</dd>
-        </div>
-        <div>
-          <dt>{{ t("硬件计数器") }}</dt>
-          <dd>{{ t("GPU-free 不采集") }}</dd>
+          <dd :class="metricValueClass(systemSummary.fabric_utilization_ratio)">
+            {{ metricRatioValue(systemSummary.fabric_utilization_ratio) }}
+          </dd>
         </div>
       </dl>
-      <p v-if="hasDeviceMappingWarning" class="metric-footnote">
+      <details class="metrics-detail-disclosure">
+        <summary>
+          <span>
+            {{ t("查看设备与 Fabric 诊断字段") }}
+            <InlineHelp :text="t('未映射任务、忙碌时间、拥塞和设备采集状态')" />
+          </span>
+        </summary>
+        <dl class="metrics-pd-summary metrics-device-overview metrics-device-overview--secondary">
+          <div class="metrics-summary-item">
+            <dt>{{ t("未映射设备任务") }}</dt>
+            <dd :class="metricValueClass(unmappedDeviceTaskCount)">{{ metricCountValue(unmappedDeviceTaskCount) }}</dd>
+          </div>
+          <div class="metrics-summary-item">
+            <dt>{{ t("Fabric 忙碌时间") }}</dt>
+            <dd :class="metricValueClass(systemSummary.fabric_busy_time_ps)">
+              {{ metricTimeValue(systemSummary.fabric_busy_time_ps) }}
+            </dd>
+          </div>
+          <div class="metrics-summary-item">
+            <dt>{{ t("拥塞事件") }}</dt>
+            <dd :class="metricValueClass(systemSummary.fabric_backpressure_event_count)">
+              {{ metricCountValue(systemSummary.fabric_backpressure_event_count) }}
+            </dd>
+          </div>
+          <div class="metrics-summary-item metrics-summary-item--muted">
+            <dt>{{ t("设备采集状态") }}</dt>
+            <dd>{{ t("未采集") }}</dd>
+          </div>
+        </dl>
+      </details>
+      <p v-if="hasDeviceMappingWarning" class="metric-footnote metrics-device-warning">
         <strong>{{ t("设备归属需要后端修复") }}</strong>
         {{
           t(
-            "报告显示设备任务归属不完整：存在未映射或缺失的设备任务；当前每张卡的 0 不能解释为 GPU 未参与，需修复设备任务到拓扑设备的归属后才能按卡汇总。",
+            "报告显示设备任务归属不完整：存在未映射或缺失的设备任务；当前每张卡的 0 不能解释为设备未参与，需修复设备任务到拓扑设备的归属后才能按卡汇总。",
           )
         }}
       </p>
-      <div v-if="deviceMetrics.length" class="table-wrap">
-        <table>
+      <div v-if="deviceMetrics.length" class="table-wrap metrics-device-table-wrap">
+        <table class="metrics-device-table">
           <thead>
             <tr>
               <th>{{ t("设备") }}</th>
@@ -488,34 +639,36 @@ function metricRatioValue(value: unknown) {
           </thead>
           <tbody>
             <tr v-for="device in deviceMetrics" :key="device.device_id">
-              <td>
-                <strong>{{ device.device_id || availabilityLabel("missing") }}</strong
-                ><small>{{ device.device_type || "—" }} · {{ device.group_id || "—" }}</small>
+              <td class="metrics-device-identity">
+                <strong>{{ device.device_id || availabilityLabel("missing") }}</strong>
+                <small>{{ device.device_type || "—" }} · {{ device.group_id || "—" }}</small>
               </td>
-              <td>
-                {{ device.evidence_state ? provenanceLabel(device.evidence_state) : availabilityLabel("missing")
-                }}<small>{{
+              <td class="metrics-device-status">
+                <span>{{
+                  device.evidence_state ? provenanceLabel(device.evidence_state) : availabilityLabel("missing")
+                }}</span>
+                <small>{{
                   device.hardware_counter_state ? provenanceLabel(device.hardware_counter_state) : "—"
                 }}</small>
               </td>
-              <td>
-                {{ metricCountValue(device.task_count)
-                }}<small
+              <td class="numeric metrics-device-tasks">
+                <strong>{{ metricCountValue(device.task_count) }}</strong>
+                <small
                   >prefill {{ metricCountValue(device.prefill_task_count) }} · decode
                   {{ metricCountValue(device.decode_task_count) }}</small
                 >
               </td>
-              <td>{{ metricBytesValue(device.modeled_memory_bytes) }}</td>
-              <td>{{ metricTimeValue(device.service_time_ps) }}</td>
-              <td>{{ metricTimeValue(device.active_time_ps) }}</td>
-              <td>{{ metricTimeValue(device.observation_window_ps) }}</td>
-              <td>{{ metricRatioValue(device.active_time_ratio) }}</td>
+              <td class="numeric metrics-device-value">{{ metricBytesValue(device.modeled_memory_bytes) }}</td>
+              <td class="numeric metrics-device-value">{{ metricTimeValue(device.service_time_ps) }}</td>
+              <td class="numeric metrics-device-value">{{ metricTimeValue(device.active_time_ps) }}</td>
+              <td class="numeric metrics-device-value">{{ metricTimeValue(device.observation_window_ps) }}</td>
+              <td class="numeric metrics-device-value">{{ metricRatioValue(device.active_time_ratio) }}</td>
             </tr>
           </tbody>
         </table>
       </div>
-      <div v-if="hasFabricEvidence" class="table-wrap">
-        <table>
+      <div v-if="hasFabricEvidence" class="table-wrap metrics-device-table-wrap metrics-fabric-table-wrap">
+        <table class="metrics-device-table metrics-fabric-table">
           <thead>
             <tr>
               <th>{{ t("虚拟 Fabric 域") }}</th>
@@ -528,7 +681,7 @@ function metricRatioValue(value: unknown) {
           </thead>
           <tbody>
             <tr v-for="domain in fabricDomainUtilization" :key="domain.domain_id">
-              <td>
+              <td class="metrics-device-identity">
                 <strong>{{ domain.domain_id || availabilityLabel("missing") }}</strong>
                 <small v-if="domain.topology_domain_ref?.json_pointer">
                   {{ domain.topology_domain_ref.json_pointer }}
@@ -538,20 +691,23 @@ function metricRatioValue(value: unknown) {
               <td>{{ metricTimeValue(domain.busy_time_ps) }}</td>
               <td>{{ metricTimeValue(domain.observation_window_ps) }}</td>
               <td>{{ metricRatioValue(domain.utilization_ratio) }}</td>
-              <td>
-                queue
-                {{
-                  typeof domain.queue_delay_us === "number"
-                    ? `${formatNumber(domain.queue_delay_us)} µs`
-                    : availabilityLabel("missing")
-                }}<small
-                  >congestion
-                  {{
+              <td class="metrics-fabric-queue">
+                <span>
+                  <small>queue</small>
+                  <strong>{{
+                    typeof domain.queue_delay_us === "number"
+                      ? `${formatNumber(domain.queue_delay_us)} µs`
+                      : availabilityLabel("missing")
+                  }}</strong>
+                </span>
+                <span>
+                  <small>congestion</small>
+                  <strong>{{
                     typeof domain.congestion_delay_us === "number"
                       ? `${formatNumber(domain.congestion_delay_us)} µs`
                       : availabilityLabel("missing")
-                  }}</small
-                >
+                  }}</strong>
+                </span>
               </td>
             </tr>
             <tr v-if="!fabricDomainUtilization.length">
@@ -565,43 +721,62 @@ function metricRatioValue(value: unknown) {
         {{ resourceConvergence.summary || availabilityLabel("missing") }} · {{ t("缺失设备任务") }}
         {{ metricCountValue(missingDeviceTaskCount) }}
       </p>
-      <dl v-if="pdDisaggregation" class="metrics-pd-summary">
-        <div>
-          <dt>{{ t("handoff 证据") }}</dt>
-          <dd>{{ pdDisaggregation.has_handoff_evidence ? t("已报告") : t("未关联") }}</dd>
-        </div>
-        <div>
-          <dt>{{ t("主导请求") }}</dt>
-          <dd>{{ pdDisaggregation.dominant_handoff_request_id || t("未关联") }}</dd>
-        </div>
-        <div>
-          <dt>{{ t("handoff / disaggregation group") }}</dt>
-          <dd>
-            {{ pdDisaggregation.dominant_handoff_id || t("未关联") }} /
-            {{ pdDisaggregation.dominant_source_placement_group_id || t("未关联") }} →
-            {{ pdDisaggregation.dominant_destination_placement_group_id || t("未关联") }}
-          </dd>
-        </div>
-        <div>
-          <dt>{{ t("handoff 等待") }}</dt>
-          <dd>
-            {{
-              isLosslessInteger(pdDisaggregation.decode_wait_for_handoff_ps)
-                ? formatPicoseconds(pdDisaggregation.decode_wait_for_handoff_ps)
-                : availabilityLabel("missing")
-            }}
-          </dd>
-        </div>
-      </dl>
-    </section>
-
-    <section class="metric-footnote" data-help-anchor="metrics-interpretation">
-      <ArrowDown :size="17" />
-      <p>
-        <strong>{{ t("如何理解这些数字") }}</strong
-        >{{ t("延迟越低通常越好，但结论必须与证据来源、负载输入和实际 fidelity 一起判断。") }}
-      </p>
-      <ArrowUp :size="17" />
+      <details v-if="pdDisaggregation" class="metrics-detail-disclosure metrics-pd-detail">
+        <summary>
+          <span>
+            {{ t("查看 PD handoff 与放置归属") }}
+            <InlineHelp :text="t('交接证据、源/目的 placement group 和请求参与设备')" />
+          </span>
+        </summary>
+        <dl class="metrics-pd-summary metrics-pd-summary--handoff">
+          <div class="metrics-summary-item">
+            <dt>{{ t("handoff 证据") }}</dt>
+            <dd>{{ pdDisaggregation.has_handoff_evidence ? t("已报告") : t("未关联") }}</dd>
+          </div>
+          <div class="metrics-summary-item">
+            <dt>{{ t("主导请求") }}</dt>
+            <dd>{{ pdDisaggregation.dominant_handoff_request_id || t("未关联") }}</dd>
+          </div>
+          <div class="metrics-summary-item">
+            <dt>{{ t("handoff / disaggregation group") }}</dt>
+            <dd>
+              {{ pdDisaggregation.dominant_handoff_id || t("未关联") }} /
+              {{ pdDisaggregation.dominant_source_placement_group_id || t("未关联") }} →
+              {{ pdDisaggregation.dominant_destination_placement_group_id || t("未关联") }}
+            </dd>
+          </div>
+          <div class="metrics-summary-item">
+            <dt>{{ t("handoff 等待") }}</dt>
+            <dd>
+              {{
+                isLosslessInteger(pdDisaggregation.decode_wait_for_handoff_ps)
+                  ? formatPicoseconds(pdDisaggregation.decode_wait_for_handoff_ps)
+                  : availabilityLabel("missing")
+              }}
+            </dd>
+          </div>
+        </dl>
+        <dl class="metrics-pd-placement-grid">
+          <div class="metrics-summary-item">
+            <dt>
+              {{ t("Prefill 归属") }}
+              <InlineHelp
+                :text="t('来自本次运行输入中的 placement_group_id 与 participants，表示虚拟拓扑归属，不是硬件采样。')"
+              />
+            </dt>
+            <dd>{{ placementAssignmentLabel(pdPrefillAssignments) }}</dd>
+          </div>
+          <div class="metrics-summary-item">
+            <dt>
+              {{ t("Decode 归属") }}
+              <InlineHelp
+                :text="t('来自本次运行输入中的 placement_group_id 与 participants，表示虚拟拓扑归属，不是硬件采样。')"
+              />
+            </dt>
+            <dd>{{ placementAssignmentLabel(pdDecodeAssignments) }}</dd>
+          </div>
+        </dl>
+      </details>
     </section>
   </div>
 </template>

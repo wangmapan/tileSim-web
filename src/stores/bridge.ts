@@ -14,9 +14,12 @@ export const useBridgeStore = defineStore("bridge", () => {
     identity: null,
     manifest: null,
   });
-  const catalog = reactive<Record<string, unknown> & { scenarios: unknown[]; fidelity_policies: string[] }>({
+  const catalog = reactive<
+    Record<string, unknown> & { scenarios: unknown[]; fidelity_policies: string[]; model_ids: string[] }
+  >({
     scenarios: [],
     fidelity_policies: ["des", "default"],
+    model_ids: [],
   });
   const capabilities = reactive<
     Record<string, unknown> & {

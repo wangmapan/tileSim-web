@@ -24,7 +24,6 @@ const RESULT_ANALYSIS_ROUTE_NAMES = new Set([
   "validation",
   "evidence_agent",
   "evidence_lab",
-  "lightweight_results",
 ]);
 
 export function canUseResultAnalysisRoute(routeName: unknown): boolean {

@@ -86,24 +86,25 @@ export function useAgentBatchEventStream(batchId: MaybeRefOrGetter<string | null
   const lastSequence = ref(0);
   const active = ref(false);
   let controller: AbortController | null = null;
-  const start = async (value: string) => {
-    controller?.abort();
-    controller = new AbortController();
+  let streamToken = 0;
+  const start = async (value: string, token: number) => {
+    const localController = new AbortController();
+    controller = localController;
     active.value = true;
     try {
       await observeAgentBatchEvents(value, {
         lastEventSequence: lastSequence.value,
-        signal: controller.signal,
+        signal: localController.signal,
         onEvent: (event) => {
+          if (token !== streamToken) return;
           if (typeof event.sequence !== "number") return;
           if (event.sequence === lastSequence.value + 1) {
             lastSequence.value = event.sequence;
+            void queryClient.invalidateQueries({ queryKey: ["agent-harness", "batch", value] });
             return;
           }
-          if (event.sequence > lastSequence.value + 1) {
-            // A gap is never silently accepted.  Abort SSE and let the
-            // durable polling query replay from the last contiguous event.
-            controller?.abort();
+          if (event.sequence !== lastSequence.value) {
+            localController.abort();
             void queryClient.invalidateQueries({ queryKey: ["agent-harness", "batch", value] });
             void queryClient.invalidateQueries({ queryKey: ["agent-harness", "batch-events", value] });
           }
@@ -112,17 +113,24 @@ export function useAgentBatchEventStream(batchId: MaybeRefOrGetter<string | null
     } catch {
       /* polling remains the durable fallback */
     } finally {
-      active.value = false;
+      if (token === streamToken) active.value = false;
     }
   };
   watch(
     id,
     (value) => {
+      streamToken += 1;
+      controller?.abort();
+      controller = null;
       lastSequence.value = 0;
-      if (value) void start(value);
+      active.value = false;
+      if (value) void start(value, streamToken);
     },
     { immediate: true },
   );
-  onBeforeUnmount(() => controller?.abort());
+  onBeforeUnmount(() => {
+    streamToken += 1;
+    controller?.abort();
+  });
   return { active, lastSequence };
 }

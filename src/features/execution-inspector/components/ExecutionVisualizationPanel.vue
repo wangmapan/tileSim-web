@@ -5,6 +5,7 @@ import { formatNumber, formatPercent } from "../../../lib/format";
 import type { LayerVisualization } from "../model/types";
 import { useI18n } from "../../../i18n";
 import ArtifactEvidenceLink from "../../../components/ArtifactEvidenceLink.vue";
+import InlineHelp from "../../../components/InlineHelp.vue";
 import RecordPager from "../../../components/ui/RecordPager.vue";
 import { useRecordPage } from "../../../components/ui/useRecordPage";
 import { semanticFieldPresentation, semanticValuePresentation } from "../presentation";
@@ -18,6 +19,14 @@ const { page, pages, visibleRecords } = useRecordPage(records);
 const dataOpen = ref(props.visualization.kind === "matrix");
 const hasStatus = computed(() => records.value.some((row) => row.status));
 const chartable = computed(() => ["bar", "stacked-bar", "scatter", "timeline"].includes(props.visualization.kind));
+const visualizationHelp = computed(() =>
+  [
+    t(props.visualization.description),
+    props.showBoundary && props.visualization.boundary ? `${t("解读边界")}：${t(props.visualization.boundary)}` : "",
+  ]
+    .filter(Boolean)
+    .join(" "),
+);
 const selectedRowIndex = ref<number | null>(null);
 const selectedRow = computed(() =>
   selectedRowIndex.value === null ? null : props.visualization.rows[selectedRowIndex.value] || null,
@@ -72,6 +81,13 @@ function semanticField(field: string, value: unknown) {
 function semanticValue(value: unknown) {
   return semanticValuePresentation(value);
 }
+
+function semanticHelp(field: string, value: unknown) {
+  const presentation = semanticField(field, value);
+  return [presentation.fieldDescription, presentation.valueDescription, presentation.technicalText]
+    .filter(Boolean)
+    .join(" · ");
+}
 </script>
 
 <template>
@@ -88,6 +104,7 @@ function semanticValue(value: unknown) {
         <div class="visualization-title-line">
           <h3>{{ t(visualization.title) }}</h3>
           <span>{{ t(kindLabels[visualization.kind]) }}</span>
+          <InlineHelp v-if="visualizationHelp" :text="visualizationHelp" />
         </div>
       </div>
     </header>
@@ -118,15 +135,15 @@ function semanticValue(value: unknown) {
     </template>
     <div v-else-if="visualization.kind === 'matrix'" class="visualization-matrix">
       <div v-for="row in visibleRecords" :key="row.label">
-        <span class="semantic-field-label">{{ semanticField(row.label, row.values[0]).fieldLabel }}</span>
-        <p v-if="semanticField(row.label, row.values[0]).fieldDescription" class="semantic-field-description">
-          {{ semanticField(row.label, row.values[0]).fieldDescription }}
-        </p>
+        <div class="semantic-field-heading">
+          <span class="semantic-field-label">{{ semanticField(row.label, row.values[0]).fieldLabel }}</span>
+        </div>
         <strong>{{ semanticField(row.label, row.values[0]).valueLabel }}</strong>
-        <p v-if="semanticField(row.label, row.values[0]).valueDescription" class="semantic-value-description">
-          {{ semanticField(row.label, row.values[0]).valueDescription }}
-        </p>
-        <small class="semantic-technical">{{ semanticField(row.label, row.values[0]).technicalText }}</small>
+        <InlineHelp
+          class="semantic-field-help"
+          :text="semanticHelp(row.label, row.values[0])"
+          :label="`${semanticField(row.label, row.values[0]).fieldLabel}${t('说明')}`"
+        />
         <code class="semantic-pointer">{{ row.sourcePath || "—" }}</code>
       </div>
     </div>
@@ -140,11 +157,6 @@ function semanticValue(value: unknown) {
       :pages="pages"
       :label="`${t(visualization.title)} · ${t('数据分页')}`"
     />
-    <p class="visualization-caption">{{ t(visualization.description) }}</p>
-    <p v-if="showBoundary && visualization.boundary" class="visualization-boundary">
-      {{ t("解读边界") }} · {{ t(visualization.boundary) }}
-    </p>
-
     <div v-if="dataIssues.length" class="visualization-issues" role="status">
       <AlertTriangle :size="16" />
       <div>

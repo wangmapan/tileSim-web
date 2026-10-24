@@ -4,6 +4,27 @@
  * `tests/unit/i18n-model-coverage.test.js`.
  */
 export const reportCoverageEnglishCatalog: Readonly<Record<string, string>> = {
+  运行输入: "Runtime input",
+  请求指标: "Request metrics",
+  网络阶段资源: "Network-phase resource",
+  验证记录: "Validation record",
+  归因记录: "Attribution record",
+  执行来源: "Execution source",
+  验证来源: "Validation source",
+  归因来源: "Attribution source",
+  "请求 {index}": "Request {index}",
+  "查看请求 {index} 的技术标识": "View the technical identifier for request {index}",
+  当前运行: "Current run",
+  查看当前运行和请求的技术身份: "View the technical identity of the current run and request",
+  "这些记录用于核对执行、校准和归因结果，不单独构成延迟因果结论。":
+    "These records verify execution, calibration, and attribution; they do not by themselves establish latency causality.",
+  "查看 {title} 的技术说明": "View the technical explanation for {title}",
+  查看技术详情: "View technical details",
+  内部标识: "Internal identifiers",
+  模块标识: "Module identifier",
+  来源证据: "Source evidence",
+  相关资源: "Related resources",
+  "选择一个请求查看对应证据。": "Choose a request to view its evidence.",
   报告已提供: "Reported",
   是: "Yes",
   否: "No",
@@ -79,6 +100,8 @@ export const reportCoverageEnglishCatalog: Readonly<Record<string, string>> = {
   "三个分布摘要各自独立展示 p50、p95、p99 与 max；不把某一分位数当作整体结论。":
     "Each of the three distribution summaries shows p50, p95, p99 and max independently; no single percentile is presented as the overall conclusion.",
   "指标 Trace provenance": "Metrics Trace provenance",
+  "以下字段由后端报告直接提供；缺失时保持未知，不推断采集或校准状态。":
+    "These fields come directly from the backend report; missing values stay unknown and are not inferred as collected or calibrated.",
   "来源模式、校准级别、声明范围和 Trace 类型由后端提供；缺失时保持 unknown，不由前端推断。":
     "Source mode, calibration level, claim scope and Trace kind come from the backend; missing values remain unknown and are never inferred by the front end.",
   "观测窗口为 0 表示该边界没有产生可观测样本；后端会另行写出 boundary_notes。":
@@ -114,6 +137,38 @@ export const reportCoverageEnglishCatalog: Readonly<Record<string, string>> = {
   网络时间线与占用: "Fabric timeline and utilization",
   "has_fabric_timeline 为 false 表示后端没有写出网络时间线；该布尔事实不得显示为「已采集」。":
     'has_fabric_timeline = false means the backend wrote no fabric timeline; this boolean fact must never be displayed as "captured".',
+  报告解释: "Report interpretation",
+  已生成设备任务: "Device tasks were generated",
+  "设备任务未映射到 GPU": "Device tasks are not mapped to GPUs",
+  本次没有设备任务记录: "No device-task records in this run",
+  "后端报告设备任务为 0": "The backend reported 0 device tasks",
+  "已有 Fabric 通信记录，缺少设备任务明细": "Fabric communication exists, but device-task detail is absent",
+  没有设备活动证据: "No device-activity evidence",
+  "后端已生成模型化设备任务；下方卡片显示本次仿真的设备活动。":
+    "The backend generated modelled device tasks; the cards below show device activity in this simulation.",
+  "报告中存在设备任务，但没有映射到这些 GPU 行。当前卡上的 0 不能解释为 GPU 未参与，请检查请求 participants、placement_group 和 Fabric 路由。":
+    "The report contains device tasks, but they are not mapped to these GPU rows. A 0 on a card does not prove that the GPU did not participate; check request participants, placement_group, and Fabric routing.",
+  "GPU 和拓扑只是仿真输入；本次报告没有设备任务记录。这里的 0 表示没有可归属的设备任务。":
+    "GPUs and topology are simulation inputs; this report contains no device-task records. The 0 means there is no device task to attribute.",
+  "后端明确报告设备任务数为 0，表示本次请求没有在设备层形成任务；请结合请求 participants 和 Fabric 记录判断。":
+    "The backend explicitly reported 0 device tasks, meaning this request did not form a device-level task; check participants and Fabric records together.",
+  "拓扑已产生虚拟 Fabric 通信记录，但后端没有提供设备任务明细，因此暂时不能把通信活动分摊到每张 GPU。":
+    "The topology produced virtual Fabric communication records, but the backend provided no device-task detail, so the activity cannot yet be allocated to individual GPUs.",
+  "后端没有提供设备任务或 Fabric 活动记录，无法判断每张 GPU 的参与情况。":
+    "The backend provided neither device-task nor Fabric activity records, so GPU participation cannot be determined.",
+  "查看设备与 Fabric 诊断字段": "View device and Fabric diagnostic fields",
+  "未映射任务、忙碌时间、拥塞和设备采集状态": "Unmapped tasks, busy time, congestion, and device collection state",
+  设备采集状态: "Device collection state",
+  未采集: "Not collected",
+  无设备任务: "No device tasks",
+  仿真设备参与与拓扑通信: "Simulated device participation and topology communication",
+  "这里只展示后端报告的模型化设备任务和虚拟 Fabric 记录；设备采集状态缺失不等于仿真未执行。":
+    "This section shows modelled device tasks and virtual Fabric records from the backend; missing device collection state does not mean the simulation did not run.",
+  "报告显示设备任务归属不完整：存在未映射或缺失的设备任务；当前每张卡的 0 不能解释为设备未参与，需修复设备任务到拓扑设备的归属后才能按卡汇总。":
+    "The report has incomplete device-task attribution: some tasks are unmapped or missing. A 0 on a device does not prove that it did not participate; fix task-to-device attribution before aggregating by device.",
+  "查看 PD handoff 与放置归属": "View PD handoff and placement",
+  "交接证据、源/目的 placement group 和请求参与设备":
+    "Handoff evidence, source/destination placement groups, and request participants",
 
   /* C0-3 validation coverage ------------------------------------------- */
   验证范围与基线: "Validation scope and baseline",

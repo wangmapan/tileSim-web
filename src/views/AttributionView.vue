@@ -2,6 +2,7 @@
 import { Braces, ChevronDown, GitCommitHorizontal, ShieldCheck, Target, TriangleAlert } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import EmptyState from "../components/EmptyState.vue";
+import InlineHelp from "../components/InlineHelp.vue";
 import { formatNumber, formatPercent } from "../lib/format";
 import { useDashboard } from "../store/dashboard";
 import { useI18n } from "../i18n";
@@ -141,7 +142,10 @@ function semanticField(field: string, value: unknown) {
           </div>
           <dl>
             <div>
-              <dt>{{ t("报告置信度") }}</dt>
+              <dt>
+                {{ t("报告置信度") }}
+                <InlineHelp :text="t('置信度与完整度是报告字段，不代表真实系统准确率。')" />
+              </dt>
               <dd>
                 {{ formatPercent(state.bundle.tail.confidence)
                 }}<ArtifactEvidenceLink
@@ -161,7 +165,6 @@ function semanticField(field: string, value: unknown) {
               </dd>
             </div>
           </dl>
-          <p class="attribution-reading-note">{{ t("置信度与完整度是报告字段，不代表真实系统准确率。") }}</p>
         </section>
 
         <ExecutionVisualizationPanel :visualization="attributionVisualization" show-boundary />
@@ -170,8 +173,10 @@ function semanticField(field: string, value: unknown) {
           <header class="panel-header">
             <div>
               <p class="section-kicker">{{ t("报告贡献项") }}</p>
-              <h2>{{ t("贡献排序") }}</h2>
-              <p>{{ t("保留报告顺序与原始排名；份额条使用固定 0–100% 范围，不重新归一化。") }}</p>
+              <h2>
+                {{ t("贡献排序") }}
+                <InlineHelp :text="t('保留报告顺序与原始排名；份额条使用固定 0–100% 范围，不重新归一化。')" />
+              </h2>
             </div>
           </header>
           <div
@@ -240,8 +245,10 @@ function semanticField(field: string, value: unknown) {
           <summary class="panel-header">
             <div>
               <p class="section-kicker">{{ t("报告审计") }}</p>
-              <h2>{{ t("归因守恒与传播审计") }}</h2>
-              <p>{{ t("直接展示归因报告的审计结论；守恒通过不代表传播链完整。") }}</p>
+              <h2>
+                {{ t("归因守恒与传播审计") }}
+                <InlineHelp :text="t('直接展示归因报告的审计结论；守恒通过不代表传播链完整。')" />
+              </h2>
             </div>
             <span
               class="status-pill"
@@ -349,8 +356,10 @@ function semanticField(field: string, value: unknown) {
           <summary class="panel-header">
             <div>
               <p class="section-kicker">{{ t("有序解释") }}</p>
-              <h2>{{ t("共享时间轴上的原因链") }}</h2>
-              <p>{{ t("这是报告提供的有序解释，不应单独视为现实因果证明。") }}</p>
+              <h2>
+                {{ t("共享时间轴上的原因链") }}
+                <InlineHelp :text="t('这是报告提供的有序解释，不应单独视为现实因果证明。')" />
+              </h2>
             </div>
             <span>{{ t("{count} 条原因记录", { count: state.bundle.tail.cause_chain.length }) }}</span>
             <ChevronDown :size="17" />

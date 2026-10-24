@@ -23,13 +23,6 @@
   --positive: #267154;
   --positive-soft: #dfeee6;
   --positive-ink: #1c6548;
-  /* The lightweight workbench reads a `success` family that was never declared.
-     Three of those reads carry no fallback, so those chips rendered with no
-     background at all instead of a green one. Aliased here rather than at each
-     call site so the dark theme picks them up through its own `--positive`. */
-  --success: var(--positive);
-  --success-soft: var(--positive-soft);
-  --success-ink: var(--positive-ink);
   --neutral-ink: #54625d;
   /* Depth reads as three ordered tiers: resting surface, raised card, floating
      overlay. A wide soft blur over a short negative spread keeps the edge tight

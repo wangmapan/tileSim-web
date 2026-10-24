@@ -58,11 +58,11 @@ beforeEach(() => fetchVerifiedArtifact.mockReset());
 
 describe("小拓的只读报告整理与教学", () => {
   it("仅允许结果/只读路由使用结果分析，即使全局存在旧报告", () => {
-    expect(canUseResultAnalysisRoute("lightweight_results")).toBe(true);
+    expect(canUseResultAnalysisRoute("overview")).toBe(true);
     expect(canUseResultAnalysisRoute("overview")).toBe(true);
     expect(canUseResultAnalysisRoute("experiment")).toBe(false);
-    expect(canUseResultAnalysisRoute("lightweight_prepare")).toBe(false);
-    expect(canUseResultAnalysisRoute("lightweight_run")).toBe(false);
+    expect(canUseResultAnalysisRoute("experiment")).toBe(false);
+    expect(canUseResultAnalysisRoute("unknown_route")).toBe(false);
   });
 
   it("只引用报告已有指标及后端原文，不把缺失值补为零", () => {

@@ -5,6 +5,14 @@
 **对照后端**：`D:\tileSim`，`main@5e44dbb0`  
 **计划性质**：活跃开发计划，不代表功能已经完成或已通过真实设备校准。
 
+## 2026-10-24 代码复核补充
+
+本计划中的 FE-C01–FE-C07、FE-B01 与相关结果展示工作已在当前源码中落地：`report-model.ts` 已声明等待/KV/Profile/PD/
+`network_intervals` 字段，Metrics/Attribution/Report Coverage 已使用 lossless 值和后端 applicability，Trace Package 页面仍对
+未由 Bridge 暴露的对象计数、`evidence_only`/`executable`、observed/inferred 与 snapshot digest 显示 contract gap。`runtime-engine`
+继续按 semantic profile 和后端 validator fail closed，不把设备数或 TP/domain 数量推断成能力。当前未完成项、真实后端/硬件校准和
+held-out 证据不因本节代码复核升级；工作包表中的旧“当前状态”保留为 2026-10-17 计划快照。
+
 ## 1. 复核结论
 
 当前前端不是完全不能读取后端新报告，而是部分字段通过 `[key: string]: unknown` 兜底，导致数据可以进入页面，却没有稳定的类型、可视化、证据跳转和缺失语义。前端现状应定义为：

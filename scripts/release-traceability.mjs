@@ -12,8 +12,14 @@ const defaultExcludedNames = new Set([
   "node_modules",
   "playwright-report",
   ".playwright-cli",
+  ".idea",
+  ".venv",
+  ".workbuddy",
+  "artifacts",
+  "output",
   "runtime",
   "runs",
+  "target",
   "test-results",
 ]);
 

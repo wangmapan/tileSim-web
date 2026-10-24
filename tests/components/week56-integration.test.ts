@@ -230,15 +230,24 @@ describe("Week 5 and Week 6 frontend integration", () => {
       },
     });
 
-    expect(wrapper.text()).toContain("S1 · 调度、批处理与 KV 准入");
-    expect(wrapper.text()).toContain("S0 · 通信负载输入");
-    expect(wrapper.text()).toContain("S6 · Scale-up 与 Scale-out");
-    expect(wrapper.findAll("[data-field-path]")).toHaveLength(13);
+    expect(wrapper.get('[role="tab"][data-module="runtime"]').text()).toContain("运行策略");
+    expect(wrapper.get('[role="tab"][data-module="workload"]').text()).toContain("工作负载");
+    expect(wrapper.get('[role="tab"][data-module="fabric"]').text()).toContain("互联参数");
+    // The invalid S6 pointer routes the stage to the matching module instead
+    // of painting every subsystem on the same screen.
+    expect(wrapper.findAll("[data-field-path]")).toHaveLength(4);
     expect(
       wrapper.find('[data-field-path="/overrides/fabric/scale_out_latency_us"] input').attributes("aria-invalid"),
     ).toBe("true");
     expect(wrapper.text()).not.toContain("/overrides/runtime/batch_scheduler");
+    await wrapper.get('[role="tab"][data-module="runtime"]').trigger("click");
+    expect(wrapper.text()).toContain("调度、批处理与 KV 准入");
+    expect(wrapper.findAll('[data-field-path^="/overrides/runtime/"]')).toHaveLength(8);
+    await wrapper.get('[role="tab"][data-module="workload"]').trigger("click");
+    expect(wrapper.text()).toContain("通信负载输入");
+    await wrapper.get('[role="tab"][data-module="fabric"]').trigger("click");
     await wrapper.get('button[aria-pressed="false"]').trigger("click");
+    await wrapper.get('[role="tab"][data-module="runtime"]').trigger("click");
     expect(wrapper.text()).toContain("/overrides/runtime/batch_scheduler");
     expect(wrapper.get('button[aria-pressed="true"]').text()).toContain("隐藏字段契约");
   });

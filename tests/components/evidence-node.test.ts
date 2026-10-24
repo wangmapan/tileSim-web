@@ -45,20 +45,22 @@ function renderNode(node: RunBoundEvidenceNode, output = false) {
 afterEach(() => setLocale("zh-CN"));
 
 describe("evidence node presentation", () => {
-  it("uses semantic headings without changing identifiers, rules or reference paths", async () => {
+  it("keeps the default view readable and moves identifiers and references into technical details", async () => {
     const node = nodeFixture();
     const original = JSON.stringify(node);
     const wrapper = renderNode(node);
     expect(wrapper.find("header strong").text()).toBe("网络请求阶段");
-    expect(wrapper.find("header span").text()).toBe("S6");
-    expect(wrapper.findAll("code").map((entry) => entry.text())).toEqual(node.entityIds);
+    expect(wrapper.find("header .run-bound-node-scope").exists()).toBe(false);
+    expect(wrapper.find(".run-bound-node-summary").text()).toContain("网络阶段");
+    expect(wrapper.findAll(".run-bound-node-content > code")).toHaveLength(0);
+    expect(wrapper.find(".run-bound-technical-details").attributes("open")).toBeUndefined();
+    expect(wrapper.find(".run-bound-technical-details").text()).toContain("S6");
+    expect(wrapper.find(".run-bound-technical-details").text()).toContain(node.entityIds[0]);
     expect(wrapper.find("a").attributes("data-source")).toBe(node.references[0].sourcePath);
-    expect(wrapper.find(".run-bound-binding-rule").attributes("open")).toBeUndefined();
-    expect(wrapper.find(".run-bound-binding-rule p").text()).toBe(node.detail);
     setLocale("en-US");
     await wrapper.vm.$nextTick();
     expect(wrapper.find("header strong").text()).toBe("Network request phase");
-    expect(wrapper.find("summary").text()).toBe("Binding rule");
+    expect(wrapper.find(".run-bound-technical-details summary").text()).toBe("View technical details");
     expect(JSON.stringify(node)).toBe(original);
     wrapper.unmount();
   });
@@ -74,12 +76,12 @@ describe("evidence node presentation", () => {
     "unsupported_schema",
     "legacy_compatibility",
     "contract_gap",
-  ])("keeps %s reasons outside collapsed details", (availability) => {
+  ])("keeps %s status readable without exposing raw detail by default", (availability) => {
     const node = { ...nodeFixture(), availability };
     const wrapper = renderNode(node);
-    expect(wrapper.find(".run-bound-node-reason").text()).toBe(node.detail);
-    expect(wrapper.find(".run-bound-node-reason").element.closest("details")).toBeNull();
-    expect(wrapper.find(".run-bound-binding-rule").exists()).toBe(false);
+    expect(wrapper.find(".run-bound-node-summary").exists()).toBe(true);
+    expect(wrapper.find(".run-bound-node-summary").text()).not.toContain(node.detail);
+    expect(wrapper.find(".run-bound-technical-details").exists()).toBe(true);
     expect(wrapper.find("header small").text()).toBe(availability);
     wrapper.unmount();
   });
@@ -93,10 +95,13 @@ describe("evidence node presentation", () => {
       sourcePath: `tail:/cause_chain/${index}`,
     }));
     const wrapper = renderNode(node, true);
-    expect(wrapper.findAll(".run-bound-node-content > code")).toHaveLength(3);
-    expect(wrapper.findAll(".run-bound-node-content > .run-bound-reference-list a")).toHaveLength(2);
-    expect(wrapper.find(".run-bound-output-more summary").text()).toContain("6 项");
-    expect(wrapper.findAll("code").map((entry) => entry.text())).toEqual(node.entityIds);
+    expect(wrapper.findAll(".run-bound-node-content > code")).toHaveLength(0);
+    expect(wrapper.findAll(".run-bound-node-content > .run-bound-reference-list a")).toHaveLength(0);
+    expect(wrapper.find(".run-bound-technical-details").exists()).toBe(true);
+    expect(wrapper.findAll(".run-bound-technical-section code").map((entry) => entry.text())).toEqual([
+      "S9",
+      ...node.entityIds,
+    ]);
     expect(wrapper.findAll("a").map((entry) => entry.attributes("data-source"))).toEqual(
       node.references.map((entry) => entry.sourcePath),
     );
