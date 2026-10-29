@@ -83,7 +83,12 @@ function Invoke-BridgeValidation {
     # validation only needs an isolated temporary store.
     Invoke-Checked "wsl.exe" @(
         "-d", $WslDistro, "--cd", "$webRootWsl/bridge", "--exec", "env",
-        "TILESIM_WEB_STATE_ROOT=$validationStateRootWsl", "python3", "-m", "unittest", "test_server.py"
+        "TILESIM_WEB_STATE_ROOT=$validationStateRootWsl",
+        "TILESIM_AGENT_HARNESS_DB=$validationStateRootWsl/runtime/agent-harness.sqlite3",
+        "TILESIM_AGENT_OPTIMIZATION_DB=$validationStateRootWsl/runtime/agent-harness-optimization.sqlite3",
+        "TILESIM_AGENT_BATCH_DB=$validationStateRootWsl/runtime/agent-harness-batch.sqlite3",
+        "TILESIM_AGENT_FLOW_DB=$validationStateRootWsl/runtime/agent-flow.sqlite3",
+        "python3", "-m", "unittest", "test_server.py"
     )
 }
 
