@@ -14,10 +14,12 @@ import {
   requestAssistantPlan,
   selectAssistantModel,
 } from "../../src/lib/api/assistant-model";
+import { BRIDGE_SCHEMA_SET_REVISION } from "../../src/contracts/generated/bridge-contracts";
 
 afterEach(() => vi.unstubAllGlobals());
 
-const schemaSetRevision = `sha256:${"a".repeat(64)}`;
+const schemaSetRevision = BRIDGE_SCHEMA_SET_REVISION;
+const apiVersion = "tilesim.bridge.api.v1";
 
 function jsonResponse(value: unknown, status = 200) {
   return new Response(JSON.stringify(value), {
@@ -25,6 +27,7 @@ function jsonResponse(value: unknown, status = 200) {
     headers: {
       "Content-Type": "application/json",
       "X-TileSim-Schema-Set-Revision": schemaSetRevision,
+      "X-TileSim-API-Version": apiVersion,
     },
   });
 }
@@ -37,11 +40,12 @@ function plan(overrides: Record<string, unknown> = {}) {
     provider_id: "tilesim_assistant_openai_v1",
     model_id: "deepseek-v4-flash",
     served_model: "deepseek-v4-flash",
-    instruction: "跑一个高吞吐离线批处理的场景",
+    instruction: "跑一个高吞吐场景",
     title: "高吞吐 / 离线批量",
     rationale: "把每批塞满、放宽容纳上限。",
     settings: [{ key: "max_batch_size", value: "64", why: "提高每批处理量以吃满带宽。" }],
     dropped: [],
+    answer_state: "settings",
     applied: false,
     executed: false,
     ...overrides,
@@ -53,14 +57,14 @@ describe("assistant model plan request", () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(plan()));
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await requestAssistantPlan("跑一个高吞吐离线批处理的场景");
+    const result = await requestAssistantPlan("跑一个高吞吐场景");
 
     expect(result?.title).toBe("高吞吐 / 离线批量");
     expect(result?.settings[0]).toMatchObject({ key: "max_batch_size", value: "64" });
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toContain("/api/agent/scenario-plan");
     expect(init.method).toBe("POST");
-    expect(JSON.parse(String(init.body))).toEqual({ instruction: "跑一个高吞吐离线批处理的场景" });
+    expect(JSON.parse(String(init.body))).toEqual({ instruction: "跑一个高吞吐场景" });
   });
 
   it("returns null when this Bridge has no channel configured (503)", async () => {
@@ -126,6 +130,15 @@ describe("assistant model plan request", () => {
     // disagrees with that is treated as no answer at all.
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(plan(overrides))));
 
+    await expect(requestAssistantPlan("跑一个高吞吐场景")).resolves.toBeNull();
+  });
+
+  it.each([
+    ["a stale schema revision", { schema_set_revision: `sha256:${"f".repeat(64)}` }],
+    ["an unknown top-level field", { extra: "unexpected" }],
+    ["a plan whose instruction does not match the request", { instruction: "另一条请求" }],
+  ])("fails closed for %s", async (_label, overrides) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(plan(overrides))));
     await expect(requestAssistantPlan("跑一个高吞吐场景")).resolves.toBeNull();
   });
 
@@ -243,19 +256,23 @@ describe("assistant model catalogue request", () => {
     expect(String(fetchMock.mock.calls[0][0])).toContain("/api/agent/assistant-model-catalogue");
   });
 
-  it("drops entries that are not usable identities, and still returns the rest", async () => {
+  it("rejects a catalogue containing malformed identities instead of silently changing it", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(jsonResponse(catalogue({ models: ["glm-5.1", "", "  ", 7, "x"], count: 5 }))),
     );
 
-    await expect(fetchAssistantModelCatalogue()).resolves.toMatchObject({
-      models: ["glm-5.1", "x"],
-    });
+    await expect(fetchAssistantModelCatalogue()).resolves.toBeNull();
   });
 
   it("returns null when nothing usable is left, rather than emptying the dropdown", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(catalogue({ models: ["", "   "], count: 2 }))));
+
+    await expect(fetchAssistantModelCatalogue()).resolves.toBeNull();
+  });
+
+  it("rejects a catalogue whose selected identity is not published in the model list", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(catalogue({ selected_model: "model-not-in-list" }))));
 
     await expect(fetchAssistantModelCatalogue()).resolves.toBeNull();
   });
@@ -292,6 +309,17 @@ describe("assistant model selection request", () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toContain("/api/agent/assistant-model-selection");
     expect(init.method).toBe("POST");
+    expect(JSON.parse(String(init.body))).toEqual({ model: "glm-5.1" });
+  });
+
+  it("binds a selection request to the active assistant session without putting identity in the body", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(selection()));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await selectAssistantModel("glm-5.1", { sessionId: "assistant-session-a" });
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.headers["X-TileSim-Assistant-Session"]).toBe("assistant-session-a");
     expect(JSON.parse(String(init.body))).toEqual({ model: "glm-5.1" });
   });
 

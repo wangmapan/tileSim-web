@@ -258,7 +258,6 @@ describe("published runtime engine closure", () => {
   it("recovers only a same-schema tab draft", () => {
     const draft = {
       mode: "json" as const,
-      structuredInput: false,
       runtimeJson: JSON.stringify(generic),
       topologyJson: JSON.stringify(topology),
     };

@@ -55,14 +55,14 @@ defineExpose({ focus, value: instruction });
 <template>
   <form class="agent-composer" aria-label="助手输入" @submit.prevent="submit">
     <label class="agent-composer__field">
-      <span class="agent-composer__label">描述要理解或调整的内容</span>
+      <span class="agent-composer__label">直接告诉我你想做什么</span>
       <textarea
         ref="textarea"
         v-model="instruction"
         rows="3"
         :maxlength="maxLength"
         :disabled="disabled"
-        placeholder="描述要运行的场景，例如：低延迟在线服务；也可以直接写「最大 batch = 32」"
+        placeholder="例如：帮我准备一个低延迟场景，或把最大 batch 调整为 32"
         @compositionstart="composing = true"
         @compositionend="composing = false"
         @keydown="onKeydown"
@@ -74,8 +74,8 @@ defineExpose({ focus, value: instruction });
           disabled
             ? disabledReason
             : busy
-              ? "模型正在回答；可以直接停止，也可以先写下一句"
-              : "Enter 提交 · 描述场景会交给配置助手生成方案，确认后才写入面板"
+              ? "正在回答；可以停止，也可以先写下一个问题"
+              : "Enter 提交 · 助手会先给出建议，需要时再请你确认"
         }}
       </p>
       <button v-if="busy" type="button" class="agent-composer__stop" @click="emit('cancel')">停止</button>
@@ -86,11 +86,24 @@ defineExpose({ focus, value: instruction });
 
 <style scoped>
 .agent-composer {
+  position: relative;
   display: grid;
   gap: 8px;
-  padding: 12px 14px 14px;
+  padding: 12px 14px 13px;
   border-top: 1px solid var(--line);
-  background: color-mix(in srgb, var(--panel) 92%, var(--surface-muted));
+  background: color-mix(in srgb, var(--panel) 88%, var(--surface-muted));
+  box-shadow: 0 -8px 24px -22px color-mix(in srgb, var(--ink) 68%, transparent);
+}
+
+.agent-composer::before {
+  position: absolute;
+  top: -1px;
+  left: 14px;
+  width: 42px;
+  height: 3px;
+  border-radius: 0 0 999px 999px;
+  background: var(--accent);
+  content: "";
 }
 
 .agent-composer__field {
@@ -99,18 +112,19 @@ defineExpose({ focus, value: instruction });
 }
 
 .agent-composer__label {
-  color: var(--muted);
+  color: var(--accent-ink);
   font-size: var(--text-xs);
+  font-weight: 700;
 }
 
 .agent-composer textarea {
   width: 100%;
-  min-height: 76px;
+  min-height: 82px;
   max-height: 180px;
   resize: vertical;
-  padding: 9px 10px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-control);
+  padding: 11px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line-strong));
+  border-radius: 9px;
   color: var(--ink);
   background: var(--control-bg);
   line-height: 1.5;
@@ -127,6 +141,7 @@ defineExpose({ focus, value: instruction });
   box-shadow:
     var(--ring),
     inset 0 1px 2px rgb(18 29 39 / 4%);
+  transform: translateY(-1px);
 }
 
 .agent-composer textarea:disabled {
@@ -150,14 +165,15 @@ defineExpose({ focus, value: instruction });
 }
 
 .agent-composer button {
-  min-height: 34px;
-  padding: 6px 13px;
+  min-height: 36px;
+  padding: 6px 15px;
   border: 1px solid var(--accent);
-  border-radius: var(--radius-control);
+  border-radius: 8px;
   color: #fff;
   background: var(--accent);
   cursor: pointer;
   font-weight: 600;
+  box-shadow: 0 4px 12px -8px color-mix(in srgb, var(--accent) 82%, transparent);
   transition:
     background-color var(--motion-interaction) var(--ease-standard),
     border-color var(--motion-interaction) var(--ease-standard),
@@ -169,7 +185,7 @@ defineExpose({ focus, value: instruction });
   border-color: var(--accent-hover);
   background: var(--accent-hover);
   transform: translateY(-1px);
-  box-shadow: var(--shadow-hairline);
+  box-shadow: 0 7px 16px -9px color-mix(in srgb, var(--accent) 84%, transparent);
 }
 
 .agent-composer button:disabled {

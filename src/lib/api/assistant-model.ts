@@ -4,6 +4,7 @@ import type {
   AssistantModelPlanResponse,
   AssistantModelSelectionResponse,
 } from "../../contracts/bridge-api";
+import { BRIDGE_SCHEMA_SET_REVISION } from "../../contracts/generated/bridge-contracts";
 import { bridgePaths } from "../../contracts/generated/bridge-client";
 import { isRecord, apiRoots, apiRequestWithMetadata } from "./transport";
 import { parseJsonLossless } from "../../contracts/lossless-json";
@@ -14,6 +15,44 @@ const ASSISTANT_MODEL_PROTOCOL = "tilesim.assistant_model.v1";
 /** The chat envelope identity the Bridge writes on its prose, error and done events. */
 const ASSISTANT_CHAT_SCHEMA_VERSION = "tilesim.bridge.assistant_model_chat.v1";
 const RESULT_ANALYSIS_CHAT_SCHEMA_VERSION = "tilesim.bridge.result_analysis_chat.v1";
+const ASSISTANT_MODEL_DESCRIPTOR_SCHEMA_VERSION = "tilesim.bridge.assistant_model_descriptor.v1";
+const ASSISTANT_MODEL_PLAN_SCHEMA_VERSION = "tilesim.bridge.assistant_model_plan.v1";
+const ASSISTANT_MODEL_CATALOGUE_SCHEMA_VERSION = "tilesim.bridge.assistant_model_catalogue.v1";
+const ASSISTANT_MODEL_SELECTION_SCHEMA_VERSION = "tilesim.bridge.assistant_model_selection.v1";
+const ASSISTANT_MODEL_API_VERSION = "tilesim.bridge.api.v1";
+const ASSISTANT_MODEL_SESSION_HEADER = "X-TileSim-Assistant-Session";
+
+type AssistantModelRequestOptions = { signal?: AbortSignal; sessionId?: string };
+
+function assistantModelHeaders(sessionId?: string): Record<string, string> {
+  return sessionId && sessionId.trim() ? { [ASSISTANT_MODEL_SESSION_HEADER]: sessionId.trim() } : {};
+}
+
+const PLAN_KEYS = [
+  "schema_version",
+  "schema_set_revision",
+  "protocol",
+  "provider_id",
+  "model_id",
+  "served_model",
+  "instruction",
+  "answer_state",
+  "title",
+  "rationale",
+  "settings",
+  "structured_inputs",
+  "dropped",
+  "applied",
+  "executed",
+] as const;
+
+function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  return Object.keys(value).every((key) => keys.includes(key));
+}
+
+function boundedString(value: unknown, maximum: number, allowEmpty = false): value is string {
+  return typeof value === "string" && value.length <= maximum && (allowEmpty || value.trim().length > 0);
+}
 
 /** One replayed conversation turn. Only these two roles are accepted by the Bridge. */
 export interface AssistantChatMessage {
@@ -65,30 +104,66 @@ export interface AssistantResultAnalysisContext {
  */
 export async function requestAssistantPlan(
   instruction: string,
-  options: { signal?: AbortSignal } = {},
+  options: AssistantModelRequestOptions = {},
 ): Promise<AssistantModelPlanResponse | null> {
   try {
-    const { payload } = await apiRequestWithMetadata<AssistantModelPlanResponse>(bridgePaths.planAgentScenario(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ instruction }),
-      ...(options.signal ? { signal: options.signal } : {}),
-    });
-    return trustedPlan(payload);
+    const { payload, schemaSetRevision, apiVersion } = await apiRequestWithMetadata<AssistantModelPlanResponse>(
+      bridgePaths.planAgentScenario(),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...assistantModelHeaders(options.sessionId) },
+        body: JSON.stringify({ instruction }),
+        ...(options.signal ? { signal: options.signal } : {}),
+      },
+    );
+    return schemaSetRevision === BRIDGE_SCHEMA_SET_REVISION && apiVersion === ASSISTANT_MODEL_API_VERSION
+      ? trustedPlan(payload, instruction)
+      : null;
   } catch {
     return null;
   }
 }
 
 /** Accepts a plan only when it claims nothing was applied and nothing was executed. */
-function trustedPlan(payload: unknown): AssistantModelPlanResponse | null {
+function trustedPlan(payload: unknown, expectedInstruction?: string): AssistantModelPlanResponse | null {
   if (!isRecord(payload)) return null;
+  if (!hasOnlyKeys(payload, PLAN_KEYS)) return null;
+  if (payload.schema_version !== ASSISTANT_MODEL_PLAN_SCHEMA_VERSION) return null;
+  if (payload.schema_set_revision !== BRIDGE_SCHEMA_SET_REVISION) return null;
   if (payload.protocol !== ASSISTANT_MODEL_PROTOCOL) return null;
   // A channel that claims to have written or run something is not trusted.
   if (payload.applied !== false || payload.executed !== false) return null;
-  if (!Array.isArray(payload.settings)) return null;
+  if (!Array.isArray(payload.settings) || payload.settings.length > 64) return null;
+  if (!boundedString(payload.provider_id, 200) || !boundedString(payload.model_id, 200)) return null;
+  if (!boundedString(payload.served_model, 200) || !boundedString(payload.instruction, 2_000)) return null;
+  if (!boundedString(payload.title, 80, true) || !boundedString(payload.rationale, 600, true)) return null;
+  if (!(["settings", "prose_only", "settings_unparsed"] as const).includes(payload.answer_state as never)) return null;
+  if (expectedInstruction !== undefined && payload.instruction.trim() !== expectedInstruction.trim()) return null;
+  if (!Array.isArray(payload.dropped) || payload.dropped.length > 64) return null;
+  if (
+    payload.settings.some(
+      (entry) =>
+        !isRecord(entry) ||
+        !hasOnlyKeys(entry, ["key", "value", "why"]) ||
+        !boundedString(entry.key, 256) ||
+        !boundedString(entry.value, 2_000, true) ||
+        !boundedString(entry.why, 240, true),
+    )
+  )
+    return null;
+  if (
+    payload.dropped.some(
+      (entry) =>
+        !isRecord(entry) ||
+        !hasOnlyKeys(entry, ["key", "reason"]) ||
+        !boundedString(entry.key, 256) ||
+        !boundedString(entry.reason, 240),
+    )
+  )
+    return null;
   if (payload.structured_inputs !== undefined) {
-    if (!isRecord(payload.structured_inputs)) return null;
+    if (!isRecord(payload.structured_inputs) || !hasOnlyKeys(payload.structured_inputs, ["runtime_trace", "topology"]))
+      return null;
     if (!isRecord(payload.structured_inputs.runtime_trace) || !isRecord(payload.structured_inputs.topology))
       return null;
   }
@@ -104,16 +179,69 @@ function trustedPlan(payload: unknown): AssistantModelPlanResponse | null {
  * which is read as "no channel", i.e. the panel keeps its previous behaviour.
  */
 export async function fetchAssistantModelDescriptor(
-  options: { signal?: AbortSignal } = {},
+  options: AssistantModelRequestOptions = {},
 ): Promise<AssistantModelDescriptorResponse | null> {
   try {
-    const { payload } = await apiRequestWithMetadata<AssistantModelDescriptorResponse>(
+    const { payload, schemaSetRevision, apiVersion } = await apiRequestWithMetadata<AssistantModelDescriptorResponse>(
       bridgePaths.assistantModelDescriptor(),
-      { ...(options.signal ? { signal: options.signal } : {}) },
+      {
+        headers: assistantModelHeaders(options.sessionId),
+        ...(options.signal ? { signal: options.signal } : {}),
+      },
     );
-    if (!isRecord(payload)) return null;
+    if (schemaSetRevision !== BRIDGE_SCHEMA_SET_REVISION || apiVersion !== ASSISTANT_MODEL_API_VERSION) return null;
+    if (
+      !isRecord(payload) ||
+      !hasOnlyKeys(payload, [
+        "schema_version",
+        "schema_set_revision",
+        "protocol",
+        "availability",
+        "configured",
+        "degradation_state",
+        "detail",
+        "provider",
+        "limits",
+      ])
+    )
+      return null;
+    if (
+      payload.schema_version !== ASSISTANT_MODEL_DESCRIPTOR_SCHEMA_VERSION ||
+      payload.schema_set_revision !== BRIDGE_SCHEMA_SET_REVISION
+    )
+      return null;
     if (payload.protocol !== ASSISTANT_MODEL_PROTOCOL) return null;
-    if (payload.configured !== true) return null;
+    if (
+      payload.configured !== true ||
+      payload.availability !== "available" ||
+      payload.degradation_state !== "available"
+    )
+      return null;
+    if (
+      !boundedString(payload.detail, 2_000) ||
+      !isRecord(payload.provider) ||
+      !hasOnlyKeys(payload.provider, ["configured", "provider_id", "model_id", "model_revision"])
+    )
+      return null;
+    if (
+      payload.provider.configured !== true ||
+      !boundedString(payload.provider.provider_id, 200) ||
+      !boundedString(payload.provider.model_id, 200) ||
+      !boundedString(payload.provider.model_revision, 200)
+    )
+      return null;
+    if (
+      !isRecord(payload.limits) ||
+      !hasOnlyKeys(payload.limits, ["maximum_instruction_characters", "maximum_settings"])
+    )
+      return null;
+    if (
+      !Number.isSafeInteger(payload.limits.maximum_instruction_characters) ||
+      payload.limits.maximum_instruction_characters < 1 ||
+      !Number.isSafeInteger(payload.limits.maximum_settings) ||
+      payload.limits.maximum_settings < 1
+    )
+      return null;
     return payload as unknown as AssistantModelDescriptorResponse;
   } catch {
     return null;
@@ -130,24 +258,54 @@ export async function fetchAssistantModelDescriptor(
  * no catalogue simply keeps the identity it already had.
  */
 export async function fetchAssistantModelCatalogue(
-  options: { signal?: AbortSignal } = {},
+  options: AssistantModelRequestOptions = {},
 ): Promise<AssistantModelCatalogueResponse | null> {
   try {
-    const { payload } = await apiRequestWithMetadata<AssistantModelCatalogueResponse>(
+    const { payload, schemaSetRevision, apiVersion } = await apiRequestWithMetadata<AssistantModelCatalogueResponse>(
       bridgePaths.assistantModelCatalogue(),
-      { ...(options.signal ? { signal: options.signal } : {}) },
+      {
+        headers: assistantModelHeaders(options.sessionId),
+        ...(options.signal ? { signal: options.signal } : {}),
+      },
     );
-    if (!isRecord(payload)) return null;
+    if (schemaSetRevision !== BRIDGE_SCHEMA_SET_REVISION || apiVersion !== ASSISTANT_MODEL_API_VERSION) return null;
+    if (
+      !isRecord(payload) ||
+      !hasOnlyKeys(payload, [
+        "schema_version",
+        "schema_set_revision",
+        "protocol",
+        "provider_id",
+        "models",
+        "count",
+        "selected_model",
+        "session_override",
+      ])
+    )
+      return null;
+    if (
+      payload.schema_version !== ASSISTANT_MODEL_CATALOGUE_SCHEMA_VERSION ||
+      payload.schema_set_revision !== BRIDGE_SCHEMA_SET_REVISION
+    )
+      return null;
     if (payload.protocol !== ASSISTANT_MODEL_PROTOCOL) return null;
     if (typeof payload.selected_model !== "string") return null;
     if (!Array.isArray(payload.models)) return null;
-    const models = payload.models.filter(
-      (entry): entry is string => typeof entry === "string" && entry.trim().length > 0,
-    );
+    if (payload.models.some((entry) => !boundedString(entry, 200))) return null;
+    const models = payload.models.filter((entry): entry is string => boundedString(entry, 200));
     // The contract promises at least one identity, and an empty catalogue would silently empty the
     // dropdown, so a list that lost every entry on the way here is refused rather than shown.
     const [head, ...tail] = models;
-    if (head === undefined) return null;
+    if (
+      head === undefined ||
+      models.length !== new Set(models).size ||
+      !Number.isSafeInteger(payload.count) ||
+      payload.count !== models.length ||
+      !boundedString(payload.selected_model, 200) ||
+      !models.includes(payload.selected_model) ||
+      typeof payload.session_override !== "boolean"
+    )
+      return null;
     return { ...(payload as unknown as AssistantModelCatalogueResponse), models: [head, ...tail] };
   } catch {
     return null;
@@ -157,31 +315,57 @@ export async function fetchAssistantModelCatalogue(
 /**
  * Asks the Bridge to use one model identity from now on.
  *
- * The switch is session-scoped: it takes effect for the next answer without restarting the backend,
+ * The switch is assistant-session-scoped: it takes effect for the next answer in that browser session
+ * without restarting the backend,
  * and it is forgotten when the Bridge process is restarted. A reply that claims to have written the
  * saved configuration is rejected, because the saved configuration belongs to the launcher and this
  * call is not allowed to change it. Every refusal is `null`, so a caller keeps its previous identity.
  */
 export async function selectAssistantModel(
   model: string,
-  options: { signal?: AbortSignal } = {},
+  options: AssistantModelRequestOptions = {},
 ): Promise<AssistantModelSelectionResponse | null> {
   try {
-    const { payload } = await apiRequestWithMetadata<AssistantModelSelectionResponse>(
+    const { payload, schemaSetRevision, apiVersion } = await apiRequestWithMetadata<AssistantModelSelectionResponse>(
       bridgePaths.selectAssistantModel(),
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...assistantModelHeaders(options.sessionId) },
         body: JSON.stringify({ model }),
         ...(options.signal ? { signal: options.signal } : {}),
       },
     );
-    if (!isRecord(payload)) return null;
+    if (schemaSetRevision !== BRIDGE_SCHEMA_SET_REVISION || apiVersion !== ASSISTANT_MODEL_API_VERSION) return null;
+    if (
+      !isRecord(payload) ||
+      !hasOnlyKeys(payload, [
+        "schema_version",
+        "schema_set_revision",
+        "protocol",
+        "provider_id",
+        "selected_model",
+        "previous_model",
+        "in_force",
+        "persisted",
+        "session_only",
+      ])
+    )
+      return null;
+    if (
+      payload.schema_version !== ASSISTANT_MODEL_SELECTION_SCHEMA_VERSION ||
+      payload.schema_set_revision !== BRIDGE_SCHEMA_SET_REVISION
+    )
+      return null;
     if (payload.protocol !== ASSISTANT_MODEL_PROTOCOL) return null;
     // A channel that claims to have persisted the choice, or to have made it permanent, is not trusted.
     if (payload.persisted !== false || payload.session_only !== true) return null;
     if (payload.in_force !== true) return null;
-    if (typeof payload.selected_model !== "string" || !payload.selected_model) return null;
+    if (
+      payload.selected_model !== model.trim() ||
+      !boundedString(payload.selected_model, 200) ||
+      !boundedString(payload.previous_model, 200)
+    )
+      return null;
     return payload as unknown as AssistantModelSelectionResponse;
   } catch {
     return null;
@@ -193,8 +377,12 @@ function parseFrameData(data: string): unknown {
   try {
     return parseJsonLossless(data);
   } catch {
-    return null;
+    throw new Error("invalid_sse_json");
   }
+}
+
+function streamProtocolFailure(outcome: { failure: string }, message = "模型回答格式不受支持。"): void {
+  if (!outcome.failure) outcome.failure = message;
 }
 
 export interface AssistantChatOutcome {
@@ -233,14 +421,18 @@ export async function streamAssistantChat(
     /** Receives the validated plan as soon as it arrives, so the panel can label the answer at once. */
     onPlan: (plan: AssistantModelPlanResponse) => void;
   },
-  options: { signal?: AbortSignal } = {},
+  options: AssistantModelRequestOptions = {},
 ): Promise<AssistantChatOutcome | null> {
   let response: Response;
   try {
     response = await fetch(`${apiRoots()[0]}${bridgePaths.streamAgentScenarioChat()}`, {
       method: "POST",
       cache: "no-store",
-      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+        ...assistantModelHeaders(options.sessionId),
+      },
       body: JSON.stringify({ messages: request.messages, panel_values: request.panel_values }),
       ...(options.signal ? { signal: options.signal } : {}),
     });
@@ -249,45 +441,104 @@ export async function streamAssistantChat(
     return options.signal?.aborted ? { answer: "", plan: null, failure: "", cancelled: true } : null;
   }
   if (!response.ok) return null;
+  if (
+    response.headers.get("x-tilesim-schema-set-revision") !== BRIDGE_SCHEMA_SET_REVISION ||
+    response.headers.get("x-tilesim-api-version") !== ASSISTANT_MODEL_API_VERSION
+  )
+    return null;
   const contentType = response.headers.get("content-type") || "";
   if (!contentType.includes("text/event-stream") || !response.body) return null;
 
   const outcome: AssistantChatOutcome = { answer: "", plan: null, failure: "", cancelled: false };
+  let sawDone = false;
+  let sawError = false;
+  let sawPlan = false;
+  const expectedInstruction = [...request.messages].reverse().find((message) => message.role === "user")?.content;
   try {
     for await (const frame of readSseFrames(response)) {
+      if (sawDone || sawError) {
+        streamProtocolFailure(outcome);
+        break;
+      }
       if (frame.event === "prose") {
         const payload = parseFrameData(frame.data);
-        if (isRecord(payload) && payload.schema_version === ASSISTANT_CHAT_SCHEMA_VERSION) {
-          const text = payload.text;
-          if (typeof text === "string") {
-            outcome.answer = text;
-            callbacks.onAnswer(text);
-          }
+        if (isRecord(payload) && payload.schema_version !== ASSISTANT_CHAT_SCHEMA_VERSION) continue;
+        if (
+          !isRecord(payload) ||
+          !hasOnlyKeys(payload, ["schema_version", "text"]) ||
+          !boundedString(payload.text, 24_000, true)
+        ) {
+          streamProtocolFailure(outcome);
+          break;
         }
+        outcome.answer = payload.text;
+        callbacks.onAnswer(payload.text);
         continue;
       }
       if (frame.event === "plan") {
-        const plan = trustedPlan(parseFrameData(frame.data));
+        if (sawPlan) {
+          streamProtocolFailure(outcome);
+          break;
+        }
+        const plan = trustedPlan(parseFrameData(frame.data), expectedInstruction);
         if (plan) {
           outcome.plan = plan;
+          sawPlan = true;
           callbacks.onPlan(plan);
-        }
+        } else streamProtocolFailure(outcome);
         continue;
       }
       if (frame.event === "error") {
         const payload = parseFrameData(frame.data);
-        outcome.failure =
-          isRecord(payload) && typeof payload.message === "string" && payload.message
-            ? payload.message
-            : "模型没有答完这次请求。";
+        if (
+          !isRecord(payload) ||
+          !hasOnlyKeys(payload, ["schema_version", "code", "message", "retryable"]) ||
+          payload.schema_version !== ASSISTANT_CHAT_SCHEMA_VERSION ||
+          !boundedString(payload.code, 128) ||
+          !boundedString(payload.message, 2_000) ||
+          typeof payload.retryable !== "boolean"
+        ) {
+          streamProtocolFailure(outcome);
+          break;
+        }
+        outcome.failure = payload.message;
+        sawError = true;
+        continue;
       }
+      if (frame.event === "done") {
+        const payload = parseFrameData(frame.data);
+        if (
+          !isRecord(payload) ||
+          !hasOnlyKeys(payload, ["schema_version"]) ||
+          payload.schema_version !== ASSISTANT_CHAT_SCHEMA_VERSION
+        ) {
+          streamProtocolFailure(outcome);
+          break;
+        }
+        sawDone = true;
+        continue;
+      }
+      streamProtocolFailure(outcome);
+      break;
     }
-  } catch {
+  } catch (error) {
     // A stream cut mid-answer still leaves the caller with whatever prose already arrived. A stop the
     // user asked for is reported as cancelled rather than as a failure, because it is not one.
     if (options.signal?.aborted) outcome.cancelled = true;
-    else if (!outcome.failure) outcome.failure = "模型回答的连接中断了。";
+    else if (!outcome.failure)
+      outcome.failure =
+        error instanceof Error && error.message === "invalid_sse_json"
+          ? "模型回答格式不受支持。"
+          : "模型回答的连接中断了。";
   }
+  if (!outcome.cancelled && !outcome.failure && (!sawDone || !outcome.plan)) outcome.failure = "模型回答没有正常结束。";
+  if (sawError && !outcome.failure) outcome.failure = "模型没有答完这次请求。";
+  // A plan is actionable only when the complete stream reached its normal
+  // terminal frame.  Providers/proxies can emit a plan and then fail or send
+  // an unknown frame; retaining that partial plan would let the caller apply
+  // data from an incomplete response.  The prose remains available for the
+  // user, but the plan is fail-closed.
+  if (outcome.failure || outcome.cancelled) outcome.plan = null;
   return outcome;
 }
 
@@ -308,14 +559,18 @@ export async function streamAssistantResultAnalysis(
     context: AssistantResultAnalysisContext;
   },
   callbacks: { onAnswer: (text: string) => void },
-  options: { signal?: AbortSignal } = {},
+  options: AssistantModelRequestOptions = {},
 ): Promise<AssistantResultAnalysisOutcome | null> {
   let response: Response;
   try {
     response = await fetch(`${apiRoots()[0]}${bridgePaths.streamAgentResultAnalysis()}`, {
       method: "POST",
       cache: "no-store",
-      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+        ...assistantModelHeaders(options.sessionId),
+      },
       body: JSON.stringify({ messages: request.messages, context: request.context }),
       ...(options.signal ? { signal: options.signal } : {}),
     });
@@ -345,34 +600,75 @@ export async function streamAssistantResultAnalysis(
     }
     return null;
   }
+  if (
+    response.headers.get("x-tilesim-schema-set-revision") !== BRIDGE_SCHEMA_SET_REVISION ||
+    response.headers.get("x-tilesim-api-version") !== ASSISTANT_MODEL_API_VERSION
+  )
+    return null;
   const contentType = response.headers.get("content-type") || "";
   if (!contentType.includes("text/event-stream") || !response.body) return null;
 
   const outcome: AssistantResultAnalysisOutcome = { answer: "", failure: "", cancelled: false };
+  let sawDone = false;
+  let sawError = false;
   try {
     for await (const frame of readSseFrames(response)) {
+      if (sawDone || sawError) {
+        streamProtocolFailure(outcome);
+        break;
+      }
       if (frame.event === "prose") {
         const payload = parseFrameData(frame.data);
-        if (isRecord(payload) && payload.schema_version === RESULT_ANALYSIS_CHAT_SCHEMA_VERSION) {
-          const text = payload.text;
-          if (typeof text === "string") {
-            outcome.answer = text;
-            callbacks.onAnswer(text);
-          }
+        if (isRecord(payload) && payload.schema_version !== RESULT_ANALYSIS_CHAT_SCHEMA_VERSION) continue;
+        if (
+          !isRecord(payload) ||
+          !hasOnlyKeys(payload, ["schema_version", "text"]) ||
+          !boundedString(payload.text, 24_000, true)
+        ) {
+          streamProtocolFailure(outcome);
+          break;
         }
+        outcome.answer = payload.text;
+        callbacks.onAnswer(payload.text);
         continue;
       }
       if (frame.event === "error") {
         const payload = parseFrameData(frame.data);
-        outcome.failure =
-          isRecord(payload) && typeof payload.message === "string" && payload.message
-            ? payload.message
-            : "模型没有答完这次结果分析。";
+        if (
+          !isRecord(payload) ||
+          !hasOnlyKeys(payload, ["schema_version", "code", "message", "retryable"]) ||
+          payload.schema_version !== RESULT_ANALYSIS_CHAT_SCHEMA_VERSION ||
+          !boundedString(payload.code, 128) ||
+          !boundedString(payload.message, 2_000) ||
+          typeof payload.retryable !== "boolean"
+        ) {
+          streamProtocolFailure(outcome);
+          break;
+        }
+        outcome.failure = payload.message;
+        sawError = true;
+        continue;
       }
+      if (frame.event === "done") {
+        const payload = parseFrameData(frame.data);
+        if (
+          !isRecord(payload) ||
+          !hasOnlyKeys(payload, ["schema_version"]) ||
+          payload.schema_version !== RESULT_ANALYSIS_CHAT_SCHEMA_VERSION
+        ) {
+          streamProtocolFailure(outcome);
+          break;
+        }
+        sawDone = true;
+        continue;
+      }
+      streamProtocolFailure(outcome);
+      break;
     }
   } catch {
     if (options.signal?.aborted) outcome.cancelled = true;
     else if (!outcome.failure) outcome.failure = "模型回答的连接中断了。";
   }
+  if (!outcome.cancelled && !outcome.failure && !sawDone) outcome.failure = "模型回答没有正常结束。";
   return outcome;
 }

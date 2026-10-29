@@ -5,18 +5,20 @@ import { useI18n } from "../../i18n";
 import InlineHelp from "../../components/InlineHelp.vue";
 import { topologyDeviceFields, topologyDeviceMaxItems, type SchemaFieldMeta } from "./input-schema-meta";
 import {
-  deviceIdsOf,
+  participantDeviceIdsOf,
   deviceReferences,
+  addTopologyDevice,
   parseJsonDocument,
   patchJsonDocument,
   removeDevice,
   renameDevice,
-  setDeviceCount,
+  setGpuCount,
   topologyDevicesOf,
   StructuredInputError,
   type DeviceCountChange,
   type JsonObject,
 } from "./structured-input";
+import { TOPOLOGY_NODE_TYPES, topologyNodeType } from "./topology-node-types";
 
 const props = withDefaults(defineProps<{ modelValue: string; fieldPath?: string }>(), { fieldPath: "" });
 const emit = defineEmits<{
@@ -50,9 +52,28 @@ const parsed = computed(() => parseJsonDocument(props.modelValue, "Fabric topolo
 const documentValue = computed<JsonObject | null>(() => (parsed.value.ok ? parsed.value.value : null));
 const devices = computed<unknown[] | null>(() => (documentValue.value ? topologyDevicesOf(documentValue.value) : null));
 const rowIndexes = computed(() => (devices.value || []).map((_, index) => index));
-const deviceCount = computed(() => devices.value?.length ?? 0);
+const deviceCount = computed(
+  () =>
+    devices.value?.filter(
+      (entry) =>
+        entry &&
+        typeof entry === "object" &&
+        !Array.isArray(entry) &&
+        topologyNodeType((entry as JsonObject).device_type).participant,
+    ).length ?? 0,
+);
+const selectedNewDeviceType = ref("GPU");
+const customNewDeviceType = ref("");
+const nodeTypeChoices = TOPOLOGY_NODE_TYPES;
+const customNodeChoice = {
+  value: "__custom__",
+  label: "自定义类型",
+  prefix: "node",
+  category: "unknown",
+  participant: false,
+} as const;
 const deviceTypeSuggestions = computed(() => {
-  const values = new Set<string>(["GPU"]);
+  const values = new Set<string>(nodeTypeChoices.map((entry) => entry.value));
   for (const value of devices.value || []) {
     if (value && typeof value === "object" && !Array.isArray(value)) {
       const type = (value as JsonObject).device_type;
@@ -100,7 +121,7 @@ function describeReferences(references: { domains: string[]; links: number[] }):
  */
 function announceDeviceIds(next: string) {
   const nextDocument = parseJsonDocument(next, "Fabric topology");
-  emit("device-count-change", { ids: nextDocument.ok ? deviceIdsOf(nextDocument.value) : [] });
+  emit("device-count-change", { ids: nextDocument.ok ? participantDeviceIdsOf(nextDocument.value) : [] });
 }
 
 function applyDeviceCount(event: Event) {
@@ -115,7 +136,7 @@ function applyDeviceCount(event: Event) {
     // box: a plain `let` would stay narrowed to `null` at the use site.
     const outcome: { change: DeviceCountChange | null } = { change: null };
     const next = patchJsonDocument(props.modelValue, "Fabric topology", (draft) => {
-      outcome.change = setDeviceCount(draft, count);
+      outcome.change = setGpuCount(draft, count);
     });
     emit("update:modelValue", next);
     localError.value = "";
@@ -138,26 +159,38 @@ function applyDeviceCount(event: Event) {
   }
 }
 
-/** The count box handles bulk changes; this button adds exactly one device. */
-function addOneDevice() {
-  const outcome: { change: DeviceCountChange | null } = { change: null };
+/** GPU count is a convenience control; other node roles are added explicitly. */
+function addDeviceOfType(deviceType: string) {
+  const customType = customNewDeviceType.value.trim();
+  const choice =
+    deviceType === customNodeChoice.value
+      ? { ...customNodeChoice, value: customType || "Unknown" }
+      : nodeTypeChoices.find((entry) => entry.value === deviceType) || topologyNodeType(deviceType);
+  if (deviceType === customNodeChoice.value && !customType) {
+    localError.value = t("自定义节点类型不能为空。");
+    return;
+  }
   try {
     const next = patchJsonDocument(props.modelValue, "Fabric topology", (draft) => {
-      outcome.change = setDeviceCount(draft, deviceCount.value + 1);
+      if (choice.participant) setGpuCount(draft, deviceCount.value + 1);
+      else addTopologyDevice(draft, choice.value, choice.prefix);
     });
     emit("update:modelValue", next);
     localError.value = "";
-    const added = outcome.change?.added || [];
-    if (added.length) {
-      emit("notice", {
-        tone: "info",
-        message: t("已新增设备 {device}，设备类型默认 GPU；记得把它勾进需要的域。", { device: added.join("、") }),
-      });
-    }
+    emit("notice", {
+      tone: "info",
+      message: choice.participant
+        ? t("已新增 GPU。")
+        : t("已新增 {type} 节点；它不会自动成为请求参与设备。", { type: choice.label }),
+    });
     announceDeviceIds(next);
   } catch (error) {
     localError.value = error instanceof StructuredInputError ? error.message : String(error);
   }
+}
+
+function addOneDevice() {
+  addDeviceOfType(selectedNewDeviceType.value);
 }
 
 function updateField(field: SchemaFieldMeta, index: number, event: Event) {
@@ -237,40 +270,52 @@ function cellPath(index: number, key: string): string {
 
 <template>
   <section class="device-inventory" :aria-label="t('设备清单')">
-    <header class="structured-block__header">
+    <header class="structured-block__header device-inventory__header">
       <Server :size="16" />
       <div>
         <span
           ><strong>{{ t("设备清单") }}</strong
-          ><InlineHelp
-            :text="
-              t('最多 {max} 台。新增设备按 gpu0、gpu1 的顺序命名，自动跳过重名。', {
-                max: topologyDeviceMaxItems,
-              })
-            "
+          ><InlineHelp :text="t('GPU 会参与请求；交换机、路由器等只作为拓扑节点。')"
         /></span>
       </div>
       <label class="device-inventory__count"
-        ><span>{{ t("卡数") }}</span
+        ><span>{{ t("GPU 卡数") }}</span
         ><input
           type="number"
           min="0"
           :max="topologyDeviceMaxItems"
           step="1"
           :value="deviceCount"
-          :aria-label="t('卡数')"
+          :aria-label="t('GPU 卡数')"
           @change="applyDeviceCount"
       /></label>
-      <button type="button" class="button button--secondary" @click="addOneDevice">
-        <Plus :size="15" />{{ t("新增设备") }}
-      </button>
+      <div class="device-inventory__add">
+        <select v-model="selectedNewDeviceType" :aria-label="t('新增节点类型')">
+          <option v-for="choice in nodeTypeChoices" :key="choice.value" :value="choice.value">
+            {{ choice.label }}
+          </option>
+          <option :value="customNodeChoice.value">{{ t(customNodeChoice.label) }}</option>
+        </select>
+        <input
+          v-if="selectedNewDeviceType === customNodeChoice.value"
+          v-model="customNewDeviceType"
+          class="device-inventory__custom-type"
+          :placeholder="t('例如：DPU')"
+          :aria-label="t('自定义节点类型')"
+        />
+        <button type="button" class="button button--secondary" @click="addOneDevice">
+          <Plus :size="15" />{{ t("新增节点") }}
+        </button>
+      </div>
     </header>
 
     <p v-if="!parsed.ok" class="structured-note structured-note--warning" role="alert">{{ parsed.error }}</p>
     <p v-else-if="!devices" class="structured-note structured-note--warning" role="alert">
       {{ t("topology JSON 缺少 devices 数组，设备清单暂不可编辑。") }}
     </p>
-    <p v-else-if="!devices.length" class="structured-note">{{ t("当前没有设备。把「卡数」改为大于 0 即可新增。") }}</p>
+    <p v-else-if="!devices.length" class="structured-note">
+      {{ t("当前没有节点。可先设置 GPU 卡数，或从新增节点菜单选择交换机等拓扑节点。") }}
+    </p>
 
     <ul v-else class="device-inventory__rows">
       <li v-for="index in rowIndexes" :key="`device-row-${index}`" class="device-inventory-row">
@@ -282,7 +327,29 @@ function cellPath(index: number, key: string): string {
           :title="field.key"
         >
           <span>{{ deviceLabel(field) }}</span>
+          <select
+            v-if="field.key === 'device_type'"
+            :value="cellValue(index, field.key)"
+            :aria-label="`${deviceLabel(field)} ${index + 1}`"
+            :aria-invalid="fieldPath === cellPath(index, field.key)"
+            @change="updateField(field, index, $event)"
+          >
+            <option value="">{{ t("未指定") }}</option>
+            <option v-for="choice in nodeTypeChoices" :key="`${index}-${choice.value}`" :value="choice.value">
+              {{ choice.label }}
+            </option>
+            <option
+              v-if="
+                cellValue(index, field.key) &&
+                !nodeTypeChoices.some((choice) => choice.value === cellValue(index, field.key))
+              "
+              :value="cellValue(index, field.key)"
+            >
+              {{ cellValue(index, field.key) }}
+            </option>
+          </select>
           <input
+            v-else
             type="text"
             spellcheck="false"
             :value="cellValue(index, field.key)"

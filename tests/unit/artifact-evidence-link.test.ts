@@ -19,6 +19,10 @@ describe("artifact evidence links", () => {
       artifactId: "execution-envelope",
       pointer: "/stages/2",
     });
+    expect(parseArtifactPointerSource("execution-replay:/collective_steps/0")).toEqual({
+      artifactId: "execution-replay",
+      pointer: "/collective_steps/0",
+    });
     expect(parseArtifactPointerSource("metrics:/request_metrics/*/ttft_ps")).toBeNull();
     expect(parseArtifactPointerSource("metrics:/request_metrics/0 + validation:/checks/0")).toBeNull();
   });

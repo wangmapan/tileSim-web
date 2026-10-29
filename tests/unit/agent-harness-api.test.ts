@@ -328,4 +328,97 @@ describe("formal Agent Harness v1 read-only adapter", () => {
     expect(projection.source).toBe("polling");
     expect(fetchMock.mock.calls[2][1].headers["Last-Event-ID"]).toBe("2");
   });
+
+  it("does not downgrade a malformed SSE workflow event into polling", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response({ operation: operation("running"), events: [] }))
+      .mockResolvedValueOnce(
+        new Response(`event: workflow\ndata: ${JSON.stringify(event(0, "running"))}\n\n`, {
+          status: 200,
+          headers: {
+            ...headers,
+            "content-type": "text/event-stream; charset=utf-8",
+          },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(observeAgentHarnessOperation("op-test", { maxPollAttempts: 1 })).rejects.toMatchObject({
+      code: "invalid_event_sequence",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects a terminal SSE frame that is not bound to the durable operation", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response({ operation: operation("running"), events: [] }))
+      .mockResolvedValueOnce(
+        new Response(`event: terminal\ndata: ${JSON.stringify({ operation_id: "op-test", state: "completed" })}\n\n`, {
+          status: 200,
+          headers: {
+            ...headers,
+            "content-type": "text/event-stream; charset=utf-8",
+          },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(observeAgentHarnessOperation("op-test", { maxPollAttempts: 1 })).rejects.toMatchObject({
+      code: "operation_binding_mismatch",
+    });
+  });
+
+  it.each(["recovery_required", "manual_intervention_required"] as const)(
+    "treats %s as an observation boundary without presenting it as an ordinary terminal",
+    (boundaryState) => {
+      const projection = projectAgentHarnessEvents(
+        [{ ...event(1, boundaryState), terminal: true }],
+        operation("running"),
+      );
+      expect(projection.state).toBe(boundaryState);
+      expect(projection.requires_recovery).toBe(true);
+      expect(projection.terminal).toBe(false);
+    },
+  );
+
+  it("does not hide a durable recovery state when its event replay is incomplete", () => {
+    const projection = projectAgentHarnessEvents([event(1, "queued")], operation("recovery_required"));
+    expect(projection.state).toBe("recovery_required");
+    expect(projection.requires_recovery).toBe(true);
+    expect(projection.terminal).toBe(false);
+  });
+
+  it.each(["recovery_required", "manual_intervention_required"] as const)(
+    "accepts a %s terminal observation frame emitted by the Bridge",
+    async (boundaryState) => {
+      const recoveryEvent = { ...event(1, boundaryState), terminal: true };
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(response({ operation: operation("running"), events: [] }))
+        .mockResolvedValueOnce(
+          new Response(
+            [
+              `id: 1\nevent: workflow\ndata: ${JSON.stringify(recoveryEvent)}\n\n`,
+              `event: terminal\ndata: ${JSON.stringify({ operation_id: "op-test", state: boundaryState })}\n\n`,
+            ].join(""),
+            {
+              status: 200,
+              headers: {
+                ...headers,
+                "content-type": "text/event-stream; charset=utf-8",
+              },
+            },
+          ),
+        );
+      vi.stubGlobal("fetch", fetchMock);
+
+      const projection = await observeAgentHarnessOperation("op-test", { maxPollAttempts: 1 });
+
+      expect(projection.source).toBe("sse");
+      expect(projection.state).toBe(boundaryState);
+      expect(projection.requires_recovery).toBe(true);
+      expect(projection.terminal).toBe(false);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    },
+  );
 });

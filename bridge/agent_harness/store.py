@@ -295,6 +295,15 @@ class DurableHarnessStore:
             row = self._connection.execute("SELECT * FROM operations WHERE operation_id=? AND deleted_at IS NULL", (operation_id,)).fetchone()
             return self._row_document(row) if row else None
 
+    def operation_ids_for_run(self, run_id: str) -> list[str]:
+        """Return only operation roots explicitly bound to ``run_id``."""
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT operation_id FROM stage3_executions WHERE run_id=? ORDER BY operation_id",
+                (run_id,),
+            ).fetchall()
+            return [str(row["operation_id"]) for row in rows]
+
     def get_by_idempotency(self, key: str) -> dict[str, Any] | None:
         with self._lock:
             row = self._connection.execute("SELECT * FROM operations WHERE idempotency_key=? AND deleted_at IS NULL", (key,)).fetchone()
@@ -638,7 +647,13 @@ class DurableHarnessStore:
                     changed += 1
         return changed
 
-    def delete_operation(self, operation_id: str) -> bool:
+    def retain_operation_tombstone(self, operation_id: str) -> bool:
+        """Redact an operation while retaining its tombstone for retention.
+
+        This is intentionally not the public user-erasure path.  Keeping the
+        explicit name prevents a caller from mistaking retention redaction for
+        deletion of the operation graph.
+        """
         with self._lock:
             row = self._connection.execute("SELECT operation_id FROM operations WHERE operation_id=? AND deleted_at IS NULL", (operation_id,)).fetchone()
             if not row:
@@ -654,6 +669,101 @@ class DurableHarnessStore:
                     (timestamp, operation_id),
                 )
             return True
+
+    def delete_operation(self, operation_id: str) -> bool:
+        """Backward-compatible retention wrapper.
+
+        New code must call :meth:`retain_operation_tombstone`; this alias is
+        kept only for existing retention tests and callers.
+        """
+
+        return self.retain_operation_tombstone(operation_id)
+
+    def purge_operation_graph_permanently(
+        self,
+        operation_id: str,
+        *,
+        principal: str | None = None,
+        workspace_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Erase an operation and every row owned by its operation graph.
+
+        ``retain_operation_tombstone`` is the retention/soft-delete API.
+        User-requested erasure must use this method: a single
+        SQLite transaction removes the operation's events, checkpoints,
+        tool calls, approvals, side effects, drafts, validations, approval
+        actions and executions before deleting the root row.  The response is
+        deliberately a small audit projection and never contains payloads.
+        """
+        with self._lock:
+            row = self._connection.execute("SELECT * FROM operations WHERE operation_id=?", (operation_id,)).fetchone()
+            if row is None:
+                return {"status": "not_found", "store": "harness", "resource_id": operation_id}
+            document = self._decode(row["document_json"], {})
+            owner_principal = document.get("principal")
+            owner_workspace = document.get("workspace_id")
+            if principal is not None and (not owner_principal or owner_principal != principal):
+                raise HarnessStoreError("principal_mismatch", "Operation does not belong to the caller.")
+            if workspace_id is not None and (not owner_workspace or owner_workspace != workspace_id):
+                raise HarnessStoreError("workspace_mismatch", "Operation does not belong to the caller workspace.")
+            counts: dict[str, int] = {}
+            self._connection.execute("BEGIN IMMEDIATE")
+            try:
+                # Delete children explicitly even though foreign keys are
+                # enabled: old databases may have been created before the
+                # full cascade graph was introduced.
+                draft_rows = self._connection.execute("SELECT draft_id FROM stage2_drafts WHERE operation_id=?", (operation_id,)).fetchall()
+                draft_ids = [row["draft_id"] for row in draft_rows]
+                if draft_ids:
+                    placeholders = ",".join("?" for _ in draft_ids)
+                    for table, column in (
+                        ("stage2_approval_actions", "approval_id"),
+                        ("stage2_approvals", "draft_id"),
+                        ("stage2_validation_actions", "draft_id"),
+                        ("stage2_validations", "draft_id"),
+                    ):
+                        if table == "stage2_approval_actions":
+                            sql = f"DELETE FROM {table} WHERE approval_id IN (SELECT approval_id FROM stage2_approvals WHERE draft_id IN ({placeholders}))"
+                        elif table == "stage2_validation_actions":
+                            sql = f"DELETE FROM {table} WHERE draft_id IN ({placeholders})"
+                        else:
+                            sql = f"DELETE FROM {table} WHERE draft_id IN ({placeholders})"
+                        cursor = self._connection.execute(sql, draft_ids)
+                        counts[table] = int(cursor.rowcount)
+                    cursor = self._connection.execute(f"DELETE FROM stage2_drafts WHERE draft_id IN ({placeholders})", draft_ids)
+                    counts["stage2_drafts"] = int(cursor.rowcount)
+                for table in ("stage3_executions", "events", "checkpoints", "tool_calls", "approvals", "side_effects"):
+                    cursor = self._connection.execute(f"DELETE FROM {table} WHERE operation_id=?", (operation_id,))
+                    counts[table] = int(cursor.rowcount)
+                cursor = self._connection.execute("DELETE FROM operations WHERE operation_id=?", (operation_id,))
+                counts["operations"] = int(cursor.rowcount)
+                self._connection.commit()
+            except BaseException:
+                self._connection.rollback()
+                raise
+            return {"status": "deleted", "store": "harness", "resource_id": operation_id, "deleted_rows": counts}
+
+    def delete_operation_permanently(
+        self,
+        operation_id: str,
+        *,
+        principal: str | None = None,
+        workspace_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Backward-compatible alias for permanent graph erasure.
+
+        User-facing deletion must call ``purge_operation_graph_permanently``
+        (normally through ``AgentDeletionCoordinator``).  This legacy alias is
+        retained only for older retention/test callers and should not be used
+        by new route code; unlike ``delete_operation`` it removes the complete
+        operation graph.
+        """
+
+        return self.purge_operation_graph_permanently(
+            operation_id,
+            principal=principal,
+            workspace_id=workspace_id,
+        )
 
     def purge_expired(self, *, now_iso: str | None = None) -> int:
         now_iso = now_iso or utc_now()

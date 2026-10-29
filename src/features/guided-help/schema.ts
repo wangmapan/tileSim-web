@@ -2,6 +2,7 @@ export const professionalRoutedGuideIds = [
   "overview",
   "experiment",
   "execution",
+  "replay",
   "metrics",
   "fabric",
   "attribution",

@@ -8,7 +8,6 @@ import {
   MousePointer2,
   Plus,
   Trash2,
-  Unlink,
   ZoomIn,
   ZoomOut,
 } from "@lucide/vue";
@@ -17,12 +16,15 @@ import InlineHelp from "../../components/InlineHelp.vue";
 import DeviceInventoryForm from "./DeviceInventoryForm.vue";
 import DomainInventoryForm from "./DomainInventoryForm.vue";
 import TopologyLinkProperties from "./TopologyLinkProperties.vue";
-import {
-  moduleBindingFields,
-  moduleBindingOverrideFields,
-  topologyModuleBindingMaxItems,
-  type SchemaFieldMeta,
-} from "./input-schema-meta";
+import bridgeIllustration from "../../assets/topology-nodes/bridge.png";
+import cpuHostIllustration from "../../assets/topology-nodes/cpu-host.png";
+import gpuIllustration from "../../assets/topology-nodes/gpu.png";
+import nicIllustration from "../../assets/topology-nodes/nic.png";
+import routerIllustration from "../../assets/topology-nodes/router.png";
+import storageIllustration from "../../assets/topology-nodes/storage.png";
+import switchIllustration from "../../assets/topology-nodes/switch.png";
+import unknownIllustration from "../../assets/topology-nodes/unknown.png";
+import { moduleBindingFields, moduleBindingOverrideFields, type SchemaFieldMeta } from "./input-schema-meta";
 import {
   addModuleBinding,
   moduleBindingNamesOf,
@@ -43,6 +45,8 @@ import {
   type TopologyDocument,
   type TopologyLink,
 } from "./topology-graph";
+import { topologyNodeCategory, topologyNodeLabel, topologyNodeType } from "./topology-node-types";
+import { layoutTopology } from "./topology-layout";
 
 const props = withDefaults(
   defineProps<{
@@ -50,9 +54,8 @@ const props = withDefaults(
     fieldPath?: string;
     readOnly?: boolean;
     showJson?: boolean;
-    showModuleBindings?: boolean;
   }>(),
-  { fieldPath: "", readOnly: false, showJson: true, showModuleBindings: true },
+  { fieldPath: "", readOnly: false, showJson: true },
 );
 const emit = defineEmits<{
   (event: "update:modelValue", value: string): void;
@@ -108,6 +111,17 @@ const ARRANGEMENT_CARD_HEIGHT = 72;
 const ARRANGEMENT_INNER_X_GAP = 150;
 const ARRANGEMENT_ROW_GAP = 48;
 const ARRANGEMENT_SIDE_INSET = 48;
+const NODE_HALF_WIDTH = 68;
+const NODE_HALF_HEIGHT = 36;
+const topologyIllustrations: Record<string, string> = {
+  bridge: bridgeIllustration,
+  cpu: cpuHostIllustration,
+  gpu: gpuIllustration,
+  nic: nicIllustration,
+  router: routerIllustration,
+  storage: storageIllustration,
+  switch: switchIllustration,
+};
 const graph = computed(() => parsed.value.document);
 const links = computed(() => graph.value?.links || []);
 const domains = computed(() => graph.value?.domains || []);
@@ -192,12 +206,14 @@ const defaultCanvasHeight = computed(() =>
 const arrangedCanvasHeight = computed(() =>
   Math.max(
     240,
-    DEVICE_Y_START +
-      arrangementRows.value.reduce(
-        (height, row) => height + Math.max(...row.map((group) => group.height)) + ARRANGEMENT_GROUP_ROW_GAP,
-        0,
-      ) +
-      44,
+    links.value.length
+      ? Math.max(...Object.values(positions.value).map((position) => position.y), DEVICE_Y_START) + 92
+      : DEVICE_Y_START +
+          arrangementRows.value.reduce(
+            (height, row) => height + Math.max(...row.map((group) => group.height)) + ARRANGEMENT_GROUP_ROW_GAP,
+            0,
+          ) +
+          44,
   ),
 );
 const canvasHeight = computed(() =>
@@ -215,7 +231,7 @@ const WORKSPACE_HEIGHT = 520;
 // The SVG viewport stays fixed while the scene can extend beyond it. That is
 // what makes the workspace effectively infinite: large layouts are explored by
 // panning instead of shrinking the whole graph to fit.
-const viewBoxHeight = computed(() => WORKSPACE_HEIGHT);
+const viewBoxHeight = computed(() => Math.max(WORKSPACE_HEIGHT, canvasHeight.value));
 const sceneOffsetY = computed(() => Math.max(0, (viewBoxHeight.value - canvasHeight.value) / 2));
 const sceneTransform = computed(() => {
   const centerX = CANVAS_WIDTH / 2;
@@ -302,14 +318,18 @@ onBeforeUnmount(() => {
 
 function layoutSignature(document: TopologyDocument) {
   const deviceSignature = document.devices
-    .map((device) => `${device.device_id}:${device.group_id || ""}`)
+    .map((device) => `${device.device_id}:${device.device_type || ""}:${device.group_id || ""}`)
     .sort()
     .join("|");
   const domainSignature = document.domains
     .map((domain) => `${domain.domain_id}:${domain.domain_type}:${[...domain.member_devices].sort().join(",")}`)
     .sort()
     .join("|");
-  return `${deviceSignature}||${domainSignature}`;
+  const linkSignature = (document.links || [])
+    .map((link) => `${link.src_device}:${link.dst_device}:${link.domain_id}`)
+    .sort()
+    .join("|");
+  return `${deviceSignature}||${domainSignature}||${linkSignature}`;
 }
 
 function columnX(index: number, columns: number) {
@@ -338,6 +358,13 @@ function resetPositions(items: TopologyDevice[]) {
 }
 function arrangeByDomain() {
   if (props.readOnly || !devices.value.length) return;
+  if (links.value.length) {
+    positions.value = layoutTopology(devices.value, links.value, domains.value);
+    arrangementApplied.value = true;
+    if (graph.value) arrangementSignature.value = layoutSignature(graph.value);
+    pendingConnection.value = null;
+    return;
+  }
   const next: Record<string, { x: number; y: number }> = {};
   let groupStartY = DEVICE_Y_START;
   arrangementRows.value.forEach((row) => {
@@ -443,7 +470,7 @@ function deviceAtPoint(event: PointerEvent, excludeId = "") {
   return devices.value.find((device) => {
     if (device.device_id === excludeId) return false;
     const position = positions.value[device.device_id];
-    return position && Math.abs(p.x - position.x) <= 62 && Math.abs(p.y - position.y) <= 36;
+    return position && Math.abs(p.x - position.x) <= NODE_HALF_WIDTH && Math.abs(p.y - position.y) <= NODE_HALF_HEIGHT;
   });
 }
 function svgForEvent(event: PointerEvent) {
@@ -709,7 +736,27 @@ function eventValue(event: Event) {
   return (event.target as HTMLInputElement | HTMLSelectElement | null)?.value || "";
 }
 function deviceLabel(device: TopologyDevice) {
-  return device.device_type ? `${device.device_id} · ${device.device_type}` : device.device_id;
+  return device.device_type ? `${device.device_id} · ${topologyNodeLabel(device.device_type)}` : device.device_id;
+}
+function compactNodeText(value: string, limit: number) {
+  return [...value].length > limit ? `${[...value].slice(0, Math.max(1, limit - 1)).join("")}…` : value;
+}
+function deviceCardId(device: TopologyDevice) {
+  return compactNodeText(device.device_id, 18);
+}
+function deviceCardType(device: TopologyDevice) {
+  return compactNodeText(topologyNodeLabel(device.device_type), 14);
+}
+function deviceIllustration(device: TopologyDevice) {
+  const key = topologyNodeType(device.device_type).value.trim().toLowerCase();
+  return topologyIllustrations[key] || unknownIllustration;
+}
+function deviceTitle(device: TopologyDevice) {
+  return t("设备 {device}，类型 {type}，{domain}", {
+    device: deviceLabel(device),
+    type: device.device_type || t("未指定"),
+    domain: deviceDomainLabel(device),
+  });
 }
 function linkLabel(link: TopologyLink) {
   return t("连接 {src} 与 {dst}，domain {domain}，{kind}", {
@@ -727,7 +774,7 @@ function linkKindLabel(link: TopologyLink) {
   return t(linkKind(link) === "inside" ? "域内通信" : "跨域通信");
 }
 function linkKindText(link: TopologyLink) {
-  return `${linkKindLabel(link)} · ${link.domain_id}${link.link_id ? ` · ${link.link_id}` : ""}`;
+  return `${linkKindLabel(link)} · ${compactNodeText(link.domain_id, 14)}`;
 }
 function linkBadgeWidth(link: TopologyLink) {
   return Math.min(190, Math.max(92, [...linkKindText(link)].length * 7 + 18));
@@ -737,7 +784,7 @@ function deviceDomainLabel(device: TopologyDevice) {
     .filter((domain) => domain.member_devices.includes(device.device_id))
     .map((domain) => domain.domain_id);
   if (!ids.length) return t("未入域");
-  return t("域 · {domains}", { domains: ids.length === 1 ? ids[0] : `${ids[0]} +${ids.length - 1}` });
+  return t("域 {domains}", { domains: ids.length === 1 ? ids[0] : `${ids[0]} +${ids.length - 1}` });
 }
 function linkMidpoint(link: TopologyLink) {
   const source = positions.value[link.src_device];
@@ -745,47 +792,113 @@ function linkMidpoint(link: TopologyLink) {
   if (!source || !target) return { x: 0, y: 0 };
   if (linkKind(link) === "cross") {
     const controlY = Math.max(20, (source.y + target.y) / 2 - 60);
-    return { x: (source.x + target.x) / 2, y: (source.y + target.y) / 4 + controlY / 2 };
+    return {
+      x: (source.x + target.x) / 2,
+      y: (source.y + 2 * controlY + target.y) / 4,
+    };
   }
   return { x: (source.x + target.x) / 2, y: (source.y + target.y) / 2 };
 }
-function linkBadgeBasePosition(link: TopologyLink) {
+function crossLabelLane(link: TopologyLink, index: number) {
+  const source = positions.value[link.src_device];
+  const target = positions.value[link.dst_device];
+  if (!source || !target) return { x: 0, y: 0 };
+  // Cross-domain edges are visually noisy at the geometric midpoint (the
+  // exact place where several diagonals meet). Alternate two side rails and
+  // use a small vertical rhythm so every badge remains legible without
+  // relying on collision-dependent cascading.
+  const side = index % 2 === 0 ? 1 : -1;
+  const vertical = ((index % 3) - 1) * 28;
+  const horizontal = Math.abs(target.y - source.y) < 30 ? 0 : side * 96;
+  return {
+    x: horizontal,
+    y: Math.abs(target.y - source.y) < 30 ? -48 + vertical : vertical,
+  };
+}
+function linkParallelOffsetVector(link: TopologyLink, index: number) {
+  const source = positions.value[link.src_device];
+  const target = positions.value[link.dst_device];
+  if (!source || !target) return { x: 0, y: 0 };
+  const peers = links.value
+    .map((candidate, peerIndex) => ({ candidate, peerIndex }))
+    .filter(
+      ({ candidate }) =>
+        (candidate.src_device === link.src_device && candidate.dst_device === link.dst_device) ||
+        (candidate.src_device === link.dst_device && candidate.dst_device === link.src_device),
+    );
+  if (peers.length < 2) return { x: 0, y: 0 };
+  const slot = peers.findIndex(({ peerIndex }) => peerIndex === index);
+  const offset = (slot - (peers.length - 1) / 2) * 10;
+  const length = Math.hypot(target.x - source.x, target.y - source.y) || 1;
+  return {
+    x: -((target.y - source.y) / length) * offset,
+    y: ((target.x - source.x) / length) * offset,
+  };
+}
+function linkBadgeBasePosition(link: TopologyLink, index = -1) {
   const midpoint = linkMidpoint(link);
-  if (linkKind(link) === "cross") return midpoint;
+  const offset = index >= 0 ? linkParallelOffsetVector(link, index) : { x: 0, y: 0 };
+  if (linkKind(link) === "cross") {
+    const lane = crossLabelLane(link, index);
+    return { x: midpoint.x + lane.x + offset.x, y: midpoint.y + lane.y + offset.y };
+  }
   const source = positions.value[link.src_device];
   const target = positions.value[link.dst_device];
   if (!source || !target) return midpoint;
   const horizontal = Math.abs(target.x - source.x) >= Math.abs(target.y - source.y);
-  return horizontal ? { x: midpoint.x, y: midpoint.y - 42 } : { x: midpoint.x + 82, y: midpoint.y };
+  return horizontal
+    ? { x: midpoint.x + offset.x, y: midpoint.y - 42 + offset.y }
+    : { x: midpoint.x + 82 + offset.x, y: midpoint.y + offset.y };
 }
 const linkBadgePositions = computed(() => {
-  const basePositions = links.value.map((link) => linkBadgeBasePosition(link));
-  const collisionGroups = new Map<string, number[]>();
-  basePositions.forEach((position, index) => {
-    // A 28px bucket keeps exact and near-exact labels together without
-    // repeatedly scanning every link for every badge. Exact parallel links
-    // therefore stay cheap even in large synthetic topologies.
-    const key = `${Math.round(position.x / 28)}:${Math.round(position.y / 28)}`;
-    const group = collisionGroups.get(key) || [];
-    group.push(index);
-    collisionGroups.set(key, group);
-  });
+  const basePositions = links.value.map((link, index) => linkBadgeBasePosition(link, index));
   const result = basePositions.map((position) => ({ ...position }));
-  collisionGroups.forEach((indexes) => {
-    indexes.forEach((linkIndex, slot) => {
-      const link = links.value[linkIndex];
-      if (!link) return;
-      const offset = (slot - (indexes.length - 1) / 2) * 22;
-      result[linkIndex] = {
-        x: basePositions[linkIndex].x,
-        y: basePositions[linkIndex].y + offset,
-      };
-    });
+  const placed: { index: number; x: number; y: number; width: number; height: number }[] = [];
+  const nodeBoxes = devices.value.map((device) => {
+    const position = positions.value[device.device_id];
+    return position ? { x: position.x, y: position.y, width: NODE_HALF_WIDTH * 2, height: NODE_HALF_HEIGHT * 2 } : null;
   });
+  const intersectsNode = (x: number, y: number, width: number, height: number) =>
+    nodeBoxes.some(
+      (node) =>
+        node &&
+        Math.abs(x - node.x) < (width + node.width) / 2 + 16 &&
+        Math.abs(y - node.y) < (height + node.height) / 2 + 16,
+    );
+  [...basePositions.keys()]
+    .sort((left, right) => basePositions[left].y - basePositions[right].y || left - right)
+    .forEach((index) => {
+      const base = basePositions[index];
+      const width = linkBadgeWidth(links.value[index]);
+      const candidates = [
+        { x: base.x, y: base.y },
+        { x: base.x, y: base.y - 30 },
+        { x: base.x, y: base.y + 30 },
+        { x: base.x, y: base.y + 60 },
+        { x: base.x, y: base.y + 86 },
+        { x: base.x, y: base.y + 112 },
+        { x: base.x - Math.min(120, width / 2 + 30), y: base.y },
+        { x: base.x + Math.min(120, width / 2 + 30), y: base.y },
+        ...Array.from({ length: 8 }, (_, attempt) => ({ x: base.x, y: base.y - 60 - attempt * 26 })),
+      ];
+      const chosen = candidates.find(
+        (candidate) =>
+          candidate.x - width / 2 >= 12 &&
+          candidate.x + width / 2 <= CANVAS_WIDTH - 12 &&
+          !intersectsNode(candidate.x, candidate.y, width, 18) &&
+          !placed.some(
+            (other) =>
+              Math.abs(candidate.x - other.x) < (width + other.width) / 2 + 12 &&
+              Math.abs(candidate.y - other.y) < (18 + other.height) / 2 + 8,
+          ),
+      ) || { x: base.x, y: base.y };
+      result[index] = chosen;
+      placed.push({ index, ...chosen, width, height: 18 });
+    });
   return result;
 });
 function linkBadgePosition(link: TopologyLink, index: number) {
-  return linkBadgePositions.value[index] || linkBadgeBasePosition(link);
+  return linkBadgePositions.value[index] || linkBadgeBasePosition(link, index);
 }
 function linkPath(link: TopologyLink) {
   const source = positions.value[link.src_device];
@@ -793,6 +906,11 @@ function linkPath(link: TopologyLink) {
   if (!source || !target) return "";
   const controlY = Math.max(20, (source.y + target.y) / 2 - 60);
   return `M ${source.x} ${source.y} Q ${(source.x + target.x) / 2} ${controlY} ${target.x} ${target.y}`;
+}
+function linkParallelOffset(link: TopologyLink, index: number) {
+  const offset = linkParallelOffsetVector(link, index);
+  if (!offset.x && !offset.y) return "";
+  return `translate(${offset.x.toFixed(2)} ${offset.y.toFixed(2)})`;
 }
 
 const moduleBindings = computed<Record<string, unknown>[]>(
@@ -977,16 +1095,7 @@ function dropModule(index: number) {
     @keydown="keydown"
   >
     <div class="topology-editor__toolbar">
-      <div>
-        <strong>{{ t("显卡连接") }}</strong>
-        <InlineHelp
-          :text="
-            readOnly
-              ? t('只读预览：改下面的 JSON 文本，显卡和连线会立刻跟着变。')
-              : t('空白区域可平移画布；拖动显卡调整位置；拖到另一张卡新增连接；再次拖同一对移除连接。')
-          "
-        />
-      </div>
+      <strong class="visually-hidden">{{ t("拓扑连接") }}</strong>
       <div v-if="!readOnly" class="topology-editor__toolbar-actions">
         <button
           v-if="hasGraph"
@@ -994,9 +1103,8 @@ function dropModule(index: number) {
           class="button button--secondary button--small topology-arrange-button"
           @click="arrangeByDomain"
         >
-          <LayoutGrid :size="14" />{{ t("按域一键排布") }}
+          <LayoutGrid :size="14" />{{ t("自动排布") }}
         </button>
-        <InlineHelp :text="t('只调整画布位置，不修改拓扑 JSON。')" />
         <button
           v-if="hasGraph"
           type="button"
@@ -1008,13 +1116,12 @@ function dropModule(index: number) {
         >
           <Trash2 :size="14" />{{ t("清除画布") }}
         </button>
-        <span class="topology-status-chip topology-status-chip--simulation">{{ t("拖拽编辑") }}</span>
       </div>
     </div>
     <div v-if="hasGraph" class="topology-summary" :aria-label="t('拓扑摘要')">
       <div class="topology-summary__metric">
         <strong>{{ devices.length }}</strong
-        ><span>{{ t("显卡") }}</span>
+        ><span>{{ t("节点") }}</span>
       </div>
       <div class="topology-summary__metric">
         <strong>{{ links.length }}</strong
@@ -1026,22 +1133,27 @@ function dropModule(index: number) {
       </div>
     </div>
     <p v-if="parsed.error" class="topology-editor__error" role="alert">{{ parsed.error }}</p>
-    <div v-if="hasGraph" ref="editorRegion" class="topology-direct-canvas">
+    <div
+      v-if="hasGraph"
+      ref="editorRegion"
+      class="topology-direct-canvas"
+      :data-arrangement-applied="arrangementApplied ? 'true' : undefined"
+    >
       <div class="topology-direct-canvas__controls">
         <div v-if="isFullscreen" class="topology-workbench__title">
-          <strong>{{ t("显卡连接工作台") }}</strong>
-          <span>{{ t("在这里添加显卡、分配仿真域并编辑连接") }}</span>
+          <strong>{{ t("拓扑编辑工作台") }}</strong>
+          <span>{{ t("添加节点、分配域并编辑连接") }}</span>
         </div>
         <button
           v-if="isFullscreen && !readOnly"
           type="button"
           class="button button--secondary button--small topology-arrange-button topology-fullscreen-arrange"
-          :aria-label="t('按域一键排布')"
-          :title="t('按域一键排布')"
+          :aria-label="t('自动排布')"
+          :title="t('自动排布')"
           data-fullscreen-arrange
           @click="arrangeByDomain"
         >
-          <LayoutGrid :size="14" />{{ t("按域一键排布") }}
+          <LayoutGrid :size="14" />{{ t("自动排布") }}
         </button>
         <button
           v-if="isFullscreen && !readOnly"
@@ -1121,7 +1233,7 @@ function dropModule(index: number) {
         >
           <div>
             <strong>{{ t("确认清除画布？") }}</strong>
-            <span>{{ t("会删除当前拓扑中的所有显卡、仿真域和连接；网络模型参数保留。") }}</span>
+            <span>{{ t("会删除当前拓扑中的所有节点、仿真域和连接；网络模型参数保留。") }}</span>
           </div>
           <div class="topology-canvas-confirmation__actions">
             <button type="button" class="button button--danger button--small" data-clear-confirm @click="clearCanvas">
@@ -1138,11 +1250,10 @@ function dropModule(index: number) {
           </div>
         </div>
       </div>
-      <aside v-if="isFullscreen" class="topology-workbench__sidebar" :aria-label="t('显卡与仿真域')">
+      <aside v-if="isFullscreen" class="topology-workbench__sidebar" :aria-label="t('拓扑节点与仿真域')">
         <header class="topology-workbench__panel-header">
           <div>
-            <strong>{{ t("显卡与仿真域") }}</strong>
-            <small>{{ t("这里的修改会直接写入当前拓扑输入") }}</small>
+            <strong>{{ t("拓扑节点与仿真域") }}</strong>
           </div>
         </header>
         <DeviceInventoryForm
@@ -1175,20 +1286,9 @@ function dropModule(index: number) {
           @update-field="updateLinkField($event.field, $event.value)"
         />
       </aside>
-      <div class="topology-direct-canvas__instruction">
+      <div v-if="pendingConnection" class="topology-direct-canvas__instruction">
         <MousePointer2 :size="15" />
-        <span v-if="pendingConnection">{{ t("已选择 {device}，拖到另一张卡。", { device: pendingConnection }) }}</span>
-        <InlineHelp
-          v-else
-          :text="t('空白区域可平移画布；拖动显卡调整位置；拖到另一张卡新增连接；再次拖同一对移除连接。')"
-        />
-        <InlineHelp
-          v-if="domains.length"
-          :text="t('同组显卡优先使用 scale_up 域，不同组显卡优先使用 scale_out 域；点击连线可改所属 domain。')"
-        />
-        <small v-if="arrangementApplied" class="topology-direct-canvas__arranged-note">
-          {{ t("已按 domain 分组排布；拖动卡片仍可微调位置。") }}
-        </small>
+        <span>{{ t("已选择 {device}，拖到另一个节点。", { device: pendingConnection }) }}</span>
       </div>
       <div class="topology-canvas-scroll">
         <svg
@@ -1212,6 +1312,7 @@ function dropModule(index: number) {
                 :key="`${link.src_device}-${link.dst_device}-${index}`"
                 class="topology-link"
                 :class="[`topology-link--${linkKind(link)}`, { selected: selectedLink === index }]"
+                :transform="linkParallelOffset(link, index)"
                 :tabindex="readOnly ? -1 : 0"
                 :role="readOnly ? 'img' : 'button'"
                 :aria-label="linkLabel(link)"
@@ -1240,6 +1341,7 @@ function dropModule(index: number) {
                   class="topology-link__badge"
                   :transform="`translate(${linkBadgePosition(link, index).x}, ${linkBadgePosition(link, index).y - 13})`"
                 >
+                  <title>{{ linkLabel(link) }}</title>
                   <rect :x="-linkBadgeWidth(link) / 2" y="-10" :width="linkBadgeWidth(link)" height="18" rx="4" />
                   <text class="topology-link__kind" text-anchor="middle" y="3">
                     {{ linkKindText(link) }}
@@ -1251,20 +1353,34 @@ function dropModule(index: number) {
               v-for="device in devices"
               :key="device.device_id"
               class="topology-device"
-              :class="{ pending: pendingConnection === device.device_id }"
+              :class="[
+                `topology-device--${topologyNodeCategory(device.device_type)}`,
+                { pending: pendingConnection === device.device_id },
+              ]"
               :transform="`translate(${positions[device.device_id]?.x || 0},${positions[device.device_id]?.y || 0})`"
               :tabindex="readOnly ? -1 : 0"
               :role="readOnly ? 'img' : 'button'"
-              :aria-label="t('设备 {label}', { label: `${deviceLabel(device)}，${deviceDomainLabel(device)}` })"
+              :aria-label="deviceTitle(device)"
               @keydown="nodeKeydown($event, device)"
               @pointerdown.stop="startNode($event, device)"
               @pointerup.stop="endNode($event, device)"
             >
-              <title>{{ deviceDomainLabel(device) }}</title>
-              <rect x="-62" y="-36" width="124" height="72" rx="8" />
-              <text class="topology-device__id" text-anchor="middle" y="-4">{{ device.device_id }}</text>
+              <title>{{ deviceTitle(device) }}</title>
+              <image
+                class="topology-device__illustration"
+                :href="deviceIllustration(device)"
+                x="-76"
+                y="-68"
+                width="152"
+                height="100"
+                preserveAspectRatio="xMidYMid meet"
+                aria-hidden="true"
+                draggable="false"
+              />
+              <rect class="topology-device__hit-area" x="-68" y="-36" width="136" height="72" rx="8" />
+              <text class="topology-device__id" text-anchor="middle" y="-4">{{ deviceCardId(device) }}</text>
               <text v-if="device.device_type" class="topology-device__type" text-anchor="middle" y="12">
-                {{ device.device_type }}
+                {{ deviceCardType(device) }}
               </text>
               <text class="topology-device__domain" text-anchor="middle" y="28">{{ deviceDomainLabel(device) }}</text>
             </g>
@@ -1274,12 +1390,11 @@ function dropModule(index: number) {
       <div class="topology-direct-canvas__legend">
         <span><i class="topology-legend-line topology-legend-line--inside" />{{ t("实线：域内通信") }}</span>
         <span><i class="topology-legend-line topology-legend-line--cross" />{{ t("虚线：跨域通信") }}</span>
-        <span class="topology-direct-canvas__legend-note">{{ t("卡片下方的域标签用于核对归属") }}</span>
-        <span v-if="!links.length" class="topology-direct-canvas__empty">{{ t("当前还没有显卡连接") }}</span>
+        <span v-if="!links.length" class="topology-direct-canvas__empty">{{ t("当前还没有节点连接") }}</span>
       </div>
     </div>
     <div v-if="!hasGraph" class="topology-editor__empty">
-      <MousePointer2 :size="18" /><span>{{ t("输入合法拓扑 JSON 后，这里会显示显卡与连接。") }}</span>
+      <MousePointer2 :size="18" /><span>{{ t("输入合法拓扑 JSON 后，这里会显示节点与连接。") }}</span>
     </div>
     <TopologyLinkProperties
       v-if="selected && !readOnly && !isFullscreen"
@@ -1288,27 +1403,11 @@ function dropModule(index: number) {
       @delete="deleteSelected"
       @update-field="updateLinkField($event.field, $event.value)"
     />
-    <details
-      v-if="graph && !readOnly && showModuleBindings"
-      class="topology-advanced-disclosure topology-editor__advanced"
-    >
-      <summary>
-        <span
-          ><strong>{{ t("网络模型参数") }}</strong
-          ><InlineHelp :text="t('只有需要改模型或连接参数时再展开')" :interactive="false" /></span
-        ><span>{{ t("高级") }}</span>
-      </summary>
-      <div class="topology-advanced-disclosure__body">
+    <section v-if="graph && !readOnly" class="topology-model-settings">
+      <div class="topology-model-settings__body">
         <header class="topology-section-header">
           <div>
-            <strong>{{ t("模块绑定参数") }}</strong
-            ><InlineHelp
-              :text="
-                t('每行一个网络模型；域必须绑定其中一个。最多 {max} 个。', {
-                  max: topologyModuleBindingMaxItems,
-                })
-              "
-            />
+            <strong>{{ t("模块绑定参数") }}</strong>
           </div>
           <button type="button" class="button button--secondary" @click="addOneModule">
             <Plus :size="15" />{{ t("新增模型") }}
@@ -1364,13 +1463,12 @@ function dropModule(index: number) {
             </button>
           </div>
           <div class="topology-module-binding__params">
-            <InlineHelp :text="t('以下几项写进 module_bindings[].override_params；留空表示省略该键。')" />
             <label
               v-for="field in moduleBindingOverrideFields"
               :key="`${index}-${field.key}`"
               class="topology-module-binding__field"
               ><span
-                >{{ overrideLabel(field) }} <small>{{ overrideHint(field) }}</small></span
+                >{{ overrideLabel(field) }} <InlineHelp :text="overrideHint(field)" :label="t('查看字段范围')" /></span
               ><input
                 type="number"
                 step="any"
@@ -1378,8 +1476,7 @@ function dropModule(index: number) {
                 :value="overrideValue(index, field.key)"
                 :aria-label="`${bindingName(index)} ${overrideLabel(field)}`"
                 @change="updateModuleOverride(index, field, $event)"
-              /><code>{{ field.key }}</code></label
-            >
+            /></label>
           </div>
         </div>
         <template v-for="field in moduleBindingOverrideFields" :key="`override-presets-${field.key}`">
@@ -1405,7 +1502,7 @@ function dropModule(index: number) {
           {{ moduleMessage.text }}
         </p>
       </div>
-    </details>
+    </section>
     <div v-if="showJson" class="topology-editor__json">
       <label :for="jsonEditorId">{{ t("Fabric topology JSON") }}</label
       ><textarea
@@ -1422,10 +1519,5 @@ function dropModule(index: number) {
     <p v-else-if="topologyFieldError" class="topology-editor__error" role="alert">
       {{ t("后端指出拓扑字段：{path}", { path: props.fieldPath }) }}
     </p>
-    <div v-if="!readOnly" class="topology-editor__hint">
-      <Unlink :size="13" /><InlineHelp
-        :text="t('画布位置只用于本次编辑，不会写入提交 JSON；连接属性保留缺失与 0 的原始语义。')"
-      />
-    </div>
   </section>
 </template>

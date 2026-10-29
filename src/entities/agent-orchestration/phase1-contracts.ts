@@ -286,6 +286,58 @@ type AgentTypedBlockBody =
   | { block_type: "clarification"; block_id: string; questions: readonly ClarificationQuestion[] }
   | { block_type: "unsupported"; block_id: string; result: UnsupportedCapabilityResult }
   | {
+      /** A user-approved, read-only page navigation proposal. */
+      block_type: "agent_navigation";
+      block_id: string;
+      /** Durable flow identity created when the model proposal was accepted. */
+      flow_id?: string;
+      /** Last durable event observed for the proposal's flow. */
+      event_sequence?: number;
+      /** Identity echo required to revalidate a pending navigation after reload. */
+      binding?: {
+        session_id: string;
+        flow_id: string | null;
+        run_id: string | null;
+        run_context_revision: string | null;
+        backend_identity: Readonly<Record<string, unknown>>;
+        schema_set_revision: string;
+        input_snapshot_digest: string | null;
+        artifact_bindings: readonly {
+          artifact_id: string;
+          schema_identity: string;
+          sha256: string;
+          bytes: string;
+        }[];
+      };
+      target_pages: readonly string[];
+      required_capabilities: readonly string[];
+      authorization: {
+        authorization_id?: string;
+        authorization_digest?: string;
+        max_navigation_attempts: number;
+        max_model_calls: number;
+        max_tool_calls_per_round: number;
+        max_run_creations: number;
+        max_execution_time_ms: number;
+        allowed_pages: readonly string[];
+        allowed_actions: readonly string[];
+      };
+      status: "pending" | "running" | "succeeded" | "waiting_user" | "stale" | "failed";
+      detail: string;
+      observation?: {
+        target_page: string;
+        actual_page: string | null;
+        page_correct: boolean;
+        current_page_capabilities: readonly string[];
+        current_run_id: string | null;
+        current_context_revision: string | null;
+        failure_type: string | null;
+        retry_allowed: boolean;
+        visited_pages: readonly string[];
+        navigation_attempts: number;
+      } | null;
+    }
+  | {
       /**
        * The parameter-edit prototype. Unlike `draft_summary` this block is not
        * limited to the legacy phase-one field subset: it carries whatever the
@@ -327,6 +379,90 @@ type AgentTypedBlockBody =
        * stale plan can never overwrite newer form state.
        */
       plan_revision: string | null;
+    }
+  | {
+      block_type: "report_action";
+      block_id: string;
+      action: "generate_user_run_interpretation";
+      status: "pending" | "confirmed" | "failed" | "stale";
+      title: string;
+      detail: string;
+      run_id: string;
+      context_revision: string;
+    }
+  | {
+      /**
+       * A read-only projection of a durable deterministic agent flow. This is a UI
+       * block, not a command: resuming it must go through the owning flow
+       * adapter and the Bridge's binding checks.
+       */
+      block_type: "agent_flow";
+      block_id: string;
+      flow_id: string;
+      /** Bounded visible user goal retained only to rehydrate a pending flow after reload. */
+      user_goal?: string;
+      /** Page identity captured when the durable flow was started. */
+      page_id?: string | null;
+      /** Page-context revision captured when the durable flow was started. */
+      context_revision?: string | null;
+      /** Last durable Bridge event accepted for this projection. */
+      event_sequence?: number;
+      status:
+        | "created"
+        | "running"
+        | "waiting_user"
+        | "draft_ready"
+        | "completed"
+        | "stale"
+        | "refused"
+        | "cancelled"
+        | "failed";
+      phase: string;
+      title: string;
+      detail: string;
+      pending_action: {
+        action: "clarify_intent" | "confirm_report" | "confirm_draft" | "confirm_navigation" | "cancel" | "reject";
+        prompt: string;
+        reason: string;
+        intent_options?: readonly {
+          intent: "explain" | "existing_run_analysis" | "user_report" | "configuration_draft";
+          label: string;
+        }[];
+      } | null;
+      evidence_status:
+        "validated" | "deterministic_fallback" | "partial" | "truncated" | "missing" | "provider_unavailable";
+      report_status: "not_started" | "ready" | "ready_with_limitations" | "not_applicable";
+      terminal_reason: string | null;
+      /** Durable page-navigation observation, when this flow used the navigation executor. */
+      navigation?: {
+        target_page: string;
+        actual_page: string | null;
+        page_correct: boolean;
+        current_page_capabilities: readonly string[];
+        current_run_id: string | null;
+        current_context_revision: string | null;
+        failure_type: string | null;
+        retry_allowed: boolean;
+        visited_pages: readonly string[];
+        navigation_attempts: number;
+      } | null;
+      /** Local UI notice; never sent back as a flow binding or server state. */
+      local_notice?: string;
+      binding: {
+        session_id: string;
+        flow_id: string | null;
+        run_id: string | null;
+        run_context_revision: string | null;
+        backend_identity: Readonly<Record<string, unknown>>;
+        schema_set_revision: string;
+        input_snapshot_digest: string | null;
+        artifact_bindings: readonly {
+          artifact_id: string;
+          schema_identity: string;
+          sha256: string;
+          bytes: string | null;
+        }[];
+      };
     }
   | { block_type: "formal_error"; block_id: string; code: string; message: string; safe_next_action: string };
 

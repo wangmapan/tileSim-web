@@ -8,11 +8,29 @@ export const topologyEditorEnglishCatalog: Readonly<Record<string, string>> = {
   网络拓扑可视化编辑器: "Network topology visual editor",
   网络拓扑: "Network topology",
   显卡连接: "GPU connections",
+  拓扑连接: "Topology links",
+  自动排布: "Auto layout",
+  节点: "Nodes",
+  拓扑编辑工作台: "Topology editor workbench",
+  "添加节点、分配域并编辑连接": "Add nodes, assign domains and edit links",
+  拓扑节点与仿真域: "Topology nodes and simulation domains",
+  "节点颜色区分计算、网络与存储角色": "Node colors distinguish compute, network and storage roles",
+  "节点、网络域与连线": "Nodes, network domains and links",
+  当前还没有节点连接: "No node links are configured yet",
+  "输入合法拓扑 JSON 后，这里会显示节点与连接。": "Nodes and links appear here after valid topology JSON is entered.",
+  "会删除当前拓扑中的所有节点、仿真域和连接；网络模型参数保留。":
+    "This removes all nodes, simulation domains and links from the current topology; network model parameters stay intact.",
+  "已选择 {device}，拖到另一个节点。": "{device} selected; drag it onto another node.",
+  "设备 {device}，类型 {type}，{domain}": "Device {device}, type {type}, {domain}",
+  未指定: "Unspecified",
+  "域 {domains}": "Domain {domains}",
   显卡连线: "GPU connections",
   选择源设备: "Choose source device",
   选择目标设备: "Choose target device",
   "最常用的拓扑操作：把一张显卡拖到另一张显卡，添加一条仿真连接。":
     "The common topology task: drag one GPU onto another to add a simulated connection.",
+  "最常用的拓扑操作：把一个节点拖到另一个节点，添加一条仿真连接。":
+    "The common topology task: drag one node onto another to add a simulated connection.",
   仿真输入: "Simulation input",
   "只读预览：改下面的 JSON 文本，显卡和连线会立刻跟着变。":
     "Read-only preview: edit the JSON text below and the GPUs and links update immediately.",
@@ -47,14 +65,43 @@ export const topologyEditorEnglishCatalog: Readonly<Record<string, string>> = {
   "只调整画布位置，不修改拓扑 JSON。": "Only changes canvas positions; the topology JSON is unchanged.",
   "已按 domain 分组排布；拖动卡片仍可微调位置。":
     "Cards are arranged by domain; drag a card to fine-tune its position.",
+  "已按 domain 分组排布；连接关系已分层，拖动节点仍可微调位置。":
+    "Cards are arranged by domain and links are layered; drag a node to fine-tune its position.",
   显卡: "GPUs",
   已连接: "Connected",
   仿真域: "Simulation domains",
   "已选择 {device}，拖到另一张卡。": "{device} selected; drag it onto another GPU.",
+  设备清单: "Device inventory",
+  "GPU 卡数": "GPU count",
+  "CPU 主机": "CPU host",
+  网卡: "NIC",
+  交换机: "Switch",
+  路由器: "Router",
+  网络桥: "Network bridge",
+  存储: "Storage",
+  新增节点类型: "New node type",
+  新增节点: "Add node",
+  自定义类型: "Custom type",
+  自定义节点类型: "Custom node type",
+  "自定义节点类型不能为空。": "Custom node type cannot be empty.",
+  "例如：DPU": "For example: DPU",
+  "当前没有节点。可先设置 GPU 卡数，或从新增节点菜单选择交换机等拓扑节点。":
+    "No nodes yet. Set a GPU count or choose a switch or another topology node from the add menu.",
+  "GPU 卡数可参与请求；交换机、路由器等是拓扑中的中间节点，不会自动加入请求。最多 {max} 台。":
+    "GPUs can participate in requests; switches and routers are topology intermediates and are not added to requests. Up to {max} nodes.",
+  "已新增 GPU。": "GPU added.",
+  "已新增 {type} 节点；它不会自动成为请求参与设备。":
+    "{type} added; it will not become a request participant automatically.",
+  "卡数必须是整数。": "GPU count must be an integer.",
+  "GPU 卡数不能超过 {max}。": "GPU count cannot exceed {max}.",
+  "设备不能超过 {max} 台。": "Nodes cannot exceed {max}.",
+  "GPU 卡数必须是非负整数。": "GPU count must be a non-negative integer.",
   "拖拽一张显卡到另一张显卡：新增连接；再次拖拽同一对：移除连接。":
     "Drag one GPU onto another GPU to add a link; drag the same pair again to remove it.",
   "同组显卡优先使用 scale_up 域，不同组显卡优先使用 scale_out 域；点击连线可改所属 domain。":
     "GPUs in the same group prefer a scale_up domain; GPUs in different groups prefer scale_out. Click a link to change its domain.",
+  "同组节点优先使用 scale_up 域，不同组节点优先使用 scale_out 域；点击连线可改所属 domain。":
+    "Nodes in the same group prefer a scale_up domain; nodes in different groups prefer scale_out. Click a link to change its domain.",
   "实线：已配置的显卡连接": "Solid: configured GPU links",
   "实线：域内通信": "Solid: inside-domain communication",
   "虚线：跨域通信": "Dashed: cross-domain communication",
@@ -69,17 +116,10 @@ export const topologyEditorEnglishCatalog: Readonly<Record<string, string>> = {
   "画布位置只用于本次编辑，不会写入提交 JSON；连接属性保留缺失与 0 的原始语义。":
     "Canvas positions are local to this edit and are not submitted; link properties preserve missing-versus-zero semantics.",
   网络模型参数: "Network model parameters",
-  只有需要改模型或连接参数时再展开: "Expand only when changing a model or link parameter.",
-  高级: "Advanced",
   "每行一个网络模型；域必须绑定其中一个。最多 {max} 个。":
     "One network model per row; every domain must bind to one. Up to {max}.",
   "还没有网络模型。点「新增模型」加一条，再绑定给需要的域。":
     "No network models yet. Add one, then bind it to the domains that need it.",
-  高级拓扑设置: "Advanced topology settings",
-  "需要改卡数、domain 成员或网络模型时再展开":
-    "Expand only when you need to change the device count, domain members or network models.",
-  默认收起: "Collapsed by default",
-  收起: "Collapse",
   部署概览: "Deployment overview",
   "需要核对设备归属和 domain 时再展开": "Expand when you need to check device membership and domains.",
   辅助信息: "Supporting information",

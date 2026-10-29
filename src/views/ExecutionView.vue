@@ -38,7 +38,9 @@ import type { LayerId } from "../features/execution-inspector";
 import { useI18n } from "../i18n";
 import ArtifactEvidenceLink from "../components/ArtifactEvidenceLink.vue";
 import { useEvidenceSelectionStore } from "../stores/evidence-selection";
+import { useEvidenceAgentStore } from "../stores/evidence-agent";
 import { ReportCoveragePanel } from "../features/report-coverage";
+import { evidenceAgentBackendIdentity } from "../features/evidence-agent";
 
 type ExecutionResult = ReturnType<typeof buildExecutionResult>;
 type ExecutionLayer = ExecutionResult["layers"][number];
@@ -46,9 +48,11 @@ type ExecutionLayer = ExecutionResult["layers"][number];
 const { state, notify } = useDashboard();
 const { t } = useI18n();
 const evidenceSelection = useEvidenceSelectionStore();
+const evidenceAgent = useEvidenceAgentStore();
 const selectedEvidenceRequestId = computed(() => evidenceSelection.requestForRun(state.runId));
 const selectedId = ref<LayerId>("S1");
 const exportingReport = ref(false);
+const exportingInterpretationReport = ref(false);
 const result = computed(() => buildExecutionResult(state.bundle, state.inputs));
 const layerById = computed(() => new Map(result.value.layers.map((layer) => [layer.id, layer])));
 const selected = computed(() => layerById.value.get(selectedId.value) || result.value.layers[0]);
@@ -160,6 +164,50 @@ async function exportStructuredReport() {
     exportingReport.value = false;
   }
 }
+
+function interpretationContext() {
+  const identity = state.bridge.identity;
+  return {
+    bundle: state.bundle,
+    inputs: state.inputs,
+    runId: state.runId,
+    runName: state.runName,
+    artifactManifest: state.artifactManifest,
+    schemaSetRevision: state.bridge.manifest?.schema_set_revision || null,
+    backendIdentity: identity ? evidenceAgentBackendIdentity(identity) || null : null,
+    validatedAgentResult: evidenceAgent.result,
+    evidenceAgentBinding: { ...evidenceAgent.resultBinding },
+    currentEvidenceAgentBinding: evidenceAgent.currentBindingSnapshot(),
+  };
+}
+
+async function exportInterpretationReport() {
+  if (exportingInterpretationReport.value || !state.runId) return;
+  exportingInterpretationReport.value = true;
+  try {
+    const {
+      createUserRunInterpretationExport,
+      downloadUserRunInterpretationExport,
+      userRunInterpretationBindingMatches,
+    } = await import("../features/user-run-interpretation");
+    const context = interpretationContext();
+    const exported = createUserRunInterpretationExport(context);
+    if (!userRunInterpretationBindingMatches(exported.report.binding, interpretationContext())) {
+      throw new Error("结果解读报告上下文已变化，请重新生成。");
+    }
+    // Use the same captured context for the download; the binding check above fences run,
+    // backend identity, schema revision and artifact identities before any browser write.
+    downloadUserRunInterpretationExport(exported);
+    notify(t("已导出 {filename}", { filename: exported.filename }), "positive");
+  } catch (error) {
+    notify(
+      t("导出结果解读报告失败：{message}", { message: error instanceof Error ? error.message : String(error) }),
+      "danger",
+    );
+  } finally {
+    exportingInterpretationReport.value = false;
+  }
+}
 </script>
 
 <template>
@@ -188,6 +236,13 @@ async function exportStructuredReport() {
           </div>
           <button class="button button--secondary" :disabled="exportingReport" @click="exportStructuredReport">
             <Download :size="16" />{{ exportingReport ? t("生成中…") : t("导出完整技术报告") }}
+          </button>
+          <button
+            class="button button--secondary"
+            :disabled="exportingInterpretationReport || !state.runId"
+            @click="exportInterpretationReport"
+          >
+            <Download :size="16" />{{ exportingInterpretationReport ? t("生成中…") : t("导出结果解读报告") }}
           </button>
         </div>
       </header>
@@ -465,6 +520,7 @@ async function exportStructuredReport() {
                 :text="`${t('这里记录各环节在同一模拟时间线上的开始和结束。')} ${t(
                   '本页只重组当前后端报告。计数去重仅用于避免同一并列资源证据随多个网络阶段重复展示，不改变模拟结果，也不把关联证据升级为独立 trace。',
                 )}`"
+                :interactive="false"
               />
             </span>
           </div>

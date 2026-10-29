@@ -50,6 +50,7 @@ function semanticHelp(field: string, value: unknown) {
         <strong>{{ semanticField("source_mode", evidence.sourceMode).valueLabel }}</strong>
         <InlineHelp
           class="provenance-help"
+          placement="start"
           :text="semanticHelp('source_mode', evidence.sourceMode)"
           :label="t('输入来源模式说明')"
         />
@@ -75,7 +76,12 @@ function semanticHelp(field: string, value: unknown) {
       <article>
         <small>{{ t("证据完整度") }}</small>
         <strong>{{ formatPercent(state.bundle.validation.completeness) }}</strong>
-        <InlineHelp class="provenance-help" :text="t('字段覆盖，非准确率')" :label="t('证据完整度说明')" />
+        <InlineHelp
+          class="provenance-help"
+          placement="end"
+          :text="t('字段覆盖，非准确率')"
+          :label="t('证据完整度说明')"
+        />
       </article>
     </section>
 

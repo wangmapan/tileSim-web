@@ -1,6 +1,16 @@
 // Generated from bridge/contracts/openapi.json. Do not edit by hand.
 
 import type {
+  AgentFlowEventsResponse,
+  AgentFlowResumeRequest,
+  AgentFlowResumeResponse,
+  AgentFlowRevokeRequest,
+  AgentFlowRevokeResponse,
+  AgentFlowStartRequest,
+  AgentFlowStartResponse,
+  AgentFlowStatusResponse,
+  AgentIntentRequest,
+  AgentIntentResponse,
   AgentOrchestrationCapabilitySnapshotResponse,
   AgentOrchestrationRunIntakePreviewRequest,
   AgentOrchestrationRunIntakePreviewResponse,
@@ -32,6 +42,9 @@ import type {
   OptimizationActionRequest,
   OptimizationApprovalRequest,
   OptimizationApprovalResponse,
+  OptimizationAuthorizationGetResponse,
+  OptimizationAuthorizationRequest,
+  OptimizationAuthorizationResponse,
   OptimizationSessionCreateRequest,
   OptimizationSessionEventsResponse,
   OptimizationSessionListResponse,
@@ -61,9 +74,16 @@ export const bridgePaths = {
   tracePackages: () => "/trace-packages",
   inspectTracePackage: (packageId: string) => `/trace-packages/${encodeURIComponent(packageId)}/inspect`,
   assistantModelDescriptor: () => "/agent/assistant-model",
+  agentIntent: () => "/agent/intent",
   listOptimizationSessions: () => "/agent/optimization/sessions",
   createOptimizationSession: () => "/agent/optimization/sessions",
   getOptimizationSession: (sessionId: string) => `/agent/optimization/sessions/${encodeURIComponent(sessionId)}`,
+  getOptimizationAuthorization: (sessionId: string) =>
+    `/agent/optimization/sessions/${encodeURIComponent(sessionId)}/authorization`,
+  createOptimizationAuthorization: (sessionId: string) =>
+    `/agent/optimization/sessions/${encodeURIComponent(sessionId)}/authorization`,
+  revokeOptimizationAuthorization: (sessionId: string) =>
+    `/agent/optimization/sessions/${encodeURIComponent(sessionId)}/authorization/revoke`,
   getOptimizationSessionEvents: (sessionId: string) =>
     `/agent/optimization/sessions/${encodeURIComponent(sessionId)}/events`,
   streamOptimizationSessionEvents: (sessionId: string) =>
@@ -80,7 +100,13 @@ export const bridgePaths = {
   approveBatch: (batchId: string) => `/agent/batches/${encodeURIComponent(batchId)}/approve`,
   mutateBatch: (batchId: string, action: string) =>
     `/agent/batches/${encodeURIComponent(batchId)}/${encodeURIComponent(action)}`,
+  startAgentFlow: () => "/agent/flows",
+  getAgentFlow: (flowId: string) => `/agent/flows/${encodeURIComponent(flowId)}`,
+  getAgentFlowEvents: (flowId: string) => `/agent/flows/${encodeURIComponent(flowId)}/events`,
+  streamAgentFlowEvents: (flowId: string) => `/agent/flows/${encodeURIComponent(flowId)}/events/stream`,
+  resumeAgentFlow: (flowId: string) => `/agent/flows/${encodeURIComponent(flowId)}/resume`,
   assistantModelCatalogue: () => "/agent/assistant-model-catalogue",
+  revokeAgentFlowAuthorization: (flowId: string) => `/agent/flows/${encodeURIComponent(flowId)}/authorization/revoke`,
   selectAssistantModel: () => "/agent/assistant-model-selection",
   planAgentScenario: () => "/agent/scenario-plan",
   streamAgentScenarioChat: () => "/agent/scenario-chat",
@@ -142,6 +168,14 @@ export class GeneratedBridgeClient {
     return this.transport.request<AssistantModelDescriptorResponse>(bridgePaths.assistantModelDescriptor(), {});
   }
 
+  agentIntent(body: AgentIntentRequest): Promise<AgentIntentResponse> {
+    return this.transport.request<AgentIntentResponse>(bridgePaths.agentIntent(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
   listOptimizationSessions(): Promise<OptimizationSessionListResponse> {
     return this.transport.request<OptimizationSessionListResponse>(bridgePaths.listOptimizationSessions(), {});
   }
@@ -159,6 +193,38 @@ export class GeneratedBridgeClient {
 
   getOptimizationSession(sessionId: string): Promise<OptimizationSessionResponse> {
     return this.transport.request<OptimizationSessionResponse>(bridgePaths.getOptimizationSession(sessionId), {});
+  }
+
+  getOptimizationAuthorization(sessionId: string): Promise<OptimizationAuthorizationGetResponse> {
+    return this.transport.request<OptimizationAuthorizationGetResponse>(
+      bridgePaths.getOptimizationAuthorization(sessionId),
+      {},
+    );
+  }
+
+  createOptimizationAuthorization(
+    sessionId: string,
+    body: OptimizationAuthorizationRequest,
+    idempotencyKey: string,
+  ): Promise<OptimizationAuthorizationResponse> {
+    return this.transport.request<OptimizationAuthorizationResponse>(
+      bridgePaths.createOptimizationAuthorization(sessionId),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+        body: JSON.stringify(body),
+      },
+    );
+  }
+
+  revokeOptimizationAuthorization(
+    sessionId: string,
+    idempotencyKey: string,
+  ): Promise<OptimizationAuthorizationResponse> {
+    return this.transport.request<OptimizationAuthorizationResponse>(
+      bridgePaths.revokeOptimizationAuthorization(sessionId),
+      { method: "POST", headers: { "Idempotency-Key": idempotencyKey } },
+    );
   }
 
   getOptimizationSessionEvents(sessionId: string): Promise<OptimizationSessionEventsResponse> {
@@ -241,8 +307,102 @@ export class GeneratedBridgeClient {
     });
   }
 
+  startAgentFlow(
+    body: AgentFlowStartRequest,
+    idempotencyKey: string,
+    xTileSimPrincipal?: string,
+    xTileSimWorkspace?: string,
+    xTileSimScopes?: string,
+  ): Promise<AgentFlowStartResponse> {
+    return this.transport.request<AgentFlowStartResponse>(bridgePaths.startAgentFlow(), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": idempotencyKey,
+        ...(xTileSimPrincipal ? { "X-TileSim-Principal": xTileSimPrincipal } : {}),
+        ...(xTileSimWorkspace ? { "X-TileSim-Workspace": xTileSimWorkspace } : {}),
+        ...(xTileSimScopes ? { "X-TileSim-Scopes": xTileSimScopes } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+  }
+
+  getAgentFlow(
+    flowId: string,
+    xTileSimPrincipal?: string,
+    xTileSimWorkspace?: string,
+    xTileSimScopes?: string,
+  ): Promise<AgentFlowStatusResponse> {
+    return this.transport.request<AgentFlowStatusResponse>(bridgePaths.getAgentFlow(flowId), {
+      headers: {
+        ...(xTileSimPrincipal ? { "X-TileSim-Principal": xTileSimPrincipal } : {}),
+        ...(xTileSimWorkspace ? { "X-TileSim-Workspace": xTileSimWorkspace } : {}),
+        ...(xTileSimScopes ? { "X-TileSim-Scopes": xTileSimScopes } : {}),
+      },
+    });
+  }
+
+  getAgentFlowEvents(
+    flowId: string,
+    xTileSimPrincipal?: string,
+    xTileSimWorkspace?: string,
+    xTileSimScopes?: string,
+    lastEventID?: string,
+  ): Promise<AgentFlowEventsResponse> {
+    return this.transport.request<AgentFlowEventsResponse>(bridgePaths.getAgentFlowEvents(flowId), {
+      headers: {
+        ...(xTileSimPrincipal ? { "X-TileSim-Principal": xTileSimPrincipal } : {}),
+        ...(xTileSimWorkspace ? { "X-TileSim-Workspace": xTileSimWorkspace } : {}),
+        ...(xTileSimScopes ? { "X-TileSim-Scopes": xTileSimScopes } : {}),
+        ...(lastEventID ? { "Last-Event-ID": lastEventID } : {}),
+      },
+    });
+  }
+
+  resumeAgentFlow(
+    flowId: string,
+    body: AgentFlowResumeRequest,
+    idempotencyKey: string,
+    xTileSimPrincipal?: string,
+    xTileSimWorkspace?: string,
+    xTileSimScopes?: string,
+  ): Promise<AgentFlowResumeResponse> {
+    return this.transport.request<AgentFlowResumeResponse>(bridgePaths.resumeAgentFlow(flowId), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": idempotencyKey,
+        ...(xTileSimPrincipal ? { "X-TileSim-Principal": xTileSimPrincipal } : {}),
+        ...(xTileSimWorkspace ? { "X-TileSim-Workspace": xTileSimWorkspace } : {}),
+        ...(xTileSimScopes ? { "X-TileSim-Scopes": xTileSimScopes } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+  }
+
   assistantModelCatalogue(): Promise<AssistantModelCatalogueResponse> {
     return this.transport.request<AssistantModelCatalogueResponse>(bridgePaths.assistantModelCatalogue(), {});
+  }
+
+  revokeAgentFlowAuthorization(
+    flowId: string,
+    body: AgentFlowRevokeRequest,
+    idempotencyKey: string,
+    xTileSimPrincipal?: string,
+    xTileSimWorkspace?: string,
+    xTileSimScopes?: string,
+  ): Promise<AgentFlowRevokeResponse> {
+    return this.transport.request<AgentFlowRevokeResponse>(bridgePaths.revokeAgentFlowAuthorization(flowId), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": idempotencyKey,
+        ...(xTileSimPrincipal ? { "X-TileSim-Principal": xTileSimPrincipal } : {}),
+        ...(xTileSimWorkspace ? { "X-TileSim-Workspace": xTileSimWorkspace } : {}),
+        ...(xTileSimScopes ? { "X-TileSim-Scopes": xTileSimScopes } : {}),
+      },
+      body: JSON.stringify(body),
+    });
   }
 
   selectAssistantModel(body: AssistantModelSelectionRequest): Promise<AssistantModelSelectionResponse> {

@@ -2,12 +2,13 @@
 
 export const AGENT_HARNESS_CONTRACT_REVISION = "2026-10-17.wpa.v1" as const;
 export const AGENT_HARNESS_SCHEMA_SET_REVISION =
-  "sha256:29c1b985068c3f4be921fa48cebe5bbe3502079d3a13d263e6bcdbad4fc6ec73" as const;
+  "sha256:0085e3a4e89576fff168f29d811be581c7107b9bd3f8fabf9834d651f3c606b3" as const;
 export const AGENT_HARNESS_SUCCESSOR_CONTRACT_REVISION = "2026-10-18.wpb.v1" as const;
 export const AGENT_HARNESS_SUCCESSOR_SCHEMA_SET_REVISION =
-  "sha256:75db95b271671c336276f5082810e2eb5b3362b1d8aa2cb0a81a59af416a8c84" as const;
+  "sha256:0085e3a4e89576fff168f29d811be581c7107b9bd3f8fabf9834d651f3c606b3" as const;
 export const AGENT_HARNESS_EXECUTION_CONTRACT_REVISION = "2026-10-18.wpc.v1" as const;
 export const AGENT_HARNESS_OPTIMIZATION_CONTRACT_REVISION = "2026-10-19.wpd.v1" as const;
+export const AGENT_HARNESS_AUTHORIZATION_CONTRACT_REVISION = "2026-10-28.wpf.v1" as const;
 export const AGENT_HARNESS_BATCH_CONTRACT_REVISION = "2026-10-19.wpe.v1" as const;
 export const AGENT_HARNESS_TOOL_REGISTRY_REVISION = "2026-10-17.tools.v1" as const;
 export const AGENT_HARNESS_BATCH_TOOL_REGISTRY_REVISION = "2026-10-19.tools.v3" as const;
@@ -84,6 +85,10 @@ export type AgentHarnessOptimizationSchemaIdentity =
   | "tilesim.agent_harness.optimization_approval.v1"
   | "tilesim.agent_harness.optimization_summary.v1"
   | "tilesim.agent_harness.optimization_event.v1";
+export type AgentHarnessAuthorizationSchemaIdentity =
+  | "tilesim.agent_harness.optimization_authorization_request.v1"
+  | "tilesim.agent_harness.optimization_authorization.v1"
+  | "tilesim.agent_harness.optimization_authorization_response.v1";
 
 export type AgentHarnessBatchState =
   | "draft"
@@ -551,6 +556,11 @@ export interface AgentHarnessOptimizationSession {
   execution_request?: Record<string, unknown> | null;
   local_dev: true;
   automatic_submission: false;
+  autonomy?: "off" | "propose" | "auto";
+  authorization_id?: string | null;
+  authorization_digest?: string | null;
+  authorization?: AgentHarnessOptimizationAuthorization | null;
+  agent_turns?: Array<Record<string, unknown>>;
   state?: AgentHarnessOptimizationState;
   current_candidate_id?: string | null;
   current_iteration?: number;
@@ -562,6 +572,98 @@ export interface AgentHarnessOptimizationSession {
   updated_at?: string;
   provenance: Record<string, unknown>;
   error?: Record<string, unknown> | null;
+}
+export interface AgentHarnessOptimizationAuthorizationBudget {
+  max_rounds: number;
+  max_runs: number;
+  max_seconds: number;
+  max_failures: number;
+  max_model_calls: number;
+  max_tool_calls_per_round: number;
+  max_navigation_attempts: number;
+  max_run_creations: number;
+  max_execution_time_ms: number;
+}
+export interface AgentHarnessOptimizationAuthorizationParameterGrant {
+  pointer: string;
+  min: number;
+  max: number;
+  step: number;
+  kind: "int" | "integer" | "number" | "float";
+}
+export interface AgentHarnessOptimizationAuthorizationObjective {
+  metric_path: string;
+  direction: "minimize" | "maximize";
+  minimum_improvement: number;
+  plateau_rounds: number;
+}
+export interface AgentHarnessOptimizationAuthorizationRequest {
+  autonomy_level: "bounded_autonomous" | "human_approves_each";
+  budget: {
+    max_rounds?: number;
+    max_runs?: number;
+    max_seconds?: number;
+    max_failures?: number;
+    max_model_calls: number;
+    max_tool_calls_per_round: number;
+    max_navigation_attempts: number;
+    max_run_creations: number;
+    max_execution_time_ms: number;
+  };
+  parameter_grants: Array<
+    Omit<AgentHarnessOptimizationAuthorizationParameterGrant, "kind"> & {
+      kind?: AgentHarnessOptimizationAuthorizationParameterGrant["kind"];
+    }
+  >;
+  objective: {
+    metric_path: string;
+    direction: "minimize" | "maximize";
+    minimum_improvement?: number;
+    plateau_rounds?: number;
+  };
+  tool_allowlist: string[];
+  allowed_pages: string[];
+  allowed_actions: string[];
+  ttl_seconds?: number;
+}
+export interface AgentHarnessOptimizationAuthorization {
+  schema_identity: "tilesim.agent_harness.optimization_authorization.v1";
+  contract_revision: typeof AGENT_HARNESS_AUTHORIZATION_CONTRACT_REVISION;
+  authorization_id: string;
+  session_id: string;
+  principal: string;
+  workspace_id: string;
+  schema_set_revision: string;
+  backend_identity: AgentHarnessBackendIdentity;
+  input_snapshot_digest: string;
+  autonomy_level: "bounded_autonomous" | "human_approves_each";
+  budget: AgentHarnessOptimizationAuthorizationBudget;
+  parameter_grants: AgentHarnessOptimizationAuthorizationParameterGrant[];
+  objective: AgentHarnessOptimizationAuthorizationObjective;
+  tool_allowlist: string[];
+  allowed_pages: string[];
+  allowed_actions: string[];
+  protected: Record<string, unknown>;
+  status: "active" | "exhausted" | "revoked" | "expired";
+  issued_by: string;
+  issued_at: string;
+  expires_at: string;
+  revoked_at: string | null;
+  provenance: Record<string, unknown>;
+  authorization_digest: string;
+}
+export interface AgentHarnessOptimizationAuthorizationGetResponse {
+  authorization: AgentHarnessOptimizationAuthorization | null;
+  session_id: string;
+  provenance: Record<string, unknown>;
+}
+export interface AgentHarnessOptimizationAuthorizationResponse {
+  authorization: AgentHarnessOptimizationAuthorization;
+  session: AgentHarnessOptimizationSession;
+  detail: AgentHarnessOptimizationDetail;
+  idempotent_replay?: boolean;
+  autonomous_started?: boolean;
+  provenance: Record<string, unknown>;
 }
 export interface AgentHarnessOptimizationCandidate {
   schema_identity: "tilesim.agent_harness.optimization_candidate.v1";
@@ -764,7 +866,12 @@ export const agentHarnessPaths = {
     `${agentHarnessPaths.execution(operationId)}/${action}`,
   optimizationSessions: () => "/agent/optimization/sessions",
   optimizationSession: (sessionId: string) => `/agent/optimization/sessions/${encodeURIComponent(sessionId)}`,
+  optimizationAuthorization: (sessionId: string) =>
+    `/agent/optimization/sessions/${encodeURIComponent(sessionId)}/authorization`,
+  optimizationAuthorizationRevoke: (sessionId: string) =>
+    `/agent/optimization/sessions/${encodeURIComponent(sessionId)}/authorization/revoke`,
   optimizationEvents: (sessionId: string) => `${agentHarnessPaths.optimizationSession(sessionId)}/events`,
+  optimizationEventStream: (sessionId: string) => `${agentHarnessPaths.optimizationSession(sessionId)}/events/stream`,
   optimizationApprove: (sessionId: string, candidateId: string) =>
     `${agentHarnessPaths.optimizationSession(sessionId)}/candidates/${encodeURIComponent(candidateId)}/approve`,
   optimizationAction: (sessionId: string, action: "pause" | "resume" | "cancel" | "retry") =>
@@ -941,6 +1048,34 @@ export class GeneratedAgentHarnessClient {
       agentHarnessPaths.optimizationSession(sessionId),
     );
   }
+  optimizationAuthorization(sessionId: string) {
+    return this.transport.request<AgentHarnessOptimizationAuthorizationGetResponse>(
+      agentHarnessPaths.optimizationAuthorization(sessionId),
+    );
+  }
+  createOptimizationAuthorization(
+    sessionId: string,
+    body: AgentHarnessOptimizationAuthorizationRequest,
+    idempotencyKey: string,
+  ) {
+    return this.transport.request<AgentHarnessOptimizationAuthorizationResponse>(
+      agentHarnessPaths.optimizationAuthorization(sessionId),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+        body: JSON.stringify(body),
+      },
+    );
+  }
+  revokeOptimizationAuthorization(sessionId: string, idempotencyKey: string) {
+    return this.transport.request<AgentHarnessOptimizationAuthorizationResponse>(
+      agentHarnessPaths.optimizationAuthorizationRevoke(sessionId),
+      {
+        method: "POST",
+        headers: { "Idempotency-Key": idempotencyKey },
+      },
+    );
+  }
   optimizationEvents(sessionId: string, lastEventId = "0") {
     const headers: Record<string, string> = {};
     if (lastEventId !== "0") headers["Last-Event-ID"] = lastEventId;
@@ -948,6 +1083,9 @@ export class GeneratedAgentHarnessClient {
       agentHarnessPaths.optimizationEvents(sessionId),
       { headers },
     );
+  }
+  optimizationEventStream(sessionId: string) {
+    return agentHarnessPaths.optimizationEventStream(sessionId);
   }
   approveOptimizationCandidate(
     sessionId: string,

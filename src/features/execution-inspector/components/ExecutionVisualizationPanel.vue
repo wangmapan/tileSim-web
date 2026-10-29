@@ -151,6 +151,10 @@ function semanticHelp(field: string, value: unknown) {
       <Info :size="17" /><span>{{ visualization.emptyReason }}</span>
     </div>
 
+    <p v-if="showBoundary && visualization.boundary" class="visualization-boundary">
+      <strong>{{ t("解读边界") }}：</strong>{{ t(visualization.boundary) }}
+    </p>
+
     <RecordPager
       v-if="visualization.kind === 'matrix' && !dataOpen"
       v-model:page="page"

@@ -61,6 +61,14 @@ SCHEMA_IDENTITIES.update({
         "iteration", "evaluation", "checkpoint", "stop_reason", "approval", "action", "summary", "event",
     )
 })
+# Optimization authorization envelopes are published alongside the Stage 4
+# records. Keep their filename-derived registry keys explicit so the manifest
+# drift test covers the request, envelope, and response schemas as a closed set.
+SCHEMA_IDENTITIES.update({
+    "optimization_authorization_request": "tilesim.agent_harness.optimization_authorization_request.v1",
+    "optimization_authorization": "tilesim.agent_harness.optimization_authorization.v1",
+    "optimization_authorization_response": "tilesim.agent_harness.optimization_authorization_response.v1",
+})
 # Stage 5 batch records are published as first-class schemas. Keep their
 # filename-derived keys in this registry as well so the manifest check cannot
 # silently drift when a batch schema is added. The existing candidate/stop

@@ -206,7 +206,7 @@ describe("Week 5 and Week 6 frontend integration", () => {
     expect(wrapper.attributes("open")).toBeUndefined();
   });
 
-  it("renders S0, S1, and S6 controls while keeping field contracts on demand", async () => {
+  it("renders S0, S1, and S6 controls without extra contract toggles", async () => {
     const surface = buildExperimentSurface(
       {
         scenarios: [{ scenario_id: "s1_des_example", label: "S1" }],
@@ -230,8 +230,7 @@ describe("Week 5 and Week 6 frontend integration", () => {
       },
     });
 
-    expect(wrapper.get('[role="tab"][data-module="runtime"]').text()).toContain("运行策略");
-    expect(wrapper.get('[role="tab"][data-module="workload"]').text()).toContain("工作负载");
+    expect(wrapper.get('[role="tab"][data-module="runtime"]').text()).toContain("工作负载与运行策略");
     expect(wrapper.get('[role="tab"][data-module="fabric"]').text()).toContain("互联参数");
     // The invalid S6 pointer routes the stage to the matching module instead
     // of painting every subsystem on the same screen.
@@ -243,13 +242,13 @@ describe("Week 5 and Week 6 frontend integration", () => {
     await wrapper.get('[role="tab"][data-module="runtime"]').trigger("click");
     expect(wrapper.text()).toContain("调度、批处理与 KV 准入");
     expect(wrapper.findAll('[data-field-path^="/overrides/runtime/"]')).toHaveLength(8);
-    await wrapper.get('[role="tab"][data-module="workload"]').trigger("click");
+    expect(wrapper.find('[data-field-path="/overrides/workload/message_size_multiplier"]').exists()).toBe(true);
     expect(wrapper.text()).toContain("通信负载输入");
     await wrapper.get('[role="tab"][data-module="fabric"]').trigger("click");
-    await wrapper.get('button[aria-pressed="false"]').trigger("click");
     await wrapper.get('[role="tab"][data-module="runtime"]').trigger("click");
-    expect(wrapper.text()).toContain("/overrides/runtime/batch_scheduler");
-    expect(wrapper.get('button[aria-pressed="true"]').text()).toContain("隐藏字段契约");
+    expect(wrapper.find('[data-field-path="/overrides/runtime/batch_scheduler"]').exists()).toBe(true);
+    expect(wrapper.text()).not.toContain("显示字段契约");
+    expect(wrapper.text()).not.toContain("隐藏字段契约");
   });
 
   it("preflights custom manifest candidate and transfer budgets", () => {

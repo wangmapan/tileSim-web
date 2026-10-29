@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tilesim.agent_intent.request.v1",
+  "title": "AgentIntentRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_identity", "contract_revision", "session_id", "user_goal", "current_page", "page_catalog", "run_id", "run_context_revision", "backend_identity", "schema_set_revision", "input_snapshot_digest"],
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_intent.request.v1" },
+    "contract_revision": { "const": "2026-10-28.agent-intent.v1" },
+    "session_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "user_goal": { "type": "string", "minLength": 1, "maxLength": 20000 },
+    "current_page": {
+      "type": "object", "additionalProperties": false,
+      "required": ["page_id", "route_name", "context_revision", "capability_ids"],
+      "properties": {
+        "page_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "route_name": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "capability_ids": { "type": "array", "maxItems": 64, "items": { "type": "string", "minLength": 1, "maxLength": 128 } },
+        "context_revision": { "type": "string", "minLength": 1, "maxLength": 256 }
+      }
+    },
+    "page_catalog": {
+      "type": "array", "minItems": 1, "maxItems": 64,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["page_id", "route_name", "capability_ids", "supports_run"],
+        "properties": {
+          "page_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "route_name": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "capability_ids": { "type": "array", "maxItems": 64, "items": { "type": "string", "minLength": 1, "maxLength": 128 } },
+          "supports_run": { "type": "boolean" }
+        }
+      }
+    },
+    "run_id": { "type": ["string", "null"], "minLength": 1, "maxLength": 128 },
+    "run_context_revision": { "type": ["string", "null"], "minLength": 1, "maxLength": 256 },
+    "backend_identity": { "type": "object", "additionalProperties": true },
+    "schema_set_revision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "input_snapshot_digest": { "type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}

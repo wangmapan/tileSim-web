@@ -51,7 +51,15 @@ export async function* readSseFrames(response: Response): AsyncGenerator<SseFram
         if (frame) yield frame;
         boundary = buffer.indexOf("\n\n");
       }
-      if (done) return;
+      if (done) {
+        // SSE dispatches an event only after the terminating blank line.  A
+        // response that ends with a partial field block is a truncated stream,
+        // not a clean EOF; callers must fall back to their durable polling or
+        // surface the protocol failure instead of silently treating it as a
+        // complete observation.
+        if (buffer.trim()) throw new Error("incomplete_sse_frame");
+        return;
+      }
     }
   } finally {
     void reader.cancel().catch(() => undefined);

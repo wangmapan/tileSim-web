@@ -1,0 +1,242 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/execution-replay.schema.json",
+  "title": "ExecutionReplayArtifact",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "start_time_ps",
+    "finish_time_ps",
+    "end_time_ps",
+    "fabric",
+    "collective_steps"
+  ],
+  "properties": {
+    "schema_version": { "const": "tilesim.execution_replay.v1" },
+    "run_id": { "type": "string", "minLength": 1 },
+    "start_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+    "finish_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+    "end_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+    "fabric": { "$ref": "#/$defs/fabricReport" },
+    "collective_steps": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/collectiveStep" }
+    }
+  },
+  "$defs": {
+    "fabricReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scenario_name",
+        "end_to_end_latency_us",
+        "timeline",
+        "module_stats",
+        "fallback_reasons",
+        "hotspots"
+      ],
+      "properties": {
+        "scenario_name": { "type": "string" },
+        "end_to_end_latency_us": { "type": "number", "minimum": 0 },
+        "timeline": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/executionRecord" }
+        },
+        "module_stats": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "module_id",
+              "module_kind",
+              "fidelity_level",
+              "total_bytes",
+              "total_queue_delay_us",
+              "total_congestion_delay_us",
+              "total_runtime_us",
+              "total_algorithm_rounds",
+              "transfers_executed"
+            ],
+            "properties": {
+              "module_id": { "type": "string" },
+              "module_kind": { "type": "string" },
+              "fidelity_level": { "type": "string" },
+              "total_bytes": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+              "total_queue_delay_us": { "type": "number", "minimum": 0 },
+              "total_congestion_delay_us": { "type": "number", "minimum": 0 },
+              "total_runtime_us": { "type": "number", "minimum": 0 },
+              "total_algorithm_rounds": { "type": "number", "minimum": 0 },
+              "transfers_executed": { "$ref": "f6b-common.schema.json#/$defs/uint64" }
+            }
+          }
+        },
+        "fallback_reasons": { "type": "array", "items": { "type": "string" } },
+        "hotspots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["hotspot_type", "resource_scope", "phase_id", "time_window_ps", "required_observation"],
+            "properties": {
+              "hotspot_type": { "type": "string" },
+              "resource_scope": { "type": "string" },
+              "phase_id": { "type": "string" },
+              "time_window_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+              "required_observation": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "executionRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_id",
+        "collective_id",
+        "phase_id",
+        "collective_algorithm",
+        "collective_rounds",
+        "participant_count",
+        "module_id",
+        "domain_id",
+        "module_kind",
+        "fidelity_level",
+        "release_time_ps",
+        "memory_latency_ps",
+        "device_latency_ps",
+        "start_time_ps",
+        "finish_time_ps",
+        "queue_delay_ps",
+        "serialization_delay_ps",
+        "congestion_delay_ps",
+        "profile_queueing_delay_ps",
+        "propagation_delay_ps",
+        "service_delay_ps",
+        "completion_delay_ps",
+        "backpressure_delay_ps",
+        "profile_id",
+        "profile_selection",
+        "profile_asset_id",
+        "profile_asset_sha256",
+        "profile_source_id",
+        "profile_generation_path",
+        "profile_source_mode",
+        "profile_calibration_level",
+        "profile_claim_scope",
+        "service_busy_time_ps",
+        "has_service_busy_time",
+        "elapsed_time_includes_queue_delay",
+        "resource_annotations",
+        "retransmission_count",
+        "flow_control_stall_count",
+        "actual_path",
+        "link_endpoints",
+        "execution_events"
+      ],
+      "properties": {
+        "request_id": { "type": "string" },
+        "collective_id": { "type": "string" },
+        "phase_id": { "type": "string" },
+        "collective_algorithm": { "type": "string" },
+        "collective_rounds": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "participant_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "module_id": { "type": "string" },
+        "domain_id": { "type": "string" },
+        "module_kind": { "type": "string" },
+        "fidelity_level": { "type": "string" },
+        "release_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "memory_latency_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "device_latency_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "start_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "finish_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "queue_delay_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "serialization_delay_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "congestion_delay_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "profile_queueing_delay_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "propagation_delay_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "service_delay_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "completion_delay_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "backpressure_delay_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "profile_id": { "type": "string" },
+        "profile_selection": { "type": "string" },
+        "profile_asset_id": { "type": "string" },
+        "profile_asset_sha256": { "type": "string" },
+        "profile_source_id": { "type": "string" },
+        "profile_generation_path": { "type": "string" },
+        "profile_source_mode": { "type": "string" },
+        "profile_calibration_level": { "type": "string" },
+        "profile_claim_scope": { "type": "string" },
+        "service_busy_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "has_service_busy_time": { "type": "boolean" },
+        "elapsed_time_includes_queue_delay": { "type": "boolean" },
+        "resource_annotations": { "type": "object", "additionalProperties": { "type": "string" } },
+        "retransmission_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "flow_control_stall_count": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "actual_path": { "type": "array", "items": { "type": "string" } },
+        "link_endpoints": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["source", "destination"],
+            "properties": { "source": { "type": "string" }, "destination": { "type": "string" } }
+          }
+        },
+        "execution_events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "phase_id", "link_id", "port_id", "time_ps", "attempt"],
+            "properties": {
+              "kind": { "type": "string" },
+              "phase_id": { "type": "string" },
+              "link_id": { "type": "string" },
+              "port_id": { "type": "string" },
+              "time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+              "attempt": { "$ref": "f6b-common.schema.json#/$defs/uint64" }
+            }
+          }
+        }
+      }
+    },
+    "collectiveStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "step_id",
+        "collective_id",
+        "phase_id",
+        "round",
+        "chunk",
+        "start_time_ps",
+        "end_time_ps",
+        "source_device",
+        "destination_device",
+        "bytes",
+        "dependencies",
+        "state"
+      ],
+      "properties": {
+        "step_id": { "type": "string" },
+        "collective_id": { "type": "string" },
+        "demand_id": { "type": "string" },
+        "phase_id": { "type": "string" },
+        "phase": { "type": "string" },
+        "round": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "chunk": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "start_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "end_time_ps": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "source_device": { "type": "string" },
+        "destination_device": { "type": "string" },
+        "bytes": { "$ref": "f6b-common.schema.json#/$defs/uint64" },
+        "dependencies": { "type": "array", "items": { "type": "string" } },
+        "state": { "type": "string" }
+      }
+    }
+  }
+}

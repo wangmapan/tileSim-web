@@ -239,6 +239,29 @@ describe("typed result presentation", () => {
     expect(wrapper.get('[role="alert"]').text()).toContain("无法显示的结果块");
     expect(wrapper.text()).not.toContain("secret payload must not render");
   });
+
+  it("requires explicit confirmation before a result report action can run", async () => {
+    const wrapper = mount(AgentTypedBlockList, {
+      props: {
+        blocks: [
+          {
+            block_type: "report_action",
+            block_id: "report:1",
+            action: "generate_user_run_interpretation",
+            status: "pending",
+            title: "可以生成结果解读报告",
+            detail: "只整理当前 run。",
+            run_id: "run:1",
+            context_revision: "context:1",
+          },
+        ],
+      },
+    });
+    expect(wrapper.get('[data-block-type="report_action"] button').text()).toContain("生成结果解读报告");
+    expect(wrapper.emitted("report-confirm")).toBeUndefined();
+    await wrapper.get('[data-block-type="report_action"] button').trigger("click");
+    expect(wrapper.emitted("report-confirm")?.[0]).toEqual(["report:1"]);
+  });
 });
 
 describe("Agent copilot shell interaction", () => {
@@ -249,7 +272,8 @@ describe("Agent copilot shell interaction", () => {
 
     expect(wrapper.attributes("data-state")).toBe("open");
     expect(wrapper.get(".agent-copilot-shell__header").text()).toContain("小拓 · TileSim 助手");
-    expect(wrapper.get(".agent-composer__label").text()).toBe("描述要理解或调整的内容");
+    expect(wrapper.get(".agent-copilot-shell__header").text()).not.toContain("在线");
+    expect(wrapper.get(".agent-composer__label").text()).toBe("直接告诉我你想做什么");
     expect(wrapper.get("textarea").attributes("placeholder")).not.toContain("你");
     expect(wrapper.findAll(".agent-block")).toHaveLength(blocks.length);
     await wrapper.get('button[aria-pressed="false"]').trigger("click");
@@ -287,11 +311,48 @@ describe("Agent copilot shell interaction", () => {
     });
     const before = wrapper.findAll(".agent-block").length;
 
+    expect(wrapper.find(".agent-context-bar").exists()).toBe(false);
     await wrapper.setProps({ context: pageContext("context:experiment:2") });
 
     expect(wrapper.findAll(".agent-block")).toHaveLength(before);
-    expect(wrapper.text()).toContain("页面或选择已更新；现有内容仍按原上下文保留");
     expect(wrapper.text()).toContain("现有内容使用旧上下文");
+  });
+
+  it("keeps internal context and Harness details out of the user-facing shell", async () => {
+    const wrapper = mount(AgentCopilotShell, {
+      props: {
+        modelValue: "open",
+        context: pageContext(),
+        blocks: [],
+        sessions: [
+          {
+            id: "session-internal",
+            title: "新会话",
+            updated_at: "2026-10-26T00:00:00Z",
+            message_count: 0,
+            block_count: 0,
+          },
+        ],
+        activeSessionId: "session-internal",
+        modelChannel: true,
+        modelCatalogue: ["model-internal"],
+        modelSelected: "model-internal",
+        harnessAvailable: true,
+        harnessProjection: { operation_id: "operation-internal" } as never,
+        optimizationSessions: [{ session_id: "optimization-internal" }] as never,
+        batchSessions: [{ batch_id: "batch-internal" }] as never,
+      },
+    });
+
+    expect(wrapper.find(".agent-copilot-shell__harness").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("operation-internal");
+    expect(wrapper.text()).not.toContain("optimization-internal");
+    expect(wrapper.text()).not.toContain("batch-internal");
+    expect((wrapper.get(".agent-copilot-shell__settings").element as HTMLDetailsElement).open).toBe(false);
+    expect(wrapper.get(".agent-copilot-shell__settings > summary").text()).toBe("设置");
+    expect(wrapper.get(".agent-block-empty__choices").findAll("button")).toHaveLength(3);
+    await wrapper.get(".agent-copilot-shell__settings > summary").trigger("click");
+    expect((wrapper.get(".agent-copilot-shell__settings").element as HTMLDetailsElement).open).toBe(true);
   });
 
   it("labels run-bound contexts as explain-only instead of implying draft access", () => {
@@ -340,13 +401,19 @@ describe("Agent copilot shell interaction", () => {
 describe("conversation turns", () => {
   it("opens with task choices and forwards each choice without creating a run", async () => {
     const wrapper = mount(AgentTypedBlockList, { props: { blocks: [] } });
-    expect(wrapper.text()).toContain("你好，需要小拓帮忙做些什么");
+    expect(wrapper.text()).toContain("我可以帮你了解当前页面、准备实验草案，或解读已有运行结果");
     const choices = wrapper.findAll(".agent-block-empty__choices button");
-    expect(choices.map((button) => button.text())).toEqual(["配置实验", "分析实验结果", "学习怎么看结果"]);
+    expect(choices.map((button) => button.attributes("data-task"))).toEqual(["capabilities", "configure", "analyze"]);
+    expect(choices.map((button) => button.get("strong").text())).toEqual([
+      "了解助手能做什么",
+      "从实验配置开始",
+      "从已有结果开始",
+    ]);
     await choices[0].trigger("click");
     await choices[1].trigger("click");
     await choices[2].trigger("click");
-    expect(wrapper.emitted("start")?.map(([task]) => task)).toEqual(["configure", "analyze", "learn"]);
+    expect(wrapper.emitted("start")?.map(([task]) => task)).toEqual(["capabilities", "configure", "analyze"]);
+    expect(wrapper.text()).not.toContain("学习怎么看结果");
   });
 
   it("shows the user's own turn and the model's answer with the model that wrote it", () => {
@@ -465,7 +532,7 @@ describe("composer while an answer is arriving", () => {
     await wrapper.get("textarea").setValue("再激进一点");
 
     expect(wrapper.find('button[type="submit"]').exists()).toBe(false);
-    expect(wrapper.text()).toContain("模型正在回答；可以直接停止，也可以先写下一句");
+    expect(wrapper.text()).toContain("正在回答；可以停止，也可以先写下一个问题");
 
     await wrapper.get(".agent-composer__stop").trigger("click");
     expect(wrapper.emitted("cancel")).toHaveLength(1);
@@ -508,7 +575,7 @@ describe("composer, focus and lazy isolation", () => {
     expect(wrapper.text()).not.toContain("仅询问");
     expect(wrapper.text()).not.toContain("提出草案修改");
     expect(wrapper.text()).not.toContain("直接改参数");
-    expect(wrapper.text()).toContain("描述场景会交给配置助手生成方案");
+    expect(wrapper.text()).toContain("助手会先给出建议，需要时再请你确认");
   });
 
   it("does not submit Enter before Chinese IME composition ends", async () => {
@@ -547,7 +614,7 @@ describe("composer, focus and lazy isolation", () => {
     wrapper.unmount();
   });
 
-  it("forwards the complete optimization session and candidate ids through the lazy entry", async () => {
+  it("keeps Harness approval details out of the ordinary assistant sidebar", async () => {
     const provenance = {
       deployment_mode: "local_dev",
       source_mode: "synthetic_trace",
@@ -608,29 +675,70 @@ describe("composer, focus and lazy isolation", () => {
     });
     await flushPromises();
 
-    const approve = entry.findAll("button").find((button) => button.text().includes("批准候选并提交"));
-    expect(approve).toBeDefined();
-    await approve!.trigger("click");
-    expect(entry.emitted("optimization-approve")?.at(-1)).toEqual([sessionId, candidateId]);
+    expect(entry.find(".agent-copilot-shell__harness").exists()).toBe(false);
+    expect(entry.findAll("button").some((button) => button.text().includes("批准候选并提交"))).toBe(false);
+    expect(entry.text()).not.toContain(sessionId);
+    expect(entry.text()).not.toContain(candidateId);
   });
 
-  it("forwards optimization creation payloads through the lazy entry", async () => {
+  it("keeps optimization creation behind the conversation entry points", async () => {
     const entry = mount(AgentCopilotEntry, {
-      props: { modelValue: "open", context: pageContext(), blocks: [] },
+      props: {
+        modelValue: "open",
+        context: pageContext(),
+        blocks: [],
+        harnessAvailable: true,
+        batchSessions: [{ batch_id: "batch-internal" }] as never,
+      },
     });
     await flushPromises();
-    const createButton = entry.findAll("button").find((button) => button.text().includes("创建本地优化 session"));
-    expect(createButton).toBeDefined();
-    await createButton!.trigger("click");
-    const createForm = entry.findAll("form").find((form) => form.text().includes("候选基础配置"));
-    expect(createForm).toBeDefined();
-    await createForm!.trigger("submit");
-    expect(entry.emitted("optimization-create")?.at(-1)).toEqual([
-      {
-        objectivePath: "/tail_latency_summary/ttft_ps/p95_ps",
-        direction: "minimize",
-        baseConfigText: '{"scenario_id":"s1_des_example","fidelity_policy":"des","gpu_participation_mode":"gpu_free"}',
+    expect(entry.find(".agent-copilot-shell__harness").exists()).toBe(false);
+    expect(entry.findAll("form")).toHaveLength(1);
+    expect(entry.text()).not.toContain("创建本地优化 session");
+    expect(entry.text()).not.toContain("批准批量计划");
+    expect(entry.findAll(".agent-block-empty__choices button")).toHaveLength(3);
+  });
+
+  it("forwards flow resume actions from the lazy entry to App", async () => {
+    const entry = mount(AgentCopilotEntry, {
+      props: {
+        modelValue: "open",
+        context: pageContext(),
+        blocks: [
+          {
+            block_type: "agent_flow",
+            block_id: "flow-block-1",
+            flow_id: "flow-1",
+            session_id: "session-1",
+            status: "waiting_user",
+            phase: "需要确认",
+            title: "确认结果整理",
+            detail: "准备整理已有结果。",
+            user_goal: "解读结果",
+            evidence_status: "validated",
+            report_status: "not_started",
+            binding: {
+              session_id: "session-1",
+              run_id: null,
+              run_context_revision: null,
+              backend_identity: {},
+              schema_set_revision: sha("s"),
+              input_snapshot_digest: null,
+            },
+            pending_action: {
+              action: "confirm_report",
+              prompt: "是否继续？",
+              reason: "用户确认",
+            },
+          },
+        ] as never,
       },
+    });
+    await flushPromises();
+
+    await entry.get('[data-block-type="agent_flow"] button').trigger("click");
+    expect(entry.emitted("flow-resume")?.at(-1)).toEqual([
+      { blockId: "flow-block-1", action: "confirm_report" },
     ]);
   });
 

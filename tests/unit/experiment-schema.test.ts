@@ -226,7 +226,7 @@ describe("F8 experiment schema adapter", () => {
   it("intersects advertised options with the generated create-run schema", () => {
     const surface = formalSurface();
 
-    expect(surface.scenarios).toEqual([{ value: "s1_des_example", label: "S1 → S6" }]);
+    expect(surface.scenarios).toEqual([{ value: "s1_des_example", label: "标准推理运行（合成示例）" }]);
     expect(surface.fidelityPolicies).toEqual(["des"]);
     expect(surface.gpuParticipationModes).toEqual(["gpu_free"]);
     expect(surface.inputModes).toEqual(["controls", "json"]);
@@ -234,6 +234,32 @@ describe("F8 experiment schema adapter", () => {
     expect(surface.contractStatus).toBe("legacy_compatibility");
     expect(surface.contractGaps).toContain("experiment_descriptor_unavailable");
     expect(surface.canSubmit).toBe(true);
+  });
+
+  it("localizes the supported scenario names instead of exposing backend identifiers", () => {
+    const surface = buildExperimentSurface(
+      {
+        scenarios: [
+          { scenario_id: "s1_des_example", label: "S1 → S6 synthetic runtime example" },
+          { scenario_id: "dense_des_package", label: "Dense DES Trace package (package input only)" },
+          { scenario_id: "pd_disaggregation_example", label: "PD disaggregation runtime example" },
+        ],
+        fidelity_policies: ["des"],
+        input_modes: ["controls", "json"],
+        design_space_modes: ["built_in_synthetic"],
+        gpu_participation_modes: ["gpu_free"],
+      },
+      {
+        default_gpu_participation_mode: "gpu_free",
+        run_surface: { gpu_participation_modes: ["gpu_free"], design_space_modes: ["built_in_synthetic"] },
+      },
+    );
+
+    expect(surface.scenarios).toEqual([
+      { value: "s1_des_example", label: "标准推理运行（合成示例）" },
+      { value: "dense_des_package", label: "高密度离散事件模拟（仅导入 Trace 包）" },
+      { value: "pd_disaggregation_example", label: "预填充 / 解码分离运行（PD 示例）" },
+    ]);
   });
 
   it("uses one descriptor set for controls, JSON Pointer validation, and request serialization", () => {

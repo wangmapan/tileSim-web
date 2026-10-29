@@ -1,5 +1,365 @@
 # TileSim Web AI Handoff
 
+## 2026-10-29 Agent autonomy 复审第五轮：事件持久化 fail-closed（当前工作树，未提交、未部署）
+
+- 发现并修复优化 Agent 事件写入失败被当作普通遥测处理的真实风险：`bridge/server.py` 的
+  `_optimization_set_agent_event` 现在把非预期存储异常包装为 `event_persistence_failed`，并标记
+  `unknown_outcome=true`；worker 不再继续模型重试、规则回退或自动提交，而是进入
+  `recovery_required`/人工恢复边界。事件仍只持久化有界摘要与 digest，不写入完整模型文本。
+- 新增 `bridge/test_agent_event_persistence.py`，注入事件存储故障并验证错误码、未知结果和不可自动重试语义，
+  也覆盖 waiting-approval 状态进入 recovery 的窗口。定向优化测试为 **22 tests / OK**；Bridge `py_compile`
+  通过；全量 Bridge discovery 为 **628 tests / 7 skipped / OK**。
+- 前端最新全量 Vitest 为 **131 files / 1403 passed / 8 skipped**；`pnpm typecheck`、`pnpm lint`、
+  `pnpm contracts:check`（canonical revision `sha256:0085e3a4e89576fff168f29d811be581c7107b9bd3f8fabf9834d651f3c606b3`）、
+  `pnpm docs:check`、`pnpm deps:check` 和既有生成物检查保持通过。LangGraph flow 仍是
+  `deterministic_transition_adapter` / `optional_not_active`，事件端点仍是可恢复回放 + durable polling，
+  不宣称实时长连接。
+- 规则 fallback 审查确认：意图识别失败不会回退关键词猜测；`deterministic_fallback` 仅用于已验证证据整理，
+  未知意图进入 clarification/waiting_user。批处理仍为 `max_concurrency=1` bounded serial。
+- 能力边界继续为 `local_dev + synthetic_trace + exploratory + not_for_production`；Run Intake v2/create-run、
+  Provider/live acceptance、真实 GPU、CTest 与生产部署仍 blocked/not-run。未触碰 `D:\\tileSim`、
+  `127.0.0.1:5173`、Provider credential、真实用户 run、commit 或 push。
+
+## 2026-10-29 Agent autonomy 复审第四轮：导航历史与恢复终态 fail-closed（当前工作树，未提交、未部署）
+
+- 纯导航执行器 `bridge/services/agent_orchestrator.py` 不再静默过滤 checkpoint 中的未知、重复或未授权
+  `visited_pages`；未知页面/重复历史/未授权历史、空或含未知页面的 allowlist，以及额外 action grant 均拒绝，
+  保留原始损坏历史并返回 `navigation_history_invalid`/授权检查失败。`bridge/test_agent_orchestrator.py` 新增回归。
+- durable flow runtime 校验 `navigation_attempts` 不得超过授权上限、不得落后于 `visited_pages`，并重新校验
+  observation 的实际页面与发布 capability 集合；不存在实际页面时不能声称拥有 capability。对应回归位于
+  `bridge/test_agent_flow.py`。
+- batch/optimization 的 JSON event replay 与 SSE 现在把 `recovery_required`、`manual_intervention_required` 作为
+  观察终态，前端 `src/lib/api/agent-optimization.ts` 与 Harness 面板不再把人工介入状态误报为 active；事件序列
+  gap 继续 409 fail-closed。相关 HTTP 回归覆盖 recovery/manual replay。
+- Bridge Harness HTTP 测试在替换全局 SQLite store 后恢复原 store，消除了按 unittest discovery 顺序运行时的
+  closed-database 污染；`PYTHONPATH=D:\\tileSim-web python -m unittest discover -q` 当前 **621 tests / 7 skipped / OK**。
+- 本轮没有修改 contract JSON、generated client、schema revision 或 allowlist；canonical revision 仍为
+  `sha256:0085e3a4e89576fff168f29d811be581c7107b9bd3f8fabf9834d651f3c606b3`。能力边界仍为
+  `local_dev + synthetic_trace + exploratory + not_for_production`；Run Intake v2/create-run、Provider/live acceptance、
+  CTest、真实 GPU 与生产部署仍 blocked/not-run。
+- 未触碰 `D:\\tileSim`、`127.0.0.1:5173`、Provider credential、真实用户 run；未 commit、未 push。
+
+## 2026-10-29 Agent autonomy 复审第三轮：契约 manifest、checkpoint 与生命周期收口（当前工作树，未提交、未部署）
+
+- 本轮修复了真实的发布契约漂移：`assistant-intent` 现在在 `bridge/contracts/openapi.json` 中明确标为
+  `legacy_compatibility`、`routable=false`，active HTTP/runtime 只使用 `agent-intent`；同时 Agent Flow
+  manifest/schema/fixture/generated client 对齐 13 个 schema identity，并补齐
+  `revoke_authorization` endpoint。`pnpm contracts:check` 当前 canonical revision 为
+  `sha256:0085e3a4e89576fff168f29d811be581c7107b9bd3f8fabf9834d651f3c606b3`。
+- durable flow projection 现在在 GET、事件回放、resume/revoke 和 restart 读取前校验 event sequence、导航计数、授权 usage
+  与 envelope；字符串、负数、回退或损坏状态统一为 `langgraph_checkpoint_mismatch` / HTTP 409，禁止静默 `int()` 或归零。
+- 前端导航生命周期继续保持 fail-closed：批准的目标路径过渡不会误 abort 自身 controller；会话切换/删除/卸载强制停止旧循环；未知
+  `visited_pages` 不再被静默过滤。模型选择仍为 session/principal/workspace 绑定与请求级 immutable config snapshot；HTTP 选择/catalogue
+  缺少 session header 时返回 400。
+- 真实验证：前端 Vitest `131 files / 1395 passed / 8 skipped`；Bridge discovery `608 tests / 7 skipped / OK`；定向 Flow/intent/model
+  测试与 `pnpm typecheck`、`pnpm lint`、`pnpm build`、`pnpm docs:check`、`pnpm deps:check`、`git diff --check` 已通过（最终契约生成后
+  的全量复跑仍需按门禁顺序补齐）。构建仅保留既有大 chunk warning。
+- 语义边界不变：Flow/optimization/batch/harness SSE 是可恢复事件回放 + durable polling，不宣称实时长连接；batch 是
+  `max_concurrency=1` bounded serial；LangGraph runtime 为 `optional_not_active`；Run Intake v2/create-run、Provider/live acceptance、
+  CTest、真实 GPU 与生产部署仍 blocked/not-run。能力保持 `local_dev + synthetic_trace + exploratory + not_for_production`。
+- 本轮未触碰 `D:\tileSim`、`127.0.0.1:5173`、Provider credential、真实用户 run、部署；未 commit、未 push。
+
+## 2026-10-29 Agent flow 施工后第二轮审查与门禁修复（当前工作树，未提交、未部署）
+
+- 导航执行的两个响应丢失窗口已补齐：撤销与成功页面观察都使用同一幂等键做一次有界重放，
+  仍不确定时通过 durable GET 对账；只有匹配已持久化的 `cancelled/revoked` 或 observation+sequence
+  才恢复成功，否则保持 `stale`，不重新暴露旧动作。`src/App.vue` 与
+  `tests/unit/agent-flow-app-integration.test.ts` 回归覆盖通过（App lifecycle 42、navigation 10）。
+- Bridge flow 预算现在绑定同一签名授权 envelope：`max_navigation_attempts` 不得扩大授权预算；
+  optional runtime 的 `model_calls`/`run_creations` 计数单调合并，类型回退和超预算均
+  `langgraph_checkpoint_mismatch`/`authorization_budget_exhausted` fail-closed。
+  `bridge/test_agent_flow.py` 定向 **45 tests OK**。
+- 修复 Bridge manifest 测试对旧 11 个 flow identity 的硬编码，改为校验当前发布的 13 个 exact identity；
+  `test_server.py` **191 tests OK**。Phase 2D registry 恢复只读兼容投影 API（不改变
+  `runtime_status=unavailable`、`agent_exposed/calculator/ranking=false` 或空的
+  `executable_combinations`），并将结构性 model facts 的 provenance/claim ceiling 保持在
+  `externally_specified`/`exploration`；registry tests **8 tests OK**。
+- 前端全量 Vitest **131 files / 1391 passed / 8 skipped**；`typecheck`、`lint`、`build`、
+  `contracts:check`（canonical revision `sha256:bb7dc63f42c11f01b38cb4c958353452905486d1513436e99168de60888ef6c4`）、
+  `docs:check`、`deps:check`、`git diff --check` 和 Bridge `py_compile` 通过。Prettier 对既有
+  dirty 的 Vue/TS 文件仍报告格式差异，Python 文件无 parser；未做覆盖式格式化。
+- 在 `bridge` 目录设置 `PYTHONPATH=D:\\tileSim-web` 后运行 `python -m unittest discover -q`，
+  全量 Bridge discovery **604 tests / 7 skipped / OK**；日志中的 400/503 是故障注入测试的预期
+  HTTP 结果，不是失败。显式 `test_server.py`、Agent flow/orchestrator/deletion/intent 和 registry
+  套件也均已独立通过。
+  CTest、E2E、Provider/live acceptance、真实 GPU、Run Intake v2 create-run 和生产部署仍未运行。
+- 未触碰 `D:\tileSim`、`127.0.0.1:5173`、Provider credential、真实用户 run；未 commit、未 push。
+  能力边界继续为 `local_dev + synthetic_trace + exploratory + not_for_production`。
+
+## 2026-10-29 Agent flow revoke、预算账本与导航恢复复核（当前工作树，未提交、未部署）
+
+- Flow authorization revoke 已形成独立的 JSON/OpenAPI/generated client 链路：
+  `POST /api/agent/flows/{flow_id}/authorization/revoke` 要求完整授权 envelope、当前 binding、
+  cursor、principal/workspace 和幂等键；Bridge 以 durable 事务写入 `authorization_status=revoked`、
+  `cancelled` terminal 状态及连续事件，精确重试返回同一 replay，撤销与 resume 竞态 fail-closed。
+- 生成器已补齐 `AgentFlowRevokeRequest` / `AgentFlowRevokeResponse`，当前 canonical schema-set oracle
+  为 `sha256:bb7dc63f42c11f01b38cb4c958353452905486d1513436e99168de60888ef6c4`；
+  `pnpm contracts:check` 与 `pnpm typecheck` 通过。
+- Flow 的 `max_execution_time_ms` 现在由 Bridge 根据 durable `created_at` 计算服务端权威使用量；
+  resume 前和可选 runtime 返回后均重新检查，超时持久化为 `failed / execution_time_budget_exhausted`，
+  授权标记为 exhausted，不继续导航或执行。GET 投影也显示最新 usage/remaining。
+- 浏览器导航恢复会在每个失败候选后立即用同一 flow resume 写入 transition event，再使用更新后的
+  cursor 尝试下一候选；Bridge 编排器保留 bounded `navigation_failures`。导航卡新增“停止这条建议”，
+  通过 revoke endpoint 停止待执行授权，不再留下可继续的旧按钮。
+- 定向证据：Bridge `test_agent_flow test_agent_orchestrator test_agent_deletion` 为 **78 tests / 7 skipped / OK**；
+  前端 Flow/导航/App 定向为 **82 tests passed**，`typecheck` 通过。仍未 commit/push/deploy，
+  未触碰 `D:\tileSim`、`127.0.0.1:5173`、Provider、credential 或真实用户 run。
+- 语义边界不变：Flow SSE 是可恢复事件回放 + durable polling；LangGraph runtime 仍为
+  `optional_not_active`；batch 仍是 `max_concurrency=1` bounded serial；能力仍为
+  `local_dev + synthetic_trace + exploratory + not_for_production`。
+
+## 2026-10-29 Agent 意图 policy 与 schema-set 基线复核（当前工作树，未提交、未部署）
+
+- `src/features/agent-intent-compiler/model-policy.ts` 将模型返回的 `risk_level`、
+  `requires_user_confirmation`、`suggested_steps` 和 `clarification_questions` 投影为确定性
+  policy：澄清问题会停止后续动作；高于 low 的风险、明确 execute 步骤和模型确认标记不会授予
+  权限，导航仍只进入既有人工确认卡，仿真执行仍进入明确未执行/拒绝路径。模型输出不是事实或授权。
+- 当前 schema-set oracle 与 generated client 均为
+  `sha256:6c3b799abc38e6952eac0a6472ba202e37b48ba408553e4732dff46c8fb21d59`；本轮只运行生成物
+  drift check，没有新增 canonical contract 字段。`assistant-intent` 仍是历史兼容 schema，实际
+  active HTTP/runtime 路径为 `agent-intent`，两者未合并，后续应在正式迁移窗口处理。
+- Flow/optimization/batch/harness 事件流的产品语义保持“可恢复事件回放 + durable polling”，
+  前端状态文案不再把 Flow 回放称为实时通道；batch 仍为 `max_concurrency=1` 的 bounded serial。
+- 新增意图 policy 回归：`tests/unit/agent-intent-model-policy.test.ts`；保留
+  `local_dev + synthetic_trace + exploratory + not_for_production`，未接 create-run、Provider 或
+  生产执行。
+- 本条未触碰 `D:\tileSim`、`127.0.0.1:5173`、Provider、credential、真实用户 run、部署、commit 或 push。
+
+## 2026-10-29 Agent 面试准备语义收口（当前工作树，未提交、未部署）
+
+- 修正编排节点命名：`bridge/services/agent_orchestrator.py` 的 `compose_report` 已改为
+  `mark_report_ready`。该 transition 只标记已经通过证据校验的结果可供报告展示层读取，不组装正文、claims
+  或 citations；前端报告投影仍由结果报告 feature 负责，避免把状态标记误称为报告生成。
+- Agent Harness schema identity registry 补齐 `optimization_authorization_request`、
+  `optimization_authorization` 和 `optimization_authorization_response` 三个已发布 schema；未修改
+  canonical JSON、generated client 或 revision。`test_21_schema_identity_manifest_has_no_drift` 已通过。
+- 模型选择继续保持 session-scoped、request-start immutable config snapshot；assistant chat、intent 和只读结果分析
+  的 Bridge 请求沿用同一 scope，正在进行的流不会因另一会话切换模型而改变。能力边界仍为
+  `local_dev + synthetic_trace + exploratory + not_for_production`。
+- 事件端点的准确语义仍是可恢复事件回放 + durable polling；当前未宣称多数 Agent 端点是真实时长连接。批处理仍为
+  `max_concurrency=1` 的 bounded serial batch。用户删除走跨 store permanent graph erase，软删仅作为明确命名的 retention tombstone 兼容路径。
+- 本条未触碰 `D:\tileSim`、`127.0.0.1:5173`、Provider、credential、真实用户 run、部署、commit 或 push。
+
+## 2026-10-28 Agent autonomy authorization budget 收口（当前工作树，未提交、未部署）
+
+- 授权 envelope 现在要求签发请求显式提供 `max_navigation_attempts`、`max_model_calls`、`max_tool_calls_per_round`、`max_run_creations` 和 `max_execution_time_ms`；缺失、零、负数、浮点数或超过 local-dev 上限均 fail-closed，不再从进程默认值恢复。`allowed_pages` 与 `allowed_actions` 也必须显式提供、非空、去重并来自发布目录；导航执行器只接受显式 `navigate` 动作。
+- 授权 digest、验证、撤销、durable agent turn receipt 和剩余预算继续绑定这些字段；旧 envelope 在恢复/重放时不能重新获得默认预算。回归覆盖五类预算的缺失与边界值、白名单缺失/未发布值、HTTP 签发与幂等 replay。
+- Agent Harness generated client 已与 canonical Bridge schema-set 绑定到 `sha256:495627d32f488aa46933795664c86a837c9ef05a211528b451054ec6ccce16a9`；`pnpm contracts:check` 通过。Agent Bridge 定向 **128 tests / 7 skipped / OK**，`test_server.py` **187 tests / OK**；Web 全量 **130 files / 1349 passed / 8 skipped**，`typecheck`、`lint`、`build`、`docs:check`、`deps:check`、`git diff --check` 和 Bridge `py_compile` 通过。HTTP 合并运行曾遇到一次 Windows `WinError 10053`，单测随后独立复跑通过。
+- 仍保持 `local_dev + synthetic_trace + exploratory + not_for_production`；未接入 Run Intake v2/create-run 或生产执行，未触碰 `D:\tileSim`、`127.0.0.1:5173`、Provider、credential、真实用户 run、部署、commit 或 push。完整 E2E、CTest、Provider/live acceptance 未运行。
+
+## 2026-10-28 Agent 面试路径收口（当前工作树，未提交、未部署）
+
+- 修复配置页对明确“创建运行 / 启动运行 / 执行实验 / run it”请求的真实路由缺陷：`src/features/agent-intent-compiler/constants.ts` 暴露统一的 `isUnsupportedExecutionRequest()`，`src/App.vue` 在结果分析、疑问和配置草案分支之前将其绑定到 `unsupported_execution` flow；Bridge 在无授权时以 `authorization_required_for_execution` fail-closed，不能进入 `confirm_draft`，也不会调用 create-run。新增 `tests/unit/agent-execution-intent.test.ts` 和 App flow 回归断言。
+- 最新 Web 全量 Vitest **128 files / 1340 passed / 8 skipped**；Agent flow/intent 定向 **67 passed**；`pnpm typecheck`、`pnpm lint`、`pnpm build`（仅既有大 chunk warning）、`contracts:check`（canonical schema-set revision `sha256:dcee3503...`）、`docs:check`、`deps:check`、`git diff --check` 通过。
+- Bridge `test_server.py` **187 tests OK**，Agent flow/autonomy 定向拆分复跑 **80 tests / 7 skipped / OK**；同一组并行运行曾出现一次 Windows `WinError 10053` 连接中止，未视为代码断言通过。完整 Bridge discovery 仍有既有 Phase 2D registry 导入错误，真实 LangGraph runtime 仍未激活（`deterministic_transition_adapter` / `optional_not_active`）。
+- 能力边界保持 `local_dev + synthetic_trace + exploratory + not_for_production`；未修改正式 contract/generated/revision，未接 create-run，未触碰 `D:\tileSim`、`127.0.0.1:5173`、Provider、credential、用户 run、部署、commit 或 push。
+
+## 2026-10-27 执行回放第二轮审查与修补（当前工作树，未提交、未部署）
+
+- 修复播放到时间终点后再次点击“播放”无法重播的问题：会从已验证时间范围的起点重新开始，并清空上一轮帧余量，不改变用户选择的慢放档位。
+- 修复页面级空格快捷键与证据说明 `<summary>` 冒泡冲突；焦点在说明控件时只展开/收起说明，不会意外启动回放。Fabric/集合步骤的 SHA、Pointer 等技术证据保持默认收起，按需展开。
+- 拓扑回放的物理链路和详情选中项都按 ID 预计算索引，避免大拓扑/大事件集在每帧或每次详情重绘时重复线性查找；令牌进度改用 `BigInt` 定点比例，避免 64 位 ps 时间戳转 `Number` 后的精度损失；没有改变路径校验或证据来源语义。
+- 回放专项测试 **79 passed（6 files）**；全量 Vitest **1315 passed / 8 skipped（127 files）**；`pnpm typecheck`、`pnpm build`、改动文件 ESLint/Prettier、`git diff --check` 通过（build 仅有既有大 chunk warning）。视觉复核覆盖 1440×900、1920×1080、545×900、浅色/暗色模式，无横向溢出。未触碰后端、`127.0.0.1:5173`、部署、提交或推送。
+
+## 2026-10-27 执行回放慢速档位与信息密度修补（当前工作树，未提交、未部署）
+
+- 修复速度回弹：`ReplayControls` 的 `update:speed` 现在由父回放面板正确接收并写回状态；速度档位改为 **1/1000、1/2000、1/4000、1/10000、1/20000**，默认 **1/2000**，播放与重渲染后保持所选档位。
+- “全部已报告证据”、集合通信步骤和拓扑路径证据默认收起；选中对应证据时自动展开并定位，保留虚拟列表、键盘焦点和完整后端记录，不删除或推断证据。
+- 回放定向测试 **76 passed**；全量 Vitest **1312 passed / 8 skipped（127 files）**；`vue-tsc --noEmit`、改动文件 ESLint/Prettier、`git diff --check` 通过。临时 4175 预览检查了 1440×900 与 545×900，默认信息密度、速度控件和无横向溢出符合预期；未触碰 `127.0.0.1:5173`、后端、部署、提交或推送。
+
+## 2026-10-26 执行回放同屏布局与数据流可视化修补（当前工作树，未提交、未部署）
+
+- 回放主工作区改为桌面端左侧时间轴、右侧吸附式“设备与链路 / 详情”实时视图；集合步骤列表保留在下方，窄屏自动恢复纵向布局，避免播放时反复滚动寻找拓扑图。
+- 拓扑回放新增“当前数据流”读出：优先展示后端已报告的 collective 阶段、round/chunk、源设备、目标设备和无损 bytes；Fabric 事件没有 bytes 时明确显示未报告。
+- 只有 `available` route 且 `actual_path`、`linkIds` 与已验证 topology links 完整匹配时，才在 SVG 中显示沿真实链路移动的数据令牌；不从拓扑推断路径、不伪造 packet/flit。
+- 回归：回放组件/查询/导航/速度/虚拟列表定向测试 **76 passed**；全量 Vitest **1311 passed / 8 skipped（127 files）**；`vue-tsc --noEmit`、改动文件 ESLint/Prettier、`git diff --check`、生产构建通过（仅既有大 chunk warning）。临时 4175 视觉复核确认宽屏首屏同屏、窄屏降级与无横溢出；未触碰 `127.0.0.1:5173`、后端、部署、提交或推送。
+
+## 2026-10-26 执行回放独立模块与慢放默认值（当前工作树，未提交、未部署）
+
+- 回放已从执行过程页拆为独立的 `/replay` 路由，并在侧边栏新增“执行回放”入口；执行过程页不再重复挂载回放面板。独立页继续复用现有运行身份、工件校验、路径/拓扑/集合证据和大列表窗口化能力。
+- 播放默认速度固定为原速的 **1/100**（控件显示“1/100 速度 · 慢 100 倍”），可选档位仅更慢（最高不超过 1/100）；切换档位会清空上一档的帧余量，避免速度切换造成时间轴跳跃。
+- 新增导航、速度和回放定向回归；本轮回放/导航相关测试、`vue-tsc --noEmit`、改动文件 ESLint/Prettier、生产构建均通过。未触碰后端、`127.0.0.1:5173`、部署、提交或推送。
+
+## 2026-10-26 执行回放真实后端闭环与部署（当前工作树）
+
+- 后端现在从真实 Fabric 执行状态导出 `tilesim.execution_replay.v1`：包含 `actual_path`、`link_endpoints`、`execution_events`、开始/结束时间和 S5 collective round/chunk 步骤；`ModuleStats::total_bytes` 全链路保持无损 `uint64`，不再输出浮点字节数。
+- Bridge 在 S6 CLI 成功后校验 canonical execution replay；缺失或非法工件会以 `cli_invalid_execution_replay` 失败，不再把“运行成功但回放不可用”静默发布为 completed。未修改缺口提示文案，也未从拓扑推断路径、packet 或 flit。
+- 正式部署脚本已从当前 `D:\tileSim` 工作树重建 WSL CLI 并原子更新 `runtime/backend-current.json`：source/build state `7e880db134b103290d9d437eb564daaf737ce9a0f2e4fd2c854344bddc031013`，CTest **102/102**，Bridge `test_server.py` **187 tests OK**，Web Vitest **1301 passed / 8 skipped**，生产构建通过；随后 5173 已切换到该 manifest，health `execution_ready=true`。
+- 新建真实 run `run-20261026-182001-4e8f284b` 已 completed；回放工件为 `supported/ready`，含 **1164** 条 Fabric 路径、**8148** 条执行事件、**1164** 个 collective 步骤，时间范围 `100–21029082468 ps`，两个模块的 `total_bytes` 均为 JSON 整数。上述仍属于当前声明的 synthetic consistency/exploratory 证据边界。
+- 部署摘要排除项新增 `tmp/`，避免回放探针和 Bridge 临时产物触发源码摘要误报；真实 Web 源文件变化仍会 fail-closed。未提交、未推送。
+
+## 2026-10-26 Agent 侧栏转为对话优先（工作树，未提交、未部署）
+
+- 普通用户侧栏不再挂载 Stage 4/5 Harness 技术面板，因此不会再展示 session、candidate、checkpoint、事件序列或“创建后再批准”等内部控件；
+  底层 Harness props、事件、API 和后端审批边界保持不变。
+- 会话选择、模型选择和本地缓存操作移入默认收起的“会话与模型设置”；标题、输入提示和空态入口改为更大的对话优先文案，保留三个快捷入口供用户开始对话或生成提示词。
+- 回归位于 `tests/components/agent-copilot-shell.test.ts`、`tests/unit/agent-copilot-shell-accessibility.test.ts`：验证 Harness 数据即使存在也不渲染，三个快捷入口仍保留，模型/会话控制仍可在设置区使用。未修改 contract、generated client、Bridge、Provider 或执行能力。
+
+## 2026-10-26 Agent 侧栏冗余上下文展示移除（工作树，未提交、未部署）
+
+- 右侧助手不再渲染 `AgentContextBar` 这块重复的上下文卡片；页面上下文 envelope、revision/stale 比较、composer
+  禁用守卫和状态 footer 保持不变。用户仍可通过助手标题/状态和对话内容获得必要反馈，不再展示
+  `current-unsaved-experiment`、context revision、route、run ID 或引用数量等内部诊断字段。
+- 回归位于 `tests/components/agent-copilot-shell.test.ts`：确认上下文卡片不挂载，并保留上下文变化后的 stale 状态提示。
+  未修改 contract、generated client、Bridge、Provider 或执行能力。
+
+## 2026-10-26 Agent 助手第二轮协议与数据一致性审查（工作树，未提交、未部署）
+
+- 修复 `src/lib/api/agent-batch.ts` 的 batch replay 游标缺陷：`getAgentBatchEvents()` 现在要求返回的 `after_sequence` 是安全整数且与请求游标完全一致；batch detail 的事件也统一经过 schema identity、contract revision、batch binding、连续 sequence、state、digest、timestamp 和 provenance 校验，不再只检查序号和 `batch_id`。
+- 修复 `src/lib/api/assistant-model.ts` 的模型目录一致性缺陷：只有 `selected_model` 确实出现在已发布 `models` 列表中时才接受 catalogue；聊天与结果解读 SSE 终态后拒绝继续到达的帧，聊天也拒绝重复 plan，避免 `done`/`error` 后的晚到 payload 污染显示或触发后续动作。
+- 新增回归：`tests/unit/agent-batch-api.test.ts` 覆盖 replay cursor 漂移与 malformed detail event；`tests/unit/assistant-model-api.test.ts` 覆盖 selected identity 不在 catalogue；`tests/unit/assistant-model-chat.test.ts` 与 `tests/unit/assistant-result-analysis.test.ts` 覆盖终态后的 late frame。定向助手/API **68 passed**；全量 Vitest **124 files / 1289 passed / 8 skipped**。
+- 质量门禁：`vue-tsc --noEmit`、ESLint、Vite build、`contracts:check`（canonical revision `sha256:3677e6e3c01d0970a1107d97b2d0b3452c20c0230f412f4a1567ab4933478a89`）、`docs:check`（54 active Markdown）、`deps:check`（336 source files）、改动文件 Prettier 与 `git diff --check` 通过；build 只有既有大 chunk warning，contracts 只有既有 Ajv `date-time` ignored warnings。
+- Bridge 合并运行首次出现已知 Windows worker 连接中止，非断言失败；拆分重跑确认 `test_agent_flow.py + test_agent_orchestrator.py` **52 tests / 7 skipped / OK**，`test_server.py` **187 tests / OK**，py_compile 通过。完整 E2E、CTest、Provider/live acceptance 未运行；未触碰 `127.0.0.1:5173`、`D:\tileSim`、Provider、credential、用户 run、部署、commit 或 push。能力边界仍为 `local_dev + synthetic_trace + exploratory + not_for_production`。
+
+## 2026-10-26 Agent 助手全量审查：SSE 提前 EOF fail-closed 修复（工作树，未提交、未部署）
+
+- 发现并修复两个真实客户端缺陷：`src/lib/api/agent-optimization.ts` 的 optimization SSE observer，以及 `src/lib/api/agent-batch.ts` 的 batch SSE observer，在只收到 workflow 帧后正常 EOF 时会错误地 resolve 成功，调用方可能把被截断的 advisory stream 当成完整观察结果。两者现在都要求收到并通过 identity/state 校验的 terminal 帧；否则分别抛出 `incomplete_optimization_stream` / `incomplete_batch_stream`，继续交由现有 durable polling/retry 边界处理。
+- 新增 `tests/unit/agent-optimization-api.test.ts` 与 `tests/unit/agent-batch-api.test.ts` 回归，覆盖 workflow 后无 terminal 提前 EOF；原有完整 terminal、非法 terminal、sequence、schema metadata 和 incomplete SSE frame 断言继续保留。未改变 flow/harness observer 已有的 durable polling 语义。
+- 本轮实测：定向 SSE **14 passed**；全量 Vitest **124 files / 1284 passed / 8 skipped**；`pnpm typecheck`、`pnpm lint`、`pnpm build`、`pnpm contracts:check`、`pnpm docs:check`（54 active Markdown）、`pnpm deps:check`（336 source files）、改动文件 Prettier 与 `git diff --check` 均通过。`contracts:check` canonical revision 为 `sha256:3677e6e3c01d0970a1107d97b2d0b3452c20c0230f412f4a1567ab4933478a89`，仅有既有 Ajv `date-time` ignored warnings；build 仅有既有大 chunk warning。
+- Bridge `py_compile` 通过；`python -m unittest test_server.py test_agent_flow.py test_agent_orchestrator.py` 为 **239 tests / 7 skipped / OK**。完整 E2E、CTest、Provider/live acceptance 未运行；未触碰 `127.0.0.1:5173`、`D:\tileSim`、Provider、credential、用户 run、部署、commit 或 push。能力边界继续为 `local_dev + synthetic_trace + exploratory + not_for_production`。
+
+## 2026-10-26 LangGraph flow follow-up fail-closed 收口（工作树，未提交、未部署）
+
+- `src/App.vue` 的 persisted flow 恢复现在共享 dashboard/navigation ready promise；会话切换会等待 bootstrap/deep-link 同步和 `nextTick()`，并以 session/route token 围栏旧恢复，避免暂态空 `runId` 把有效 flow 误判为 stale。`src/lib/api/agent-flow.ts` 另拒绝与 URL 不同的 status flow、终态携带 pending action、跨 flow 的嵌套 event binding/state，以及不完整 SSE frame；`src/lib/api/sse.ts` 在 EOF 遇到未闭合 frame 时 fail-closed，调用方继续走 durable polling/重试边界。
+- 修复一个真实 typecheck 回归：`src/lib/api/agent-optimization.ts` 使用生成客户端实际发布的 `optimizationEventStream`，不再引用不存在的路径方法；`src/contracts/generated/agent-harness.ts` 与 `scripts/generate-agent-harness-client.mjs` 的 stream operation 保持一致。
+- 本轮证据：全量 Vitest **123 files / 1272 passed / 8 skipped**；Agent Flow API/App 定向 **47 passed**；Bridge flow/orchestrator **52 tests / 7 skipped / OK**，`test_server.py` **187 tests OK**；Bridge `py_compile`、`vue-tsc --noEmit`、ESLint、Vite build、`contracts:check`、`docs:check`、`deps:check`、改动文件 Prettier 和 `git diff --check` 均通过。契约检查的 canonical revision 为 `sha256:3677e6e3c01d0970a1107d97b2d0b3452c20c0230f412f4a1567ab4933478a89`，仅有既有 Ajv `date-time` ignored warnings，build 仅有既有大 chunk warning。
+- 完整 E2E、CTest、Provider/live acceptance 未运行；未触碰 `127.0.0.1:5173`、`D:\\tileSim`、Provider、credential、用户 run、部署、commit 或 push。标准 Bridge 仍为 deterministic transition adapter，optional LangGraph runtime 为 `optional_not_active`；能力边界继续是 `local_dev + synthetic_trace + exploratory + not_for_production`，Run Intake v2 DoR 与生产执行仍 blocked/pending。
+
+## 2026-10-26 Agent 助手审查追加收口（工作树，未提交、未部署）
+
+- `src/lib/api/agent-flow.ts` 对 start/status/events/resume 的外层 response envelope 增加闭世界字段、必填字段、布尔值、cursor 和 events 数组校验；未知字段、缺失字段或错误类型现在以 `invalid_flow_payload` fail-closed，不会被静默忽略。状态/event 内层仍继续走 generated validator、binding、sequence 和 terminal 一致性校验。
+- `src/App.vue` 的实验配置页 explain flow 在只读流程完成后仍会追加用户可读的页面说明，不再只显示“流程已完成”状态块而吞掉答案；首次挂载与路由恢复继续等待 dashboard/deep-link 同步完成后再恢复 pending flow，避免临时空 `runId` 把有效流程误判为 stale。该恢复等待只增加身份保护，不覆盖实验页自己的 rich agent context。
+- `src/stores/agent-sessions.ts` 恢复本地 transcript 时拒绝带未知字段、空内容或超长内容的 chat message，防止被篡改的 localStorage 字段进入下一次 Bridge 请求；对应回归位于 `tests/unit/agent-sessions.test.ts`。现有 quota 裁剪仍只作用于持久化副本，不删当前可见内存内容。
+- 本轮回归：Agent 相关定向 **6 files / 107 passed**；全量 Vitest **123 files / 1264 passed / 8 skipped**；`vue-tsc --noEmit`、标准 `pnpm lint`、`pnpm build`、`contracts:check`、`docs:check`、`deps:check`、改动文件 Prettier 和 `git diff --check` 均通过。构建仅有既有大 chunk warning，契约检查仅有既有 Ajv `date-time` ignored warnings。
+- 未运行完整 E2E、CTest、Provider/live acceptance；未修改正式契约 JSON、Bridge 后端、generated revision 或生产执行能力。5173、`D:\tileSim`、Provider、credential、用户 run、部署、commit 和 push 均未触碰。能力边界仍为 `local_dev + synthetic_trace + exploratory + not_for_production`。
+
+## 2026-10-26 Agent 助手全链路审查与最小修复（工作树，未提交、未部署）
+
+- `src/lib/api/assistant-model.ts` 现在对 one-shot descriptor/plan/catalogue/selection 和两条 SSE 流统一校验 `tilesim.bridge.api.v1`、当前 generated schema-set revision、固定 schema identity、闭世界字段、plan instruction、模型目录计数/选择一致性与字段边界。SSE 对目标 envelope 的坏 JSON、未知 event、非法 plan/error/done 和缺少正常终态 fail-closed；非本频道 prose 仍忽略，不会把它当成用户回答。
+- `src/lib/api/agent-flow.ts` 现在在语义 binding/sequence 检查前后结合 generated Agent Flow validators，拒绝未知根字段、非法日期时间、response terminal/status 不一致、resume action 错配和 terminal frame 的非终态；start binding 的 revision drift 与其他 identity mismatch 分开报告。`src/App.vue` 的取消操作立即递增 stream token、释放 busy/abort 状态并结束未完成 assistant block，避免 abort 尚未 settle 时旧回调污染新 turn。
+- `src/stores/agent-sessions.ts` 对本地缓存的 created/updated/expires 时间戳、非负 sequence 和 capability projection 做 fail-closed 校验；损坏的 capability 不会重新注入助手上下文，过期/非法日期的会话不会恢复。超预算裁剪只作用于待写入副本，不再通过 localStorage quota/size 路径删掉当前内存中的可见消息或 block。
+- 新增/收紧回归位于 `tests/unit/assistant-model-api.test.ts`、`assistant-model-chat.test.ts`、`agent-flow-api.test.ts`、`agent-flow-app-integration.test.ts`、`agent-sessions.test.ts`；没有修改正式 contract JSON、Bridge endpoint、generated contract revision 或生产执行能力。
+- 实测：Agent 相关 **37 files / 403 passed**；全量 Vitest **123 files / 1253 passed / 8 skipped**；Bridge `test_server.py + test_agent_flow.py + test_agent_orchestrator.py` **233 tests / 7 skipped / OK**；`vue-tsc --noEmit`、全仓 ESLint、`git diff --check`、`contracts:check`、`docs:check`、`deps:check`、Vite build 均通过。`contracts:check` 仍只报告既有 Ajv `date-time` ignored warnings，build 仍只有既有大 chunk warning；本轮未运行完整 E2E。
+- 后续 fail-closed 收口：flow start 的重复 Idempotency-Key 在进入 deterministic/optional runtime 前直接回放，Bridge 进程内并发由 start lock 串行化；客户端把 response binding revision、SSE frame id 和最终 event cursor 与 canonical schema/flow state 绑定；生成 Ajv validator 的 Node 原生 ESM helper 兼容 CJS default interop，并补实际调用回归。persisted agent-flow 在恢复前核对当前 run/context identity，损坏的 flow block 不进入 resume UI。补充门禁：全量 Vitest **123 files / 1255 passed / 8 skipped**；flow 前端定向 **46 passed**；`test_agent_flow + test_agent_orchestrator` **46 tests / 7 skipped / OK**，`test_server.py` **187 tests OK**；首次合并 Bridge 运行出现 Windows server worker 连接中止，拆分 canonical 套件后分别通过。完整 E2E 未运行。
+- 5173、`D:\tileSim`、Provider、credential、用户 run、部署、commit 和 push 均未触碰。能力边界继续是 `local_dev + synthetic_trace + exploratory + not_for_production`；Run Intake v2 DoR、Profile records、真实 LangGraph HTTP runtime 和生产执行仍 blocked/pending。
+
+## 2026-10-26 新建对话入口引导（工作树，未提交、未部署）
+
+- 助手空状态的三个入口已更新为「了解助手能做什么」「从实验配置开始」「从已有结果开始」，移除过时的「学习怎么看结果」入口。
+- 新用户引导只陈述当前已接入能力：解释页面和证据、生成并校验实验参数草案、只读解读已有运行结果；同时明确参数需用户确认，助手不会自动创建运行或调用真实 Provider。
+- 「了解助手能做什么」使用现有 `explanation` typed block 展示能力、自然语言示例和安全边界，不新增 Bridge contract、LangGraph route 或执行副作用。事件联合类型已同步更新，旧 `learn` 任务不再从空状态发出。
+- 受影响回归：`tests/components/agent-copilot-shell.test.ts` 覆盖入口文案、顺序、事件和旧文案移除；本轮不扩大到 Run Intake、Provider、生产执行或移动端。
+
+## 2026-10-26 Flow 生命周期与幂等收口（工作树，未提交、未部署）
+
+- `existing_run_analysis` flow 完成后，`src/App.vue` 会继续调用已验证的 `presentResultAnalysis`，不会只留下“流程已完成” typed block；结果分析仍受 run、schema、artifact 与 evidence binding 约束。
+- resume 请求按完整 payload 生成 SHA-256 bounded `Idempotency-Key`；同一 mutation 在响应丢失后的重试复用原 key，action/cursor/binding 变化生成新 key，成功或上下文/会话失效后清理。该逻辑不改变 HTTP flow 的 deterministic adapter 语义。
+- 当前实测门禁：前端 Vitest **123 files / 1222 passed / 8 skipped**；Bridge flow/orchestrator/`test_server` **230 tests / 7 skipped**；`typecheck`、`lint`、`contracts:check`、`docs:check`、`deps:check`、`build`、`git diff --check` 均通过。
+
+## 2026-10-26 LangGraph HTTP 边界更正（工作树，未提交、未部署）
+
+- `/api/agent/flows` 当前由 `bridge/services/agent_flow.py` 使用可审计的 SQLite WAL + deterministic transition engine 提供；它不是已接线的 LangGraph HTTP runtime。`build_langgraph_graph()` 仅在显式提供可选 `langgraph==1.2.17` 与 durable checkpointer 的隔离测试环境编译，标准 Bridge 进程不会自动加载该依赖。
+- `/api/manifest.agent_flow` 与 OpenAPI metadata 现在明确发布 `runtime_mode=deterministic_transition_adapter`、`langgraph_runtime_status=optional_not_active`、`activation_boundary=local_dev_only`；前端 typed block 使用“只读助手流程”文案，不把 HTTP adapter 宣称为 LangGraph runtime。当前 canonical schema-set revision 为 `sha256:3677e6e3c01d0970a1107d97b2d0b3452c20c0230f412f4a1567ab4933478a89`，且已由 `bridge/check_schema_set_revision.py`、生成客户端和 manifest 对齐。能力仍为 `local_dev + synthetic_trace + exploratory + not_for_production`，不创建 run、不写配置、不调用 Provider。
+- flow artifact binding 的 `bytes` schema 现在与 Bridge/前端无损十进制校验一致：只接受 `0` 或无前导零的十进制字符串；`01` 等值会 fail-closed。该契约修正已重新生成客户端和 validators，并使 schema-set revision 更新为上述值。
+- flow resume 的 `clarify_intent` 现在只接受显式发布的 intent enum；Bridge 不再从 `clarification` 自由文本猜测路由，歧义或缺失 intent 会保持 fail-closed。对应 HTTP 回归覆盖见 `bridge/test_agent_flow.py`。
+- Flow SSE 客户端现在也拒绝未发布的 event type；事件序列、flow/binding identity 和终态仍先经过连续性校验。
+- 当前 flow HTTP adapter 的真实门禁包括 schema/API response headers、start/resume binding identity、幂等、权限、stale、event sequence、SQLite restart/rollback 与 non-retryable observer fail-closed；实际 LangGraph HTTP integration 仍 pending，不得把 optional runtime tests 当作 endpoint 已接线证据。
+
+## 2026-10-25 最终 LangGraph/前端质量复核（工作树，未提交、未部署）
+
+- 经用户授权，本轮正式纳入 LangGraph flow contract 发布窗口：canonical Bridge schema-set revision 更新为 `sha256:89982d73beec1c709f729c0ec3c1fbe295d7fb0d3db0ecafccc6e0b6fc7e9c1e`；`bridge/contracts/openapi.json`、`bridge/contracts/schemas/api-manifest.schema.json`、`bridge/contracts/schemas/bridge-api.schema.json` 与生成的 `src/contracts/generated/bridge-client.ts`、`src/contracts/generated/bridge-contracts.ts`、`src/contracts/generated/agent-flow-validators.js` 必须保持同一 revision。`/api/manifest` 现发布完整 10 项 flow schema identity、endpoint、scope、幂等和 `create_run=false` 边界；该变更仍仅限 `local_dev + synthetic_trace + exploratory + not_for_production`。
+- 本轮最终实现文件为 `bridge/services/agent_orchestrator.py`、`bridge/test_agent_orchestrator.py` 和 `bridge/requirements.txt`；LangGraph **1.2.17** 在 Python **3.12.10** 隔离 `bridge/.venv` 中可导入。`build_langgraph_graph(checkpointer=InMemorySaver())` 实测返回 `CompiledStateGraph`；clarify/report interrupt 均可由 `Command(resume=...)` 恢复，确认后只读报告终态为 `completed / ready / read_only_result_ready`，stale、cancel、reject 和非法恢复重试均 fail-closed。未接 `server.py` endpoint、前端入口或正式用户服务，未创建 run、写配置、重算指标或调用 Provider。
+- 最终 Bridge 验证：`python -m py_compile services/agent_orchestrator.py test_agent_orchestrator.py` 通过；隔离 venv `python -m unittest test_agent_orchestrator.py test_server.py` 为 **207 tests OK**（编排器 20、`test_server.py` 187）。前端全量 `pnpm test -- --reporter=dot` 为 **119 files / 1172 passed / 8 skipped**；typecheck、lint、build、contracts:check、docs:check（54 active Markdown）、deps:check（331 source files）、改动前端文件 Prettier 和 `git diff --check` 均通过。仓库级 `pnpm format:check` 仍有 **14 个既有格式警告**，未覆盖式格式化。
+- 完整单 worker Edge E2E（临时 4173）实际为 **1 failed / 66 not reached**：warmup 导航在 90 秒超时，故暗色用例没有执行，不能把它当作暗色对比度通过或失败；此前 `--no-deps` 目标暗色用例也因 fixture 未完成挂载而超时，未取得新的 AA 断言结果。此前已保存的报告覆盖运行时对比度证据仍为 `#a0a4aa` 对 `#191a1c` **约 6.95:1**，并未放宽断言。
+- `127.0.0.1:5173` 仍由原进程监听；临时 4173 已释放。未触碰 `D:\tileSim`、Provider、credential、用户 run、部署、commit 或 push。经用户授权，本轮已更新 LangGraph flow contract/generated client/schema-set revision 至 `sha256:89982d73beec1c709f729c0ec3c1fbe295d7fb0d3db0ecafccc6e0b6fc7e9c1e`；Agent Harness successor revision drift 与 Run Intake v2 DoR、Profile records、Bridge lowering execution evidence 仍另行 blocked/pending。能力边界仍为 `local_dev + synthetic_trace + exploratory + not_for_production`。
+
+## 2026-10-25 LangGraph interrupt/checkpoint 安全收口（工作树，未提交、未部署）
+
+- `bridge/services/agent_orchestrator.py` 的 LangGraph 适配现在要求显式 checkpointer；缺少 checkpointer 直接抛出 `langgraph_checkpointer_required`，不允许构建一个运行到用户暂停时才失败的 ephemeral graph。澄清意图与报告/草案确认都通过真实 `interrupt()` 暂停，使用 `Command(resume=...)` 恢复；invalid clarification 或 wrong-pending confirmation 会重新 interrupt，不会留下 `next=()` 的无暂停 checkpoint；纯 transition engine 仍保留供无依赖的审查测试。
+- 隔离 `bridge/.venv`（Python 3.12.10，`langgraph==1.2.17`）下真实 backend 回归为 **20 tests OK**，覆盖 clarification、report confirmation、cancel/reject、stale binding、非法恢复后的再次 interrupt、partial/truncated evidence 和无损十进制 bytes。标准库 Python 未安装可选依赖时，相关 backend tests 明确 skipped，dependency/checkpointer 缺失均 fail-closed。
+- 当前没有 `server.py` endpoint、前端入口或生产路由接线；本适配不是用户可用的 Agent 服务。下一轮若获明确授权，只能先定义只读 adapter 输入/输出（session/flow、run/backend/schema/input/artifact bindings、validated evidence、approval、terminal reason）并复用现有 Bridge identity/citation validator；不得在此模块直接创建 run、写配置、调用 Provider 或替代正式 contract/generated client。
+
+## 2026-10-25 LangGraph 真实运行时验证补充（工作树，未提交、未部署）
+
+- 为单编排器增加可审计的 `bridge/requirements.txt`，固定 `langgraph==1.2.17` 及其完整传递依赖（`langchain-core==1.7.0`、checkpoint/prebuilt/sdk、pydantic、transport/runtime 等精确版本）。依赖只安装在工作树被忽略的 `bridge/.venv`（Python **3.12.10**）中；标准 Bridge 进程不会因该文件自动加载依赖，未改变现有部署契约。
+- 使用该隔离环境实测 `build_langgraph_graph()` 返回 `CompiledStateGraph`；`InMemorySaver` 配置下首次 `invoke()` 产生真实 `__interrupt__`，随后用 `Command(resume={"action":"confirm_report", ...})` 恢复，最终得到 `graph_status=completed`、`report_status=ready`、`terminal_reason=read_only_result_ready`。该 smoke 验证未创建 run、未修改配置，也未调用 Provider。
+- `bridge/services/agent_orchestrator.py` 仍是只读、单编排器适配：节点顺序和纯 transition engine 保持一致，LangGraph 缺依赖时显式抛出 `langgraph_dependency_unavailable`，不以伪造实现替代；resume 前继续比较 run/context/backend/schema/input/artifact identity，变化进入 `stale`，取消/拒绝保持明确终态。
+- 当前 deterministic adapter 测试为 **12 tests OK**；真实 LangGraph backend 回归测试与依赖安装环境的完整 Bridge 回归仍需在本工作树继续执行。未修改 `bridge/contracts/**/*.json`、OpenAPI、generated client、schema revision 或前端 allowlist；Run Intake v2、create-run、Provider/真实 GPU 和生产编排仍不可用。整体能力继续限定为 `local_dev + synthetic_trace + exploratory + not_for_production`。
+
+## 2026-10-25 LangGraph 单编排器适配审查（工作树，未提交、未部署）
+
+- 新增 `bridge/services/agent_orchestrator.py`：以 `AgentOrchestratorState` 建模 session/flow、intent、route、run/context/backend/schema/input/artifact identity、validation/evidence、approval、pending action、report、terminal reason 和有序事件；节点顺序为 `receive_input -> normalize_intent -> clarify_if_needed -> capability_gate -> load_current_context -> deterministic_validate -> prepare_evidence -> await_user_confirmation -> execute_report_action -> mark_report_ready -> terminal`。只允许 explain、existing-run analysis、user report、configuration draft 和明确 blocked 的 execution request；不创建 run、不写配置、不计算指标、不替代 artifact/citation validator。
+- `resume()` 在确认、取消、拒绝前重新比较 run、context revision、backend identity、schema revision、input snapshot digest 和 artifact bindings；变化进入 `stale`，模型不可用可进入确定性 fallback，unsupported execution 进入 `refused`。报告动作只产生 `report_status=ready`，实际下载仍由现有 `report_action` 与结果页公共导出入口负责（`src/App.vue:1153-1214`）。
+- 当前 Python 3.12.10 环境没有 `langgraph`，仓库没有 Python 依赖 manifest/lock；因此 `build_langgraph_graph()` 只在显式提供 LangGraph 时编译同一节点布局，缺依赖明确抛 `langgraph_dependency_unavailable`，不在前端伪造 LangGraph，也未改变 Bridge 部署契约。当前 adapter/test 是架构适配与审查阶段，不是已激活的生产编排能力。
+- 新增 `bridge/test_agent_orchestrator.py` **12 tests OK**，覆盖 clarify、capability blocked、validation/artifact rejection、unsupported schema、approval resume、cancel/refuse、stale binding、provider unavailable fallback、draft-only、unsupported execution、no-side-effect 和 dependency fail-closed。未修改 `bridge/contracts/**/*.json`、OpenAPI、generated client、schema revision 或 frontend allowlist。
+- 结果报告定向 Playwright 在临时 4173 fixture 的 canonical 单 worker 重跑中，`assistant proposes` 与 `unknown schema` **2 passed**；完整报告下载用例在 120 秒上限内等待导出按钮超时，未把它算作通过。此前同一代码状态已有 3 条报告相关定向通过记录；本轮 LangGraph adapter 没有触碰前端 report_action。
+
+## 2026-10-25 最终助手与结果报告质量复核（工作树，未提交、未部署）
+
+- 暗色报告覆盖面板的真实样式已通过 Edge fixture 的运行时对比度断言：`--muted: #a0a4aa` 在当前深色画布 `#191a1c` 上约为 **6.95:1**；覆盖字段计数、分组/列表辅助文字和状态 badge 均未降低到 4.5:1 以下。状态仍按 positive / warning / danger / neutral 分色，未放宽断言、隐藏文字或更新视觉快照。
+- 受影响 Vitest 定向套件为 **10 files / 185 passed**；全量 `pnpm test -- --reporter=dot` 为 **119 files / 1172 passed / 8 skipped**。`pnpm typecheck`、`pnpm lint`、`pnpm build`（仅既有 chunk warning）、`pnpm contracts:check`（schema-set `sha256:dd9fad27c1d5591a79a16211f701f5725a711163bb284d960b99cca020064b4e`）、`pnpm docs:check`（54 active Markdown）、`pnpm deps:check`（331 source files）、`git diff --check` 均通过；Bridge `py_compile` 与 `python -m unittest test_server.py` 为 **187 tests OK**。
+- 仓库级 `pnpm format:check` 仍报告 **14 个文件**（既有 Bridge/Tauri 生成 JSON、`docs/architecture/EXECUTION_REPLAY_DESIGN.md` 及本交接文档）；未运行覆盖式格式化。所有本轮涉及的 `src/` 与 `tests/` TypeScript/Vue/JS/CSS/JSON 文件单独 `prettier --check` 通过。
+- 单 worker dashboard desktop E2E 实际为 **42 passed / 12 failed**（含 warmup，54 条已执行；无 skipped）。12 条失败逐条登记如下，均未作为通过处理：
+
+  | 测试                       | 失败表现                                                                                | 根因分类                                                  | 当前处理                                                                |
+  | -------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------- |
+  | Phase 1 Agent 八字段草案   | 期望 `200 → 100`，页面显示当前结构化带宽值 `100`                                        | 结构化输入 dirty 改动与旧 fixture 预期不一致              | 保留 fail-closed 提交流程；不改快照/不伪造旧 diff                       |
+  | Agent unknown field        | 期望旧“目录不可验证”文案，当前完整性 guard 先提示设备/请求/拓扑尚未发布                 | 结构化输入完整性语义改变，旧断言未到达 unknown-field 分支 | 保留无写入、无 create-run；单元与 full-surface Agent E2E 已覆盖拒绝边界 |
+  | P99 表格                   | `.percentile-subjects` 中旧 `req-0` 按钮不存在                                          | 旧选择器/请求标签语义                                     | 不放宽选择器；保留证据链接与键盘回归                                    |
+  | workflow Trace integrity   | `.trace-integrity-scope` 已不存在                                                       | 当前 InlineHelp passive 文案替代旧 DOM 选择器             | passive InlineHelp 已有组件回归与 a11y 验证                             |
+  | runtime evidence lazy read | 首屏已产生 1 次 runtime-events 读取                                                     | 当前 ExecutionReplay query 为 eager 生命周期              | 保留 run-bound、分页和 stale 保护；未把 eager 误报为 lazy               |
+  | synthetic evidence         | 单独 dashboard 复跑在后续 snapshot 出现高度/内容差异；完整轮次在 fabric 节点 click 超时 | 视觉快照差异 + fixture/worker 就绪性波动                  | 未覆盖旧快照、未延长无依据等待；SVG/空态/a11y 仍单测与浏览器检查        |
+  | language switch            | 旧 `Review and run` heading 不存在                                                      | 当前页面文案/选择器已改变                                 | 不回退产品文案；保留语言切换与结果页定向验证                            |
+  | F8 experiment builder      | 旧断言要求 `overrides`，实际使用 `custom_inputs`                                        | 结构化输入 canonical channel                              | 请求通道由契约约束，未扩大 allowlist                                    |
+  | quick-control channel      | 空 JSON 文档时旧断言要求 `custom_inputs`                                                | controls-only 的显式标量通道语义                          | 保留 runtime-only/topology-only 防静默丢弃回归                          |
+  | quick-control topology     | 旧断言期望 4 个节点，当前 fixture 页面未得到节点                                        | 结构化输入/模板 hydration fixture 就绪性                  | 独立拓扑 E2E 通过；未延长无依据等待                                     |
+  | dark appearance            | 暗色截图高度/内容与旧基线不同                                                           | 视觉快照差异                                              | 暗色 AA 对比度循环已通过；未更新快照                                    |
+  | boundary metrics           | `0/0 请求完成` 位于隐藏 tooltip                                                         | 文案改为 passive InlineHelp，旧断言要求直接可见           | 保留 unavailable/expected absence 语义；不隐藏数据规避断言              |
+
+  暗色报告覆盖面板的对比度循环通过，失败发生在后续 snapshot，不是 AA 对比度缺陷；未放宽断言或选择器。
+- 完整 Playwright E2E 最后以单 worker、临时 4173 fixture 运行：**48 passed / 12 failed / 6 skipped / 1 did not run**（67 条）。未到达的是依赖链上的 `large-artifact-worker`；随后使用 `--no-deps` 单独复跑，`artifact-worker.spec.js` **1 passed**。6 条 skipped 为 `live-week8.spec.js` 的部署/Provider 依赖，未伪造为通过；12 条失败与上表相同。完整运行期间没有停止或替换 5173。
+- Playwright CLI 视觉检查使用临时 `127.0.0.1:4173` 页面，覆盖 1440×1100 / 1024×768 及 light/dark overview 截图；该临时 fixture 已关闭。用户的 `127.0.0.1:5173` 仍由原进程监听，未停止、重启或替换。
+- 本轮未修改 `bridge/contracts/**/*.json`、generated client、schema revision 或 allowlist；未接 Run Intake v2 create-run。当前仍为 `local_dev + synthetic_trace + exploratory + not_for_production`，Run Intake v2 DoR、Profile records、Bridge lowering execution evidence 与 Agent Harness generated revision drift 继续 blocked/pending。未触碰 `D:\\tileSim`、Provider、credential、用户 run、部署、commit 或 push。
+
+## 2026-10-25 用户运行结果解读报告收口（工作树，未提交、未部署）
+
+- 结果页报告上下文现在通过 `useEvidenceAgentStore()` 读取已通过 `validateEvidenceAgentResult()` 的结果与 `resultBinding`；只有 `available_draft`/`partial`/`truncated` 且无 `invalidClaimIds`、当前 run/backend/schema/input digest 完全绑定、并带完整 artifact citation 的 `conditional_recommendation` 才会进入后续建议。stale/refused/failed/timeout/cancelled、无 citation 或不一致 claim 不进入报告，见 `src/views/ExecutionView.vue:40-185`、`src/features/user-run-interpretation/model.ts:145-235`。
+- 报告模型增加 manifest evidence status、rejected artifact、unsupported schema、run mismatch、schema revision mismatch、artifact identity missing 和 unavailable 语义；普通证据不足仍生成确定性摘要，但 unsupported schema、run identity mismatch 和 schema revision mismatch 在公共 `createUserRunInterpretationExport()` 入口 fail-closed，见 `src/features/user-run-interpretation/model.ts:75-145`、`src/features/user-run-interpretation/download.ts:20-74`。
+- HTML 报告主文不再默认展示 backend/schema/input digest、JSON Pointer 或 artifact SHA；这些内容移入“查看证据依据”折叠区。bar、stacked-bar、scatter、timeline 投影现在输出真实 SVG，缺失值保持缺失状态，见 `src/features/user-run-interpretation/render-html.ts:1-210`。
+- 右侧助手新增本地 `report_action` typed confirmation block；助手只能提出“生成结果解读报告”，用户确认后才调用公共报告导出 API，非结果页不生成 run 报告。未新增 Bridge endpoint、正式 contract、generated client、schema revision 或 create-run 能力，见 `src/entities/agent-orchestration/phase1-contracts.ts:331-349`、`src/App.vue:1110-1215,1488-1510`。
+- 实测门禁：`pnpm test` **116 files / 1147 passed / 8 skipped**；`pnpm typecheck`、`pnpm lint`、`pnpm build`、`pnpm contracts:check`（Bridge revision `sha256:dd9fad27c1d5591a79a16211f701f5725a711163bb284d960b99cca020064b4e`）、`pnpm docs:check`（52 active Markdown）、`pnpm deps:check`（319 source files）、`git diff --check` 均通过；Bridge `py_compile` + `python -m unittest test_server.py` **187 tests OK**。受影响 Playwright Edge fixture（4173）合并运行 `--grep "run interpretation report|assistant proposes"` **3 passed**（含 warmup），未触碰 5173。
+- 当前功能仍限于 `local_dev + synthetic_trace + exploratory + not_for_production`；Run Intake v2 DoR、五类 Profile records、Bridge lowering execution evidence 和 generated Agent Harness revision drift 均保持 blocked/pending。
+
+## 2026-10-25 拓扑节点与自动排布收口（当前工作树，未提交、未部署）
+
+- 拓扑编辑器补齐 GPU、CPU 主机、网卡、交换机、路由器、网络桥和存储等节点预设；契约仍保留开放的 `device_type` 字符串，不新增后端字段。GPU 卡数输入仅调整 GPU，新增网络节点不会进入请求 participants。
+- 一键排布改为确定性的依赖零的分层布局：借鉴 Sugiyama/hierarchical graph drawing，将交换机/路由器置于上层、网卡/桥置于中层、计算/存储终端置于下层；无连接时保留按域网格兜底。并行边增加几何偏移，连线标签采用短文本，完整端点/link_id 放在 SVG hover title 中。
+- 节点使用计算/主机/网络/存储/未知类别视觉语义，设备类型字段改为预设选择并保留未知类型回显；新增 `topology-layout.ts`、`topology-node-types.ts` 及布局和节点参与者回归测试。
+- 定向与全量门禁：`pnpm typecheck`、改动文件 eslint/prettier、`git diff --check`、`pnpm build`、Vitest **116 files / 1140 passed / 8 skipped**、Topology Playwright **3 passed** 均通过；浏览器实测 1440×1100、1024×768 无横向溢出。4173 fixture 已停止，5173 未触碰。
+
+## 2026-10-25 用户运行结果解读报告（工作树，未提交、未部署）
+
+- 结果页新增独立的“导出结果解读报告”入口，保留“导出完整技术报告”；实现位于 `src/features/user-run-interpretation/` 与 `src/views/ExecutionView.vue:52,187-211,240-249`。报告由前端确定性整理，不重新执行模拟、不写入 run、不嵌入完整 artifact 正文。
+- 报告绑定 `run_id`、backend identity、`schema_set_revision` 及 manifest artifact 的 `artifact_id/schema_identity/sha256/bytes/contract_status`；普通结果 API 没有 canonical `input_snapshot_digest` 时明确显示 `不可用`，不由前端自行哈希。生成前会比较绑定，run、后端、schema 或 artifact identity 变化则拒绝下载，回归覆盖见 `tests/unit/user-run-interpretation.test.ts`。
+- key results、findings、attention items 与 charts 均限制数量并只读取已有报告/可视化；`0`、missing、expected absence 和未报告保持区分。下一步只允许后端 `run.next_action` 或已通过 Evidence Agent validator、带完整 citation 且 `recommendation_semantics=conditional_not_executed` 的条件建议，否则显示“暂无有依据的后续建议”。
+- 当前 Bridge schema-set 仍为 `sha256:dd9fad27c1d5591a79a16211f701f5725a711163bb284d960b99cca020064b4e`；generated Agent Harness revision drift 与 Run Intake v2 DoR blocked 不变。本功能仍属于 `local_dev + synthetic_trace + exploratory + not_for_production`，未新增 contract/generated/revision allowlist 或 create-run 能力。
+
+## 2026-10-25 结构化输入 UI 收口与视觉验收（工作树，未提交、未部署）
+
+- 结构化输入编辑器现在严格依赖 surface 的 `json` input mode 与非 `contract_error` 状态；controls-only 保留标量 controls，请求/拓扑 custom_inputs 模块使用真实 `disabled`/`aria-disabled`，对应回归覆盖见 `src/features/run-experiment/ExperimentInputPanel.vue:89-110,451-452` 与 `tests/components/structured-input-panel.test.ts:267-292`。
+- controls 页的 runtime/topology JSON 只在两份文档都有内容时进入 `custom_inputs`；runtime-only、topology-only、非法 JSON 和 stale structured draft 均 fail-closed，两份为空仍走标量通道，见 `src/features/run-experiment/request.ts:217-243` 与 `tests/unit/structured-input-channel.test.ts:101-160`。TP/participants 校验保留空 participants 由后端按 TP 推导的语义，见 `src/features/run-experiment/structured-input.ts:120-137` 与 `tests/unit/structured-input.test.ts:252-282`。
+- v2 session draft 使用 schema revision 绑定并移除已失效的 `structuredInput` 持久化字段；revision 变化标记 stale、禁止自动提交，模板 hydration 通过 token/controller、scenario、revision、mode、input mutation 与 mounted fencing 防止旧响应覆盖用户输入，见 `src/features/run-experiment/input-draft-session.ts:2-38`、`src/views/ExperimentView.vue:62-92,303-353`、`src/features/run-experiment/template-hydration.ts:25-37`。
+- 独立 Edge fixture `127.0.0.1:4174` 已检查 1440×1100、1024×768、light/dark、runtime empty、template request/loading path（含完成后的 hydration）、完整 runtime/topology、validation error、runtime policy、request table、topology graph、设备/域/module 设置、键盘焦点、selected/disabled/error/loading 状态；截图保存在 `output/playwright/`。未停止、重启、替换或写入 5173；fixture 页面因现有 API base 自动尝试读取 5173，均被跨源失败并回退到 4174 fixture。
+- 本轮继续收敛实验配置页的信息密度：移除模块卡副标题、当前模块重复标题、拓扑工具栏可见重复标题、请求参与设备“点击选择”、隐藏契约字段清单、Trace 内部字段名旁注和模块 override 原始 key；范围、模型目录和完整性边界改为字段旁问号或保留为真实错误/状态。定向组件回归 **61 passed**，全量 Vitest **116 files / 1140 passed / 8 skipped**，`vue-tsc --noEmit`、改动文件 eslint/prettier、`git diff --check` 与 `vite build` 均通过。
+- 当前 Bridge schema-set 仍为 `sha256:dd9fad27c1d5591a79a16211f701f5725a711163bb284d960b99cca020064b4e`；generated Agent Harness revision drift 与 Run Intake v2 DoR 阻塞保持不变，不新增生产执行能力。
+
+## 2026-10-24 当前发布/契约基线收口审查（工作树，未提交、未部署）
+
+- deployment portability 修复位于 `scripts/package-windows-release.ps1:30`：错误提示中的 WSL/native 示例均改为相对的 `./artifacts` 占位路径，不再嵌入本机用户名或 `D:\tileSim` 盘符；参数行为未改变。定向门禁 `tests/unit/deployment-portability.test.js`、`tests/unit/phase0d-evidence-reproducibility-oracle.test.mjs`、`tests/unit/release-traceability.test.js` 合计 **16 passed / 0 failed**。
+- Phase 0D committed archive extraction 位于 `tests/oracles/phase0d-evidence-reproducibility.mjs:293-322`：使用 Python `tarfile` 的 UTF-8 流式提取，保留中文文件名（包括 `发布Windows测试包.cmd`），拒绝符号链接/硬链接和 resolved path escape；临时目录仍由 `verifyCommittedWebRelease()` 的 `finally` 清理（`tests/oracles/phase0d-evidence-reproducibility.mjs:438-489`）。
+- 当前 Bridge runtime schema-set 为 `sha256:dd9fad27c1d5591a79a16211f701f5725a711163bb284d960b99cca020064b4e`，而 generated Agent Harness 常量仍绑定 `sha256:29c1b985...` / `sha256:75db95b2...`（`src/contracts/generated/agent-harness.ts:3-8`；生成器常量见 `scripts/generate-agent-harness-client.mjs:9-20`）。本轮没有正式 contract/generated 发布授权，因此不修改 `bridge/contracts/**/*.json`、生成器或 generated 文件；该 drift 保持诊断状态，运行时继续由 `src/lib/api/agent-harness.ts:48-60,200-216` fail closed。
+- Run Intake v2 DoR 仍未满足：五类 Profile records 为 `0/unavailable`，calculator/validation/retained-run recovery 和 lowering execution evidence 尚未闭合；Bridge 仍是只读 preview、未接 create-run。状态继续保持 `GAP-RUN-INTAKE-001=implementing` / Phase 2 blocked，不新增 `agent_exposed` 字段或 receipt UI。依据 `docs/F9_AGENT_ORCHESTRATION/14_CONTRACT_GAP_REGISTER.md:41,88-90` 与 `docs/F9_AGENT_ORCHESTRATION/01_CURRENT_BASELINE_AND_GAPS.md:9.8-9.9`。
+
 ## 2026-10-24 启动器部署源码摘要误报修复（当前工作树，未部署）
 
 用户提供的部署日志显示后端 **102/102 CTest**、Bridge 测试、前端 Vitest（**1097 passed / 8 skipped**）和生产构建均已完成，
@@ -1078,6 +1438,13 @@ docs/archive/                    历史记录
 - `RuntimePolicyForm.vue` 对未写入 `runtime_trace.policy` 的 9 个进阶字段显示后端缺省值：数字输入以浅色 placeholder 展示，并标注「后端默认…（未写入）」；布尔下拉的空选项也明确写出默认值。填写字段才写入 JSON，清空恢复省略字段，提交语义不变。
 - 展示值逐项对照当前后端 `D:\tileSim\src\Core\LayerAdapters.cpp` 缺失字段回退值；这是本地源码的静态说明，不是 Bridge descriptor 提供的动态 Profile 默认，也不保证连接到异版后端时仍相同。未改契约、Bridge 或核心仿真代码，未部署 5173。
 
+### 2026-10-25 结果解读报告与 dashboard 复核（当前工作树，未提交）
+
+- 结果页新增只读“结果解读报告”确认动作：仅在用户确认后调用公共导出 API；报告继续 fail-closed 校验 run、backend、schema、输入摘要、artifact 身份和 Evidence Agent binding。定向报告 Vitest 与 Edge fixture E2E 均通过；未扩展 Bridge contract、generated client、schema-set revision、allowlist 或 create-run。
+- 修复前 dashboard desktop fixture 为 **54 tests / 40 passed / 14 failed**；最小修复后以单 worker 复跑为 **54 tests / 41 passed / 13 failed**。报告相关新增流程通过。剩余失败按原因登记如下：Agent 八字段与 full-surface plan 为既有 fixture/断言与当前结构化输入行为不一致；P99 table、runtime 懒加载、topology selector、boundary tooltip 和 language heading 为旧页面/fixture 选择器或文案预期；synthetic/dark 视觉快照仍与当前 dirty 视觉改动不一致；dark appearance 仍有报告覆盖面板 4.39:1 对比度缺陷。
+- 本轮已将 Attribution、Execution 和 Metrics 的 disclosure summary 内说明改为 passive `InlineHelp`，修复 `nested-interactive` 并补充 passive 渲染回归测试；执行回放阶段标记也改为非 button 容器，证据链接不再嵌在激活控件内，`desktop motion` 受影响检查通过。完整 desktop 多 worker 运行曾因临时 Vite 进程退出形成 9 passed / 51 connection-refused 链式失败，不作为代码 tally；单 worker dashboard 数字才是可引用结果。
+- 临时 Edge/Vite fixture 使用 4173，已停止并确认释放；5173 由既有进程监听，未停止、重启或替换。没有读取 credential、调用 Provider、操作用户 run、部署、commit 或 push。当前报告与 Agent Harness 仍仅为 `local_dev` / `synthetic_trace` / `exploratory` / `not_for_production`；Run Intake v2 DoR、Profile records、生产执行和 live acceptance 继续 blocked/pending。
+
 ## 7. 完整门禁
 
 以 `AGENTS.md` 为准。模块测试先行，最后运行 contracts、dependency、typecheck、Vitest、lint、format、build、Bridge unittest、fixture E2E 和 `git diff --check`。需要 deployed/live 服务的测试必须保持独立并准确报告 skip。
@@ -1229,3 +1596,10 @@ release-gate manifest 为
 （`sha256:c5cc6e0f8381be31f53f82cfbb96f97e174d9bf7fc93c5dd714d4aa3281922c5`）。Provider acceptance 和独立人工审查
 仍是强制阻塞项，阶段 3A 最终结论保持 **NO-GO**；不得启动阶段 3B execution UI、阶段 4、自主候选、多工具循环
 或无人值守执行。
+
+## 2026-10-29 LangGraph flow 前端生命周期收口（工作树，未提交）
+
+- Web 端导航 flow 继续只使用已发布的 page id、显式 `navigate` 授权和有限预算；用户在导航卡点击一次即为页面跳转授权，通用 durable flow 卡中的 `confirm_navigation` 只作状态提示，不再产生第二次批准按钮。
+- SSE、polling、重载恢复和不可重试观察错误都会按 `flow_id` 更新同一导航卡；页面、context revision、Bridge identity 或 schema revision 变化会 fail-closed 标记 stale，旧卡不会继续暴露“打开页面”操作。导航执行器保留 visited-page/attempt cursor，禁止重复已访问页面。
+- 当前工作树 schema-set revision 为 `sha256:69e724a56d73a1b4fe14c698cb9ba7823de587c17e810c439377655fa4cbb237`，与 Bridge canonical 计算和 generated client 一致；本轮未修改正式 schema、generated client 或 revision 常量。
+- 定向 flow/navigation/copilot lifecycle 测试 62 passed；全量 Web Vitest 130 files / 1381 passed / 8 skipped；typecheck、lint、contracts/docs/deps、Vite build 通过；Bridge `test_agent_flow.py test_agent_orchestrator.py test_server.py test_agent_intent.py` 为 258 tests / 7 skipped / OK。上述证据仍仅为 `local_dev + synthetic_trace + exploratory + not_for_production`，Run Intake v2、Provider/live acceptance 和生产执行继续 blocked。

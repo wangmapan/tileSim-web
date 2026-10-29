@@ -620,14 +620,14 @@ def validate_custom_inputs(value: object) -> dict:
             )
         reject_unknown_fields(
             link,
-            {"src_device", "dst_device", "domain_id", "bandwidth_gbps", "latency_us"},
+            {"link_id", "src_device", "dst_device", "domain_id", "bandwidth_gbps", "latency_us"},
             f"custom_inputs.topology.topology.links[{index}]",
         )
         link_label = f"custom_inputs.topology.topology.links[{index}]"
         validate_optional_strings(
             link,
             link_label,
-            {"src_device", "dst_device", "domain_id"},
+            {"link_id", "src_device", "dst_device", "domain_id"},
             required_nonempty={"src_device", "dst_device", "domain_id"},
         )
         validate_optional_numbers(

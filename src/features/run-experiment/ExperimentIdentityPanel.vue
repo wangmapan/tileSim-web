@@ -11,13 +11,10 @@ const { t } = useI18n();
 </script>
 
 <template>
-  <article class="panel form-section">
+  <article class="panel form-section experiment-identity-panel">
     <header class="form-section-title">
       <span>01</span>
-      <div>
-        <h2>{{ t("实验身份") }}</h2>
-        <InlineHelp v-if="!props.compact" :text="t('用于历史记录和结果回溯。')" />
-      </div>
+      <h2>{{ t("实验身份") }}</h2>
     </header>
     <div class="form-grid form-grid--identity">
       <label class="field field--wide">
@@ -40,27 +37,31 @@ const { t } = useI18n();
         /></span>
         <select v-model="form.scenario_id" :aria-invalid="fieldPath === '/scenario_id'">
           <option v-for="scenario in surface.scenarios" :key="scenario.value" :value="scenario.value">
-            {{ scenario.label }}
+            {{ t(scenario.label) }}
           </option>
         </select>
       </label>
       <label class="field">
-        <span>{{ t("请求 fidelity") }}</span>
+        <span
+          >{{ t("请求 fidelity")
+          }}<InlineHelp v-if="!props.compact" :text="t('以运行后的验证报告为准')" :label="t('查看 fidelity 说明')"
+        /></span>
         <select v-model="form.fidelity_policy" :aria-invalid="fieldPath === '/fidelity_policy'">
           <option v-for="fidelity in surface.fidelityPolicies" :key="fidelity" :value="fidelity">
             {{ fidelity }}
           </option>
         </select>
-        <small v-if="!props.compact" class="field-help">{{ t("以运行后的验证报告为准") }}</small>
       </label>
       <label class="field">
-        <span>{{ t("GPU 参与方式") }}</span>
+        <span
+          >{{ t("GPU 参与方式")
+          }}<InlineHelp v-if="!props.compact" :text="t('真实网络观测仅作为证据')" :label="t('查看 GPU 参与说明')"
+        /></span>
         <select v-model="form.gpu_participation_mode" :aria-invalid="fieldPath === '/gpu_participation_mode'">
           <option v-for="gpuMode in surface.gpuParticipationModes" :key="gpuMode" :value="gpuMode">
             {{ gpuMode }}
           </option>
         </select>
-        <small v-if="!props.compact" class="field-help">{{ t("真实网络观测仅作为证据") }}</small>
       </label>
     </div>
   </article>

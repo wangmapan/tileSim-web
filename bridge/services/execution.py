@@ -253,6 +253,7 @@ def execute_run(
     is_valid_json_file: Callable[[Path], bool],
     update_run_metadata: Callable[..., None],
     now: Callable[[], str],
+    validate_execution_replay: Callable[[str, Path], str | None] | None = None,
     process_runner: ProcessRunner = subprocess.run,
 ) -> None:
     """Execute one allow-listed run and durably publish its terminal state."""
@@ -301,6 +302,12 @@ def execute_run(
         ])
     if fidelity_policy == "des" and scenario.get("request_attribution_applicable") is True:
         command.extend(["--request-attribution-out", str(report_paths["request_attribution"])])
+    # Fabric execution replay is a first-class DES output for hosted ranges that
+    # reach S6.  It is sourced from the backend's executed Fabric timeline and
+    # S5 collective state; unlike request attribution it does not require the
+    # dense request-attribution contract.
+    if scenario.get("to") == "S6":
+        command.extend(["--execution-replay-out", str(report_paths["execution_replay"])])
     if fidelity_policy == "des" and (scenario.get("trace_package") is None or scenario.get("runtime_evidence_applicable")):
         command.extend(
             [
@@ -367,6 +374,24 @@ def execute_run(
                 # Artifact reports remain valid if a future CLI emits non-JSON stdout.
                 pass
         trace_package_changed = not trace_package_manifest_matches(scenario)
+        replay_validation_error = None
+        # A successful S6 process is not enough to publish a usable execution
+        # result: the canonical replay artifact is the source of the actual
+        # Fabric path and collective timeline consumed by the UI.  Validate it
+        # at the Bridge boundary so an old CLI (or a malformed artifact) cannot
+        # leave a run marked completed while replay silently degrades.
+        if (
+            completed.returncode == 0
+            and scenario.get("to") == "S6"
+            and validate_execution_replay is not None
+            # Preserve the primary-artifact failure classification when the
+            # CLI produced no valid run result at all.  Replay verification is
+            # meaningful only after the canonical run artifact exists; this
+            # also keeps legacy callers' missing-primary diagnostics stable.
+            and primary_report is not None
+            and is_valid_json_file(report_paths["run"])
+        ):
+            replay_validation_error = validate_execution_replay(run_id, report_paths["execution_replay"])
         with runs_lock:
             run = runs[run_id]
             run["finished_at"] = now()
@@ -383,6 +408,10 @@ def execute_run(
                 run["status"] = "failed"
                 run["error"] = "Trace-package manifest changed during execution."
                 run["failure_code"] = "trace_package_changed"
+            elif replay_validation_error:
+                run["status"] = "failed"
+                run["error"] = replay_validation_error
+                run["failure_code"] = "cli_invalid_execution_replay"
             elif completed.returncode == 0 and is_valid_json_file(report_paths["run"]):
                 run["status"] = "completed"
             elif completed.returncode == 0:

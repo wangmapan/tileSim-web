@@ -46,6 +46,7 @@ describe("AgentCopilotShell accessibility", () => {
     expect(footer.text()).toContain("正在等待模型");
     expect(footer.text()).toContain("本机存储不可用");
     expect(wrapper.find("footer[role='status']").exists()).toBe(false);
+    expect((wrapper.get(".agent-copilot-shell__settings").element as HTMLDetailsElement).open).toBe(false);
     expect(wrapper.find(".agent-copilot-shell__retention").text()).toContain("7 天");
     expect(wrapper.find("button[aria-label='清理全部本地会话']").exists()).toBe(true);
     wrapper.unmount();

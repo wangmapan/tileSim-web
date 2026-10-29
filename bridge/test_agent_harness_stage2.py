@@ -18,7 +18,11 @@ class Stage2HttpTest(unittest.TestCase):
         import server
         self.server = server
         self.tmp = tempfile.TemporaryDirectory()
+        self.original_agent_harness_store = server.agent_harness_store
+        if server.agent_harness_queue is not None:
+            server.agent_harness_queue.stop()
         server.agent_harness_store = DurableHarnessStore(Path(self.tmp.name) / "stage2.sqlite")
+        server.agent_harness_queue = None
         self.httpd = server.ThreadingHTTPServer(("127.0.0.1", 0), server.BridgeHandler)
         threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
         self.base = f"http://127.0.0.1:{self.httpd.server_port}"
@@ -27,7 +31,11 @@ class Stage2HttpTest(unittest.TestCase):
         self.request = {"scenario_id": "s1_des_example", "fidelity_policy": "des", "gpu_participation_mode": "gpu_free"}
 
     def tearDown(self):
-        self.httpd.shutdown(); self.httpd.server_close(); self.server.agent_harness_store.close(); self.tmp.cleanup()
+        self.httpd.shutdown(); self.httpd.server_close(); self.server.agent_harness_store.close()
+        self.server.agent_harness_store = self.original_agent_harness_store
+        self.server.agent_deletion_coordinator.stores["harness"] = self.original_agent_harness_store
+        self.server.agent_harness_queue = None
+        self.tmp.cleanup()
 
     def call(self, path, payload=None, *, method=None, headers=None):
         h = dict(self.headers); h.update(headers or {})

@@ -1,4 +1,5 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { compile, compileFromFile } from "json-schema-to-typescript";
 import Ajv2020 from "ajv/dist/2020.js";
@@ -29,12 +30,55 @@ const agentOrchestrationPhase2ValidatorsOutputPath = resolve(
   root,
   "src/contracts/generated/agent-orchestration-phase2-validators.js",
 );
+const agentFlowValidatorsOutputPath = resolve(root, "src/contracts/generated/agent-flow-validators.js");
+const agentIntentValidatorsOutputPath = resolve(root, "src/contracts/generated/agent-intent-validators.js");
 const openapi = JSON.parse(await readFile(openapiPath, "utf8"));
 const createRunSchema = JSON.parse(await readFile(createRunSchemaPath, "utf8"));
 const experimentDescriptorSchema = JSON.parse(await readFile(experimentDescriptorSchemaPath, "utf8"));
 const designSpaceCandidatesSchema = JSON.parse(await readFile(designSpaceCandidatesSchemaPath, "utf8"));
 const designSpaceCandidatesV2Schema = JSON.parse(await readFile(designSpaceCandidatesV2SchemaPath, "utf8"));
 const prettierConfig = (await resolveConfig(clientOutputPath)) ?? {};
+
+/**
+ * Ajv's standalone ESM output uses extensionless imports for its runtime
+ * helpers (for example `ajv/dist/runtime/ucs2length`). Vite resolves those
+ * package imports, but Node's native ESM loader does not. Normalize only Ajv
+ * runtime helpers to their real `.js` files; leave other generated module
+ * specifiers untouched.
+ */
+function standaloneEsmSource(ajv, validatorIds) {
+  return standaloneCode(ajv, validatorIds).replace(
+    /const (\w+) = require\(("ajv\/dist\/runtime\/[^"]+)(")\)\.default;/g,
+    (_match, identifier, moduleSpecifier, quote) =>
+      `import * as ${identifier}Module from ${moduleSpecifier}.js${quote};\n` +
+      `const ${identifier} = ${identifier}Module.default?.default ?? ${identifier}Module.default ?? ${identifier}Module;`,
+  );
+}
+
+function canonicalBridgeRevision() {
+  for (const executable of ["python", "python3"]) {
+    try {
+      const value = execFileSync(
+        executable,
+        [
+          "-c",
+          "from pathlib import Path; from contracts.schema_set import compute_schema_set_revision; import sys; print(compute_schema_set_revision(Path(sys.argv[1])))",
+          "contracts",
+        ],
+        {
+          cwd: resolve(root, "bridge"),
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "ignore"],
+        },
+      ).trim();
+      if (/^sha256:[0-9a-f]{64}$/u.test(value)) return value;
+    } catch {
+      // Try the platform's alternate Python executable below.
+    }
+  }
+  throw new Error("Unable to compute canonical Bridge schema-set revision. Python is required.");
+}
+const bridgeSchemaSetRevision = canonicalBridgeRevision();
 const compileOptions = {
   bannerComment: "",
   cwd: schemaDirectory,
@@ -47,6 +91,7 @@ const requestAttributionTypes = await compileFromFile(
   resolve(schemaDirectory, "request-attribution.schema.json"),
   compileOptions,
 );
+const agentIntentSchemaDirectory = resolve(schemaDirectory, "agent-intent");
 const inlineTypeNames = [
   "HealthResponse",
   "CatalogResponse",
@@ -75,12 +120,17 @@ const inlineTypeNames = [
   "OptimizationSessionListResponse",
   "OptimizationSessionEventsResponse",
   "OptimizationApprovalResponse",
+  "OptimizationAuthorizationGetResponse",
+  "OptimizationAuthorizationRequest",
+  "OptimizationAuthorizationResponse",
   "BatchActionRequest",
   "BatchApprovalRequest",
   "BatchCreateRequest",
   "BatchEventsResponse",
   "BatchListResponse",
   "BatchResponse",
+  "AgentFlowRevokeRequest",
+  "AgentFlowRevokeResponse",
 ];
 const inlineTypes = [];
 function schemaForStandaloneCompile(value) {
@@ -106,7 +156,9 @@ for (const name of inlineTypeNames) {
     ),
   );
 }
-const typesBanner = "// Generated from bridge/contracts OpenAPI and JSON Schema. Do not edit by hand.\n\n";
+const typesBanner =
+  "// Generated from bridge/contracts OpenAPI and JSON Schema. Do not edit by hand.\n\n" +
+  `export const BRIDGE_SCHEMA_SET_REVISION = ${JSON.stringify(bridgeSchemaSetRevision)};\n\n`;
 const createRunResponse = "export type CreateRunResponse = ApiRun & { idempotent_replay: boolean };\n";
 const nextTypes = await format(
   `${typesBanner}${coreTypes}\n${requestAttributionTypes}\n${inlineTypes.join("\n")}\n${createRunResponse}`,
@@ -160,7 +212,9 @@ const clientMethods = operations
   .filter(({ operation }) => operation["x-client-response-type"])
   .map(({ method, operation, parameters }) => {
     const pathParameters = parameters.filter((parameter) => parameter.in === "path");
-    const headerParameters = parameters.filter((parameter) => parameter.in === "header");
+    const headerParameters = parameters
+      .filter((parameter) => parameter.in === "header")
+      .sort((left, right) => Number(right.required) - Number(left.required));
     const args = pathParameters.map((parameter) => `${identifier(parameter.name)}: string`);
     const requestType = operation["x-client-request-type"];
     if (requestType) args.push(`body: ${requestType}`);
@@ -170,12 +224,19 @@ const clientMethods = operations
     }
     const pathArgs = pathParameters.map((parameter) => identifier(parameter.name)).join(", ");
     const initParts = method === "get" ? [] : [`method: ${JSON.stringify(method.toUpperCase())}`];
-    if (requestType) {
-      const headers = ['"Content-Type": "application/json"'];
+    if (requestType || headerParameters.length) {
+      const headers = requestType ? ['"Content-Type": "application/json"'] : [];
       for (const parameter of headerParameters) {
-        headers.push(`${JSON.stringify(parameter.name)}: ${identifier(parameter.name)}`);
+        const value = identifier(parameter.name);
+        headers.push(
+          parameter.required
+            ? `${JSON.stringify(parameter.name)}: ${value}`
+            : `...(${value} ? { ${JSON.stringify(parameter.name)}: ${value} } : {})`,
+        );
       }
       initParts.push(`headers: { ${headers.join(", ")} }`);
+    }
+    if (requestType) {
       initParts.push("body: JSON.stringify(body)");
     }
     return `
@@ -247,10 +308,7 @@ for (const schemaId of Object.values(validatorIds)) {
   if (!ajv.getSchema(schemaId)) throw new Error(`Unable to compile F8 schema: ${schemaId}`);
 }
 const experimentValidatorBanner = "// Generated Ajv standalone F8 validators. Do not edit by hand.\n";
-const experimentValidatorSource = standaloneCode(ajv, validatorIds).replace(
-  /const (\w+) = require\(("[^"]+")\)\.default;/g,
-  "import $1 from $2;",
-);
+const experimentValidatorSource = standaloneEsmSource(ajv, validatorIds);
 const nextExperimentValidators = await format(`${experimentValidatorBanner}${experimentValidatorSource}`, {
   ...prettierConfig,
   filepath: experimentValidatorsOutputPath,
@@ -279,10 +337,7 @@ for (const schemaId of Object.values(evidenceAgentValidatorIds)) {
   if (!evidenceAgentAjv.getSchema(schemaId)) throw new Error(`Unable to compile F9 schema: ${schemaId}`);
 }
 const evidenceAgentValidatorBanner = "// Generated Ajv standalone F9 validators. Do not edit by hand.\n";
-const evidenceAgentValidatorSource = standaloneCode(evidenceAgentAjv, evidenceAgentValidatorIds).replace(
-  /const (\w+) = require\(("[^"]+")\)\.default;/g,
-  "import $1 from $2;",
-);
+const evidenceAgentValidatorSource = standaloneEsmSource(evidenceAgentAjv, evidenceAgentValidatorIds);
 const nextEvidenceAgentValidators = await format(`${evidenceAgentValidatorBanner}${evidenceAgentValidatorSource}`, {
   ...prettierConfig,
   filepath: evidenceAgentValidatorsOutputPath,
@@ -323,10 +378,10 @@ const agentOrchestrationCapabilityValidatorIds = {
 const agentOrchestrationCapabilityValidatorBanner =
   "// Generated Ajv standalone Agent orchestration capability validators. Do not edit by hand.\n" +
   "/* eslint-disable @typescript-eslint/no-unused-vars */\n";
-const agentOrchestrationCapabilityValidatorSource = standaloneCode(
+const agentOrchestrationCapabilityValidatorSource = standaloneEsmSource(
   agentOrchestrationCapabilityAjv,
   agentOrchestrationCapabilityValidatorIds,
-).replace(/const (\w+) = require\(("[^"]+")\)\.default;/g, "import $1 from $2;");
+);
 const nextAgentOrchestrationCapabilityValidators = await format(
   `${agentOrchestrationCapabilityValidatorBanner}${agentOrchestrationCapabilityValidatorSource}`,
   {
@@ -369,11 +424,68 @@ const phase2ValidatorIds = {
 };
 const nextPhase2Validators = await format(
   "// Generated Ajv standalone Phase 2B validators. Do not edit by hand.\n/* eslint-disable */\n" +
-    standaloneCode(phase2Ajv, phase2ValidatorIds).replace(
-      /const (\w+) = require\(("[^"]+")\)\.default;/g,
-      "import $1 from $2;",
-    ),
+    standaloneEsmSource(phase2Ajv, phase2ValidatorIds),
   { ...prettierConfig, filepath: agentOrchestrationPhase2ValidatorsOutputPath },
+);
+
+const agentFlowSchemaDirectory = resolve(root, "bridge/contracts/schemas/agent-flow");
+const agentFlowSchemaNames = [
+  "artifact-binding.schema.json",
+  "identity-binding.schema.json",
+  "navigation-observation.schema.json",
+  "start-request.schema.json",
+  "resume-request.schema.json",
+  "state.schema.json",
+  "event.schema.json",
+  "start-response.schema.json",
+  "status-response.schema.json",
+  "events-response.schema.json",
+  "resume-response.schema.json",
+  "revoke-request.schema.json",
+  "revoke-response.schema.json",
+];
+const agentFlowSchemas = await Promise.all(
+  agentFlowSchemaNames.map(async (name) => JSON.parse(await readFile(resolve(agentFlowSchemaDirectory, name), "utf8"))),
+);
+const agentFlowAjv = new Ajv2020({ allErrors: true, strict: false, code: { source: true, esm: true } });
+for (const [index, schema] of agentFlowSchemas.entries()) {
+  agentFlowAjv.addSchema(schema);
+  agentFlowAjv.addSchema(schema, agentFlowSchemaNames[index]);
+}
+const agentFlowValidatorIds = {
+  agentFlowStartRequest: "tilesim.agent_flow.start_request.v1",
+  agentFlowResumeRequest: "tilesim.agent_flow.resume_request.v1",
+  agentFlowState: "tilesim.agent_flow.state.v1",
+  agentFlowEvent: "tilesim.agent_flow.event.v1",
+  agentFlowStartResponse: "tilesim.agent_flow.start_response.v1",
+  agentFlowStatusResponse: "tilesim.agent_flow.status_response.v1",
+  agentFlowEventsResponse: "tilesim.agent_flow.events_response.v1",
+  agentFlowResumeResponse: "tilesim.agent_flow.resume_response.v1",
+  agentFlowRevokeRequest: "tilesim.agent_flow.revoke_request.v1",
+  agentFlowRevokeResponse: "tilesim.agent_flow.revoke_response.v1",
+};
+const nextAgentFlowValidators = await format(
+  "// Generated standalone Agent Flow validators. Do not edit by hand.\n/* eslint-disable */\n" +
+    standaloneEsmSource(agentFlowAjv, agentFlowValidatorIds),
+  { ...prettierConfig, filepath: agentFlowValidatorsOutputPath },
+);
+
+const agentIntentSchemas = await Promise.all(
+  ["page-entry.schema.json", "request.schema.json", "response.schema.json"].map(async (name) =>
+    JSON.parse(await readFile(resolve(agentIntentSchemaDirectory, name), "utf8")),
+  ),
+);
+const agentIntentAjv = new Ajv2020({ allErrors: true, strict: false, code: { source: true, esm: true } });
+for (const schema of agentIntentSchemas) agentIntentAjv.addSchema(schema);
+const agentIntentValidatorIds = {
+  agentIntentPageEntry: "tilesim.agent_intent.page_entry.v1",
+  agentIntentRequest: "tilesim.agent_intent.request.v1",
+  agentIntentResponse: "tilesim.agent_intent.response.v1",
+};
+const nextAgentIntentValidators = await format(
+  "// Generated standalone Agent intent validators. Do not edit by hand.\n/* eslint-disable */\n" +
+    standaloneEsmSource(agentIntentAjv, agentIntentValidatorIds),
+  { ...prettierConfig, filepath: agentIntentValidatorsOutputPath },
 );
 
 function hasGeneratedDrift(current, generated) {
@@ -388,6 +500,8 @@ if (process.argv.includes("--check")) {
   let currentEvidenceAgentValidators = "";
   let currentAgentOrchestrationCapabilityValidators = "";
   let currentPhase2Validators = "";
+  let currentAgentFlowValidators = "";
+  let currentAgentIntentValidators = "";
   try {
     currentTypes = await readFile(typesOutputPath, "utf8");
     currentClient = await readFile(clientOutputPath, "utf8");
@@ -399,6 +513,8 @@ if (process.argv.includes("--check")) {
       "utf8",
     );
     currentPhase2Validators = await readFile(agentOrchestrationPhase2ValidatorsOutputPath, "utf8");
+    currentAgentFlowValidators = await readFile(agentFlowValidatorsOutputPath, "utf8");
+    currentAgentIntentValidators = await readFile(agentIntentValidatorsOutputPath, "utf8");
   } catch {
     // Missing output is reported as drift below.
   }
@@ -409,7 +525,9 @@ if (process.argv.includes("--check")) {
     hasGeneratedDrift(currentExperimentValidators, nextExperimentValidators) ||
     hasGeneratedDrift(currentEvidenceAgentValidators, nextEvidenceAgentValidators) ||
     hasGeneratedDrift(currentAgentOrchestrationCapabilityValidators, nextAgentOrchestrationCapabilityValidators) ||
-    hasGeneratedDrift(currentPhase2Validators, nextPhase2Validators)
+    hasGeneratedDrift(currentPhase2Validators, nextPhase2Validators) ||
+    hasGeneratedDrift(currentAgentFlowValidators, nextAgentFlowValidators)
+    || hasGeneratedDrift(currentAgentIntentValidators, nextAgentIntentValidators)
   ) {
     process.stderr.write("Generated Bridge client is stale. Run pnpm contracts:generate.\n");
     process.exitCode = 1;
@@ -423,6 +541,8 @@ if (process.argv.includes("--check")) {
   await writeFile(evidenceAgentValidatorsOutputPath, nextEvidenceAgentValidators, "utf8");
   await writeFile(agentOrchestrationCapabilityValidatorsOutputPath, nextAgentOrchestrationCapabilityValidators, "utf8");
   await writeFile(agentOrchestrationPhase2ValidatorsOutputPath, nextPhase2Validators, "utf8");
+  await writeFile(agentFlowValidatorsOutputPath, nextAgentFlowValidators, "utf8");
+  await writeFile(agentIntentValidatorsOutputPath, nextAgentIntentValidators, "utf8");
   process.stdout.write(`Generated ${typesOutputPath}\n`);
   process.stdout.write(`Generated ${clientOutputPath}\n`);
   process.stdout.write(`Generated ${createRunSchemaOutputPath}\n`);
@@ -430,4 +550,5 @@ if (process.argv.includes("--check")) {
   process.stdout.write(`Generated ${evidenceAgentValidatorsOutputPath}\n`);
   process.stdout.write(`Generated ${agentOrchestrationCapabilityValidatorsOutputPath}\n`);
   process.stdout.write(`Generated ${agentOrchestrationPhase2ValidatorsOutputPath}\n`);
+  process.stdout.write(`Generated ${agentFlowValidatorsOutputPath}\n`);
 }

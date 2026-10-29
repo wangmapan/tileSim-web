@@ -97,6 +97,12 @@ const artifactContracts: Record<string, ArtifactContract> = {
     schemaIdentities: ["tilesim.s7_execution_envelope.v1"],
     requiresRunBinding: true,
   },
+  "execution-replay": {
+    fileName: "execution-replay.json",
+    reportKind: null,
+    schemaIdentities: ["tilesim.execution_replay.v1"],
+    requiresRunBinding: true,
+  },
   "week8-run-evidence": {
     fileName: "week8-run-evidence.json",
     reportKind: "run_bound_des_evidence",

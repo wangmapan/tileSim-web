@@ -34,13 +34,14 @@ const groupPresentation = {
 } as const;
 
 const scenarioLabels: Readonly<Record<string, string>> = {
-  s1_des_example: "标准运行时示例",
-  dense_des_package: "Dense DES Trace package（仅 package 输入）",
-  pd_disaggregation_example: "PD 分离运行时示例",
+  s1_des_example: "标准推理运行（合成示例）",
+  dense_des_package: "高密度离散事件模拟（仅导入 Trace 包）",
+  pd_disaggregation_example: "预填充 / 解码分离运行（PD 示例）",
 };
 
 function friendlyScenarioLabel(value: string, label: string) {
   const normalized = label.trim();
+  if (scenarioLabels[value]) return scenarioLabels[value];
   if (normalized && normalized !== "实验场景" && normalized !== value) return normalized;
   return scenarioLabels[value] || normalized || "实验场景";
 }

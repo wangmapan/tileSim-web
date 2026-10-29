@@ -6,13 +6,31 @@ import type {
   DeterministicValidationIssue,
   DraftFieldValue,
 } from "../../entities/agent-orchestration";
+import { agentPageDirectory } from "../../entities/navigation/model";
 
-defineProps<{ blocks: readonly AgentTypedBlock[] }>();
+const props = withDefaults(
+  defineProps<{
+    blocks: readonly AgentTypedBlock[];
+    /** Prevent duplicate durable flow transitions while the first click is in flight. */
+    flowResumePending?: boolean;
+  }>(),
+  { flowResumePending: false },
+);
 
 const emit = defineEmits<{
   answer: [payload: { question_id: string; option_id: string; serialized_value: string }];
   apply: [blockId: string];
-  start: [task: "configure" | "analyze" | "learn"];
+  "report-confirm": [blockId: string];
+  "flow-resume": [
+    payload: {
+      blockId: string;
+      action: "clarify_intent" | "confirm_report" | "confirm_draft" | "confirm_navigation" | "cancel" | "reject";
+      intent?: "explain" | "existing_run_analysis" | "user_report" | "configuration_draft";
+    },
+  ];
+  "navigation-confirm": [blockId: string];
+  "navigation-cancel": [blockId: string];
+  start: [task: "capabilities" | "configure" | "analyze"];
 }>();
 
 const knownBlockTypes = new Set([
@@ -25,6 +43,9 @@ const knownBlockTypes = new Set([
   "clarification",
   "unsupported",
   "parameter_edits",
+  "report_action",
+  "agent_navigation",
+  "agent_flow",
   "formal_error",
 ]);
 
@@ -47,6 +68,10 @@ function fieldLabel(fieldId: string): string {
   return fieldLabels[fieldId] || "当前参数";
 }
 
+function pageLabel(pageId: string): string {
+  return agentPageDirectory.find((page) => page.page_id === pageId)?.display_label || "目标页面";
+}
+
 function valueText(value: DraftFieldValue | null): string {
   return value?.value_type === "null" || value === null ? "未设置" : value.serialized_value;
 }
@@ -59,6 +84,33 @@ function issueTone(issue: DeterministicValidationIssue): string {
 
 function capabilityHeading(blockType: "capability_result" | "unsupported"): string {
   return blockType === "unsupported" ? "当前能力不支持" : "能力检查结果";
+}
+
+function flowStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    created: "已建立",
+    running: "处理中",
+    waiting_user: "等待确认",
+    draft_ready: "草案已准备",
+    completed: "已完成",
+    stale: "已过期",
+    refused: "已拒绝",
+    cancelled: "已取消",
+    failed: "处理失败",
+  };
+  return labels[status] || "状态未知";
+}
+
+function flowEvidenceLabel(status: string): string {
+  const labels: Record<string, string> = {
+    validated: "已校验证据",
+    deterministic_fallback: "本地确定性整理",
+    partial: "证据不完整",
+    truncated: "证据已截断",
+    missing: "缺少证据",
+    provider_unavailable: "模型通道不可用",
+  };
+  return labels[status] || "证据状态未知";
 }
 
 /**
@@ -372,8 +424,10 @@ function formatBlockTime(value: string | undefined): string {
           <li v-for="item in block.edits" :key="item.path">
             <span>
               {{ item.label }}
-              <br />
-              <small>{{ item.path }}</small>
+              <details class="agent-block__field-details">
+                <summary>字段位置</summary>
+                <code>{{ item.path }}</code>
+              </details>
             </span>
             <strong>
               <template v-if="item.previous !== null">{{ item.previous }} → </template>
@@ -443,6 +497,143 @@ function formatBlockTime(value: string | undefined): string {
         </section>
       </template>
 
+      <template v-else-if="block.block_type === 'report_action'">
+        <p class="agent-block__eyebrow">结果解读报告</p>
+        <h3>{{ block.title }}</h3>
+        <p class="agent-block__body">{{ block.detail }}</p>
+        <p v-if="block.status === 'pending'" class="agent-block__draft-notice">需要你确认后才会生成并下载文件。</p>
+        <p v-else-if="block.status === 'confirmed'" class="agent-block__body">
+          已确认；报告下载由当前结果页的公共导出入口执行。
+        </p>
+        <p v-else-if="block.status === 'stale'" class="agent-block__body">
+          当前运行或页面上下文已变化，请回到结果页重新发起。
+        </p>
+        <p v-else-if="block.status === 'failed'" class="agent-block__body">报告生成失败，请先检查结果页的证据边界。</p>
+        <button
+          v-if="block.status === 'pending'"
+          type="button"
+          class="button button--secondary"
+          @click="emit('report-confirm', block.block_id)"
+        >
+          生成结果解读报告
+        </button>
+        <details class="agent-block__details">
+          <summary>查看当前运行绑定</summary>
+          <code>{{ block.run_id }} · {{ block.context_revision }}</code>
+        </details>
+      </template>
+
+      <template v-else-if="block.block_type === 'agent_flow'">
+        <p class="agent-block__eyebrow">助手流程 · {{ flowStatusLabel(block.status) }}</p>
+        <h3>{{ block.title }}</h3>
+        <p class="agent-block__body">{{ block.detail }}</p>
+        <p v-if="block.user_goal" class="agent-block__body">请求：{{ block.user_goal }}</p>
+        <p v-if="block.local_notice" class="agent-block__body agent-block__body--warning" role="alert">
+          {{ block.local_notice }}
+        </p>
+        <details class="agent-block__details agent-block__flow-details">
+          <summary>查看处理状态</summary>
+          <div class="agent-block__flow-meta" :data-status="block.status">
+            <span>{{ block.phase }}</span>
+            <span>{{ flowEvidenceLabel(block.evidence_status) }}</span>
+            <span v-if="block.report_status !== 'not_started'">报告：{{ block.report_status }}</span>
+          </div>
+        </details>
+        <section v-if="block.pending_action" class="agent-block__section agent-block__section--warning">
+          <h4>需要确认</h4>
+          <p class="agent-block__body">{{ block.pending_action.prompt }}</p>
+          <small>{{ block.pending_action.reason }}</small>
+          <div class="agent-block__options">
+            <button
+              v-if="block.pending_action.action === 'confirm_report'"
+              type="button"
+              :disabled="props.flowResumePending"
+              :aria-busy="props.flowResumePending"
+              @click="emit('flow-resume', { blockId: block.block_id, action: 'confirm_report' })"
+            >
+              {{ props.flowResumePending ? "处理中…" : "确认整理报告" }}
+            </button>
+            <p v-else-if="block.pending_action.action === 'confirm_navigation'" class="agent-block__body">
+              页面导航已由上方的导航卡确认；这里不会再次要求批准。
+            </p>
+            <button
+              v-else-if="block.pending_action.action === 'confirm_draft'"
+              type="button"
+              :disabled="props.flowResumePending"
+              :aria-busy="props.flowResumePending"
+              @click="emit('flow-resume', { blockId: block.block_id, action: 'confirm_draft' })"
+            >
+              {{ props.flowResumePending ? "处理中…" : "确认生成草案" }}
+            </button>
+            <template v-else-if="block.pending_action.action === 'clarify_intent'">
+              <button
+                v-for="option in block.pending_action.intent_options || []"
+                :key="option.intent"
+                type="button"
+                :disabled="props.flowResumePending"
+                :aria-busy="props.flowResumePending"
+                @click="
+                  emit('flow-resume', { blockId: block.block_id, action: 'clarify_intent', intent: option.intent })
+                "
+              >
+                {{ option.label }}
+              </button>
+            </template>
+            <button
+              type="button"
+              class="button button--secondary"
+              :disabled="props.flowResumePending"
+              :aria-busy="props.flowResumePending"
+              @click="emit('flow-resume', { blockId: block.block_id, action: 'cancel' })"
+            >
+              取消
+            </button>
+          </div>
+        </section>
+        <p v-if="block.status === 'stale'" class="agent-block__body" role="alert">
+          当前页面、运行或 schema 身份已变化，流程不能继续；请重新发起。
+        </p>
+        <p v-else-if="block.status === 'refused'" class="agent-block__body" role="alert">
+          当前请求被安全边界拒绝，不会创建运行、修改配置或调用执行接口。
+        </p>
+        <p v-else-if="block.status === 'cancelled'" class="agent-block__body">流程已取消，未产生执行副作用。</p>
+      </template>
+
+      <template v-else-if="block.block_type === 'agent_navigation'">
+        <p class="agent-block__eyebrow">页面导航建议</p>
+        <h3>{{ block.status === 'succeeded' ? '已打开目标页面' : '可以帮你打开相关页面' }}</h3>
+        <p class="agent-block__body">{{ block.detail }}</p>
+        <ul v-if="block.target_pages.length" class="agent-block__plain-list">
+          <li v-for="page in block.target_pages" :key="page">{{ pageLabel(page) }}</li>
+        </ul>
+        <button
+          v-if="block.status === 'pending'"
+          type="button"
+          class="button button--primary"
+          @click="emit('navigation-confirm', block.block_id)"
+        >
+          打开页面
+        </button>
+        <button
+          v-if="block.status === 'pending' || block.status === 'running'"
+          type="button"
+          class="button button--secondary"
+          :disabled="props.flowResumePending && block.status === 'pending'"
+          :aria-busy="props.flowResumePending && block.status === 'pending'"
+          @click="emit('navigation-cancel', block.block_id)"
+        >
+          停止这条建议
+        </button>
+        <p v-if="block.status === 'stale' || block.status === 'failed'" class="agent-block__body" role="alert">
+          页面身份或上下文发生变化，未继续导航；请重新描述你的目标。
+        </p>
+        <details v-if="block.observation" class="agent-block__details">
+          <summary>导航观察</summary>
+          <p>{{ block.observation.failure_type || (block.observation.page_correct ? '已到达目标页面' : '页面未匹配') }}</p>
+          <p>已尝试 {{ block.observation.navigation_attempts }} 次</p>
+        </details>
+      </template>
+
       <template v-else-if="block.block_type === 'formal_error'">
         <p class="agent-block__eyebrow">限制</p>
         <h3>当前结果无法继续处理</h3>
@@ -471,23 +662,32 @@ function formatBlockTime(value: string | undefined): string {
       <img :src="assistantAvatar" alt="" aria-hidden="true" width="28" height="28" />
       <strong>小拓</strong>
     </div>
-    <p>你好，需要小拓帮忙做些什么？可以配置实验、分析实验结果，或先学习怎么看报告。</p>
+    <p>你好，我可以帮你了解当前页面、准备实验草案，或解读已有运行结果。先选一个入口，也可以直接输入你的问题。</p>
     <div class="agent-block-empty__choices" aria-label="选择助手任务">
-      <button type="button" @click="emit('start', 'configure')">配置实验</button>
-      <button type="button" @click="emit('start', 'analyze')">分析实验结果</button>
-      <button type="button" @click="emit('start', 'learn')">学习怎么看结果</button>
+      <button type="button" data-task="capabilities" @click="emit('start', 'capabilities')">
+        <strong>了解助手能做什么</strong>
+        <small>先看能力、示例和边界</small>
+      </button>
+      <button type="button" data-task="configure" @click="emit('start', 'configure')">
+        <strong>从实验配置开始</strong>
+        <small>用一句话生成可校验的草案</small>
+      </button>
+      <button type="button" data-task="analyze" @click="emit('start', 'analyze')">
+        <strong>从已有结果开始</strong>
+        <small>查看重点、证据和后续建议</small>
+      </button>
     </div>
-    <small>分析只读取当前运行的报告；参数仅在确认后写入，不会自动创建运行。</small>
+    <small>涉及修改时，助手会先把建议讲清楚，再请你确认。</small>
   </div>
 </template>
 
 <style scoped>
 .agent-block-list {
   display: grid;
-  gap: 14px;
+  gap: 16px;
   min-width: 0;
   max-width: 100%;
-  padding: 16px 14px 22px;
+  padding: 18px 14px 26px;
 }
 
 .agent-block {
@@ -498,15 +698,29 @@ function formatBlockTime(value: string | undefined): string {
 
 .agent-block:not([data-block-type="user_message"]):not([data-block-type="assistant_message"]) {
   position: relative;
-  padding: 12px;
-  padding-left: 48px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-control);
-  background: color-mix(in srgb, var(--surface-subtle) 86%, var(--panel));
+  padding: 14px 14px 14px 48px;
+  border: 1px solid color-mix(in srgb, var(--accent) 17%, var(--line));
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--surface-subtle) 84%, var(--panel));
+  box-shadow: var(--shadow-hairline);
+  animation: agent-block-in 360ms var(--ease-emphasized) both;
+}
+
+.agent-block:not([data-block-type="user_message"]):not([data-block-type="assistant_message"])::after {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  content: "";
+  opacity: 0.55;
 }
 
 .agent-block[data-block-type="formal_error"] {
   border-color: color-mix(in srgb, var(--danger) 42%, var(--line));
+  background: color-mix(in srgb, var(--danger-soft) 35%, var(--panel));
 }
 
 .agent-block__eyebrow {
@@ -566,6 +780,10 @@ function formatBlockTime(value: string | undefined): string {
   left: 12px;
   width: 28px;
   height: 28px;
+  padding: 3px;
+  border: 1px solid color-mix(in srgb, var(--accent) 36%, var(--line));
+  border-radius: 9px;
+  background: var(--accent-soft);
 }
 
 .agent-block__assistant-mark img {
@@ -586,6 +804,8 @@ function formatBlockTime(value: string | undefined): string {
 }
 
 .agent-block-empty__choices button {
+  display: grid;
+  gap: 2px;
   min-height: 38px;
   padding: 7px 10px;
   border: 1px solid var(--line-strong);
@@ -599,6 +819,18 @@ function formatBlockTime(value: string | undefined): string {
     border-color var(--motion-fast) var(--ease-standard),
     background-color var(--motion-fast) var(--ease-standard),
     box-shadow var(--motion-interaction) var(--ease-standard);
+}
+
+.agent-block-empty__choices button strong {
+  color: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.agent-block-empty__choices button small {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.35;
 }
 
 .agent-block-empty__choices button:hover,
@@ -677,10 +909,19 @@ function formatBlockTime(value: string | undefined): string {
   line-height: 1.55;
   overflow-wrap: anywhere;
   box-shadow: var(--shadow-hairline);
+  transition:
+    transform var(--motion-interaction) var(--ease-emphasized),
+    box-shadow var(--motion-interaction) var(--ease-standard);
+}
+
+.agent-block__utterance:hover {
+  box-shadow: var(--shadow);
+  transform: translateY(-1px);
 }
 
 .agent-block[data-block-type="assistant_message"] .agent-block__speaker {
   width: min(92%, 44rem);
+  padding: 7px 9px 0;
 }
 
 .agent-block[data-block-type="assistant_message"] .agent-block__answer,
@@ -688,6 +929,11 @@ function formatBlockTime(value: string | undefined): string {
 .agent-block[data-block-type="assistant_message"] .agent-block__streaming {
   max-width: min(92%, 44rem);
   margin-left: 36px;
+  padding: 11px 13px;
+  border: 1px solid color-mix(in srgb, var(--accent) 19%, var(--line));
+  border-radius: 4px 13px 13px 13px;
+  background: color-mix(in srgb, var(--panel) 90%, var(--accent-soft));
+  box-shadow: var(--shadow-hairline);
 }
 
 .agent-block__answer {
@@ -703,9 +949,20 @@ function formatBlockTime(value: string | undefined): string {
 }
 
 .agent-block__streaming {
+  position: relative;
   margin: 8px 0 0;
   color: var(--accent);
   font-size: var(--text-micro);
+  font-weight: 650;
+}
+
+.agent-block__streaming::after {
+  display: inline-block;
+  width: 1.2em;
+  overflow: hidden;
+  vertical-align: bottom;
+  content: "…";
+  animation: agent-typing-dots 1.1s steps(4, end) infinite;
 }
 
 .agent-block__draft-notice {
@@ -778,6 +1035,24 @@ function formatBlockTime(value: string | undefined): string {
 .agent-block__diff-list li > span {
   min-width: 0;
   color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.agent-block__field-details {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: var(--text-micro);
+}
+
+.agent-block__field-details summary {
+  color: var(--muted);
+}
+
+.agent-block__field-details code {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink-soft);
+  font: inherit;
   overflow-wrap: anywhere;
 }
 
@@ -925,14 +1200,50 @@ function formatBlockTime(value: string | undefined): string {
   background: var(--accent-soft);
 }
 
+.agent-block__flow-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  color: var(--ink-soft);
+  font-size: var(--text-micro);
+}
+
+.agent-block__flow-meta span {
+  padding: 3px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-subtle);
+}
+
+.agent-block__flow-meta[data-status="stale"],
+.agent-block__flow-meta[data-status="refused"],
+.agent-block__flow-meta[data-status="failed"] {
+  color: var(--danger-ink);
+}
+
+.agent-block__flow-meta[data-status="waiting_user"],
+.agent-block__flow-meta[data-status="draft_ready"] {
+  color: var(--warning-ink);
+}
+
 .agent-block-empty {
   display: grid;
   place-content: center;
   gap: 4px;
-  min-height: 160px;
-  padding: 24px;
+  min-height: 236px;
+  padding: 32px 24px;
   color: var(--muted);
   text-align: center;
+}
+
+.agent-block-empty::before {
+  width: 46px;
+  height: 4px;
+  margin: 0 auto 10px;
+  border-radius: 999px;
+  background: var(--accent);
+  content: "";
 }
 
 .agent-block-empty strong {
@@ -942,5 +1253,36 @@ function formatBlockTime(value: string | undefined): string {
 .agent-block-empty p {
   max-width: 46ch;
   margin: 0;
+  line-height: 1.65;
+}
+
+@keyframes agent-block-in {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes agent-typing-dots {
+  0% {
+    width: 0;
+  }
+  50% {
+    width: 1.2em;
+  }
+  100% {
+    width: 1.2em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-block,
+  .agent-block__streaming::after {
+    animation: none;
+  }
 }
 </style>

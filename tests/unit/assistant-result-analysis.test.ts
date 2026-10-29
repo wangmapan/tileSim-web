@@ -2,10 +2,12 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { streamAssistantResultAnalysis, type AssistantChatMessage } from "../../src/lib/api/assistant-model";
+import { BRIDGE_SCHEMA_SET_REVISION } from "../../src/contracts/generated/bridge-contracts";
 
 afterEach(() => vi.unstubAllGlobals());
 
 const schema = "tilesim.bridge.result_analysis_chat.v1";
+const schemaSetRevision = BRIDGE_SCHEMA_SET_REVISION;
 const conversation: AssistantChatMessage[] = [{ role: "user", content: "请指出当前结果重点" }];
 const context = {
   run_id: "run-result-1",
@@ -45,7 +47,11 @@ function response(frames: string[], status = 200): Response {
   });
   return new Response(body, {
     status,
-    headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "X-TileSim-Schema-Set-Revision": schemaSetRevision,
+      "X-TileSim-API-Version": "tilesim.bridge.api.v1",
+    },
   });
 }
 
@@ -101,6 +107,34 @@ describe("result analysis model stream", () => {
     ).resolves.toMatchObject({
       answer: "",
       failure: "模型请求未通过校验（invalid_result_analysis_request）。",
+      cancelled: false,
+    });
+  });
+
+  it("rejects result prose that arrives after the terminal done frame", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          response([
+            frame("prose", { schema_version: schema, text: "第一段" }),
+            frame("done", { schema_version: schema }),
+            frame("prose", { schema_version: schema, text: "不应接受" }),
+          ]),
+        ),
+    );
+    const answers: string[] = [];
+
+    const outcome = await streamAssistantResultAnalysis(
+      { messages: conversation, context },
+      { onAnswer: (text) => answers.push(text) },
+    );
+
+    expect(answers).toEqual(["第一段"]);
+    expect(outcome).toMatchObject({
+      answer: "第一段",
+      failure: "模型回答格式不受支持。",
       cancelled: false,
     });
   });

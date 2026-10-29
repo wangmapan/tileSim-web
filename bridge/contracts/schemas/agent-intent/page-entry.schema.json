@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tilesim.agent_intent.page_entry.v1",
+  "title": "AgentIntentPageEntry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["page_id", "route_name", "capability_ids", "supports_run"],
+  "properties": {
+    "page_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "route_name": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "capability_ids": {
+      "type": "array",
+      "maxItems": 64,
+      "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+    },
+    "supports_run": { "type": "boolean" },
+    "context_revision": { "type": "string", "minLength": 1, "maxLength": 256 }
+  }
+}

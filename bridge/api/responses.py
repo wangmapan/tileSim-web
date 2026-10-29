@@ -43,7 +43,7 @@ def add_contract_headers(
     handler.send_header("X-TileSim-Schema-Set-Revision", schema_set_revision)
     handler.send_header(
         "Access-Control-Expose-Headers",
-        "X-Request-ID, X-TileSim-API-Version, X-TileSim-Schema-Set-Revision",
+        "X-Request-ID, X-TileSim-API-Version, X-TileSim-Schema-Set-Revision, X-TileSim-Assistant-Session",
     )
 
 
@@ -69,7 +69,7 @@ def write_json(
     handler.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
     handler.send_header(
         "Access-Control-Allow-Headers",
-        "Content-Type, X-Request-ID, Idempotency-Key, Last-Event-ID",
+        "Content-Type, X-Request-ID, Idempotency-Key, Last-Event-ID, X-TileSim-Principal, X-TileSim-Workspace, X-TileSim-Scopes, X-TileSim-Assistant-Session",
     )
     handler.end_headers()
     handler.wfile.write(body)
@@ -125,6 +125,7 @@ def api_manifest(
     run_event_contract: dict,
     evidence_agent_contract: dict,
     agent_orchestration_capability_contract: dict,
+    agent_flow_contract: dict,
     trace_package_contract: dict,
 ) -> dict:
     endpoints = {}
@@ -145,6 +146,7 @@ def api_manifest(
         "run_events": run_event_contract,
         "evidence_agent": evidence_agent_contract,
         "agent_orchestration_capability": agent_orchestration_capability_contract,
+        "agent_flow": agent_flow_contract,
         "trace_packages": trace_package_contract,
         "endpoints": endpoints,
     }

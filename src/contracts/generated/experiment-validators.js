@@ -194,7 +194,8 @@ const schema40 = {
     },
   },
 };
-import func1 from "ajv/dist/runtime/ucs2length";
+import * as func1Module from "ajv/dist/runtime/ucs2length.js";
+const func1 = func1Module.default?.default ?? func1Module.default ?? func1Module;
 const func5 = Object.prototype.hasOwnProperty;
 const schema33 = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
@@ -369,7 +370,8 @@ const schema34 = {
     },
   ],
 };
-import func0 from "ajv/dist/runtime/equal";
+import * as func0Module from "ajv/dist/runtime/equal.js";
+const func0 = func0Module.default?.default ?? func0Module.default ?? func0Module;
 const schema35 = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://tilesim.local/contracts/topology-request-input.schema.json",

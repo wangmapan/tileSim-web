@@ -18,6 +18,7 @@ import {
   parseJsonDocument,
   parseParticipantsText,
   patchJsonDocument,
+  requestParticipantCountIssue,
   removeRequestRow,
   runtimeRequestsOf,
   StructuredInputError,
@@ -117,23 +118,11 @@ const validation = computed(() =>
 );
 const rowCount = computed(() => requests.value?.length ?? 0);
 const rowIndexes = computed(() => (requests.value || []).map((_, index) => index));
-const exposedKeys = new Set<string>(REQUEST_COLUMN_KEYS);
 const participantDeviceIds = computed(() => {
   if (!props.topologyJson?.trim()) return [];
   const topologyDocument = parseJsonDocument(props.topologyJson, "Fabric topology");
   return topologyDocument.ok ? deviceIdsOf(topologyDocument.value) : [];
 });
-const tpOptions = computed(() => {
-  const count = participantDeviceIds.value.length;
-  if (!count) return [];
-  const values = new Set(Array.from({ length: count }, (_, index) => index + 1));
-  for (const index of rowIndexes.value) {
-    const value = rowAt(index)?.tp_degree;
-    if (typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 1024) values.add(value);
-  }
-  return [...values].sort((left, right) => left - right);
-});
-
 function commit(mutate: (draft: JsonObject) => void) {
   try {
     emit("update:modelValue", patchJsonDocument(props.modelValue, "Runtime trace", mutate));
@@ -166,6 +155,11 @@ function boundsHint(meta: SchemaFieldMeta): string {
   return describeBounds(meta).text;
 }
 
+function numericMaximum(field: SchemaFieldMeta): number | undefined {
+  if (field.key === "tp_degree" && participantDeviceIds.value.length) return participantDeviceIds.value.length;
+  return field.maximum ?? undefined;
+}
+
 function updateText(field: SchemaFieldMeta, index: number, event: Event, keepEmpty: boolean) {
   const raw = (event.target as HTMLInputElement).value;
   commit((draft) => {
@@ -182,6 +176,13 @@ function updateText(field: SchemaFieldMeta, index: number, event: Event, keepEmp
 function updateNumeric(field: SchemaFieldMeta, index: number, event: Event) {
   const raw = (event.target as HTMLInputElement).value;
   if (raw.trim() === "") {
+    if (field.key === "tp_degree" && selectedParticipants(index).length) {
+      localError.value = t("并行卡数必须等于参与设备数量（当前为 {tp}，参与设备为 {count} 个）。", {
+        tp: t("未设置"),
+        count: selectedParticipants(index).length,
+      });
+      return;
+    }
     commit((draft) => {
       const row = runtimeRequestsOf(draft)?.[index];
       if (row && typeof row === "object" && !Array.isArray(row)) delete (row as JsonObject)[field.key];
@@ -189,17 +190,28 @@ function updateNumeric(field: SchemaFieldMeta, index: number, event: Event) {
     return;
   }
   const value = Number(raw);
+  const maximum = numericMaximum(field);
   const invalid =
     !Number.isFinite(value) ||
     (field.integerOnly && !Number.isInteger(value)) ||
     (field.minimum !== null && value < field.minimum) ||
-    (field.maximum !== null && value > field.maximum);
+    (maximum !== undefined && value > maximum);
   if (invalid) {
     localError.value = t("{field} 超出契约范围：{hint}", {
       field: field.key,
       hint: describeBounds(field, t("整数")).title,
     });
     return;
+  }
+  if (field.key === "tp_degree") {
+    const participants = selectedParticipants(index);
+    if (participants.length && value !== participants.length) {
+      localError.value = t("并行卡数必须等于参与设备数量（当前为 {tp}，参与设备为 {count} 个）。", {
+        tp: value,
+        count: participants.length,
+      });
+      return;
+    }
   }
   commit((draft) => {
     const row = runtimeRequestsOf(draft)?.[index];
@@ -227,7 +239,10 @@ function updateParticipants(index: number, event: Event) {
     // list lets the engine derive members from the device inventory and
     // tp_degree (D:\tileSim\src\S6_Fabric\ModularFabric.cpp:1242-1253).
     if (!list.length) delete target.participants;
-    else target.participants = list;
+    else {
+      target.participants = list;
+      target.tp_degree = list.length;
+    }
   });
 }
 
@@ -257,18 +272,10 @@ function toggleParticipant(index: number, device: string, checked: boolean) {
     const row = runtimeRequestsOf(draft)?.[index];
     if (!row || typeof row !== "object" || Array.isArray(row)) return;
     const values = [...selected];
-    if (values.length) (row as JsonObject).participants = values;
-    else delete (row as JsonObject).participants;
-  });
-}
-
-function updateTpDegree(index: number, event: Event) {
-  const raw = (event.target as HTMLSelectElement).value;
-  commit((draft) => {
-    const row = runtimeRequestsOf(draft)?.[index];
-    if (!row || typeof row !== "object" || Array.isArray(row)) return;
-    if (!raw) delete (row as JsonObject).tp_degree;
-    else (row as JsonObject).tp_degree = Number(raw);
+    if (values.length) {
+      (row as JsonObject).participants = values;
+      (row as JsonObject).tp_degree = values.length;
+    } else delete (row as JsonObject).participants;
   });
 }
 
@@ -334,29 +341,25 @@ function cellPath(index: number, key: string): string {
 }
 
 function cellInvalid(index: number, key: string): boolean {
+  const row = rowAt(index);
+  const countIssue = row ? requestParticipantCountIssue(index, row) : null;
   return (
-    props.fieldPath === cellPath(index, key) || props.fieldPath === `/custom_inputs/runtime_trace/requests/${index}`
+    props.fieldPath === cellPath(index, key) ||
+    props.fieldPath === `/custom_inputs/runtime_trace/requests/${index}` ||
+    (countIssue !== null && (key === "tp_degree" || key === "participants"))
   );
+}
+
+function cellErrorText(index: number, key: string): string {
+  const row = rowAt(index);
+  const countIssue = row ? requestParticipantCountIssue(index, row) : null;
+  if (countIssue && (key === "tp_degree" || key === "participants")) return countIssue.message;
+  return props.errorMessage;
 }
 
 function cellErrorId(index: number, key: string): string {
   return `request-error-${index}-${key}`;
 }
-
-/**
- * Keys rows carry but the table does not render. Reported once for the whole
- * table rather than inside each `request_id` cell: the per-row badge wrapped to
- * four lines in a narrow column and told the reader less than the union does.
- */
-const hiddenKeys = computed(() => {
-  const keys = new Set<string>();
-  for (const index of rowIndexes.value) {
-    const row = rowAt(index);
-    if (!row) continue;
-    for (const key of Object.keys(row)) if (!exposedKeys.has(key)) keys.add(key);
-  }
-  return [...keys];
-});
 </script>
 
 <template>
@@ -396,20 +399,16 @@ const hiddenKeys = computed(() => {
       <div class="request-model-summary" :aria-label="t('仿真模型标识')">
         <span class="request-model-summary__label">
           {{ t("仿真模型标识") }}
+          <InlineHelp :text="t('用于关联请求结果，不代表模型结构。')" />
           <InlineHelp
-            :text="
-              t(
-                '模型标识用于请求分组和结果关联；它不是模型结构配置。当前结构化输入不会根据名称自动补齐层数、hidden size 等参数。',
-              )
-            "
+            v-if="catalogModelIds.length"
+            :text="t('后端可用模型：{models}', { models: catalogModelIds.join('、') })"
+            :label="t('后端可用模型')"
           />
         </span>
         <code v-for="modelId in rowModelIds" :key="modelId">{{ modelId }}</code>
         <span v-if="!rowModelIds.length" class="request-model-summary__empty">{{ t("未填写") }}</span>
       </div>
-      <p v-if="catalogModelIds.length" class="structured-note">
-        {{ t("后端可用模型") }}：{{ catalogModelIds.join("、") }}
-      </p>
 
       <div class="request-table-scroll" tabindex="0" role="region" :aria-label="t('请求表（可横向滚动）')">
         <table class="request-table">
@@ -458,7 +457,6 @@ const hiddenKeys = computed(() => {
                     :aria-invalid="cellInvalid(index, field.key)"
                   >
                     <span>{{ participantSummary(index) }}</span>
-                    <small>{{ t("点击选择") }}</small>
                   </summary>
                   <div class="request-participants-picker__menu">
                     <label>
@@ -492,21 +490,12 @@ const hiddenKeys = computed(() => {
                   :placeholder="t('留空＝不写这个字段，由引擎按并行卡数挑设备')"
                   @change="updateParticipants(index, $event)"
                 />
-                <select
-                  v-else-if="field.key === 'tp_degree' && tpOptions.length"
-                  :value="cellValue(field, index)"
-                  :aria-label="`${columnLabel(field)} ${index + 1}`"
-                  :aria-invalid="cellInvalid(index, field.key)"
-                  :aria-describedby="cellInvalid(index, field.key) ? cellErrorId(index, field.key) : undefined"
-                  @change="updateTpDegree(index, $event)"
-                >
-                  <option value="">{{ t("未设置") }}</option>
-                  <option v-for="option in tpOptions" :key="option" :value="option">{{ option }} GPU</option>
-                </select>
                 <input
                   v-else-if="field.integerOnly || field.kind === 'number'"
                   type="number"
-                  step="any"
+                  :step="field.integerOnly ? 1 : 'any'"
+                  :min="field.minimum ?? undefined"
+                  :max="numericMaximum(field)"
                   :value="cellValue(field, index)"
                   :aria-label="`${columnLabel(field)} ${index + 1}`"
                   :aria-invalid="cellInvalid(index, field.key)"
@@ -531,7 +520,7 @@ const hiddenKeys = computed(() => {
                   class="field-error"
                   role="alert"
                 >
-                  <code>{{ cellPath(index, field.key) }}</code> · {{ errorMessage }}
+                  <code>{{ cellPath(index, field.key) }}</code> · {{ cellErrorText(index, field.key) }}
                 </small>
               </td>
               <td class="request-table__actions">
@@ -563,15 +552,6 @@ const hiddenKeys = computed(() => {
       <datalist v-for="field in suggestionFields" :id="stringListId(field)" :key="stringListId(field)">
         <option v-for="value in stringSuggestions(field)" :key="value" :value="value" />
       </datalist>
-
-      <p v-if="hiddenKeys.length" class="structured-note">
-        {{
-          t("这 {count} 个字段表格里没有控件，提交时会原样保留：{fields}", {
-            count: hiddenKeys.length,
-            fields: hiddenKeys.join("、"),
-          })
-        }}
-      </p>
 
       <p v-if="localError" class="structured-note structured-note--error" role="alert">{{ localError }}</p>
     </template>

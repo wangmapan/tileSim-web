@@ -1,0 +1,89 @@
+{
+  "$id": "tilesim.agent_harness.optimization_authorization_request.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "autonomy_level",
+    "budget",
+    "parameter_grants",
+    "objective",
+    "tool_allowlist",
+    "allowed_pages",
+    "allowed_actions"
+  ],
+  "properties": {
+    "autonomy_level": { "enum": ["bounded_autonomous", "human_approves_each"] },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_model_calls",
+        "max_tool_calls_per_round",
+        "max_navigation_attempts",
+        "max_run_creations",
+        "max_execution_time_ms"
+      ],
+      "properties": {
+        "max_rounds": { "type": "integer", "minimum": 1, "maximum": 20 },
+        "max_runs": { "type": "integer", "minimum": 1, "maximum": 20 },
+        "max_seconds": { "type": "integer", "minimum": 1, "maximum": 3600 },
+        "max_failures": { "type": "integer", "minimum": 1, "maximum": 5 },
+        "max_model_calls": { "type": "integer", "minimum": 1, "maximum": 60 },
+        "max_tool_calls_per_round": { "type": "integer", "minimum": 1, "maximum": 4 },
+        "max_navigation_attempts": { "type": "integer", "minimum": 1, "maximum": 8 },
+        "max_run_creations": { "type": "integer", "minimum": 1, "maximum": 1 },
+        "max_execution_time_ms": { "type": "integer", "minimum": 1, "maximum": 3600000 }
+      }
+    },
+    "parameter_grants": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pointer", "min", "max", "step"],
+        "properties": {
+          "pointer": { "type": "string", "pattern": "^/[^/].*" },
+          "min": { "type": "number", "finite": true },
+          "max": { "type": "number", "finite": true },
+          "step": { "type": "number", "exclusiveMinimum": 0, "finite": true },
+          "kind": { "enum": ["int", "integer", "number", "float"] }
+        }
+      }
+    },
+    "objective": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metric_path", "direction"],
+      "properties": {
+        "metric_path": { "type": "string", "pattern": "^/[^/].*" },
+        "direction": { "enum": ["minimize", "maximize"] },
+        "minimum_improvement": { "type": "number", "minimum": 0 },
+        "plateau_rounds": { "type": "integer", "minimum": 1, "maximum": 20 }
+      }
+    },
+    "tool_allowlist": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": { "enum": ["get_capability_catalog", "get_run_status", "list_run_evidence", "query_verified_metrics"] }
+    },
+    "allowed_pages": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": { "enum": ["overview", "execution", "replay", "metrics", "fabric", "attribution", "validation", "raw_evidence", "evidence_agent", "evidence_lab", "design_space", "history", "experiment"] }
+    },
+    "allowed_actions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": { "enum": ["explain", "navigate", "analyze", "report", "draft", "execute"] }
+    },
+    "ttl_seconds": { "type": "integer", "minimum": 1, "maximum": 14400 }
+  }
+}

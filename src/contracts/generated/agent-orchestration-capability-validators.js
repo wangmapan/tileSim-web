@@ -107,7 +107,8 @@ const schema56 = {
   },
 };
 const func1 = Object.prototype.hasOwnProperty;
-import func0 from "ajv/dist/runtime/equal";
+import * as func0Module from "ajv/dist/runtime/equal.js";
+const func0 = func0Module.default?.default ?? func0Module.default ?? func0Module;
 const pattern4 = new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,191}$", "u");
 const pattern5 = new RegExp("^sha256:[0-9a-f]{64}$", "u");
 const schema39 = {
@@ -239,7 +240,8 @@ const schema48 = {
     "resolved_scale_out_analytical",
   ],
 };
-import func5 from "ajv/dist/runtime/ucs2length";
+import * as func5Module from "ajv/dist/runtime/ucs2length.js";
+const func5 = func5Module.default?.default ?? func5Module.default ?? func5Module;
 const pattern13 = new RegExp("^[0-9]+(?:\\.[0-9]+)?$", "u");
 const pattern17 = new RegExp("^/", "u");
 const schema45 = {

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tilesim.agent_flow.artifact_binding.v1",
+  "title": "AgentFlowArtifactBinding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["artifact_id", "schema_identity", "sha256", "bytes"],
+  "properties": {
+    "artifact_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "schema_identity": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "bytes": { "type": "string", "pattern": "^(?:0|[1-9][0-9]*)$" }
+  }
+}

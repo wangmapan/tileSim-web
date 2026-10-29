@@ -23,34 +23,41 @@ export const structuredInputEnglishCatalog: Readonly<Record<string, string>> = {
   "用于历史记录和结果回溯。": "Used to identify the run in history and trace results.",
   以运行后的验证报告为准: "The post-run validation report is authoritative.",
   真实网络观测仅作为证据: "Real network observations are evidence only.",
+  "查看 fidelity 说明": "View fidelity explanation",
+  "查看 GPU 参与说明": "View GPU participation explanation",
+  运行操作: "Run action",
+  "标准推理运行（合成示例）": "Standard inference run (synthetic example)",
+  "高密度离散事件模拟（仅导入 Trace 包）": "High-density discrete-event simulation (Trace package import only)",
+  "预填充 / 解码分离运行（PD 示例）": "Prefill / Decode split run (PD example)",
   "先选输入方式，再调整需要的参数。": "Choose an input method, then adjust the parameters you need.",
   输入模块: "Input modules",
-  "按模块切换，逐步完成运行策略、请求与拓扑。":
-    "Switch modules to configure runtime policy, requests, and topology step by step.",
+  "按模块切换，逐步完成工作负载、请求、拓扑与互联参数。":
+    "Switch modules to configure workload, requests, topology, and fabric parameters step by step.",
   当前调整模块: "Current module",
   请求: "Requests",
   拓扑: "Topology",
   "请求行、模型与参与设备": "Request rows, models, and participating devices",
   "显卡、网络域与连线": "GPUs, network domains, and links",
   快捷参数: "Quick parameters",
-  运行时参数: "Runtime parameters",
+  "快捷参数 + 进阶策略": "Quick parameters + advanced policy",
   含进阶策略: "Includes advanced policy",
   可编辑请求表: "Editable request table",
   可编辑拓扑: "Editable topology",
   需要检查: "Needs review",
-  需要完整输入: "Full input required",
   可直接调整: "Ready to adjust",
-  启用完整输入: "Enable full input",
-  这个模块需要完整输入: "This module needs full input",
-  "请求、设备和拓扑会写入 custom_inputs；启用后仍会保留当前快捷参数。":
-    "Requests, devices, and topology are written to custom_inputs; your current quick parameters remain in place.",
-  启用并继续: "Enable and continue",
+  结构化输入不可用: "Structured input unavailable",
+  "当前契约不可用，结构化 custom_inputs 编辑已禁用。":
+    "The current contract is unavailable; structured custom_inputs editing is disabled.",
+  "当前实验契约不可用，结构化 custom_inputs 编辑已禁用。":
+    "The current experiment contract is unavailable; structured custom_inputs editing is disabled.",
+  "当前能力未发布 JSON 输入，结构化 custom_inputs 编辑已禁用。":
+    "JSON input is not published by the current capability; structured custom_inputs editing is disabled.",
+  "结构化输入已关闭；当前只提交快捷参数。": "Structured input is off; only quick parameters will be submitted.",
+  "当前 schema revision 已变化，旧输入草稿未迁移；请重新加载模板或粘贴与当前 revision 匹配的 JSON。":
+    "The schema revision changed; the old input draft was not migrated. Reload a template or paste JSON for the current revision.",
+  "模板没有返回完整 runtime_trace 和 topology。": "The template did not return a complete runtime_trace and topology.",
   "runtime trace 还是空的。请先加载场景模板，或到 JSON 输入页签粘贴内容。":
     "The runtime trace is still empty. Load a scenario template first, or paste content in the JSON input tab.",
-  "需要配置请求、设备或拓扑时，打开完整输入。":
-    "Open full input when you need to configure requests, devices or topology.",
-  "完整输入已启用。上方参数会同步到对应的输入文档。":
-    "Full input is enabled. Changes above are mirrored into the corresponding input documents.",
   "可选。需要自定义候选时再展开。": "Optional. Expand when you need custom candidates.",
   "留空使用内置候选。": "Leave blank to use the built-in candidates.",
   "必要时查看执行门槛与版本信息。": "Open when you need execution gates or version information.",
@@ -68,6 +75,15 @@ export const structuredInputEnglishCatalog: Readonly<Record<string, string>> = {
   "运行时 Trace": "runtime Trace",
   运行时输入请求: "Runtime input requests",
   后端可用模型: "Models available from the backend",
+  "后端可用模型：{models}": "Models available from the backend: {models}",
+  "用于关联请求结果，不代表模型结构。": "Links request results; it does not describe model structure.",
+  "GPU 会参与请求；交换机、路由器等只作为拓扑节点。":
+    "GPUs participate in requests; switches and routers are topology nodes only.",
+  "域用于分组节点并指定通信模型；最多 {max} 个。":
+    "Domains group nodes and select a communication model; up to {max} are allowed.",
+  "仅覆盖信用链路热点，不代表全栈 Cycle。": "Covers only credit-link hotspots; it does not represent full-stack Cycle.",
+  "源码 revision 与 CLI build revision 必须一致。": "Source and CLI build revisions must match.",
+  "源码变化后会关闭执行。": "Source changes disable execution.",
   "加载模板或粘贴运行时 Trace": "Load a template or paste a runtime Trace",
   仅网络与通信: "Network and communication only",
   信用链路热点细化: "Credit-link hotspot refinement",
@@ -88,18 +104,11 @@ export const structuredInputEnglishCatalog: Readonly<Record<string, string>> = {
   等待本地服务: "Waiting for local service",
   连接本地服务后可运行: "Connect the local service to run",
   /* Quick-control tab: entry point, channel note, empty-document hint. */
-  "用表单配置全部输入 →": "Configure all inputs with forms →",
   "导入拓扑 JSON": "Import topology JSON",
   整数: "integer",
   "每个请求 / 显卡数量 / 拓扑连线": "Per-request / device count / topology links",
-  "旋钮只有 {count} 个参数，装不下请求表和设备清单；这三样只能走 custom_inputs，启用后本次提交改用它。":
-    "The knobs cover only {count} parameters, which cannot carry a request table or a device list; those three only travel on custom_inputs. This submission switches to that channel once enabled.",
-  "停用，回到只用旋钮": "Turn off and go back to knobs only",
   "本次提交方式：结构化输入（custom_inputs）。上方旋钮改的参数会同步写入 policy，Fabric 参数写入 module_bindings。":
     "This submission uses structured input (custom_inputs). Knobs edited above are mirrored into policy, and Fabric parameters into module_bindings.",
-  "已停用结构化编辑，本次提交改回 overrides。": "Structured editing is off; this submission goes back to overrides.",
-  "runtime trace 还是空的。请先点「用表单配置全部输入」载入场景模板，或到「JSON 输入」页签粘贴内容。":
-    "The runtime trace is still empty. Click “Configure all inputs with forms” to load a scenario template, or paste content in the JSON input tab.",
 
   /* R3: a changed device inventory versus the request table's participants. */
   "设备清单已变化，但 runtime trace 还是空的：加载模板后再决定请求表里的参与设备怎么办。":
@@ -130,8 +139,6 @@ export const structuredInputEnglishCatalog: Readonly<Record<string, string>> = {
   "runtime trace 缺少 policy 对象，运行策略暂不可编辑。":
     "The runtime trace has no policy object, so the run policy cannot be edited yet.",
   "runtime trace 缺少 policy 对象。": "The runtime trace has no policy object.",
-  收起进阶参数: "Collapse advanced parameters",
-  "展开进阶参数（{count} 项）": "Expand advanced parameters ({count})",
   "{field} 超出契约范围：{hint}": "{field} is outside the contract range: {hint}",
 
   /* Run policy field labels (runtime_trace.policy keys). */
@@ -188,6 +195,8 @@ export const structuredInputEnglishCatalog: Readonly<Record<string, string>> = {
   操作: "Actions",
   未设置: "Not set",
   "自动按 TP 选择": "Choose automatically by TP",
+  "并行卡数必须等于参与设备数量（当前为 {tp}，参与设备为 {count} 个）。":
+    "Parallel card count must equal the participant count (currently {tp} versus {count} devices).",
   点击选择: "Click to choose",
 
   /* Device inventory. */
@@ -268,15 +277,21 @@ export const structuredInputEnglishCatalog: Readonly<Record<string, string>> = {
   "跨机网络（scale_out）": "Inter-node network (scale_out)",
   "最多 {max} 个域。域就是「一批卡共用的同一套网络」；新增域自动命名 su0、so0，并绑定一个已存在的网络模型。":
     "Up to {max} domains. A domain is one network shared by a group of cards; new domains are named su0, so0, … and bound to an existing network model.",
+  "最多 {max} 个域。域就是「一组节点共用的同一套网络」；新增域自动命名 su0、so0，并绑定一个已存在的网络模型。":
+    "Up to {max} domains. A domain is one network shared by a group of nodes; new domains are named su0, so0, … and bound to an existing network model.",
   "topology JSON 缺少 domains 数组，域清单暂不可编辑。":
     "The topology JSON has no domains array, so the domain list cannot be edited yet.",
   "当前没有域。点「新增域」创建第一个，再勾选它包含哪些卡。":
     "There are no domains. Click Add domain to create the first one, then tick the cards it contains.",
+  "当前没有域。点「新增域」创建第一个，再勾选它包含哪些节点。":
+    "There are no domains. Click Add domain to create the first one, then tick the nodes it contains.",
   "域的数量不能超过 {max} 个。": "The number of domains cannot exceed {max}.",
   "topology 里还没有 module_bindings：新增域必须绑定一个网络模型，请先在「模块绑定参数」里补一个，或在原始 JSON 里补一条 module_bindings。":
     "The topology has no module_bindings yet: a new domain must bind a network model, so add one under Module binding parameters first, or add a module_bindings entry in the raw JSON.",
   "已新增域 {domain}（{type}），绑定网络模型 {module}。成员设备还是空的，勾选要加入的卡。":
     "Added domain {domain} ({type}) bound to network model {module}. Its member list is empty — tick the cards it contains.",
+  "已新增域 {domain}（{type}），绑定网络模型 {module}。成员设备还是空的，勾选要加入的节点。":
+    "Added domain {domain} ({type}) bound to network model {module}. Its member list is empty — tick the nodes it contains.",
   "域名不能为空。": "A domain name must not be empty.",
   "已把域 {from} 改名为 {to}，并同步更新了 links 里的 domain_id。":
     "Renamed domain {from} to {to} and updated domain_id in links.",
@@ -291,7 +306,9 @@ export const structuredInputEnglishCatalog: Readonly<Record<string, string>> = {
   "已删除域 {domain}。": "Deleted domain {domain}.",
   "删除域 {domain}": "Delete domain {domain}",
   "已选 {selected} / 共 {total} 张卡": "{selected} of {total} cards selected",
+  "已选 {selected} / 共 {total} 个节点": "{selected} of {total} nodes selected",
   "还没有设备，先在「设备清单」里加卡。": "No devices yet; add cards in Device inventory first.",
+  "还没有设备，先在「设备清单」里添加节点。": "No devices yet; add nodes in Device inventory first.",
   "这个域是 {type}，但绑定的模型 {module} 属于 {kind}，两边对不上，请核对「模块绑定参数」。":
     "This domain is {type}, but its bound model {module} is {kind}; the two disagree, check Module binding parameters.",
   "这个域还没有成员设备：它不会承载任何通信。": "This domain has no member devices, so it carries no traffic.",

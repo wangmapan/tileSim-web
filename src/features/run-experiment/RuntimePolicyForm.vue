@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { ChevronDown, ChevronRight, SlidersHorizontal } from "@lucide/vue";
+import { SlidersHorizontal } from "@lucide/vue";
 import { useI18n } from "../../i18n";
 import InlineHelp from "../../components/InlineHelp.vue";
 import {
@@ -77,12 +77,6 @@ function policyLabel(key: string): string {
   return source ? t(source) : key;
 }
 
-/**
- * Expanded by default: the block's whole point is to expose the nine keys the
- * knobs cannot reach, so hiding them behind a click would just add friction.
- * The toggle is still there for anyone who wants the quick-control tab short.
- */
-const showAdvanced = ref(true);
 const localError = ref("");
 
 const parsed = computed(() => parseJsonDocument(props.modelValue, "Runtime trace"));
@@ -197,19 +191,7 @@ function fieldPathFor(key: string): string {
   <section class="structured-block structured-block--policy" :aria-label="t('进阶运行策略')">
     <header class="structured-block__header">
       <SlidersHorizontal :size="16" />
-      <div>
-        <strong>{{ t("进阶运行策略") }}</strong>
-        <InlineHelp
-          :text="
-            t(
-              '只放旋钮管不到的 {count} 个参数；浅色数字是后端缺省值，不写入输入 JSON。填写后覆盖，清空则恢复缺省值。',
-              {
-                count: advancedFields.length,
-              },
-            )
-          "
-        />
-      </div>
+      <strong>{{ t("进阶运行策略") }}</strong>
     </header>
 
     <p v-if="!parsed.ok" class="structured-note structured-note--warning" role="alert">{{ parsed.error }}</p>
@@ -218,17 +200,7 @@ function fieldPathFor(key: string): string {
     </p>
 
     <template v-else>
-      <button
-        type="button"
-        class="text-button policy-advanced-toggle"
-        :aria-expanded="showAdvanced"
-        @click="showAdvanced = !showAdvanced"
-      >
-        <component :is="showAdvanced ? ChevronDown : ChevronRight" :size="14" />
-        {{ showAdvanced ? t("收起进阶参数") : t("展开进阶参数（{count} 项）", { count: advancedFields.length }) }}
-      </button>
-
-      <div v-if="showAdvanced" class="policy-grid policy-grid--advanced">
+      <div class="policy-grid policy-grid--advanced">
         <label
           v-for="field in advancedFields"
           :key="field.key"

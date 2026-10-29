@@ -21,6 +21,10 @@ const defaultExcludedNames = new Set([
   "runs",
   "target",
   "test-results",
+  // Local replay/Bridge probes write bounded evidence under the repository's
+  // tmp directory. It is runtime output, not Web source, and must not make a
+  // deployment's source-state guard fail after validation.
+  "tmp",
 ]);
 
 function lengthBytes(length) {

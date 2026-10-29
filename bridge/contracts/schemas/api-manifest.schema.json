@@ -15,6 +15,7 @@
     "trace_packages",
     "evidence_agent",
     "agent_orchestration_capability",
+    "agent_flow",
     "run_creation",
     "run_events",
     "endpoints"
@@ -140,6 +141,73 @@
           "type": "string",
           "pattern": "^sha256:[0-9a-f]{64}$"
         }
+      }
+    },
+    "agent_flow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_revision",
+        "runtime_mode",
+        "langgraph_runtime_status",
+        "activation_boundary",
+        "schema_identities",
+        "endpoints",
+        "scopes",
+        "idempotency_header",
+        "event_resume_header",
+        "local_dev",
+        "source_mode",
+        "claim_scope",
+        "production_status",
+        "create_run",
+        "provider_acceptance"
+      ],
+      "properties": {
+        "contract_revision": { "const": "2026-10-28.flow.v2" },
+        "runtime_mode": { "const": "deterministic_transition_adapter" },
+        "langgraph_runtime_status": { "const": "optional_not_active" },
+        "activation_boundary": { "const": "local_dev_only" },
+        "schema_identities": {
+          "type": "array",
+          "minItems": 13,
+          "maxItems": 13,
+          "uniqueItems": true,
+          "items": { "type": "string" }
+        },
+        "endpoints": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["start", "status", "events", "stream", "resume", "revoke_authorization"],
+          "properties": {
+            "start": { "const": "POST /api/agent/flows" },
+            "status": { "const": "GET /api/agent/flows/{flow_id}" },
+            "events": { "const": "GET /api/agent/flows/{flow_id}/events" },
+            "stream": { "const": "GET /api/agent/flows/{flow_id}/events/stream" },
+            "resume": { "const": "POST /api/agent/flows/{flow_id}/resume" },
+            "revoke_authorization": {
+              "const": "POST /api/agent/flows/{flow_id}/authorization/revoke"
+            }
+          }
+        },
+        "scopes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["start", "read", "resume"],
+          "properties": {
+            "start": { "const": "agent:start_flow" },
+            "read": { "const": "agent:read_flow" },
+            "resume": { "const": "agent:resume_flow" }
+          }
+        },
+        "idempotency_header": { "const": "Idempotency-Key" },
+        "event_resume_header": { "const": "Last-Event-ID" },
+        "local_dev": { "const": true },
+        "source_mode": { "const": "synthetic_trace" },
+        "claim_scope": { "const": "exploratory" },
+        "production_status": { "const": "not_for_production" },
+        "create_run": { "const": false },
+        "provider_acceptance": { "const": "pending" }
       }
     },
     "run_creation": {

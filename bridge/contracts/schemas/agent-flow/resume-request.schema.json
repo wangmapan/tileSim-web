@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tilesim.agent_flow.resume_request.v1",
+  "title": "AgentFlowResumeRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_identity",
+    "contract_revision",
+    "flow_id",
+    "session_id",
+    "action",
+    "pending_action",
+    "current_binding",
+    "current_event_sequence"
+  ],
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_flow.resume_request.v1" },
+    "contract_revision": { "const": "2026-10-28.flow.v2" },
+    "flow_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "session_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "action": { "enum": ["clarify_intent", "confirm_report", "confirm_draft", "confirm_navigation", "cancel", "reject"] },
+    "intent": {
+      "enum": ["explain", "existing_run_analysis", "user_report", "configuration_draft", "navigation", "unsupported_execution"]
+    },
+    "pending_action": { "enum": ["clarify_intent", "confirm_report", "confirm_draft", "confirm_navigation", null] },
+    "navigation_observation": { "$ref": "navigation-observation.schema.json" },
+    "current_binding": { "$ref": "identity-binding.schema.json" },
+    "current_event_sequence": { "type": "integer", "minimum": 0 },
+    "clarification": { "type": ["string", "null"], "maxLength": 20000 },
+    "reason": { "type": ["string", "null"], "maxLength": 2000 },
+    "approval_digest": { "type": ["string", "null"], "minLength": 1, "maxLength": 256 },
+    "authorization_id": { "type": "string", "pattern": "^authz-[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
+    "authorization_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "authorization_budget": {
+      "type": "object", "additionalProperties": false,
+      "required": ["max_navigation_attempts", "max_model_calls", "max_tool_calls_per_round", "max_run_creations", "max_execution_time_ms"],
+      "properties": {
+        "max_navigation_attempts": { "type": "integer", "minimum": 1, "maximum": 8 },
+        "max_model_calls": { "type": "integer", "minimum": 1, "maximum": 60 },
+        "max_tool_calls_per_round": { "type": "integer", "minimum": 1, "maximum": 4 },
+        "max_run_creations": { "type": "integer", "minimum": 1, "maximum": 1 },
+        "max_execution_time_ms": { "type": "integer", "minimum": 1, "maximum": 3600000 }
+      }
+    },
+    "principal": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "workspace_id": { "type": "string", "minLength": 1, "maxLength": 128 }
+  }
+}

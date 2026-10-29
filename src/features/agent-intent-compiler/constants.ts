@@ -135,7 +135,7 @@ export const UNSUPPORTED_CAPABILITIES = [
   },
   { pattern: /(?:\bslo\b|ttft|tpot|p99|服务等级)/iu, capability: "slo", gap_id: "GAP-SLO-001" },
   {
-    pattern: /(?:create\s+(?:a\s+)?run|start\s+(?:the\s+)?run|创建运行|启动运行|执行实验)/iu,
+    pattern: /(?:create\s+(?:a\s+)?run|start\s+(?:the\s+)?run|run\s+it|创建运行|启动运行|执行实验)/iu,
     capability: "create_run",
     gap_id: "GAP-APPROVAL-001",
   },
@@ -146,3 +146,15 @@ export const UNSUPPORTED_CAPABILITIES = [
     gap_id: "GAP-CONV-001",
   },
 ] as const;
+
+/**
+ * Explicit run/execution requests must never be routed through the editable
+ * configuration-draft path.  The flow adapter owns the final refusal, but
+ * keeping this predicate next to the published unsupported-capability rules
+ * prevents the App shell from accidentally treating an execution request as
+ * a harmless draft (including interrogative wording).
+ */
+export function isUnsupportedExecutionRequest(instruction: string): boolean {
+  const entry = UNSUPPORTED_CAPABILITIES.find((candidate) => candidate.capability === "create_run");
+  return Boolean(entry && entry.pattern.test(instruction));
+}

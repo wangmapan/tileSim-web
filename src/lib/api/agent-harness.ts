@@ -112,6 +112,17 @@ const toolScopes: Record<AgentHarnessToolName, string> = {
 };
 const toolNames = Object.keys(toolScopes) as AgentHarnessToolName[];
 const terminalStates = new Set<AgentHarnessWorkflowState>(["completed", "failed", "cancelled"]);
+// Recovery/manual-intervention are durable observation boundaries, but they
+// are not successful/failed/cancelled workflow terminals: an explicit resume
+// or human intervention is still required.  Keep this separate from
+// `terminalStates` so the UI and polling layer do not present a recoverable
+// operation as an ordinary terminal result while the SSE parser still accepts
+// the Bridge's terminal boundary frame.
+const observationBoundaryStates = new Set<AgentHarnessWorkflowState>([
+  ...terminalStates,
+  "recovery_required",
+  "manual_intervention_required",
+]);
 const publishedSchemaSetRevisions: ReadonlySet<string> = new Set([
   AGENT_HARNESS_SCHEMA_SET_REVISION,
   AGENT_HARNESS_SUCCESSOR_SCHEMA_SET_REVISION,
@@ -832,7 +843,12 @@ export function projectAgentHarnessEvents(
   const rejected_event_ids: string[] = [];
   const late_event_ids: string[] = [];
   let state: AgentHarnessWorkflowState | null = events.length ? null : operation?.workflow_state || null;
-  let requiresRecovery = false;
+  // The durable operation state is authoritative even when a response carries
+  // an incomplete event list.  A recovery/manual boundary must not disappear
+  // merely because an older cursor omitted its final workflow event.
+  let requiresRecovery = Boolean(
+    operation && ["recovery_required", "manual_intervention_required"].includes(operation.workflow_state),
+  );
   const error: AgentHarnessErrorDetails | null = operation?.last_error || null;
   let lastSequence = 0;
   for (const event of events) {
@@ -869,7 +885,7 @@ export function projectAgentHarnessEvents(
       requiresRecovery = true;
       continue;
     }
-    if (state && terminalStates.has(state)) {
+    if (state && observationBoundaryStates.has(state)) {
       late_event_ids.push(event.event_id);
       continue;
     }
@@ -877,9 +893,11 @@ export function projectAgentHarnessEvents(
     accepted.push(event);
     lastSequence = event.sequence;
     state = event.workflow_state;
+    if (state === "recovery_required" || state === "manual_intervention_required") requiresRecovery = true;
     if (event.terminal || terminalStates.has(state)) state = event.workflow_state;
   }
-  if (requiresRecovery) state = "recovery_required";
+  if (requiresRecovery && state !== "recovery_required" && state !== "manual_intervention_required")
+    state = "recovery_required";
   let stale_reason: AgentHarnessBindingMismatch | null = null;
   if (operation && expectedBinding) {
     if (operation.schema_set_revision !== expectedBinding.schema_set_revision)
@@ -979,7 +997,19 @@ async function getAgentHarnessEvents(
 ): Promise<{ response: AgentHarnessEventsResponse; metadata: { schemaSetRevision: string; apiVersion: string } }> {
   const response = await client.events(operationId, String(lastEventSequence));
   assertMetadata(response.schemaSetRevision, response.apiVersion);
-  if (response.payload.operation) assertOperation(response.payload.operation, response);
+  if (response.payload.operation) {
+    assertOperation(response.payload.operation, response);
+    if (response.payload.operation.operation_id !== operationId)
+      throw contractError(
+        "operation_binding_mismatch",
+        "Event response does not belong to the requested operation.",
+        "/operation/operation_id",
+      );
+  }
+  if (!Array.isArray(response.payload.events))
+    throw contractError("invalid_agent_harness_payload", "Event response events are not an array.", "/events");
+  if (response.payload.after_sequence !== undefined && response.payload.after_sequence !== lastEventSequence)
+    throw contractError("event_sequence_gap", "Event response cursor does not match the request.", "/after_sequence");
   response.payload.events = response.payload.events.map((event) => assertEvent(event, response));
   return { response: response.payload, metadata: response };
 }
@@ -1046,6 +1076,12 @@ export async function observeAgentHarnessOperation(
           buffer = buffer.slice(boundary + 2);
           if (frame?.event === "workflow" && frame.data) {
             const event = assertEvent(parseJsonLossless(frame.data), { schemaSetRevision, apiVersion });
+            if (!/^[0-9]+$/u.test(frame.id) || Number(frame.id) !== event.sequence)
+              throw contractError(
+                "event_sequence_gap",
+                "Agent Harness SSE event id does not match its sequence.",
+                "/events/id",
+              );
             streamed.push(event);
             lastSequence = Math.max(lastSequence, event.sequence);
             if (!projection.operation)
@@ -1053,13 +1089,36 @@ export async function observeAgentHarnessOperation(
             projection = mergeOperationProjection(projection.operation, streamed, "sse", expectedBinding);
             options.onProjection?.(projection);
           }
+          if (frame?.event === "workflow" && !frame.data)
+            throw contractError("invalid_workflow_event", "Workflow event has no payload.", "/events/data");
           if (frame?.event === "terminal") {
             if (!projection.operation)
               throw contractError("invalid_agent_harness_payload", "SSE returned no operation identity.");
+            if (!frame.data)
+              throw contractError("invalid_workflow_event", "Terminal event has no payload.", "/events/terminal");
+            const terminal = parseJsonLossless(frame.data);
+            if (
+              !isRecord(terminal) ||
+              Object.keys(terminal).some((key) => !["operation_id", "state"].includes(key)) ||
+              terminal.operation_id !== operationId ||
+              terminal.state !== (streamed.at(-1)?.workflow_state || projection.operation.workflow_state) ||
+              !observationBoundaryStates.has(terminal.state as AgentHarnessWorkflowState)
+            )
+              throw contractError(
+                "operation_binding_mismatch",
+                "Terminal event does not match the durable operation state.",
+                "/events/terminal",
+              );
             projection = mergeOperationProjection(projection.operation, streamed, "sse", expectedBinding);
             options.onProjection?.(projection);
             return projection;
           }
+          if (frame && frame.event !== "workflow")
+            throw contractError(
+              "invalid_workflow_event",
+              "Agent Harness event type is not published.",
+              "/events/event",
+            );
           boundary = buffer.indexOf("\n\n");
         }
         if (done) break;
@@ -1068,6 +1127,7 @@ export async function observeAgentHarnessOperation(
       if (projection.terminal || projection.requires_recovery) return projection;
     } catch (error) {
       if (options.signal?.aborted) throw error;
+      if (error instanceof BridgeApiError && error.terminalFailure) throw error;
       // The stream is advisory. Durable polling below is the recovery path.
     }
   }
@@ -1532,6 +1592,12 @@ export async function getAgentHarnessDraftEvents(
     );
   }
   const events = validateDraftEvents(payload.events, draftId, lastEventSequence, expectedBinding);
+  if (payload.after_sequence !== undefined && payload.after_sequence !== lastEventSequence)
+    throw contractError(
+      "event_sequence_gap",
+      "Draft event response cursor does not match the request.",
+      "/after_sequence",
+    );
   return {
     draft_id: draftId,
     events,
@@ -1585,10 +1651,29 @@ export async function streamAgentHarnessDraftEvents(
           (events.at(-1)?.sequence as number) || lastEventSequence,
           options.expectedBinding || null,
         );
+        if (!/^[0-9]+$/u.test(frame.id) || Number(frame.id) !== event.sequence)
+          throw contractError("event_sequence_gap", "Draft SSE event id does not match its sequence.", "/events/id");
         events.push(event);
         options.onEvent?.(event);
+      } else if (frame?.event === "workflow") {
+        throw contractError("invalid_workflow_event", "Draft event has no payload.", "/events/data");
       } else if (frame?.event === "terminal") {
+        if (!frame.data)
+          throw contractError("invalid_workflow_event", "Terminal event has no payload.", "/events/terminal");
+        const terminalPayload = parseJsonLossless(frame.data);
+        if (
+          !isRecord(terminalPayload) ||
+          terminalPayload.draft_id !== draftId ||
+          !["deleted", "expired", "stale"].includes(String(terminalPayload.state))
+        )
+          throw contractError(
+            "draft_binding_mismatch",
+            "Draft terminal event is not bound to the requested draft.",
+            "/events/terminal",
+          );
         terminal = true;
+      } else if (frame) {
+        throw contractError("invalid_workflow_event", "Draft event type is not published.", "/events/event");
       }
       boundary = buffer.indexOf("\n\n");
     }
@@ -2094,6 +2179,16 @@ export async function getAgentHarnessExecutionEvents(
     expectedBinding,
   );
   const events = response.payload.events.map((event) => assertExecutionEvent(event, response));
+  if (response.payload.after_sequence !== undefined && response.payload.after_sequence !== lastEventSequence)
+    throw contractError(
+      "event_sequence_gap",
+      "Execution event response cursor does not match the request.",
+      "/after_sequence",
+    );
+  if (typeof response.payload.terminal !== "boolean")
+    throw contractError("invalid_execution_event", "Execution terminal marker is invalid.", "/terminal");
+  if (response.payload.terminal !== executionTerminalStates.has(executionResponse.execution.state))
+    throw contractError("invalid_execution_event", "Execution terminal marker does not match its state.", "/terminal");
   let previous = lastEventSequence;
   for (const event of events) {
     if (event.operation_id !== operationId || event.execution_id !== executionResponse.execution.execution_id)
@@ -2329,6 +2424,12 @@ export async function observeAgentHarnessExecution(
               schemaSetRevision: response.headers.get("x-tilesim-schema-set-revision") || "",
               apiVersion: response.headers.get("x-tilesim-api-version") || "",
             });
+            if (!/^[0-9]+$/u.test(frame.id) || Number(frame.id) !== event.sequence)
+              throw contractError(
+                "event_sequence_gap",
+                "Execution SSE event id does not match its sequence.",
+                "/events/id",
+              );
             streamed.push(event);
             lastSequence = Math.max(lastSequence, event.sequence);
             projection = mergeExecutionProjection(
@@ -2340,13 +2441,35 @@ export async function observeAgentHarnessExecution(
             );
             options.onProjection?.(projection);
           }
-          if (frame?.event === "terminal") return projection;
+          if (frame?.event === "execution" && !frame.data)
+            throw contractError("invalid_execution_event", "Execution event has no payload.", "/events/data");
+          if (frame?.event === "terminal") {
+            if (!frame.data)
+              throw contractError("invalid_execution_event", "Terminal event has no payload.", "/events/terminal");
+            const terminal = parseJsonLossless(frame.data);
+            if (
+              !isRecord(terminal) ||
+              Object.keys(terminal).some((key) => !["operation_id", "state"].includes(key)) ||
+              terminal.operation_id !== operationId ||
+              terminal.state !== (streamed.at(-1)?.state || projection.execution.state) ||
+              !executionTerminalStates.has(terminal.state as AgentHarnessExecutionOperation["state"])
+            )
+              throw contractError(
+                "operation_binding_mismatch",
+                "Execution terminal event is not bound to its state.",
+                "/events/terminal",
+              );
+            return projection;
+          }
+          if (frame && frame.event !== "execution")
+            throw contractError("invalid_execution_event", "Execution event type is not published.", "/events/event");
           boundary = buffer.indexOf("\n\n");
         }
         if (done || projection.terminal || projection.requires_recovery) return projection;
       }
     } catch (error) {
       if (options.signal?.aborted) throw error;
+      if (error instanceof BridgeApiError && error.terminalFailure) throw error;
     }
   }
   const maxAttempts = options.maxPollAttempts ?? 20;

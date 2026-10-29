@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tilesim.agent_intent.response.v1",
+  "title": "AgentIntentResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_identity", "contract_revision", "schema_set_revision", "protocol", "session_id", "user_goal", "intent", "current_page_id", "current_context_revision", "run_id", "run_context_revision", "backend_identity", "input_snapshot_digest", "candidate_pages", "required_capabilities", "risk_level", "requires_user_confirmation", "suggested_steps", "clarification_questions"],
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_intent.response.v1" },
+    "contract_revision": { "const": "2026-10-28.agent-intent.v1" },
+    "schema_set_revision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "protocol": { "const": "tilesim.agent_intent.v1" },
+    "session_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "user_goal": { "type": "string", "minLength": 1, "maxLength": 20000 },
+    "intent": { "enum": ["explain", "existing_run_analysis", "user_report", "configuration_draft", "navigation", "simulation_execution", "unsupported_execution"] },
+    "current_page_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "current_context_revision": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "run_id": { "type": ["string", "null"], "minLength": 1, "maxLength": 128 },
+    "run_context_revision": { "type": ["string", "null"], "minLength": 1, "maxLength": 256 },
+    "backend_identity": { "type": "object", "additionalProperties": true },
+    "input_snapshot_digest": { "type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$" },
+    "candidate_pages": {
+      "type": "array", "maxItems": 32,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["page_id", "route_name", "required_capabilities", "reason"],
+        "properties": {
+          "page_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "route_name": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "required_capabilities": { "type": "array", "maxItems": 64, "items": { "type": "string", "minLength": 1, "maxLength": 128 } },
+          "reason": { "type": "string", "minLength": 1, "maxLength": 500 }
+        }
+      }
+    },
+    "required_capabilities": { "type": "array", "maxItems": 64, "items": { "type": "string", "minLength": 1, "maxLength": 128 } },
+    "risk_level": { "enum": ["low", "medium", "high", "critical"] },
+    "requires_user_confirmation": { "type": "boolean" },
+    "suggested_steps": {
+      "type": "array", "maxItems": 16,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["kind", "description", "page_id"],
+        "properties": {
+          "kind": { "enum": ["navigate", "observe", "clarify", "authorize", "execute", "report"] },
+          "description": { "type": "string", "minLength": 1, "maxLength": 500 },
+          "page_id": { "type": ["string", "null"], "minLength": 1, "maxLength": 128 }
+        }
+      }
+    },
+    "clarification_questions": { "type": "array", "maxItems": 8, "items": { "type": "string", "minLength": 1, "maxLength": 500 } }
+  }
+}

@@ -589,7 +589,7 @@ function placementAssignmentLabel(assignments: typeof pdPlacementAssignments.val
         <summary>
           <span>
             {{ t("查看设备与 Fabric 诊断字段") }}
-            <InlineHelp :text="t('未映射任务、忙碌时间、拥塞和设备采集状态')" />
+            <InlineHelp :text="t('未映射任务、忙碌时间、拥塞和设备采集状态')" :interactive="false" />
           </span>
         </summary>
         <dl class="metrics-pd-summary metrics-device-overview metrics-device-overview--secondary">
@@ -725,7 +725,7 @@ function placementAssignmentLabel(assignments: typeof pdPlacementAssignments.val
         <summary>
           <span>
             {{ t("查看 PD handoff 与放置归属") }}
-            <InlineHelp :text="t('交接证据、源/目的 placement group 和请求参与设备')" />
+            <InlineHelp :text="t('交接证据、源/目的 placement group 和请求参与设备')" :interactive="false" />
           </span>
         </summary>
         <dl class="metrics-pd-summary metrics-pd-summary--handoff">

@@ -86,8 +86,11 @@ describe("parameter edit block", () => {
 
     const rows = block.findAll(".agent-block__diff-list li");
     expect(rows).toHaveLength(2);
-    // The reader has to be able to see which document a value lands in, not just
-    // a friendly label, because one instruction can reach more than one of them.
+    // Keep the friendly label in the primary view. Raw field paths remain
+    // available on demand, but should not compete with the value a user is
+    // reviewing.
+    expect((rows[0].get(".agent-block__field-details").element as HTMLDetailsElement).open).toBe(false);
+    await rows[0].get(".agent-block__field-details summary").trigger("click");
     expect(rows[0].text()).toContain("runtime_trace/policy/max_active_requests");
     expect(rows[0].text().replace(/\s+/gu, " ")).toContain("4 → 8");
     // An unset previous value has nothing to point from, so there is no arrow.

@@ -19,6 +19,7 @@ export default [
       "src/contracts/generated/report-validators.js",
       "src/contracts/generated/experiment-validators.js",
       "src/contracts/generated/evidence-agent-validators.js",
+      "src/contracts/generated/agent-flow-validators.js",
     ],
   },
   eslint.configs.recommended,

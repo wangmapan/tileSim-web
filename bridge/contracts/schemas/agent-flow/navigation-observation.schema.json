@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tilesim.agent_flow.navigation_observation.v1",
+  "title": "AgentFlowNavigationObservation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "target_page",
+    "actual_page",
+    "page_correct",
+    "current_page_capabilities",
+    "current_run_id",
+    "current_context_revision",
+    "failure_type",
+    "retry_allowed",
+    "visited_pages",
+    "navigation_attempts"
+  ],
+  "properties": {
+    "target_page": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "actual_page": { "type": ["string", "null"], "maxLength": 128 },
+    "page_correct": { "type": "boolean" },
+    "current_page_capabilities": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+    },
+    "current_run_id": { "type": ["string", "null"], "maxLength": 128 },
+    "current_context_revision": { "type": ["string", "null"], "maxLength": 256 },
+    "failure_type": {
+      "enum": ["navigation_error", "context_unavailable", "context_invalid", "page_mismatch", "capability_missing", "stale_identity", null]
+    },
+    "retry_allowed": { "type": "boolean" },
+    "visited_pages": {
+      "type": "array",
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+    },
+    "navigation_attempts": { "type": "integer", "minimum": 0, "maximum": 8 }
+  }
+}

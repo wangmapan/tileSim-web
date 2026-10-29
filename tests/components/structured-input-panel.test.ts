@@ -103,6 +103,8 @@ function mountPanel(
     withScheduler?: boolean;
     fieldPath?: string;
     errorMessage?: string;
+    inputModes?: string[];
+    contractStatus?: string;
   } = {},
 ) {
   const form = reactive({ parameterValues: {} as Record<string, unknown> });
@@ -127,7 +129,11 @@ function mountPanel(
           topologyJson: state.topologyJson.value,
           "onUpdate:topologyJson": (value: string) => (state.topologyJson.value = value),
           form: state.form,
-          surface,
+          surface: {
+            ...surface,
+            inputModes: options.inputModes ?? surface.inputModes,
+            contractStatus: options.contractStatus ?? "supported",
+          },
           fieldPath: options.fieldPath,
           errorMessage: options.errorMessage,
           controlGroups: options.withScheduler
@@ -250,23 +256,39 @@ describe("structured input panel", () => {
     expect(wrapper.find(".topology-link-panel").exists()).toBe(false);
   });
 
-  it("does not render the structured editors until the user switches them on", () => {
-    const { wrapper } = mountPanel({ structuredInput: false });
+  it("renders the structured editors by default", () => {
+    const { wrapper } = mountPanel();
     expect(wrapper.find(".structured-area").exists()).toBe(true);
+    expect(wrapper.find(".structured-stack").exists()).toBe(true);
+    expect(wrapper.find(".structured-entry-button").exists()).toBe(false);
+    expect(wrapper.find(".structured-area__header .text-button").exists()).toBe(false);
+  });
+
+  it("disables structured modules when JSON input is not advertised", () => {
+    const { wrapper } = mountPanel({ inputModes: ["controls"] });
+    for (const module of ["requests", "topology"]) {
+      const tab = wrapper.get(`[role="tab"][data-module="${module}"]`);
+      expect((tab.element as HTMLButtonElement).disabled).toBe(true);
+      expect(tab.attributes("aria-disabled")).toBe("true");
+    }
     expect(wrapper.find(".structured-stack").exists()).toBe(false);
-    expect(wrapper.find(".structured-entry-button").text()).toContain("启用完整输入");
+    expect(wrapper.text()).toContain("结构化 custom_inputs 编辑已禁用");
   });
 
-  it("emits the hand-off request when the entry button is clicked", async () => {
-    const { wrapper, panel } = mountPanel({ structuredInput: false });
-    await wrapper.get(".structured-entry-button").trigger("click");
-    expect(panel().emitted("use-structured-input")).toHaveLength(1);
+  it("keeps structured modules editable when JSON input is advertised", () => {
+    const { wrapper } = mountPanel({ inputModes: ["controls", "json"] });
+    const topology = wrapper.get('[role="tab"][data-module="topology"]');
+    expect((topology.element as HTMLButtonElement).disabled).toBe(false);
+    expect(topology.attributes("aria-disabled")).toBe("false");
+    expect(wrapper.find(".structured-stack").exists()).toBe(true);
   });
 
-  it("emits the turn-off request once the editors are open", async () => {
-    const { wrapper, panel } = mountPanel({ structuredInput: true });
-    await wrapper.get(".structured-area__header .text-button").trigger("click");
-    expect(panel().emitted("disable-structured-input")).toHaveLength(1);
+  it("fails closed for a contract-error surface even when JSON was advertised", () => {
+    const { wrapper } = mountPanel({ contractStatus: "contract_error" });
+    const topology = wrapper.get('[role="tab"][data-module="topology"]');
+    expect((topology.element as HTMLButtonElement).disabled).toBe(true);
+    expect(topology.attributes("aria-disabled")).toBe("true");
+    expect(wrapper.find(".structured-stack").exists()).toBe(false);
   });
 
   it("uses module cards to show one structured editor at a time", async () => {
@@ -287,18 +309,19 @@ describe("structured input panel", () => {
     // topology editor is mounted without its own textarea and stays editable.
     expect(wrapper.findAll(".structured-stack textarea")).toHaveLength(0);
     expect(wrapper.find(".json-grid").exists()).toBe(false);
-    expect(wrapper.find(".topology-editor .topology-module-bindings").exists()).toBe(false);
+    expect(wrapper.find(".topology-editor .topology-module-binding").exists()).toBe(true);
+    expect(wrapper.find(".topology-model-settings summary").exists()).toBe(false);
     expect(wrapper.find(".topology-editor--readonly").exists()).toBe(false);
   });
 
-  it("shows a complete-input gate for request and topology modules until enabled", async () => {
-    const { wrapper } = mountPanel({ structuredInput: false });
+  it("shows request and topology editors without a complete-input gate", async () => {
+    const { wrapper } = mountPanel();
     await openModule(wrapper, "requests");
-    expect(wrapper.find(".module-input-gate").exists()).toBe(true);
-    expect(wrapper.find(".structured-block--requests").exists()).toBe(false);
+    expect(wrapper.find(".module-input-gate").exists()).toBe(false);
+    expect(wrapper.find(".structured-block--requests").exists()).toBe(true);
     await openModule(wrapper, "topology");
-    expect(wrapper.find(".module-input-gate").exists()).toBe(true);
-    expect(wrapper.find(".topology-editor").exists()).toBe(false);
+    expect(wrapper.find(".module-input-gate").exists()).toBe(false);
+    expect(wrapper.find(".topology-editor").exists()).toBe(true);
   });
 
   it("exposes the complete request contract, including model identity and advanced routing fields", async () => {
@@ -341,13 +364,14 @@ describe("structured input panel", () => {
     expect(updated.requests[0].model_id).toBe("mixtral");
   });
 
-  it("offers topology-backed dropdowns for TP and request participants", async () => {
+  it("uses a bounded TP number input and keeps it equal to selected participants", async () => {
     const { wrapper, panel } = mountPanel({ structuredInput: true });
     await openModule(wrapper, "requests");
-    const tp = wrapper.get('[data-input-path="/custom_inputs/runtime_trace/requests/0/tp_degree"] select');
-    expect(tp.findAll("option").map((option) => option.text())).toContain("4 GPU");
-    (tp.element as HTMLSelectElement).value = "4";
-    await tp.trigger("change");
+    const tp = wrapper.get<HTMLInputElement>(
+      '[data-input-path="/custom_inputs/runtime_trace/requests/0/tp_degree"] input[type="number"]',
+    );
+    expect(tp.attributes("min")).toBe("1");
+    expect(tp.attributes("max")).toBe("4");
     const participants = wrapper.get(
       '[data-input-path="/custom_inputs/runtime_trace/requests/0/participants"] .request-participants-picker',
     );
@@ -360,8 +384,13 @@ describe("structured input panel", () => {
     (gpu2.element as HTMLInputElement).checked = true;
     await gpu2.trigger("change");
     const updated = JSON.parse(panel().emitted("update:runtimeJson")?.at(-1)?.[0] as string);
-    expect(updated.requests[0].tp_degree).toBe(4);
+    expect(updated.requests[0].tp_degree).toBe(3);
     expect(updated.requests[0].participants).toEqual(["gpu0", "gpu1", "gpu2"]);
+
+    tp.element.value = "2";
+    await tp.trigger("change");
+    expect(wrapper.text()).toContain("并行卡数必须等于参与设备数量");
+    expect(JSON.parse(panel().emitted("update:runtimeJson")?.at(-1)?.[0] as string).requests[0].tp_degree).toBe(3);
   });
 
   it("paints the run-policy block with the advanced keys only, never the knobs' own", () => {
@@ -420,10 +449,10 @@ describe("structured input panel", () => {
     expect(delay.attributes("placeholder")).toBe("0");
   });
 
-  it("collapses the advanced run-policy grid on demand", async () => {
+  it("keeps the advanced run-policy grid visible", () => {
     const { wrapper } = mountPanel({ structuredInput: true });
-    await wrapper.get(".policy-advanced-toggle").trigger("click");
-    expect(wrapper.findAll(".structured-block--policy [data-input-path]")).toHaveLength(0);
+    expect(wrapper.find(".policy-advanced-toggle").exists()).toBe(false);
+    expect(wrapper.findAll(".structured-block--policy [data-input-path]")).toHaveLength(9);
   });
 
   it("accepts a legal policy value", async () => {
@@ -462,6 +491,13 @@ describe("structured input panel", () => {
     // "未设置（省略字段）" means the key is omitted again, not set to null.
     expect("max_batch_size" in JSON.parse(cleared).policy).toBe(false);
     expect(wrapper.findAll(".structured-note--error")).toHaveLength(0);
+  });
+
+  it("emits a hydration fence immediately when a scalar control receives input", async () => {
+    const { wrapper } = mountPanel({ structuredInput: true, withKnobs: true });
+    const input = wrapper.get('.field[data-field-id="max_batch_size"] input');
+    await input.trigger("input");
+    expect(wrapper.getComponent(ExperimentInputPanel).emitted("input-mutation")).toHaveLength(1);
   });
 
   it("mirrors a fabric knob into the matching module binding", async () => {
@@ -615,6 +651,17 @@ describe("structured input panel", () => {
     expect(wrapper.get('.structured-note--warning[role="alert"]').text()).toContain("5 张卡");
   });
 
+  it("adds a switch as a graph node without changing GPU pairing", async () => {
+    const { wrapper, panel } = mountPanel({ structuredInput: true });
+    await openModule(wrapper, "topology");
+    await wrapper.get(".device-inventory__add select").setValue("Switch");
+    await wrapper.get(".device-inventory__add .button").trigger("click");
+    const topoJson = panel().emitted("update:topologyJson")?.at(-1)?.[0] as string;
+    const devices = JSON.parse(topoJson).topology.devices;
+    expect(devices.at(-1)).toEqual({ device_id: "sw0", device_type: "Switch" });
+    expect(wrapper.find('.structured-note--warning[role="alert"]').exists()).toBe(false);
+  });
+
   it("hosts the domain list between the device inventory and the graph", () => {
     const { wrapper } = mountPanel({ structuredInput: true });
     return openModule(wrapper, "topology").then(() => {
@@ -629,15 +676,11 @@ describe("structured input panel", () => {
     });
   });
 
-  it("keeps device and domain editors collapsed until advanced topology settings are requested", async () => {
+  it("keeps device and domain editors visible by default", async () => {
     const { wrapper } = mountPanel({ structuredInput: true });
     await openModule(wrapper, "topology");
-    expect(wrapper.get(".topology-advanced-toggle").attributes("aria-expanded")).toBe("false");
-    expect(wrapper.get(".device-inventory").attributes("style")).toContain("display: none");
-    expect(wrapper.get(".domain-inventory").attributes("style")).toContain("display: none");
-    await wrapper.get(".topology-advanced-toggle").trigger("click");
-    expect(wrapper.get(".topology-advanced-toggle").attributes("aria-expanded")).toBe("true");
-    expect(wrapper.get(".device-inventory").attributes("style")).not.toContain("display: none");
-    expect(wrapper.get(".domain-inventory").attributes("style")).not.toContain("display: none");
+    expect(wrapper.find(".topology-advanced-toggle").exists()).toBe(false);
+    expect(wrapper.get(".device-inventory").attributes("style")).toBeUndefined();
+    expect(wrapper.get(".domain-inventory").attributes("style")).toBeUndefined();
   });
 });

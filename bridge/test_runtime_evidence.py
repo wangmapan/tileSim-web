@@ -27,6 +27,34 @@ class RuntimeEvidenceContractTests(unittest.TestCase):
         self.assertEqual(compute_schema_set_revision(server.CONTRACT_ROOT), server.SCHEMA_SET_REVISION)
         self.assertEqual(server.api_manifest()["schema_set_revision"], server.SCHEMA_SET_REVISION)
 
+    def test_agent_flow_manifest_exposes_the_published_revoke_surface(self):
+        flow = server.api_manifest()["agent_flow"]
+        # A cardinality-only assertion would let a replacement identity silently
+        # displace a published schema. Keep the manifest check closed-world so a
+        # flow contract addition/removal requires an intentional test update.
+        self.assertEqual(
+            set(flow["schema_identities"]),
+            {
+                "tilesim.agent_flow.artifact_binding.v1",
+                "tilesim.agent_flow.identity_binding.v1",
+                "tilesim.agent_flow.navigation_observation.v1",
+                "tilesim.agent_flow.start_request.v1",
+                "tilesim.agent_flow.resume_request.v1",
+                "tilesim.agent_flow.state.v1",
+                "tilesim.agent_flow.event.v1",
+                "tilesim.agent_flow.start_response.v1",
+                "tilesim.agent_flow.status_response.v1",
+                "tilesim.agent_flow.events_response.v1",
+                "tilesim.agent_flow.resume_response.v1",
+                "tilesim.agent_flow.revoke_request.v1",
+                "tilesim.agent_flow.revoke_response.v1",
+            },
+        )
+        self.assertEqual(
+            flow["endpoints"]["revoke_authorization"],
+            "POST /api/agent/flows/{flow_id}/authorization/revoke",
+        )
+
     def write(self, value):
         self.path.write_text(json.dumps(value), encoding="utf-8")
 
@@ -225,6 +253,33 @@ class RuntimeEvidenceContractTests(unittest.TestCase):
         self.assertNotIn("--runtime-events-out", calls[1])
         self.assertTrue(all("--request-attribution-out" not in command for command in calls))
 
+    def test_s6_success_cannot_publish_without_verified_canonical_replay(self):
+        run = {"run_id": self.run_id, "status": "running"}
+        runs_by_id = {self.run_id: run}
+        runner = lambda command, **_kwargs: execution.subprocess.CompletedProcess(
+            command, 0, stdout=b"{}", stderr=b""
+        )
+        with mock.patch.object(execution, "trace_package_manifest_matches", return_value=True):
+            execution.execute_run(
+                self.run_id,
+                {"from": "S1", "to": "S6", "trace": Path("trace.json"), "topology": Path("topology.json")},
+                "des",
+                runs_root=Path(self.temp.name),
+                tilesim_cli=Path("TileSimCLI"),
+                tilesim_root=self.directory,
+                runs=runs_by_id,
+                runs_lock=execution.threading.Lock(),
+                report_paths_for=server.report_paths_for,
+                is_valid_json_file=lambda _: True,
+                update_run_metadata=lambda *_args, **kwargs: run.update(kwargs),
+                now=lambda: "now",
+                validate_execution_replay=lambda _run_id, _path: "canonical replay rejected",
+                process_runner=runner,
+            )
+        self.assertEqual(run["status"], "failed")
+        self.assertEqual(run["failure_code"], "cli_invalid_execution_replay")
+        self.assertEqual(run["error"], "canonical replay rejected")
+
     def test_cli_attribution_error_is_persisted_without_generalizing_code_or_path(self):
         run = {"run_id": self.run_id, "status": "running"}
         output = {
@@ -363,6 +418,39 @@ class RuntimeEvidenceContractTests(unittest.TestCase):
         self.assertIn("--runtime-events-out", calls[1])
         self.assertNotIn("--request-attribution-out", calls[1])
         self.assertNotIn("--runtime-events-out", calls[2])
+
+    def test_s6_runs_request_canonical_execution_replay(self):
+        calls = []
+
+        def runner(command, **_kwargs):
+            calls.append(command)
+            return execution.subprocess.CompletedProcess(command, 1, stdout=b"{}", stderr=b"failed")
+
+        scenario = {
+            "from": "S2",
+            "to": "S6",
+            "trace": Path("trace.json"),
+            "topology": Path("topology.json"),
+        }
+        with mock.patch.object(execution, "trace_package_manifest_matches", return_value=True):
+            execution.execute_run(
+                self.run_id,
+                scenario,
+                "default",
+                runs_root=Path(self.temp.name),
+                tilesim_cli=Path("TileSimCLI"),
+                tilesim_root=self.directory,
+                runs={self.run_id: {"run_id": self.run_id, "status": "running"}},
+                runs_lock=execution.threading.Lock(),
+                report_paths_for=server.report_paths_for,
+                is_valid_json_file=lambda _: False,
+                update_run_metadata=lambda *_args, **_kwargs: None,
+                now=lambda: "now",
+                process_runner=runner,
+            )
+        self.assertEqual(len(calls), 1)
+        self.assertIn("--execution-replay-out", calls[0])
+        self.assertTrue(any(str(item).endswith("execution-replay.json") for item in calls[0]))
 
     def test_trace_package_applicability_does_not_infer_from_dense_shape(self):
         dense_shape_without_contract = {

@@ -1,4 +1,6 @@
 export { compileIntent } from "./compiler";
+export { isUnsupportedExecutionRequest } from "./constants";
+export { deriveAgentIntentPolicy } from "./model-policy";
 export { bindClarificationAnswer, resolveClarificationAnswer } from "./clarification-binding";
 export { applyDraftToExperimentParameterValues } from "./draft-adapter";
 export { isIntentCompilerOutput, validateIntentCompilerInput } from "./guards";
@@ -11,6 +13,7 @@ export type {
   ClarificationRebindResult,
 } from "./clarification-binding";
 export type { ExperimentParameterValue } from "./draft-adapter";
+export type { AgentIntentPolicy } from "./model-policy";
 export type {
   ClarificationQuestion,
   CurrentSubsetExperimentDraft,

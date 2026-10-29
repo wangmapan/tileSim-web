@@ -11,10 +11,11 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { streamAssistantChat, type AssistantChatMessage } from "../../src/lib/api/assistant-model";
+import { BRIDGE_SCHEMA_SET_REVISION } from "../../src/contracts/generated/bridge-contracts";
 
 afterEach(() => vi.unstubAllGlobals());
 
-const schemaSetRevision = `sha256:${"a".repeat(64)}`;
+const schemaSetRevision = BRIDGE_SCHEMA_SET_REVISION;
 const chatEnvelope = "tilesim.bridge.assistant_model_chat.v1";
 
 function plan(overrides: Record<string, unknown> = {}) {
@@ -57,7 +58,11 @@ function streamResponse(frames: readonly string[] = []): Response {
   });
   return new Response(body, {
     status: 200,
-    headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "X-TileSim-Schema-Set-Revision": schemaSetRevision,
+      "X-TileSim-API-Version": "tilesim.bridge.api.v1",
+    },
   });
 }
 
@@ -83,7 +88,11 @@ function brokenStreamResponse(frames: readonly string[]): Response {
   });
   return new Response(body, {
     status: 200,
-    headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "X-TileSim-Schema-Set-Revision": schemaSetRevision,
+      "X-TileSim-API-Version": "tilesim.bridge.api.v1",
+    },
   });
 }
 
@@ -152,7 +161,9 @@ describe("assistant chat stream", () => {
   });
 
   it("replays the transcript and the panel values with the turn", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(streamResponse([proseFrame("好。")]));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(streamResponse([proseFrame("好。"), frame("done", { schema_version: chatEnvelope })]));
     vi.stubGlobal("fetch", fetchMock);
 
     await ask(recorder());
@@ -284,6 +295,49 @@ describe("assistant chat stream", () => {
     expect(outcome?.answer).toBe("先压小批量。");
   });
 
+  it("fails closed when the stream closes without a done and validated plan", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(streamResponse([proseFrame("只收到半句")])));
+    const outcome = await ask(recorder());
+    expect(outcome?.failure).toBe("模型回答没有正常结束。");
+  });
+
+  it("rejects frames after done instead of accepting a late plan", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          streamResponse([
+            proseFrame("已完成"),
+            frame("done", { schema_version: chatEnvelope }),
+            frame("plan", plan()),
+          ]),
+        ),
+    );
+    const record = recorder();
+
+    const outcome = await ask(record);
+
+    expect(outcome?.plan).toBeNull();
+    expect(outcome?.failure).toBe("模型回答格式不受支持。");
+    expect(record.plans).toEqual([]);
+  });
+
+  it("fails closed on an unknown event type", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(streamResponse([frame("future_event", {})])));
+    const outcome = await ask(recorder());
+    expect(outcome?.failure).toBe("模型回答格式不受支持。");
+  });
+
+  it("does not read a stream from a stale Bridge contract", async () => {
+    const response = streamResponse([proseFrame("不应展示")]);
+    response.headers.set("X-TileSim-Schema-Set-Revision", `sha256:${"f".repeat(64)}`);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+    const record = recorder();
+    await expect(ask(record)).resolves.toBeNull();
+    expect(record.answers).toEqual([]);
+  });
+
   it.each([
     ["a foreign protocol", { protocol: "tilesim.something_else.v1" }],
     ["a plan that claims it was written", { applied: true }],
@@ -319,6 +373,7 @@ describe("assistant chat stream", () => {
 
     expect(record.answers).toEqual([]);
     expect(outcome?.answer).toBe("");
+    expect(outcome?.failure).toBe("模型回答没有正常结束。");
   });
 
   it("ignores a frame whose data cannot be read instead of ending the stream", async () => {
@@ -338,7 +393,7 @@ describe("assistant chat stream", () => {
 
     const outcome = await ask(record);
 
-    expect(record.answers).toEqual(["先压小批量。"]);
-    expect(outcome?.failure).toBe("");
+    expect(record.answers).toEqual([]);
+    expect(outcome?.failure).toBe("模型回答格式不受支持。");
   });
 });

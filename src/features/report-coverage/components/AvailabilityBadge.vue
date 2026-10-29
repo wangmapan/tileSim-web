@@ -30,7 +30,10 @@ const tone = computed(() => availabilityTone(props.availability));
   font: var(--text-sm) var(--font-sans);
   line-height: 1.35;
   box-shadow: var(--shadow-hairline);
-  animation: ts-fade var(--motion-enter) var(--ease-standard) backwards;
+  /* Coverage is an evidence boundary, not a decorative status pulse. A
+     partially faded badge can drop an otherwise AA-safe warning/missing label
+     below contrast during initial render and make the state look uncertain. */
+  animation: none;
   transition:
     border-color var(--motion-interaction) var(--ease-standard),
     background-color var(--motion-interaction) var(--ease-standard),

@@ -1,5 +1,18 @@
 # Local bridge contract
 
+## 2026-10-26 Agent flow 当前事实（工作树，未提交、未部署）
+
+Bridge 的 `/api/agent/flows` 当前是 `deterministic_transition_adapter`；`langgraph_runtime_status` 为
+`optional_not_active`，`activation_boundary` 为 `local_dev_only`。标准 Bridge 进程不自动加载可选 LangGraph 依赖，
+不得将 optional backend 测试描述为已接线的 LangGraph HTTP runtime。flow contract/generated client 与运行时
+schema-set 必须绑定 canonical revision
+`sha256:3677e6e3c01d0970a1107d97b2d0b3452c20c0230f412f4a1567ab4933478a89`，可由
+`python bridge/check_schema_set_revision.py` 复核。
+
+flow 只读保留 session/flow identity、幂等、权限、stale、事件序列和 SQLite restart/recovery 语义；不创建 run、
+不写配置、不调用 Provider。当前能力继续固定为 `local_dev` / `synthetic_trace` / `exploratory` /
+`not_for_production`，实际 LangGraph HTTP integration 与 Run Intake v2 create-run 仍 pending。
+
 ## 阶段 5 Local-Dev 受控批处理（2026-10-24 当前事实）
 
 Bridge 当前同时提供 `2026-10-19.wpd.v1` 受控优化和 `2026-10-19.wpe.v1` 批处理入口。批处理 tool registry 为
@@ -10,7 +23,7 @@ Bridge 当前同时提供 `2026-10-19.wpd.v1` 受控优化和 `2026-10-19.wpe.v1
 阶段 5 收尾判定为 `LOCAL_PHASE5_PASS`，仅表示 local-dev 语义闭合，不是生产 GO。候选、失败/时间/运行/重试预算、暂停恢复、
 lease/heartbeat、SSE contiguous replay、unknown outcome 的 `recovery_required` 与 `manual_intervention_required` 边界均保持
 fail-closed；结果固定为 `local_dev` / `synthetic_trace` / `exploratory` / `not_for_production`。当前 schema-set revision 为
-`sha256:dd9fad27c1d5591a79a16211f701f5725a711163bb284d960b99cca020064b4e`，Provider live acceptance、真实硬件、独立
+`sha256:3677e6e3c01d0970a1107d97b2d0b3452c20c0230f412f4a1567ab4933478a89`，Provider live acceptance、真实硬件、独立
 evidence/citation review 和生产 GO 仍为 `production_acceptance_pending`。
 
 ## 阶段 4 Local-Dev 受控优化（已由阶段 5 扩展）
@@ -112,7 +125,7 @@ API 响应携带 `X-Request-ID`、`X-TileSim-API-Version` 和 `X-TileSim-Schema-
 
 同一 key 和同一 canonical JSON payload 返回原 run；同一 key 配不同 payload 返回 409。执行开始前，key、payload SHA-256 和 Bridge 实例身份会通过临时文件加原子替换写入私有 `run-metadata.json`。该文件不属于浏览器 artifact allow-list。新 Bridge 发现旧实例遗留的 `preparing/running` 且没有主报告时，会以 `bridge_execution_interrupted` 收敛为失败终态，不会无限等待。
 
-执行故障使用稳定的私有持久化终态：timeout 为 `cli_timeout`，启动错误为 `cli_execution_error`，非零退出为 `cli_nonzero_exit`，零退出但缺少合法主报告为 `cli_missing_primary_artifact`。失败运行产生的合法 partial artifact 仍会进入工件清单；缺失或损坏 JSON 不会被枚举。持久化恢复不会把已记录的 failed 状态仅因主报告文件存在而改写为 completed。
+执行故障使用稳定的私有持久化终态：timeout 为 `cli_timeout`，启动错误为 `cli_execution_error`，非零退出为 `cli_nonzero_exit`，零退出但缺少合法主报告为 `cli_missing_primary_artifact`，S6 canonical execution-replay 缺失或契约校验失败为 `cli_invalid_execution_replay`。失败运行产生的合法 partial artifact 仍会进入工件清单；缺失或损坏 JSON 不会被枚举。持久化恢复不会把已记录的 failed 状态仅因主报告文件存在而改写为 completed。
 
 completed run 的损坏可选报告会被忽略，不影响其余合法报告；主 run artifact 缺失或损坏时 reports endpoint 返回 `primary_artifact_invalid`。run 终态与重命名使用同一 metadata lock，避免并发 read-modify-write 丢失字段。
 

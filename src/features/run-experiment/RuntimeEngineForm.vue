@@ -88,16 +88,9 @@ function toggleFeature(feature: string, checked: boolean) {
 </script>
 
 <template>
-  <section class="structured-block" :aria-label="t('推理引擎语义模型')">
+  <section class="structured-block structured-block--engine" :aria-label="t('推理引擎语义模型')">
     <header class="structured-block__header">
       <strong>{{ t("推理引擎语义模型") }}</strong>
-      <InlineHelp
-        :text="
-          t(
-            '这是仿真中的版本化运行时语义，不会启动真实推理服务。DES 是独立请求保真度，实际 resolved fidelity 以运行结果为准。',
-          )
-        "
-      />
     </header>
     <p v-if="!parsed.ok" role="alert">{{ parsed.error }}</p>
     <template v-else>
@@ -126,10 +119,7 @@ function toggleFeature(feature: string, checked: boolean) {
         </select>
       </label>
       <label
-        ><span
-          >{{ t("引擎画像")
-          }}<InlineHelp :text="t('vllm.0.6.tilesim_pd.v1 未开放：缺少完整放置、handoff 与 dense host 前置。')"
-        /></span>
+        ><span>{{ t("引擎画像") }}<InlineHelp :text="t('当前画像尚未开放完整放置与 handoff。')" /></span>
         <select data-engine-profile :value="mode === 'generic' ? selectedEngine : engine" @change="chooseEngine">
           <option v-for="(profile, key) in RUN_ENGINE_PROFILES" :key="key" :value="key">
             {{ key }} · {{ profile.version }}

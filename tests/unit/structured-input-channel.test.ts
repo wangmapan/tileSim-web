@@ -17,12 +17,12 @@ import { createF8ExperimentDescriptor, f8Capabilities } from "../fixtures/experi
  * an either/or decision rather than an addition, and the decision has to stay
  * invisible until the user actually opens the structured editors.
  */
-function surface() {
+function surface(inputModes = ["controls", "json", "trace_package"]) {
   return buildExperimentSurface(
     {
       scenarios: [{ scenario_id: "s1_des_example", label: "S1 → S6" }],
       fidelity_policies: ["default", "des"],
-      input_modes: ["controls", "json", "trace_package"],
+      input_modes: inputModes,
       design_space_modes: ["built_in_synthetic", "strict_s6_manifest"],
       gpu_participation_modes: ["gpu_free"],
     },
@@ -70,7 +70,7 @@ function build(options: { structuredInput?: boolean; runtime?: string; topology?
 
 describe("quick-control submission channel", () => {
   it("still produces overrides while the structured editors are closed", () => {
-    const request = build();
+    const request = build({ runtime: "", topology: "" });
     expect(request).not.toHaveProperty("custom_inputs");
     expect(request.custom_inputs).toBeUndefined();
   });
@@ -96,6 +96,86 @@ describe("quick-control submission channel", () => {
     });
     expect(preview.request).toBeNull();
     expect(preview.error?.fieldPath).toBe("/custom_inputs/runtime_trace");
+  });
+
+  it("refuses runtime-only structured input instead of falling back to overrides", () => {
+    const preview = buildExperimentRequestPreview({
+      form: createExperimentForm(surface()),
+      mode: "controls",
+      surface: surface(),
+      runtimeJson,
+      topologyJson: "",
+      designSpaceJson: "",
+      structuredInput: true,
+    });
+    expect(preview.request).toBeNull();
+    expect(preview.error?.fieldPath).toBe("/custom_inputs/topology");
+  });
+
+  it("refuses topology-only structured input instead of falling back to overrides", () => {
+    const preview = buildExperimentRequestPreview({
+      form: createExperimentForm(surface()),
+      mode: "controls",
+      surface: surface(),
+      runtimeJson: "",
+      topologyJson,
+      designSpaceJson: "",
+      structuredInput: true,
+    });
+    expect(preview.request).toBeNull();
+    expect(preview.error?.fieldPath).toBe("/custom_inputs/runtime_trace");
+  });
+
+  it("keeps both empty documents on the scalar overrides channel", () => {
+    const request = build({ runtime: "", topology: "", structuredInput: true });
+    expect(request.custom_inputs).toBeUndefined();
+  });
+
+  it("reports an invalid JSON document at its own nested pointer", () => {
+    const preview = buildExperimentRequestPreview({
+      form: createExperimentForm(surface()),
+      mode: "controls",
+      surface: surface(),
+      runtimeJson: "{not-json}",
+      topologyJson,
+      designSpaceJson: "",
+      structuredInput: true,
+    });
+    expect(preview.request).toBeNull();
+    expect(preview.error?.fieldPath).toBe("/custom_inputs/runtime_trace");
+  });
+
+  it("rejects a stale structured draft when JSON input is no longer advertised", () => {
+    const noJsonSurface = surface(["controls"]);
+    const preview = buildExperimentRequestPreview({
+      form: createExperimentForm(noJsonSurface),
+      mode: "controls",
+      surface: noJsonSurface,
+      runtimeJson,
+      topologyJson,
+      designSpaceJson: "",
+      structuredInput: true,
+    });
+    expect(preview.request).toBeNull();
+    expect(preview.error?.fieldPath).toBe("/input_mode");
+  });
+
+  it("refuses a request whose explicit participant count differs from TP", () => {
+    const preview = buildExperimentRequestPreview({
+      form: createExperimentForm(surface()),
+      mode: "controls",
+      surface: surface(),
+      runtimeJson: JSON.stringify({
+        policy: { batch_scheduler: "fifo" },
+        requests: [{ request_id: "req_a", tp_degree: 2, participants: ["gpu0", "gpu1", "gpu2"] }],
+      }),
+      topologyJson,
+      designSpaceJson: "",
+      structuredInput: true,
+    });
+    expect(preview.request).toBeNull();
+    expect(preview.error?.fieldPath).toBe("/custom_inputs/runtime_trace/requests/0/tp_degree");
+    expect(preview.error?.message).toContain("参与设备数量");
   });
 
   it("keeps the JSON tab on the same channel whichever way it is reached", () => {

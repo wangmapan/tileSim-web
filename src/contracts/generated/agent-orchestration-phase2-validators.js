@@ -382,7 +382,8 @@ function validate23(
 }
 validate23.evaluated = { props: true, dynamicProps: false, dynamicItems: false };
 const func1 = Object.prototype.hasOwnProperty;
-import func2 from "ajv/dist/runtime/ucs2length";
+import * as func2Module from "ajv/dist/runtime/ucs2length.js";
+const func2 = func2Module.default?.default ?? func2Module.default ?? func2Module;
 function validate22(
   data,
   { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {},
@@ -17773,7 +17774,8 @@ const schema146 = {
     },
   },
 };
-import func0 from "ajv/dist/runtime/equal";
+import * as func0Module from "ajv/dist/runtime/equal.js";
+const func0 = func0Module.default?.default ?? func0Module.default ?? func0Module;
 const pattern90 = new RegExp("^[0-9a-f]{40}$", "u");
 function validate125(
   data,

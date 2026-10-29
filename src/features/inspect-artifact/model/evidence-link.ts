@@ -28,6 +28,7 @@ const artifactAliases: Record<string, string> = {
   "runtime-requests": "runtime-requests",
   "runtime-analysis": "runtime-analysis",
   "request-attribution": "request-attribution",
+  "execution-replay": "execution-replay",
 };
 
 const sha256Pattern = /^[a-f0-9]{64}$/i;

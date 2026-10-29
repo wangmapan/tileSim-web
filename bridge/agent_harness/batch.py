@@ -233,6 +233,11 @@ class BatchStore:
         with self.lock:
             return self._batch(self.db.execute("SELECT * FROM batches WHERE batch_id=? AND deleted_at IS NULL", (batch_id,)).fetchone())
 
+    def batch_ids_for_run(self, run_id: str) -> list[str]:
+        with self.lock:
+            rows = self.db.execute("SELECT batch_id,document_json FROM batch_candidates WHERE json_extract(document_json, '$.run_id')=? ORDER BY batch_id", (run_id,)).fetchall()
+            return sorted({str(row["batch_id"]) for row in rows})
+
     def list(self, principal: str, workspace_id: str) -> list[dict[str, Any]]:
         with self.lock:
             return [self._batch(row) for row in self.db.execute("SELECT * FROM batches WHERE principal=? AND workspace_id=? AND deleted_at IS NULL ORDER BY created_at DESC", (principal, workspace_id)).fetchall()]
@@ -534,3 +539,20 @@ class BatchStore:
                 self.db.execute("DELETE FROM batch_checkpoints WHERE batch_id=?", (batch_id,))
                 self.db.execute("DELETE FROM batch_leases WHERE batch_id=?", (batch_id,))
             return bool(changed)
+
+    def delete_permanently(self, batch_id: str, *, principal: str | None = None, workspace_id: str | None = None) -> dict[str, Any]:
+        """Erase one batch and all candidate/event/checkpoint/lease rows."""
+        with self.lock, self.db:
+            row = self.db.execute("SELECT * FROM batches WHERE batch_id=?", (batch_id,)).fetchone()
+            if row is None:
+                return {"status": "not_found", "store": "batch", "resource_id": batch_id}
+            document = _decode(row["document_json"], {})
+            if principal is not None and document.get("principal") != principal:
+                raise BatchError("principal_mismatch", "Batch does not belong to the caller.")
+            if workspace_id is not None and document.get("workspace_id") != workspace_id:
+                raise BatchError("workspace_mismatch", "Batch does not belong to the caller workspace.")
+            counts = {}
+            for table in ("batch_candidates", "batch_events", "batch_checkpoints", "batch_leases"):
+                counts[table] = int(self.db.execute(f"DELETE FROM {table} WHERE batch_id=?", (batch_id,)).rowcount)
+            counts["batches"] = int(self.db.execute("DELETE FROM batches WHERE batch_id=?", (batch_id,)).rowcount)
+            return {"status": "deleted", "store": "batch", "resource_id": batch_id, "deleted_rows": counts}

@@ -131,6 +131,10 @@ TileSim 应在桌面页面右侧提供一个跨页面常驻的 Agent 对话栏�
 
 Header 不长期展示模型名、SHA 或 contract 小字。模型/provider identity、revision、citation 和诊断信息进入“专业详情”。
 
+> **2026-10-26 实现调整（工作树，未提交）**：侧栏不再把 Context Bar 作为常驻用户界面渲染。页面上下文 envelope、revision/stale 比较、权限与 composer 禁用守卫继续保留；route、run ID、context revision、引用数量等内部诊断字段不再在侧栏常驻展示，避免重复且无助于当前任务的信息占用对话空间。
+
+> **2026-10-26 对话优先调整（工作树，未提交）**：普通用户侧栏不挂载 Stage 4/5 Harness 操作、优化和批量面板；这些能力的 props、事件和后端审批边界仍保留给集成层，但 session/candidate/checkpoint、事件序列以及“创建后再批准”等内部控件不再成为用户流程。会话与模型控制移入默认收起的设置区，三个快捷入口和自然语言 composer 作为主要开始方式。
+
 > **2026-09-22 修订（已实现）**：Conversation Timeline 的“用户消息 + typed response”落地为两个新的 typed block：
 > `user_message`（用户自己那一句）与 `assistant_message`（模型的回答，带**写它的模型名**、`streaming` 与 `error`
 > 三个字段）。回答是**边写边显**的：每次可见增量都以 `prose` 事件把**到目前为止的全文**重发一次，面板直接整体替换

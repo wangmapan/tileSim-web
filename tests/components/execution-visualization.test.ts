@@ -295,6 +295,7 @@ describe("execution visualization panel", () => {
     expect(mounts).toBe(1);
     expect(wrapper.find(".visualization-table-scroll").exists()).toBe(false);
     expect(wrapper.get(".visualization-title-line .inline-help__bubble").text()).toContain("不补造数据");
+    expect(wrapper.get(".visualization-boundary").text()).toContain("解读边界");
     const disclosure = wrapper.get<HTMLDetailsElement>(".visualization-data");
     disclosure.element.open = true;
     await disclosure.trigger("toggle");

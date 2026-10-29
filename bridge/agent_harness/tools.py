@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -31,6 +32,148 @@ TOOL_DEFINITIONS = {
     "query_verified_metrics": ToolDefinition("query_verified_metrics", "1", "agent:read_evidence", 3000, True, "Read selected, verified fields from a metrics artifact."),
 }
 
+# The model-facing argument contract is deliberately separate from the gateway
+# metadata carried by a trusted caller (principal, scope and idempotency).  The
+# latter is accepted by ``_closed_input`` for backwards compatibility, but is
+# never advertised as a field the model may choose.  Keeping this mapping next
+# to the registry means the capability catalogue and the decision-loop
+# validator cannot silently drift apart.
+TOOL_INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
+    "get_capability_catalog": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": False,
+    },
+    "get_run_status": {
+        "type": "object",
+        "properties": {
+            "run_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        },
+        "required": ["run_id"],
+        "additionalProperties": False,
+    },
+    "list_run_evidence": {
+        "type": "object",
+        "properties": {
+            "run_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        },
+        "required": ["run_id"],
+        "additionalProperties": False,
+    },
+    "query_verified_metrics": {
+        "type": "object",
+        "properties": {
+            "run_id": {"type": "string", "minLength": 1, "maxLength": 128},
+            "artifact_id": {"type": "string", "enum": ["metrics"]},
+            "json_pointers": {
+                "type": "array",
+                "maxItems": 32,
+                "items": {"type": "string", "pattern": r"^/"},
+            },
+        },
+        "required": ["run_id"],
+        "additionalProperties": False,
+    },
+}
+
+# These fields are generated/checked by the authenticated gateway.  They are
+# intentionally not part of TOOL_INPUT_SCHEMAS: exposing them would let a
+# model impersonate a principal or bind a call to a different operation.
+_GATEWAY_METADATA_FIELDS = frozenset(
+    {"snapshot_digest", "principal", "scope", "idempotency_key"}
+)
+
+
+def _schema_properties(tool_name: str) -> set[str]:
+    schema = TOOL_INPUT_SCHEMAS.get(tool_name)
+    if not isinstance(schema, dict):
+        return set()
+    properties = schema.get("properties")
+    return set(properties) if isinstance(properties, dict) else set()
+
+
+def _validate_schema_value(value: Any, schema: dict[str, Any], path: str) -> None:
+    """Validate the small closed JSON-schema subset used by the tool gateway."""
+
+    expected = schema.get("type")
+    if expected == "string":
+        if not isinstance(value, str):
+            raise ToolGatewayError("schema_violation", "Expected a string.", path, status=400)
+        minimum = schema.get("minLength")
+        maximum = schema.get("maxLength")
+        if isinstance(minimum, int) and len(value) < minimum:
+            raise ToolGatewayError("schema_violation", "String is shorter than the allowed minimum.", path, status=400)
+        if isinstance(maximum, int) and len(value) > maximum:
+            raise ToolGatewayError("schema_violation", "String exceeds the allowed maximum.", path, status=400)
+        enum = schema.get("enum")
+        if isinstance(enum, list) and value not in enum:
+            raise ToolGatewayError("schema_violation", "Value is not in the allow-list.", path, status=400)
+        pattern = schema.get("pattern")
+        if isinstance(pattern, str) and re.search(pattern, value) is None:
+            raise ToolGatewayError("schema_violation", "String does not match the required pattern.", path, status=400)
+        return
+    if expected == "array":
+        if not isinstance(value, list):
+            raise ToolGatewayError("schema_violation", "Expected an array.", path, status=400)
+        maximum = schema.get("maxItems")
+        if isinstance(maximum, int) and len(value) > maximum:
+            raise ToolGatewayError("schema_violation", "Array contains too many items.", path, status=400)
+        item_schema = schema.get("items")
+        if isinstance(item_schema, dict):
+            for index, item in enumerate(value):
+                _validate_schema_value(item, item_schema, f"{path}/{index}")
+        return
+    if expected == "object" and not isinstance(value, dict):
+        raise ToolGatewayError("schema_violation", "Expected an object.", path, status=400)
+
+
+def validate_tool_arguments(tool_name: str, arguments: Any) -> None:
+    """Validate model-supplied tool arguments against the published schema.
+
+    This is intentionally fail-closed and side-effect free.  Callers should
+    invoke it before dispatching a tool; an invalid call never reaches the
+    durable tool-call ledger or the underlying run/artifact readers.
+    """
+
+    schema = TOOL_INPUT_SCHEMAS.get(tool_name)
+    if schema is None or tool_name not in TOOL_DEFINITIONS:
+        raise ToolGatewayError("unknown_tool", "Tool is not published.", "/tool_name")
+    if not isinstance(arguments, dict):
+        raise ToolGatewayError("schema_violation", "Tool arguments must be an object.", "/arguments", status=400)
+    properties = schema.get("properties", {})
+    if not isinstance(properties, dict):
+        properties = {}
+    unknown = sorted(set(arguments) - set(properties))
+    if schema.get("additionalProperties") is False and unknown:
+        raise ToolGatewayError("schema_violation", "Tool arguments are closed.", f"/arguments/{unknown[0]}", status=400)
+    required = schema.get("required", [])
+    if isinstance(required, list):
+        for key in required:
+            if key not in arguments:
+                raise ToolGatewayError("schema_violation", f"{key} is required.", f"/arguments/{key}", status=400)
+    for key, value in arguments.items():
+        rule = properties.get(key)
+        if isinstance(rule, dict):
+            _validate_schema_value(value, rule, f"/arguments/{key}")
+
+
+def _assert_schema_registry_consistency() -> None:
+    if set(TOOL_INPUT_SCHEMAS) != set(TOOL_DEFINITIONS):
+        raise RuntimeError("Tool definitions and input schemas must have identical names.")
+    for name, schema in TOOL_INPUT_SCHEMAS.items():
+        if schema.get("type") != "object" or schema.get("additionalProperties") is not False:
+            raise RuntimeError(f"Tool schema for {name} must be a closed object.")
+        properties = schema.get("properties")
+        if not isinstance(properties, dict):
+            raise RuntimeError(f"Tool schema for {name} must declare properties.")
+        required = schema.get("required")
+        if not isinstance(required, list) or any(key not in properties for key in required):
+            raise RuntimeError(f"Tool schema for {name} has invalid required fields.")
+
+
+_assert_schema_registry_consistency()
+
 
 class ToolGatewayError(ValueError):
     def __init__(self, code: str, message: str, field_path: str | None = None, *, status: int = 403, retryable: bool = False, unknown_outcome: bool = False):
@@ -43,6 +186,7 @@ class ToolGatewayError(ValueError):
 
 
 def catalog(*, schema_set_revision: str, backend_identity: Any) -> dict[str, Any]:
+    _assert_schema_registry_consistency()
     return {
         "schema_identity": "tilesim.agent_harness.tool_catalog.v1",
         "contract_revision": TOOL_REGISTRY_REVISION,
@@ -51,7 +195,7 @@ def catalog(*, schema_set_revision: str, backend_identity: Any) -> dict[str, Any
         "tools": [
             {"tool_name": item.name, "tool_revision": item.revision, "required_scope": item.scope,
              "timeout_ms": item.timeout_ms, "retryable": item.retryable, "description": item.description,
-             "input_schema": {"type": "object", "additionalProperties": False},
+             "input_schema": json.loads(json.dumps(TOOL_INPUT_SCHEMAS[item.name])),
              "output_schema": {"type": "object", "additionalProperties": False},
              "permission": {"allow_shell": False, "allow_arbitrary_path": False, "allow_arbitrary_url": False, "allow_network": False}}
             for item in TOOL_DEFINITIONS.values()
@@ -63,10 +207,15 @@ def catalog(*, schema_set_revision: str, backend_identity: Any) -> dict[str, Any
 def _closed_input(tool: ToolDefinition, payload: Any) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ToolGatewayError("invalid_tool_input", "Tool input must be an object.", "/input", status=400)
-    allowed = {"run_id", "snapshot_digest", "artifact_id", "json_pointers", "principal", "scope", "idempotency_key"}
+    allowed = _schema_properties(tool.name) | _GATEWAY_METADATA_FIELDS
     unknown = sorted(set(payload) - allowed)
     if unknown:
-        raise ToolGatewayError("unknown_field", "Tool input is closed.", f"/input/{unknown[0]}", status=400)
+        raise ToolGatewayError("schema_violation", "Tool input is closed.", f"/input/{unknown[0]}", status=400)
+    model_arguments = {key: value for key, value in payload.items() if key not in _GATEWAY_METADATA_FIELDS}
+    validate_tool_arguments(tool.name, model_arguments)
+    for metadata_key in _GATEWAY_METADATA_FIELDS & set(payload):
+        if not isinstance(payload[metadata_key], str) or not payload[metadata_key]:
+            raise ToolGatewayError("schema_violation", f"{metadata_key} must be a non-empty string.", f"/input/{metadata_key}", status=400)
     if tool.name in {"get_run_status", "list_run_evidence", "query_verified_metrics"}:
         if not isinstance(payload.get("run_id"), str) or not payload["run_id"]:
             raise ToolGatewayError("invalid_tool_input", "run_id is required.", "/input/run_id", status=400)

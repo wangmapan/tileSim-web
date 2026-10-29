@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tilesim.agent_flow.status_response.v1",
+  "title": "AgentFlowStatusResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["flow"],
+  "properties": { "flow": { "$ref": "state.schema.json" } }
+}

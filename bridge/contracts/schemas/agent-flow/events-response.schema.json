@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tilesim.agent_flow.events_response.v1",
+  "title": "AgentFlowEventsResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["flow", "events", "after_sequence", "terminal"],
+  "properties": {
+    "flow": { "$ref": "state.schema.json" },
+    "events": { "type": "array", "items": { "$ref": "event.schema.json" } },
+    "after_sequence": { "type": "integer", "minimum": 0 },
+    "terminal": { "type": "boolean" }
+  }
+}

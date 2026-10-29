@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import unittest
 
 from contracts.experiment_descriptor import PARAMETER_DEFINITIONS
@@ -812,12 +813,10 @@ class AssistantModelStreamTest(unittest.TestCase):
         self.assertNotIn("response_format", payload)
 
     def test_a_long_answer_is_capped(self) -> None:
-        events = self.stream_with([stream_chunk("x" * 4000) for _ in range(4)])
-        self.assertLessEqual(
-            max(len(text) for text in self.prose(events)),
-            assistant_model.MAXIMUM_ANSWER_CHARACTERS,
-        )
-        self.assertEqual(self.plan(events)["answer_state"], "prose_only")
+        events = self.stream_with([stream_chunk("x" * 4000) for _ in range(7)])
+        self.assertLessEqual(max(len(text) for text in self.prose(events)), assistant_model.MAXIMUM_ANSWER_CHARACTERS)
+        self.assertEqual(events[-1][0], "truncated")
+        self.assertNotIn("plan", [event for event, _ in events])
 
     def test_streaming_requires_configuration(self) -> None:
         for name in ENVIRONMENT:
@@ -830,6 +829,124 @@ class AssistantModelStreamTest(unittest.TestCase):
             self.stream_with(assistant_model.ProviderTimeoutError("timed out"))
         with self.assertRaises(assistant_model.ProviderUnavailableError):
             self.stream_with(assistant_model.ProviderUnavailableError("unreachable"))
+
+    def test_long_answer_emits_explicit_truncated_event(self) -> None:
+        events = self.stream_with([stream_chunk("x" * (assistant_model.MAXIMUM_ANSWER_CHARACTERS + 1))])
+        self.assertEqual([event for event, _ in events].count("truncated"), 1)
+        truncated = next(data for event, data in events if event == "truncated")
+        self.assertEqual(truncated["reason_code"], "output_truncated")
+        self.assertEqual(truncated["limit"], assistant_model.MAXIMUM_ANSWER_CHARACTERS)
+
+
+class AssistantModelDecisionTest(unittest.TestCase):
+    """The opt-in Agent channel parses tool-call deltas without prose fences."""
+
+    def setUp(self) -> None:
+        self.saved = {name: os.environ.pop(name, None) for name in ENVIRONMENT}
+        for name, value in ENVIRONMENT.items():
+            os.environ[name] = value
+
+    def tearDown(self) -> None:
+        for name, value in self.saved.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
+    @staticmethod
+    def chunk(*, name: str | None = None, arguments: str = "", index: int = 0, content: str | None = None) -> dict:
+        function: dict[str, str] = {"arguments": arguments}
+        if name is not None:
+            function["name"] = name
+        delta: dict = {"tool_calls": [{"index": index, "function": function}]}
+        if content is not None:
+            delta["content"] = content
+        return {"model": "deepseek-v4-flash", "choices": [{"delta": delta}]}
+
+    def decide(self, chunks: list[dict]) -> dict:
+        seen: list[dict] = []
+
+        def transport(config, payload):  # noqa: ANN001, ANN202
+            seen.append(payload)
+            return iter(chunks)
+
+        result = assistant_model.agent_decision(
+            [{"role": "user", "content": "检查吞吐"}],
+            tools=[{"type": "function", "function": {"name": "query_verified_metrics"}}],
+            transport=transport,
+        )
+        self.assertTrue(seen)
+        self.assertIn("tools", seen[0])
+        self.assertEqual(seen[0]["tool_choice"], "auto")
+        return result
+
+    def test_fragmented_tool_arguments_are_reassembled(self) -> None:
+        result = self.decide(
+            [
+                self.chunk(name="query_verified_metrics", arguments='{"run_id":"'),
+                self.chunk(arguments='run-1"}'),
+            ]
+        )
+        self.assertEqual(result["kind"], "tool_call")
+        self.assertEqual(result["tool_name"], "query_verified_metrics")
+        self.assertEqual(result["arguments"], {"run_id": "run-1"})
+
+    def test_malformed_tool_arguments_fail_closed(self) -> None:
+        result = self.decide([self.chunk(name="query_verified_metrics", arguments="{bad")])
+        self.assertEqual(result["kind"], "stop")
+        self.assertEqual(result["reason"], "needs_human")
+        self.assertEqual(result["parse_error"], "invalid_tool_arguments")
+
+    def test_oversized_tool_arguments_fail_closed(self) -> None:
+        result = self.decide([self.chunk(name="query_verified_metrics", arguments="x" * (assistant_model.MAXIMUM_TOOL_ARGUMENT_CHARACTERS + 1))])
+        self.assertEqual(result["kind"], "stop")
+        self.assertEqual(result["parse_error"], "tool_arguments_too_large")
+
+    def test_json_decision_content_supports_stop_union(self) -> None:
+        result = self.decide([{"choices": [{"delta": {"content": '{"kind":"stop","reason":"objective_reached"}'}}]}])
+        self.assertEqual(result["kind"], "stop")
+        self.assertEqual(result["reason"], "objective_reached")
+
+    def test_json_decision_content_supports_ask_user_union(self) -> None:
+        result = self.decide(
+            [{"choices": [{"delta": {"content": '{"kind":"ask_user","question":"请确认优化目标"}'}}]}]
+        )
+        self.assertEqual(result["kind"], "ask_user")
+        self.assertEqual(result["question"], "请确认优化目标")
+
+    def test_json_decision_rejects_unknown_union_fields(self) -> None:
+        result = self.decide(
+            [{"choices": [{"delta": {"content": '{"kind":"stop","reason":"objective_reached","config":{"secret":true}}'}}]}]
+        )
+        self.assertEqual(result["kind"], "stop")
+        self.assertEqual(result["parse_error"], "unknown_decision_field")
+
+    def test_json_decision_rejects_a_stale_schema_version(self) -> None:
+        result = self.decide(
+            [{"choices": [{"delta": {"content": '{"schema_version":"tilesim.bridge.agent_decision.v0","kind":"stop","reason":"objective_reached"}'}}]}]
+        )
+        self.assertEqual(result["kind"], "stop")
+        self.assertEqual(result["parse_error"], "unknown_decision_field")
+
+    def test_multiple_tool_indices_fail_closed_instead_of_selecting_the_first(self) -> None:
+        result = self.decide(
+            [
+                self.chunk(name="query_verified_metrics", arguments='{"run_id":"run-1"}', index=0),
+                self.chunk(name="get_run_status", arguments='{"run_id":"run-1"}', index=1),
+            ]
+        )
+        self.assertEqual(result["kind"], "stop")
+        self.assertEqual(result["parse_error"], "multiple_tool_calls")
+
+    def test_conflicting_tool_names_for_one_index_fail_closed(self) -> None:
+        result = self.decide(
+            [
+                self.chunk(name="query_verified_metrics", arguments="{", index=0),
+                self.chunk(name="get_run_status", arguments='"run_id":"run-1"}', index=0),
+            ]
+        )
+        self.assertEqual(result["kind"], "stop")
+        self.assertEqual(result["parse_error"], "multiple_tool_calls")
 
 
 class AssistantModelResultAnalysisTest(unittest.TestCase):
@@ -948,7 +1065,7 @@ class AssistantModelCatalogueTest(unittest.TestCase):
         for name, value in ENVIRONMENT.items():
             os.environ[name] = value
         self.requests: list[tuple[str, str, str]] = []
-        # A switch is process-wide state, so every case starts - and finishes - without one.
+        # The legacy direct-caller scope is cleared so every case starts - and finishes - without one.
         assistant_model.clear_session_model()
 
     def tearDown(self) -> None:
@@ -1090,6 +1207,60 @@ class AssistantModelCatalogueTest(unittest.TestCase):
         with self.assertRaises(assistant_model.ProviderUnavailableError):
             assistant_model.select_model("glm-5.1")
         self.assertIsNone(assistant_model.session_model())
+
+    def test_two_scopes_keep_different_model_choices_isolated(self) -> None:
+        """A second browser/session must not overwrite the first session's model."""
+
+        assistant_model.select_model("glm-5.1", scope="session-a")
+        assistant_model.select_model("qwen3-0.6b", scope="session-b")
+        self.assertEqual(assistant_model.config_from_environment("session-a").model, "glm-5.1")
+        self.assertEqual(assistant_model.config_from_environment("session-b").model, "qwen3-0.6b")
+        self.assertIsNone(assistant_model.session_model("session-c"))
+        assistant_model.clear_session_model("session-a")
+        self.assertEqual(assistant_model.config_from_environment("session-a").model, "deepseek-v4-flash")
+        self.assertEqual(assistant_model.config_from_environment("session-b").model, "qwen3-0.6b")
+
+    def test_stream_uses_one_immutable_config_when_another_scope_switches(self) -> None:
+        """A model switch during an in-flight stream cannot change its payload."""
+
+        assistant_model.select_model("glm-5.1", scope="session-a")
+        assistant_model.select_model("qwen3-0.6b", scope="session-b")
+        config_a = assistant_model.require_channel("session-a")
+        seen: list[str] = []
+
+        def transport(config, payload):
+            seen.append(payload["model"])
+            yield {"model": config.model, "choices": [{"delta": {"content": "回答"}}]}
+            assistant_model.select_model("another-model", scope="session-b")
+            yield {"model": config.model, "choices": [{"delta": {"content": "完成"}}]}
+
+        events = list(
+            assistant_model.stream_events(
+                [{"role": "user", "content": "问题"}],
+                {},
+                config=config_a,
+                transport=transport,
+            )
+        )
+        self.assertEqual(seen, ["glm-5.1"])
+        self.assertEqual(config_a.model, "glm-5.1")
+        self.assertEqual(assistant_model.config_from_environment("session-b").model, "another-model")
+        self.assertEqual(events[-1][0], "plan")
+
+    def test_invalid_scope_fails_closed(self) -> None:
+        with self.assertRaises(ValueError):
+            assistant_model.select_model("glm-5.1", scope="bad scope")
+        with self.assertRaises(ValueError):
+            assistant_model.config_from_environment("bad scope")
+
+    def test_expired_scope_selection_is_not_reused(self) -> None:
+        assistant_model.select_model("glm-5.1", scope="expired-session")
+        with assistant_model._selection_lock:
+            assistant_model._selection_models["expired-session"] = (
+                "glm-5.1",
+                time.monotonic() - 1,
+            )
+        self.assertIsNone(assistant_model.session_model("expired-session"))
 
 
 if __name__ == "__main__":

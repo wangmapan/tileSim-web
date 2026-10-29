@@ -27,7 +27,7 @@ if (-not [string]::IsNullOrWhiteSpace($InstallerPath)) {
 
 function Throw-Usage {
     param([Parameter(Mandatory = $true)][string]$Message)
-    throw "$Message`nWSL example: .\scripts\package-windows-release.ps1 -Version 0.3.0 -RuntimeMetadataPath E:\artifacts\tilesim-runtime.json -WslRootfsTar E:\artifacts\tilesim-rootfs.tar`nNative example: .\scripts\package-windows-release.ps1 -Version 0.3.0 -RuntimeKind windows-native -BackendCliPath D:\tileSim\build-ca1\Release\TileSimCLI.exe"
+    throw "$Message`nWSL example: .\scripts\package-windows-release.ps1 -Version 0.3.0 -RuntimeMetadataPath .\artifacts\tilesim-runtime.json -WslRootfsTar .\artifacts\tilesim-rootfs.tar`nNative example: .\scripts\package-windows-release.ps1 -Version 0.3.0 -RuntimeKind windows-native -BackendCliPath .\artifacts\TileSimCLI.exe"
 }
 
 function Get-Sha256 {

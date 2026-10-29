@@ -1,5 +1,7 @@
 // Generated from bridge/contracts OpenAPI and JSON Schema. Do not edit by hand.
 
+export const BRIDGE_SCHEMA_SET_REVISION = "sha256:0085e3a4e89576fff168f29d811be581c7107b9bd3f8fabf9834d651f3c606b3";
+
 export type CreateRunRequest = {
   [k: string]: unknown;
 } & {
@@ -661,6 +663,7 @@ export interface BridgeApiContracts {
   topologyInput?: S6TopologyInputV1;
   tailCauseChainReport?: TailCauseChainReportV1;
   executionEnvelope?: S7ExecutionEnvelopeV1;
+  executionReplay?: ExecutionReplayArtifact;
   runtimeEventTrace?: RuntimeEventTrace;
   runtimeEventSummary?: RuntimeEventSummary;
   runtimeRequestSummaries?: RuntimeRequestSummaries;
@@ -684,6 +687,20 @@ export interface BridgeApiContracts {
   agentOrchestrationDeviceProfileV2?: HttpsTilesimLocalContractsAgentOrchestrationPhase2DeviceProfileSchemaJson;
   agentOrchestrationTopologyProfileV2?: HttpsTilesimLocalContractsAgentOrchestrationPhase2TopologyProfileSchemaJson;
   agentOrchestrationWorkloadProfileV2?: HttpsTilesimLocalContractsAgentOrchestrationPhase2WorkloadProfileSchemaJson;
+  agentFlowArtifactBinding?: AgentFlowArtifactBinding;
+  agentFlowIdentityBinding?: AgentFlowIdentityBinding;
+  agentFlowNavigationObservation?: AgentFlowNavigationObservation;
+  agentFlowStartRequest?: AgentFlowStartRequest;
+  agentFlowResumeRequest?: AgentFlowResumeRequest;
+  agentFlowState?: AgentFlowState;
+  agentFlowEvent?: AgentFlowEvent;
+  agentFlowStartResponse?: AgentFlowStartResponse;
+  agentFlowStatusResponse?: AgentFlowStatusResponse;
+  agentFlowEventsResponse?: AgentFlowEventsResponse;
+  agentFlowResumeResponse?: AgentFlowResumeResponse;
+  agentIntentPageEntry?: AgentIntentPageEntry;
+  agentIntentRequest?: AgentIntentRequest;
+  agentIntentResponse?: AgentIntentResponse;
 }
 export interface ApiManifestResponse {
   schema_version: "tilesim.bridge.manifest.v1";
@@ -772,6 +789,52 @@ export interface ApiManifestResponse {
     ];
     catalog_revision: string;
     contract_package_revision: string;
+  };
+  agent_flow: {
+    contract_revision: "2026-10-28.flow.v2";
+    runtime_mode: "deterministic_transition_adapter";
+    langgraph_runtime_status: "optional_not_active";
+    activation_boundary: "local_dev_only";
+    /**
+     * @minItems 13
+     * @maxItems 13
+     */
+    schema_identities: [
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+    ];
+    endpoints: {
+      start: "POST /api/agent/flows";
+      status: "GET /api/agent/flows/{flow_id}";
+      events: "GET /api/agent/flows/{flow_id}/events";
+      stream: "GET /api/agent/flows/{flow_id}/events/stream";
+      resume: "POST /api/agent/flows/{flow_id}/resume";
+      revoke_authorization: "POST /api/agent/flows/{flow_id}/authorization/revoke";
+    };
+    scopes: {
+      start: "agent:start_flow";
+      read: "agent:read_flow";
+      resume: "agent:resume_flow";
+    };
+    idempotency_header: "Idempotency-Key";
+    event_resume_header: "Last-Event-ID";
+    local_dev: true;
+    source_mode: "synthetic_trace";
+    claim_scope: "exploratory";
+    production_status: "not_for_production";
+    create_run: false;
+    provider_acceptance: "pending";
   };
   run_creation: {
     idempotency_header: "Idempotency-Key";
@@ -1960,6 +2023,205 @@ export interface S7ExecutionEnvelopeV1 {
     [k: string]: unknown;
   }[];
   [k: string]: unknown;
+}
+export interface ExecutionReplayArtifact {
+  schema_version: "tilesim.execution_replay.v1";
+  run_id: string;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  start_time_ps: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  finish_time_ps: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  end_time_ps: bigint;
+  fabric: FabricReport;
+  collective_steps: CollectiveStep[];
+}
+export interface FabricReport {
+  scenario_name: string;
+  end_to_end_latency_us: number;
+  timeline: ExecutionRecord[];
+  module_stats: {
+    module_id: string;
+    module_kind: string;
+    fidelity_level: string;
+    /**
+     * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+     */
+    total_bytes: bigint;
+    total_queue_delay_us: number;
+    total_congestion_delay_us: number;
+    total_runtime_us: number;
+    total_algorithm_rounds: number;
+    /**
+     * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+     */
+    transfers_executed: bigint;
+  }[];
+  fallback_reasons: string[];
+  hotspots: {
+    hotspot_type: string;
+    resource_scope: string;
+    phase_id: string;
+    /**
+     * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+     */
+    time_window_ps: bigint;
+    required_observation: string;
+  }[];
+}
+export interface ExecutionRecord {
+  request_id: string;
+  collective_id: string;
+  phase_id: string;
+  collective_algorithm: string;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  collective_rounds: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  participant_count: bigint;
+  module_id: string;
+  domain_id: string;
+  module_kind: string;
+  fidelity_level: string;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  release_time_ps: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  memory_latency_ps: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  device_latency_ps: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  start_time_ps: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  finish_time_ps: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  queue_delay_ps: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  serialization_delay_ps: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  congestion_delay_ps: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  profile_queueing_delay_ps: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  propagation_delay_ps: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  service_delay_ps: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  completion_delay_ps: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  backpressure_delay_ps: bigint;
+  profile_id: string;
+  profile_selection: string;
+  profile_asset_id: string;
+  profile_asset_sha256: string;
+  profile_source_id: string;
+  profile_generation_path: string;
+  profile_source_mode: string;
+  profile_calibration_level: string;
+  profile_claim_scope: string;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  service_busy_time_ps: bigint;
+  has_service_busy_time: boolean;
+  elapsed_time_includes_queue_delay: boolean;
+  resource_annotations: {
+    [k: string]: string;
+  };
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  retransmission_count: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  flow_control_stall_count: bigint;
+  actual_path: string[];
+  link_endpoints: {
+    [k: string]: {
+      source: string;
+      destination: string;
+    };
+  };
+  execution_events: {
+    kind: string;
+    phase_id: string;
+    link_id: string;
+    port_id: string;
+    /**
+     * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+     */
+    time_ps: bigint;
+    /**
+     * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+     */
+    attempt: bigint;
+  }[];
+}
+export interface CollectiveStep {
+  step_id: string;
+  collective_id: string;
+  demand_id?: string;
+  phase_id: string;
+  phase?: string;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  round: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  chunk: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  start_time_ps: bigint;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  end_time_ps: bigint;
+  source_device: string;
+  destination_device: string;
+  /**
+   * A JSON integer that MUST be parsed and retained losslessly; JavaScript Number is not a conforming representation.
+   */
+  bytes: bigint;
+  dependencies: string[];
+  state: string;
 }
 export interface RuntimeEventTrace {
   schema_version: "tilesim.s1_runtime_event_trace.v1";
@@ -3315,6 +3577,1316 @@ export interface FieldProvenance {
     | "limited_extrapolation"
     | "similar_regime_conditional_prediction"
     | "real_calibrated_validation";
+}
+export interface AgentFlowArtifactBinding {
+  artifact_id: string;
+  schema_identity: string;
+  sha256: string;
+  bytes: string;
+}
+export interface AgentFlowIdentityBinding {
+  session_id: string;
+  flow_id: string | null;
+  run_id: string | null;
+  run_context_revision: string | null;
+  backend_identity: {
+    [k: string]: unknown;
+  };
+  schema_set_revision: string;
+  input_snapshot_digest: string | null;
+  /**
+   * @maxItems 256
+   */
+  artifact_bindings: AgentFlowArtifactBinding[];
+}
+export interface AgentFlowNavigationObservation {
+  target_page: string;
+  actual_page: string | null;
+  page_correct: boolean;
+  /**
+   * @maxItems 32
+   */
+  current_page_capabilities: string[];
+  current_run_id: string | null;
+  current_context_revision: string | null;
+  failure_type:
+    | "navigation_error"
+    | "context_unavailable"
+    | "context_invalid"
+    | "page_mismatch"
+    | "capability_missing"
+    | "stale_identity"
+    | null;
+  retry_allowed: boolean;
+  /**
+   * @maxItems 8
+   */
+  visited_pages:
+    | []
+    | [string]
+    | [string, string]
+    | [string, string, string]
+    | [string, string, string, string]
+    | [string, string, string, string, string]
+    | [string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string];
+  navigation_attempts: number;
+}
+export interface AgentFlowStartRequest {
+  schema_identity: "tilesim.agent_flow.start_request.v1";
+  contract_revision: "2026-10-28.flow.v2";
+  session_id: string;
+  user_goal: string;
+  intent:
+    | "explain"
+    | "existing_run_analysis"
+    | "user_report"
+    | "configuration_draft"
+    | "navigation"
+    | "unsupported_execution";
+  run_id: string | null;
+  run_context_revision: string | null;
+  backend_identity: {
+    [k: string]: unknown;
+  };
+  schema_set_revision: string;
+  input_snapshot_digest: string | null;
+  evidence_status?:
+    "validated" | "deterministic_fallback" | "partial" | "truncated" | "missing" | "provider_unavailable";
+  /**
+   * @maxItems 256
+   */
+  artifact_bindings: AgentFlowArtifactBinding[];
+  current_page?: string | null;
+  /**
+   * @maxItems 32
+   */
+  current_page_capabilities?: string[];
+  current_context_revision?: string | null;
+  /**
+   * @maxItems 32
+   */
+  required_capabilities?: string[];
+  /**
+   * @maxItems 32
+   */
+  allowed_pages?: string[];
+  /**
+   * @maxItems 32
+   */
+  allowed_actions?: string[];
+  navigation_attempts?: number;
+  max_navigation_attempts?: number;
+  authorization_id?: string;
+  authorization_digest?: string;
+  authorization_budget?: AuthorizationBudget;
+  principal?: string;
+  workspace_id?: string;
+}
+export interface AuthorizationBudget {
+  max_navigation_attempts: number;
+  max_model_calls: number;
+  max_tool_calls_per_round: number;
+  max_run_creations: number;
+  max_execution_time_ms: number;
+}
+export interface AgentFlowResumeRequest {
+  schema_identity: "tilesim.agent_flow.resume_request.v1";
+  contract_revision: "2026-10-28.flow.v2";
+  flow_id: string;
+  session_id: string;
+  action: "clarify_intent" | "confirm_report" | "confirm_draft" | "confirm_navigation" | "cancel" | "reject";
+  intent?:
+    | "explain"
+    | "existing_run_analysis"
+    | "user_report"
+    | "configuration_draft"
+    | "navigation"
+    | "unsupported_execution";
+  pending_action: "clarify_intent" | "confirm_report" | "confirm_draft" | "confirm_navigation" | null;
+  navigation_observation?: AgentFlowNavigationObservation;
+  current_binding: AgentFlowIdentityBinding;
+  current_event_sequence: number;
+  clarification?: string | null;
+  reason?: string | null;
+  approval_digest?: string | null;
+  authorization_id?: string;
+  authorization_digest?: string;
+  authorization_budget?: {
+    max_navigation_attempts: number;
+    max_model_calls: number;
+    max_tool_calls_per_round: number;
+    max_run_creations: number;
+    max_execution_time_ms: number;
+  };
+  principal?: string;
+  workspace_id?: string;
+}
+export interface AgentFlowState {
+  schema_identity: "tilesim.agent_flow.state.v1";
+  contract_revision: "2026-10-28.flow.v2";
+  flow_id: string;
+  session_id: string;
+  principal: string;
+  workspace_id: string;
+  intent:
+    | "explain"
+    | "existing_run_analysis"
+    | "user_report"
+    | "configuration_draft"
+    | "navigation"
+    | "unsupported_execution";
+  status:
+    "created" | "running" | "waiting_user" | "completed" | "draft_ready" | "stale" | "refused" | "cancelled" | "failed";
+  node: string;
+  event_sequence: number;
+  binding: AgentFlowIdentityBinding;
+  pending_action: "clarify_intent" | "confirm_report" | "confirm_draft" | "confirm_navigation" | null;
+  approval: {
+    [k: string]: unknown;
+  } | null;
+  authorization: {
+    status: "active" | "revoked" | "expired" | "exhausted";
+    authorization_id: string;
+    authorization_digest: string;
+    budget: AuthorizationBudget;
+    usage: {
+      navigation_attempts: number;
+      model_calls: number;
+      tool_calls_per_round: number;
+      run_creations: number;
+      execution_time_ms: number;
+    };
+    remaining: {
+      max_navigation_attempts: number;
+      max_model_calls: number;
+      max_tool_calls_per_round: number;
+      max_run_creations: number;
+      max_execution_time_ms: number;
+    };
+  } | null;
+  validation: {
+    [k: string]: unknown;
+  } | null;
+  evidence: {
+    [k: string]: unknown;
+  } | null;
+  report: {
+    [k: string]: unknown;
+  } | null;
+  terminal_reason: string | null;
+  checkpoint_id: string | null;
+  created_at: string;
+  updated_at: string;
+  current_page?: string | null;
+  /**
+   * @maxItems 32
+   */
+  current_page_capabilities?: string[];
+  current_context_revision?: string | null;
+  /**
+   * @maxItems 32
+   */
+  required_capabilities?: string[];
+  /**
+   * @maxItems 32
+   */
+  allowed_pages?: string[];
+  /**
+   * @maxItems 32
+   */
+  allowed_actions?: string[];
+  /**
+   * @maxItems 8
+   */
+  visited_pages?:
+    | []
+    | [string]
+    | [string, string]
+    | [string, string, string]
+    | [string, string, string, string]
+    | [string, string, string, string, string]
+    | [string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string];
+  navigation_attempts?: number;
+  max_navigation_attempts?: number;
+  /**
+   * @maxItems 8
+   */
+  navigation_failures?:
+    | []
+    | [
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+      ]
+    | [
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+      ]
+    | [
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+      ]
+    | [
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+      ]
+    | [
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+      ]
+    | [
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+      ]
+    | [
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+      ]
+    | [
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+      ];
+  last_navigation_observation?: AgentFlowNavigationObservation | null;
+  navigation_target?: string | null;
+}
+export interface AgentFlowEvent {
+  schema_identity: "tilesim.agent_flow.event.v1";
+  contract_revision: "2026-10-28.flow.v2";
+  event_id: string;
+  sequence: number;
+  flow_id: string;
+  session_id: string;
+  node: string;
+  event_type:
+    | "flow_started"
+    | "node_started"
+    | "node_completed"
+    | "interrupt"
+    | "approval_required"
+    | "state_changed"
+    | "terminal"
+    | "error";
+  state: AgentFlowState;
+  binding: AgentFlowIdentityBinding;
+  pending_action: "clarify_intent" | "confirm_report" | "confirm_draft" | "confirm_navigation" | null;
+  payload: {
+    [k: string]: unknown;
+  };
+  created_at: string;
+}
+export interface AgentFlowStartResponse {
+  flow: AgentFlowState;
+  idempotent_replay: boolean;
+}
+export interface AgentFlowStatusResponse {
+  flow: AgentFlowState;
+}
+export interface AgentFlowEventsResponse {
+  flow: AgentFlowState;
+  events: AgentFlowEvent[];
+  after_sequence: number;
+  terminal: boolean;
+}
+export interface AgentFlowResumeResponse {
+  flow: AgentFlowState;
+  events: AgentFlowEvent[];
+  idempotent_replay: boolean;
+  action: string;
+}
+export interface AgentIntentPageEntry {
+  page_id: string;
+  route_name: string;
+  /**
+   * @maxItems 64
+   */
+  capability_ids: string[];
+  supports_run: boolean;
+  context_revision?: string;
+}
+export interface AgentIntentRequest {
+  schema_identity: "tilesim.agent_intent.request.v1";
+  contract_revision: "2026-10-28.agent-intent.v1";
+  session_id: string;
+  user_goal: string;
+  current_page: {
+    page_id: string;
+    route_name: string;
+    /**
+     * @maxItems 64
+     */
+    capability_ids: string[];
+    context_revision: string;
+  };
+  /**
+   * @minItems 1
+   * @maxItems 64
+   */
+  page_catalog: [
+    {
+      page_id: string;
+      route_name: string;
+      /**
+       * @maxItems 64
+       */
+      capability_ids: string[];
+      supports_run: boolean;
+    },
+    ...{
+      page_id: string;
+      route_name: string;
+      /**
+       * @maxItems 64
+       */
+      capability_ids: string[];
+      supports_run: boolean;
+    }[],
+  ];
+  run_id: string | null;
+  run_context_revision: string | null;
+  backend_identity: {
+    [k: string]: unknown;
+  };
+  schema_set_revision: string;
+  input_snapshot_digest: string | null;
+}
+export interface AgentIntentResponse {
+  schema_identity: "tilesim.agent_intent.response.v1";
+  contract_revision: "2026-10-28.agent-intent.v1";
+  schema_set_revision: string;
+  protocol: "tilesim.agent_intent.v1";
+  session_id: string;
+  user_goal: string;
+  intent:
+    | "explain"
+    | "existing_run_analysis"
+    | "user_report"
+    | "configuration_draft"
+    | "navigation"
+    | "simulation_execution"
+    | "unsupported_execution";
+  current_page_id: string;
+  current_context_revision: string;
+  run_id: string | null;
+  run_context_revision: string | null;
+  backend_identity: {
+    [k: string]: unknown;
+  };
+  input_snapshot_digest: string | null;
+  /**
+   * @maxItems 32
+   */
+  candidate_pages: {
+    page_id: string;
+    route_name: string;
+    /**
+     * @maxItems 64
+     */
+    required_capabilities: string[];
+    reason: string;
+  }[];
+  /**
+   * @maxItems 64
+   */
+  required_capabilities: string[];
+  risk_level: "low" | "medium" | "high" | "critical";
+  requires_user_confirmation: boolean;
+  /**
+   * @maxItems 16
+   */
+  suggested_steps:
+    | []
+    | [
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+      ]
+    | [
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+      ]
+    | [
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+      ]
+    | [
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+      ]
+    | [
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+      ]
+    | [
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+      ]
+    | [
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+      ]
+    | [
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+      ]
+    | [
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+      ]
+    | [
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+      ]
+    | [
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+      ]
+    | [
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+      ]
+    | [
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+      ]
+    | [
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+      ]
+    | [
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+      ]
+    | [
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+        {
+          kind: "navigate" | "observe" | "clarify" | "authorize" | "execute" | "report";
+          description: string;
+          page_id: string | null;
+        },
+      ];
+  /**
+   * @maxItems 8
+   */
+  clarification_questions:
+    | []
+    | [string]
+    | [string, string]
+    | [string, string, string]
+    | [string, string, string, string]
+    | [string, string, string, string, string]
+    | [string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string];
 }
 
 export interface RequestAttributionArtifact {
@@ -5254,12 +6826,136 @@ export interface TilesimAgentHarnessOptimizationSessionV1 {
   execution_request?: {
     [k: string]: unknown;
   } | null;
+  autonomy?: "off" | "propose" | "auto";
+  authorization_id?: string | null;
+  authorization_digest?: string | null;
+  authorization?: TilesimAgentHarnessOptimizationAuthorizationV1;
+  /**
+   * @maxItems 128
+   */
+  agent_turns?: {
+    [k: string]: unknown;
+  }[];
   active_operation_id?: string | null;
   summary?: {
     [k: string]: unknown;
   } | null;
   created_at?: string;
   updated_at?: string;
+}
+export interface TilesimAgentHarnessOptimizationAuthorizationV1 {
+  schema_identity: "tilesim.agent_harness.optimization_authorization.v1";
+  contract_revision: "2026-10-28.wpf.v1";
+  authorization_id: string;
+  session_id: string;
+  principal: string;
+  workspace_id: string;
+  schema_set_revision: string;
+  backend_identity: {
+    [k: string]: unknown;
+  };
+  input_snapshot_digest: string;
+  autonomy_level: "bounded_autonomous" | "human_approves_each";
+  budget: {
+    max_rounds: number;
+    max_runs: number;
+    max_seconds: number;
+    max_failures: number;
+    max_model_calls: number;
+    max_tool_calls_per_round: number;
+    max_navigation_attempts: number;
+    max_run_creations: number;
+    max_execution_time_ms: number;
+  };
+  /**
+   * @maxItems 64
+   */
+  parameter_grants: {
+    pointer: string;
+    min: number;
+    max: number;
+    step: number;
+    kind: "int" | "integer" | "number" | "float";
+  }[];
+  objective: {
+    metric_path: string;
+    direction: "minimize" | "maximize";
+    minimum_improvement: number;
+    plateau_rounds: number;
+  };
+  /**
+   * @minItems 1
+   * @maxItems 32
+   */
+  tool_allowlist: [
+    "get_capability_catalog" | "get_run_status" | "list_run_evidence" | "query_verified_metrics",
+    ...("get_capability_catalog" | "get_run_status" | "list_run_evidence" | "query_verified_metrics")[],
+  ];
+  /**
+   * @minItems 1
+   * @maxItems 32
+   */
+  allowed_pages: [
+    (
+      | "overview"
+      | "execution"
+      | "replay"
+      | "metrics"
+      | "fabric"
+      | "attribution"
+      | "validation"
+      | "raw_evidence"
+      | "evidence_agent"
+      | "evidence_lab"
+      | "design_space"
+      | "history"
+      | "experiment"
+    ),
+    ...(
+      | "overview"
+      | "execution"
+      | "replay"
+      | "metrics"
+      | "fabric"
+      | "attribution"
+      | "validation"
+      | "raw_evidence"
+      | "evidence_agent"
+      | "evidence_lab"
+      | "design_space"
+      | "history"
+      | "experiment"
+    )[],
+  ];
+  /**
+   * @minItems 1
+   * @maxItems 32
+   */
+  allowed_actions: [
+    "explain" | "navigate" | "analyze" | "report" | "draft" | "execute",
+    ...("explain" | "navigate" | "analyze" | "report" | "draft" | "execute")[],
+  ];
+  protected: {
+    source_mode: "synthetic_trace";
+    claim_scope: "exploratory";
+    schema_set_revision: string;
+    backend_identity: {
+      [k: string]: unknown;
+    };
+  };
+  status: "active" | "exhausted" | "revoked" | "expired";
+  issued_by: string;
+  issued_at: string;
+  expires_at: string;
+  revoked_at: string | null;
+  provenance: {
+    deployment_mode: "local_dev";
+    source_mode: "synthetic_trace";
+    claim_scope: "exploratory";
+    production_status: "not_for_production";
+  };
+  authorization_digest: string;
+  ttl_seconds?: number;
 }
 
 export interface OptimizationSessionListResponse {
@@ -5306,12 +7002,136 @@ export interface TilesimAgentHarnessOptimizationSessionV1 {
   execution_request?: {
     [k: string]: unknown;
   } | null;
+  autonomy?: "off" | "propose" | "auto";
+  authorization_id?: string | null;
+  authorization_digest?: string | null;
+  authorization?: TilesimAgentHarnessOptimizationAuthorizationV1;
+  /**
+   * @maxItems 128
+   */
+  agent_turns?: {
+    [k: string]: unknown;
+  }[];
   active_operation_id?: string | null;
   summary?: {
     [k: string]: unknown;
   } | null;
   created_at?: string;
   updated_at?: string;
+}
+export interface TilesimAgentHarnessOptimizationAuthorizationV1 {
+  schema_identity: "tilesim.agent_harness.optimization_authorization.v1";
+  contract_revision: "2026-10-28.wpf.v1";
+  authorization_id: string;
+  session_id: string;
+  principal: string;
+  workspace_id: string;
+  schema_set_revision: string;
+  backend_identity: {
+    [k: string]: unknown;
+  };
+  input_snapshot_digest: string;
+  autonomy_level: "bounded_autonomous" | "human_approves_each";
+  budget: {
+    max_rounds: number;
+    max_runs: number;
+    max_seconds: number;
+    max_failures: number;
+    max_model_calls: number;
+    max_tool_calls_per_round: number;
+    max_navigation_attempts: number;
+    max_run_creations: number;
+    max_execution_time_ms: number;
+  };
+  /**
+   * @maxItems 64
+   */
+  parameter_grants: {
+    pointer: string;
+    min: number;
+    max: number;
+    step: number;
+    kind: "int" | "integer" | "number" | "float";
+  }[];
+  objective: {
+    metric_path: string;
+    direction: "minimize" | "maximize";
+    minimum_improvement: number;
+    plateau_rounds: number;
+  };
+  /**
+   * @minItems 1
+   * @maxItems 32
+   */
+  tool_allowlist: [
+    "get_capability_catalog" | "get_run_status" | "list_run_evidence" | "query_verified_metrics",
+    ...("get_capability_catalog" | "get_run_status" | "list_run_evidence" | "query_verified_metrics")[],
+  ];
+  /**
+   * @minItems 1
+   * @maxItems 32
+   */
+  allowed_pages: [
+    (
+      | "overview"
+      | "execution"
+      | "replay"
+      | "metrics"
+      | "fabric"
+      | "attribution"
+      | "validation"
+      | "raw_evidence"
+      | "evidence_agent"
+      | "evidence_lab"
+      | "design_space"
+      | "history"
+      | "experiment"
+    ),
+    ...(
+      | "overview"
+      | "execution"
+      | "replay"
+      | "metrics"
+      | "fabric"
+      | "attribution"
+      | "validation"
+      | "raw_evidence"
+      | "evidence_agent"
+      | "evidence_lab"
+      | "design_space"
+      | "history"
+      | "experiment"
+    )[],
+  ];
+  /**
+   * @minItems 1
+   * @maxItems 32
+   */
+  allowed_actions: [
+    "explain" | "navigate" | "analyze" | "report" | "draft" | "execute",
+    ...("explain" | "navigate" | "analyze" | "report" | "draft" | "execute")[],
+  ];
+  protected: {
+    source_mode: "synthetic_trace";
+    claim_scope: "exploratory";
+    schema_set_revision: string;
+    backend_identity: {
+      [k: string]: unknown;
+    };
+  };
+  status: "active" | "exhausted" | "revoked" | "expired";
+  issued_by: string;
+  issued_at: string;
+  expires_at: string;
+  revoked_at: string | null;
+  provenance: {
+    deployment_mode: "local_dev";
+    source_mode: "synthetic_trace";
+    claim_scope: "exploratory";
+    production_status: "not_for_production";
+  };
+  authorization_digest: string;
+  ttl_seconds?: number;
 }
 
 export interface OptimizationSessionEventsResponse {
@@ -5405,6 +7225,521 @@ export interface TilesimAgentHarnessOptimizationSessionV1 {
   execution_request?: {
     [k: string]: unknown;
   } | null;
+  autonomy?: "off" | "propose" | "auto";
+  authorization_id?: string | null;
+  authorization_digest?: string | null;
+  authorization?: TilesimAgentHarnessOptimizationAuthorizationV1;
+  /**
+   * @maxItems 128
+   */
+  agent_turns?: {
+    [k: string]: unknown;
+  }[];
+  active_operation_id?: string | null;
+  summary?: {
+    [k: string]: unknown;
+  } | null;
+  created_at?: string;
+  updated_at?: string;
+}
+export interface TilesimAgentHarnessOptimizationAuthorizationV1 {
+  schema_identity: "tilesim.agent_harness.optimization_authorization.v1";
+  contract_revision: "2026-10-28.wpf.v1";
+  authorization_id: string;
+  session_id: string;
+  principal: string;
+  workspace_id: string;
+  schema_set_revision: string;
+  backend_identity: {
+    [k: string]: unknown;
+  };
+  input_snapshot_digest: string;
+  autonomy_level: "bounded_autonomous" | "human_approves_each";
+  budget: {
+    max_rounds: number;
+    max_runs: number;
+    max_seconds: number;
+    max_failures: number;
+    max_model_calls: number;
+    max_tool_calls_per_round: number;
+    max_navigation_attempts: number;
+    max_run_creations: number;
+    max_execution_time_ms: number;
+  };
+  /**
+   * @maxItems 64
+   */
+  parameter_grants: {
+    pointer: string;
+    min: number;
+    max: number;
+    step: number;
+    kind: "int" | "integer" | "number" | "float";
+  }[];
+  objective: {
+    metric_path: string;
+    direction: "minimize" | "maximize";
+    minimum_improvement: number;
+    plateau_rounds: number;
+  };
+  /**
+   * @minItems 1
+   * @maxItems 32
+   */
+  tool_allowlist: [
+    "get_capability_catalog" | "get_run_status" | "list_run_evidence" | "query_verified_metrics",
+    ...("get_capability_catalog" | "get_run_status" | "list_run_evidence" | "query_verified_metrics")[],
+  ];
+  /**
+   * @minItems 1
+   * @maxItems 32
+   */
+  allowed_pages: [
+    (
+      | "overview"
+      | "execution"
+      | "replay"
+      | "metrics"
+      | "fabric"
+      | "attribution"
+      | "validation"
+      | "raw_evidence"
+      | "evidence_agent"
+      | "evidence_lab"
+      | "design_space"
+      | "history"
+      | "experiment"
+    ),
+    ...(
+      | "overview"
+      | "execution"
+      | "replay"
+      | "metrics"
+      | "fabric"
+      | "attribution"
+      | "validation"
+      | "raw_evidence"
+      | "evidence_agent"
+      | "evidence_lab"
+      | "design_space"
+      | "history"
+      | "experiment"
+    )[],
+  ];
+  /**
+   * @minItems 1
+   * @maxItems 32
+   */
+  allowed_actions: [
+    "explain" | "navigate" | "analyze" | "report" | "draft" | "execute",
+    ...("explain" | "navigate" | "analyze" | "report" | "draft" | "execute")[],
+  ];
+  protected: {
+    source_mode: "synthetic_trace";
+    claim_scope: "exploratory";
+    schema_set_revision: string;
+    backend_identity: {
+      [k: string]: unknown;
+    };
+  };
+  status: "active" | "exhausted" | "revoked" | "expired";
+  issued_by: string;
+  issued_at: string;
+  expires_at: string;
+  revoked_at: string | null;
+  provenance: {
+    deployment_mode: "local_dev";
+    source_mode: "synthetic_trace";
+    claim_scope: "exploratory";
+    production_status: "not_for_production";
+  };
+  authorization_digest: string;
+  ttl_seconds?: number;
+}
+
+export interface OptimizationAuthorizationGetResponse {
+  authorization: TilesimAgentHarnessOptimizationAuthorizationV1 | null;
+  session_id: string;
+  provenance: {
+    [k: string]: unknown;
+  };
+}
+export interface TilesimAgentHarnessOptimizationAuthorizationV1 {
+  schema_identity: "tilesim.agent_harness.optimization_authorization.v1";
+  contract_revision: "2026-10-28.wpf.v1";
+  authorization_id: string;
+  session_id: string;
+  principal: string;
+  workspace_id: string;
+  schema_set_revision: string;
+  backend_identity: {
+    [k: string]: unknown;
+  };
+  input_snapshot_digest: string;
+  autonomy_level: "bounded_autonomous" | "human_approves_each";
+  budget: {
+    max_rounds: number;
+    max_runs: number;
+    max_seconds: number;
+    max_failures: number;
+    max_model_calls: number;
+    max_tool_calls_per_round: number;
+    max_navigation_attempts: number;
+    max_run_creations: number;
+    max_execution_time_ms: number;
+  };
+  /**
+   * @maxItems 64
+   */
+  parameter_grants: {
+    pointer: string;
+    min: number;
+    max: number;
+    step: number;
+    kind: "int" | "integer" | "number" | "float";
+  }[];
+  objective: {
+    metric_path: string;
+    direction: "minimize" | "maximize";
+    minimum_improvement: number;
+    plateau_rounds: number;
+  };
+  /**
+   * @minItems 1
+   * @maxItems 32
+   */
+  tool_allowlist: [
+    "get_capability_catalog" | "get_run_status" | "list_run_evidence" | "query_verified_metrics",
+    ...("get_capability_catalog" | "get_run_status" | "list_run_evidence" | "query_verified_metrics")[],
+  ];
+  /**
+   * @minItems 1
+   * @maxItems 32
+   */
+  allowed_pages: [
+    (
+      | "overview"
+      | "execution"
+      | "replay"
+      | "metrics"
+      | "fabric"
+      | "attribution"
+      | "validation"
+      | "raw_evidence"
+      | "evidence_agent"
+      | "evidence_lab"
+      | "design_space"
+      | "history"
+      | "experiment"
+    ),
+    ...(
+      | "overview"
+      | "execution"
+      | "replay"
+      | "metrics"
+      | "fabric"
+      | "attribution"
+      | "validation"
+      | "raw_evidence"
+      | "evidence_agent"
+      | "evidence_lab"
+      | "design_space"
+      | "history"
+      | "experiment"
+    )[],
+  ];
+  /**
+   * @minItems 1
+   * @maxItems 32
+   */
+  allowed_actions: [
+    "explain" | "navigate" | "analyze" | "report" | "draft" | "execute",
+    ...("explain" | "navigate" | "analyze" | "report" | "draft" | "execute")[],
+  ];
+  protected: {
+    source_mode: "synthetic_trace";
+    claim_scope: "exploratory";
+    schema_set_revision: string;
+    backend_identity: {
+      [k: string]: unknown;
+    };
+  };
+  status: "active" | "exhausted" | "revoked" | "expired";
+  issued_by: string;
+  issued_at: string;
+  expires_at: string;
+  revoked_at: string | null;
+  provenance: {
+    deployment_mode: "local_dev";
+    source_mode: "synthetic_trace";
+    claim_scope: "exploratory";
+    production_status: "not_for_production";
+  };
+  authorization_digest: string;
+  ttl_seconds?: number;
+}
+
+export interface OptimizationAuthorizationRequest {
+  autonomy_level: "bounded_autonomous" | "human_approves_each";
+  budget: {
+    max_rounds?: number;
+    max_runs?: number;
+    max_seconds?: number;
+    max_failures?: number;
+    max_model_calls: number;
+    max_tool_calls_per_round: number;
+    max_navigation_attempts: number;
+    max_run_creations: number;
+    max_execution_time_ms: number;
+  };
+  /**
+   * @maxItems 64
+   */
+  parameter_grants: {
+    pointer: string;
+    min: number;
+    max: number;
+    step: number;
+    kind?: "int" | "integer" | "number" | "float";
+  }[];
+  objective: {
+    metric_path: string;
+    direction: "minimize" | "maximize";
+    minimum_improvement?: number;
+    plateau_rounds?: number;
+  };
+  /**
+   * @minItems 1
+   * @maxItems 32
+   */
+  tool_allowlist: [
+    "get_capability_catalog" | "get_run_status" | "list_run_evidence" | "query_verified_metrics",
+    ...("get_capability_catalog" | "get_run_status" | "list_run_evidence" | "query_verified_metrics")[],
+  ];
+  /**
+   * @minItems 1
+   * @maxItems 32
+   */
+  allowed_pages: [
+    (
+      | "overview"
+      | "execution"
+      | "replay"
+      | "metrics"
+      | "fabric"
+      | "attribution"
+      | "validation"
+      | "raw_evidence"
+      | "evidence_agent"
+      | "evidence_lab"
+      | "design_space"
+      | "history"
+      | "experiment"
+    ),
+    ...(
+      | "overview"
+      | "execution"
+      | "replay"
+      | "metrics"
+      | "fabric"
+      | "attribution"
+      | "validation"
+      | "raw_evidence"
+      | "evidence_agent"
+      | "evidence_lab"
+      | "design_space"
+      | "history"
+      | "experiment"
+    )[],
+  ];
+  /**
+   * @minItems 1
+   * @maxItems 32
+   */
+  allowed_actions: [
+    "explain" | "navigate" | "analyze" | "report" | "draft" | "execute",
+    ...("explain" | "navigate" | "analyze" | "report" | "draft" | "execute")[],
+  ];
+  ttl_seconds?: number;
+}
+
+export interface OptimizationAuthorizationResponse {
+  authorization: TilesimAgentHarnessOptimizationAuthorizationV1;
+  session: TilesimAgentHarnessOptimizationSessionV1;
+  detail: {
+    [k: string]: unknown;
+  };
+  idempotent_replay?: boolean;
+  autonomous_started?: boolean;
+  provenance: {
+    deployment_mode: "local_dev";
+    source_mode: "synthetic_trace";
+    claim_scope: "exploratory";
+    production_status: "not_for_production";
+  };
+}
+export interface TilesimAgentHarnessOptimizationAuthorizationV1 {
+  schema_identity: "tilesim.agent_harness.optimization_authorization.v1";
+  contract_revision: "2026-10-28.wpf.v1";
+  authorization_id: string;
+  session_id: string;
+  principal: string;
+  workspace_id: string;
+  schema_set_revision: string;
+  backend_identity: {
+    [k: string]: unknown;
+  };
+  input_snapshot_digest: string;
+  autonomy_level: "bounded_autonomous" | "human_approves_each";
+  budget: {
+    max_rounds: number;
+    max_runs: number;
+    max_seconds: number;
+    max_failures: number;
+    max_model_calls: number;
+    max_tool_calls_per_round: number;
+    max_navigation_attempts: number;
+    max_run_creations: number;
+    max_execution_time_ms: number;
+  };
+  /**
+   * @maxItems 64
+   */
+  parameter_grants: {
+    pointer: string;
+    min: number;
+    max: number;
+    step: number;
+    kind: "int" | "integer" | "number" | "float";
+  }[];
+  objective: {
+    metric_path: string;
+    direction: "minimize" | "maximize";
+    minimum_improvement: number;
+    plateau_rounds: number;
+  };
+  /**
+   * @minItems 1
+   * @maxItems 32
+   */
+  tool_allowlist: [
+    "get_capability_catalog" | "get_run_status" | "list_run_evidence" | "query_verified_metrics",
+    ...("get_capability_catalog" | "get_run_status" | "list_run_evidence" | "query_verified_metrics")[],
+  ];
+  /**
+   * @minItems 1
+   * @maxItems 32
+   */
+  allowed_pages: [
+    (
+      | "overview"
+      | "execution"
+      | "replay"
+      | "metrics"
+      | "fabric"
+      | "attribution"
+      | "validation"
+      | "raw_evidence"
+      | "evidence_agent"
+      | "evidence_lab"
+      | "design_space"
+      | "history"
+      | "experiment"
+    ),
+    ...(
+      | "overview"
+      | "execution"
+      | "replay"
+      | "metrics"
+      | "fabric"
+      | "attribution"
+      | "validation"
+      | "raw_evidence"
+      | "evidence_agent"
+      | "evidence_lab"
+      | "design_space"
+      | "history"
+      | "experiment"
+    )[],
+  ];
+  /**
+   * @minItems 1
+   * @maxItems 32
+   */
+  allowed_actions: [
+    "explain" | "navigate" | "analyze" | "report" | "draft" | "execute",
+    ...("explain" | "navigate" | "analyze" | "report" | "draft" | "execute")[],
+  ];
+  protected: {
+    source_mode: "synthetic_trace";
+    claim_scope: "exploratory";
+    schema_set_revision: string;
+    backend_identity: {
+      [k: string]: unknown;
+    };
+  };
+  status: "active" | "exhausted" | "revoked" | "expired";
+  issued_by: string;
+  issued_at: string;
+  expires_at: string;
+  revoked_at: string | null;
+  provenance: {
+    deployment_mode: "local_dev";
+    source_mode: "synthetic_trace";
+    claim_scope: "exploratory";
+    production_status: "not_for_production";
+  };
+  authorization_digest: string;
+  ttl_seconds?: number;
+}
+export interface TilesimAgentHarnessOptimizationSessionV1 {
+  schema_identity: "tilesim.agent_harness.optimization_session.v1";
+  contract_revision: "2026-10-19.wpd.v1";
+  session_id: string;
+  principal: string;
+  workspace_id: string;
+  input_snapshot_digest: string;
+  schema_set_revision: string;
+  backend_identity: {
+    [k: string]: unknown;
+  };
+  policy_revision: "tilesim.agent_harness.local_optimization.policy.v1";
+  objective: {
+    [k: string]: unknown;
+  };
+  /**
+   * @maxItems 32
+   */
+  constraints: unknown[];
+  budget: {
+    [k: string]: unknown;
+  };
+  base_config: {
+    [k: string]: unknown;
+  };
+  local_dev: true;
+  automatic_submission: false;
+  provenance: {
+    [k: string]: unknown;
+  };
+  state?: string;
+  current_candidate_id?: string | null;
+  current_iteration?: number;
+  run_count?: number;
+  failure_count?: number;
+  execution_request?: {
+    [k: string]: unknown;
+  } | null;
+  autonomy?: "off" | "propose" | "auto";
+  authorization_id?: string | null;
+  authorization_digest?: string | null;
+  authorization?: TilesimAgentHarnessOptimizationAuthorizationV1;
+  /**
+   * @maxItems 128
+   */
+  agent_turns?: {
+    [k: string]: unknown;
+  }[];
   active_operation_id?: string | null;
   summary?: {
     [k: string]: unknown;
@@ -5671,6 +8006,435 @@ export interface TilesimAgentHarnessBatchApprovalV1 {
   provenance: {
     [k: string]: unknown;
   };
+}
+
+export interface AgentFlowRevokeRequest {
+  schema_identity: "tilesim.agent_flow.revoke_request.v1";
+  contract_revision: "2026-10-28.flow.v2";
+  flow_id: string;
+  session_id: string;
+  current_binding: AgentFlowIdentityBinding;
+  current_event_sequence: number;
+  authorization_id: string;
+  authorization_digest: string;
+  authorization_budget: AuthorizationBudget;
+  principal?: string;
+  workspace_id?: string;
+}
+export interface AgentFlowIdentityBinding {
+  session_id: string;
+  flow_id: string | null;
+  run_id: string | null;
+  run_context_revision: string | null;
+  backend_identity: {
+    [k: string]: unknown;
+  };
+  schema_set_revision: string;
+  input_snapshot_digest: string | null;
+  /**
+   * @maxItems 256
+   */
+  artifact_bindings: AgentFlowArtifactBinding[];
+}
+export interface AgentFlowArtifactBinding {
+  artifact_id: string;
+  schema_identity: string;
+  sha256: string;
+  bytes: string;
+}
+export interface AuthorizationBudget {
+  max_navigation_attempts: number;
+  max_model_calls: number;
+  max_tool_calls_per_round: number;
+  max_run_creations: number;
+  max_execution_time_ms: number;
+}
+
+export interface AgentFlowRevokeResponse {
+  flow: AgentFlowState;
+  events: AgentFlowEvent[];
+  idempotent_replay: boolean;
+  action: "revoke_authorization";
+}
+export interface AgentFlowState {
+  schema_identity: "tilesim.agent_flow.state.v1";
+  contract_revision: "2026-10-28.flow.v2";
+  flow_id: string;
+  session_id: string;
+  principal: string;
+  workspace_id: string;
+  intent:
+    | "explain"
+    | "existing_run_analysis"
+    | "user_report"
+    | "configuration_draft"
+    | "navigation"
+    | "unsupported_execution";
+  status:
+    "created" | "running" | "waiting_user" | "completed" | "draft_ready" | "stale" | "refused" | "cancelled" | "failed";
+  node: string;
+  event_sequence: number;
+  binding: AgentFlowIdentityBinding;
+  pending_action: "clarify_intent" | "confirm_report" | "confirm_draft" | "confirm_navigation" | null;
+  approval: {
+    [k: string]: unknown;
+  } | null;
+  authorization: {
+    status: "active" | "revoked" | "expired" | "exhausted";
+    authorization_id: string;
+    authorization_digest: string;
+    budget: AuthorizationBudget;
+    usage: {
+      navigation_attempts: number;
+      model_calls: number;
+      tool_calls_per_round: number;
+      run_creations: number;
+      execution_time_ms: number;
+    };
+    remaining: {
+      max_navigation_attempts: number;
+      max_model_calls: number;
+      max_tool_calls_per_round: number;
+      max_run_creations: number;
+      max_execution_time_ms: number;
+    };
+  } | null;
+  validation: {
+    [k: string]: unknown;
+  } | null;
+  evidence: {
+    [k: string]: unknown;
+  } | null;
+  report: {
+    [k: string]: unknown;
+  } | null;
+  terminal_reason: string | null;
+  checkpoint_id: string | null;
+  created_at: string;
+  updated_at: string;
+  current_page?: string | null;
+  /**
+   * @maxItems 32
+   */
+  current_page_capabilities?: string[];
+  current_context_revision?: string | null;
+  /**
+   * @maxItems 32
+   */
+  required_capabilities?: string[];
+  /**
+   * @maxItems 32
+   */
+  allowed_pages?: string[];
+  /**
+   * @maxItems 32
+   */
+  allowed_actions?: string[];
+  /**
+   * @maxItems 8
+   */
+  visited_pages?:
+    | []
+    | [string]
+    | [string, string]
+    | [string, string, string]
+    | [string, string, string, string]
+    | [string, string, string, string, string]
+    | [string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string];
+  navigation_attempts?: number;
+  max_navigation_attempts?: number;
+  /**
+   * @maxItems 8
+   */
+  navigation_failures?:
+    | []
+    | [
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+      ]
+    | [
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+      ]
+    | [
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+      ]
+    | [
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+      ]
+    | [
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+      ]
+    | [
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+      ]
+    | [
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+      ]
+    | [
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+        {
+          page: string;
+          type: string;
+          detail?: string;
+        },
+      ];
+  last_navigation_observation?: AgentFlowNavigationObservation | null;
+  navigation_target?: string | null;
+}
+export interface AgentFlowIdentityBinding {
+  session_id: string;
+  flow_id: string | null;
+  run_id: string | null;
+  run_context_revision: string | null;
+  backend_identity: {
+    [k: string]: unknown;
+  };
+  schema_set_revision: string;
+  input_snapshot_digest: string | null;
+  /**
+   * @maxItems 256
+   */
+  artifact_bindings: AgentFlowArtifactBinding[];
+}
+export interface AgentFlowArtifactBinding {
+  artifact_id: string;
+  schema_identity: string;
+  sha256: string;
+  bytes: string;
+}
+export interface AuthorizationBudget {
+  max_navigation_attempts: number;
+  max_model_calls: number;
+  max_tool_calls_per_round: number;
+  max_run_creations: number;
+  max_execution_time_ms: number;
+}
+export interface AgentFlowNavigationObservation {
+  target_page: string;
+  actual_page: string | null;
+  page_correct: boolean;
+  /**
+   * @maxItems 32
+   */
+  current_page_capabilities: string[];
+  current_run_id: string | null;
+  current_context_revision: string | null;
+  failure_type:
+    | "navigation_error"
+    | "context_unavailable"
+    | "context_invalid"
+    | "page_mismatch"
+    | "capability_missing"
+    | "stale_identity"
+    | null;
+  retry_allowed: boolean;
+  /**
+   * @maxItems 8
+   */
+  visited_pages:
+    | []
+    | [string]
+    | [string, string]
+    | [string, string, string]
+    | [string, string, string, string]
+    | [string, string, string, string, string]
+    | [string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string];
+  navigation_attempts: number;
+}
+export interface AgentFlowEvent {
+  schema_identity: "tilesim.agent_flow.event.v1";
+  contract_revision: "2026-10-28.flow.v2";
+  event_id: string;
+  sequence: number;
+  flow_id: string;
+  session_id: string;
+  node: string;
+  event_type:
+    | "flow_started"
+    | "node_started"
+    | "node_completed"
+    | "interrupt"
+    | "approval_required"
+    | "state_changed"
+    | "terminal"
+    | "error";
+  state: AgentFlowState;
+  binding: AgentFlowIdentityBinding;
+  pending_action: "clarify_intent" | "confirm_report" | "confirm_draft" | "confirm_navigation" | null;
+  payload: {
+    [k: string]: unknown;
+  };
+  created_at: string;
 }
 
 export type CreateRunResponse = ApiRun & { idempotent_replay: boolean };

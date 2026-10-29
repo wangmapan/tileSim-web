@@ -24,7 +24,7 @@ from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from api import responses
 from infra import identity
@@ -36,6 +36,7 @@ from services import run_intake as run_intake_service
 from services import trace_packages
 from services import week7
 from providers import assistant_model
+from providers import agent_intent
 from providers import evidence_agent as evidence_agent_provider_contract
 from providers.evidence_agent import ProviderError, ProviderStructuredOutputError, ProviderTimeoutError
 
@@ -84,10 +85,20 @@ from agent_harness.optimization import (
     OptimizationError,
     OptimizationStore,
     MAX_BUDGET_SECONDS,
+    build_attempt_history,
     canonical_sha256 as optimization_digest,
     candidate_document as optimization_candidate_document,
     validate_session_request,
 )
+from agent_harness.authorization import (
+    AuthorizationError,
+    issue_authorization,
+    revoke_authorization,
+    validate_authorization,
+    verify_authorization,
+)
+from services.agent_loop import run_agent_turn
+from services.agent_deletion import AgentDeletionCoordinator
 from agent_harness.batch import (
     CONTRACT_REVISION as BATCH_CONTRACT_REVISION,
     POLICY_REVISION as BATCH_POLICY_REVISION,
@@ -99,6 +110,21 @@ from agent_harness.batch import (
     BatchError,
     BatchStore,
     validate_batch_request,
+)
+from repositories.agent_flows import AgentFlowStore, AgentFlowStoreError
+from services.agent_flow import (
+    AgentFlowError,
+    AgentFlowService,
+    FLOW_CONTRACT_REVISION,
+    FLOW_ERROR_SCHEMA_IDENTITY,
+)
+
+# Generic Harness operations use recovery/manual-intervention as durable
+# observation boundaries.  They are not ordinary completed/failed/cancelled
+# terminals (explicit recovery or human action is still required), but replay
+# responses and SSE must expose the same boundary marker.
+GENERIC_HARNESS_OBSERVATION_BOUNDARY_STATES = frozenset(
+    {"completed", "failed", "cancelled", "recovery_required", "manual_intervention_required"}
 )
 
 from contracts import evidence_agent
@@ -289,6 +315,7 @@ EVIDENCE_AGENT_CONTRACT = CONTRACT_METADATA["evidence_agent"]
 AGENT_ORCHESTRATION_CAPABILITY_CONTRACT = CONTRACT_METADATA[
     "agent_orchestration_capability"
 ]
+AGENT_FLOW_CONTRACT = CONTRACT_METADATA["agent_flow"]
 TRACE_PACKAGE_CONTRACT = CONTRACT_METADATA["trace_packages"]
 SCHEMA_SET_REVISION = compute_schema_set_revision(CONTRACT_ROOT)
 runs: dict[str, dict] = {}
@@ -311,14 +338,74 @@ OPTIMIZATION_DB = Path(
 BATCH_DB = Path(
     os.environ.get("TILESIM_AGENT_BATCH_DB", str(STATE_ROOT / "runtime" / "agent-harness-batch.sqlite3"))
 )
+AGENT_FLOW_DB = Path(
+    os.environ.get("TILESIM_AGENT_FLOW_DB", str(STATE_ROOT / "runtime" / "agent-flow.sqlite3"))
+)
 optimization_store = OptimizationStore(OPTIMIZATION_DB)
 optimization_store.recover_inflight()
 batch_store = BatchStore(BATCH_DB)
 batch_store.recover_inflight()
+agent_flow_store = AgentFlowStore(AGENT_FLOW_DB)
+agent_flow_service = AgentFlowService(
+    agent_flow_store,
+    schema_set_revision=SCHEMA_SET_REVISION,
+    backend_identity_provider=lambda: harness_backend_identity(),
+)
+agent_deletion_coordinator = AgentDeletionCoordinator(
+    {
+        "harness": agent_harness_store if "agent_harness_store" in globals() else None,
+        "batch": batch_store,
+        "optimization": optimization_store,
+        "flow": agent_flow_store,
+    },
+    STATE_ROOT / "runtime" / "agent-deletion.sqlite3",
+)
 batch_workers: dict[str, threading.Thread] = {}
 batch_workers_lock = threading.RLock()
 optimization_workers: dict[str, threading.Thread] = {}
 optimization_workers_lock = threading.RLock()
+
+# New autonomous behavior is opt-in twice: tool calling is separately gated,
+# and the optimization worker requires an explicit autonomy mode.  The default
+# therefore remains byte-for-byte compatible with the human-approval path.
+AGENT_TOOLS_ENABLED = os.environ.get("TILESIM_AGENT_TOOLS", "off").strip().lower() in {"on", "true", "1"}
+AGENT_AUTONOMY_MODE = os.environ.get("TILESIM_AGENT_AUTONOMY", "off").strip().lower()
+if AGENT_AUTONOMY_MODE not in {"off", "propose", "auto"}:
+    AGENT_AUTONOMY_MODE = "off"
+
+AGENT_SECURITY_STOP_ERRORS = frozenset(
+    {
+        "authorization_inactive",
+        "authorization_revoked",
+        "authorization_required",
+        "authorization_expired",
+        "authorization_invalid",
+        "authorization_digest_mismatch",
+        "invalid_tool_allowlist",
+        "protected_field",
+        "snapshot_mismatch",
+        "schema_revision_mismatch",
+        "backend_identity_mismatch",
+        "principal_mismatch",
+        "workspace_mismatch",
+        "session_not_found",
+    }
+)
+
+# Named SSE frames are an additive projection for Agent diagnostics.  The
+# durable ``workflow`` frame remains the replay/cursor fence for older
+# clients; named frames deliberately carry no event id and are de-duplicated
+# by the browser adapter against their workflow counterpart.
+OPTIMIZATION_AGENT_EVENT_NAMES = frozenset(
+    {
+        "agent.step",
+        "agent.tool_call",
+        "agent.tool_result",
+        "agent.verdict",
+        "agent.degraded",
+        "agent.ask_user",
+    }
+)
 
 
 def _process_harness_operation(operation_id: str) -> None:
@@ -344,6 +431,7 @@ def _process_harness_operation(operation_id: str) -> None:
 
 
 agent_harness_store = DurableHarnessStore(AGENT_HARNESS_DB)
+agent_deletion_coordinator.stores["harness"] = agent_harness_store
 agent_harness_store.recover_incomplete()
 agent_harness_queue: HarnessQueue | None = HarnessQueue(
     agent_harness_store,
@@ -513,7 +601,30 @@ def harness_capability_snapshot() -> dict:
                 "POST /api/agent/batches/{batch_id}/{action}",
             ],
         },
-        "autonomous_optimization": False,
+        "flow": {
+            "contract_revision": FLOW_CONTRACT_REVISION,
+            "runtime_mode": "deterministic_transition_adapter",
+            "langgraph_runtime_status": "optional_not_active",
+            "activation_boundary": "local_dev_only",
+            "schema_identities": list(AGENT_FLOW_CONTRACT["schema_identities"]),
+            "states": ["created", "running", "waiting_user", "completed", "draft_ready", "stale", "refused", "cancelled", "failed"],
+            "local_dev": True,
+            "automatic_submission": False,
+            "production_status": "not_for_production",
+            "endpoints": [
+                "POST /api/agent/flows",
+                "GET /api/agent/flows/{flow_id}",
+                "GET /api/agent/flows/{flow_id}/events",
+                "GET /api/agent/flows/{flow_id}/events/stream",
+                "POST /api/agent/flows/{flow_id}/resume",
+                "POST /api/agent/flows/{flow_id}/authorization/revoke",
+            ],
+            "scopes": ["agent:start_flow", "agent:read_flow", "agent:resume_flow"],
+            "creates_run": False,
+            "writes_configuration": False,
+            "provider_calls": False,
+        },
+        "autonomous_optimization": bool(AGENT_TOOLS_ENABLED and AGENT_AUTONOMY_MODE == "auto"),
         "local_optimization": True,
         "provider_acceptance": "live_acceptance_pending",
     }
@@ -524,9 +635,9 @@ def harness_principal(handler: SimpleHTTPRequestHandler) -> tuple[str, set[str]]
     principal = handler.headers.get("X-TileSim-Principal", "local-user").strip()
     if not re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", principal):
         raise HarnessContractError("principal_invalid", "Principal identity is invalid.", "/headers/X-TileSim-Principal", status=403)
-    raw_scope = handler.headers.get("X-TileSim-Scopes", "agent:read_capability,agent:read_run,agent:read_evidence,agent:read_draft,agent:write_draft,agent:approve_draft")
+    raw_scope = handler.headers.get("X-TileSim-Scopes", "agent:read_capability,agent:read_run,agent:read_evidence,agent:read_draft,agent:write_draft,agent:approve_draft,agent:start_flow,agent:read_flow,agent:resume_flow")
     scopes = {item.strip() for item in raw_scope.split(",") if item.strip()}
-    allowed = {"agent:read_capability", "agent:read_run", "agent:read_evidence", "agent:read_draft", "agent:write_draft", "agent:approve_draft", "agent:submit_experiment", "agent:cancel_experiment", "agent:retry_experiment", "agent:resume_experiment"}
+    allowed = {"agent:read_capability", "agent:read_run", "agent:read_evidence", "agent:read_draft", "agent:write_draft", "agent:approve_draft", "agent:submit_experiment", "agent:cancel_experiment", "agent:retry_experiment", "agent:resume_experiment", "agent:start_flow", "agent:read_flow", "agent:resume_flow"}
     if not scopes.issubset(allowed):
         raise HarnessContractError("unknown_scope", "Unknown scope is rejected.", "/headers/X-TileSim-Scopes", status=403)
     return principal, scopes
@@ -581,7 +692,7 @@ def harness_error(handler: SimpleHTTPRequestHandler, error: HarnessContractError
         "payload_conflict": HTTPStatus.CONFLICT, "execution_not_found": HTTPStatus.NOT_FOUND,
         "execution_terminal": HTTPStatus.CONFLICT, "cancel_not_allowed": HTTPStatus.CONFLICT,
         "retry_not_allowed": HTTPStatus.CONFLICT, "resume_not_allowed": HTTPStatus.CONFLICT,
-        "unknown_outcome": HTTPStatus.CONFLICT, "recovery_required": HTTPStatus.CONFLICT,
+        "unknown_outcome": HTTPStatus.CONFLICT, "recovery_required": HTTPStatus.CONFLICT, "event_sequence_gap": HTTPStatus.CONFLICT,
          "recovery_acknowledgement_required": HTTPStatus.CONFLICT,
          "schema_revision_mismatch": HTTPStatus.CONFLICT, "contract_revision_mismatch": HTTPStatus.CONFLICT,
          "result_schema_mismatch": HTTPStatus.CONFLICT, "result_identity_incomplete": HTTPStatus.CONFLICT,
@@ -591,6 +702,9 @@ def harness_error(handler: SimpleHTTPRequestHandler, error: HarnessContractError
         "artifact_manifest_invalid": HTTPStatus.CONFLICT,
         "queue_capacity_reached": HTTPStatus.TOO_MANY_REQUESTS,
         "approval_required": HTTPStatus.CONFLICT, "invalid_transition": HTTPStatus.CONFLICT,
+        "authorization_required": HTTPStatus.CONFLICT, "authorization_inactive": HTTPStatus.CONFLICT,
+        "authorization_expired": HTTPStatus.CONFLICT, "authorization_not_found": HTTPStatus.NOT_FOUND,
+        "authorization_already_issued": HTTPStatus.CONFLICT, "autonomy_disabled": HTTPStatus.CONFLICT,
         "create_run_failed": HTTPStatus.SERVICE_UNAVAILABLE,
         "cli_unavailable": HTTPStatus.SERVICE_UNAVAILABLE,
         "run_timeout": HTTPStatus.CONFLICT,
@@ -615,6 +729,23 @@ def harness_error(handler: SimpleHTTPRequestHandler, error: HarnessContractError
     )
 
 
+def agent_flow_error(handler: SimpleHTTPRequestHandler, error: AgentFlowError | AgentFlowStoreError) -> None:
+    """Write the canonical Bridge error envelope for the independent flow."""
+    return write_error(
+        handler,
+        HTTPStatus(getattr(error, "status", HTTPStatus.CONFLICT)),
+        getattr(error, "code", "flow_error"),
+        str(error),
+        field_path=getattr(error, "field_path", "/"),
+        retryable=bool(getattr(error, "retryable", False)),
+        # `nested_schema_identity` identifies the payload schema that owns the
+        # error, not the contract revision used to version that schema.  Keep
+        # flow failures distinguishable from the generic Bridge error envelope
+        # and from other Agent Harness contracts.
+        nested_schema_identity=FLOW_ERROR_SCHEMA_IDENTITY,
+    )
+
+
 def harness_public_operation(operation: dict) -> dict:
     # Public state contains identities/digests and bounded errors only.
     value = dict(operation)
@@ -628,6 +759,212 @@ def _stage2_scope(handler: SimpleHTTPRequestHandler, required: str | set[str]) -
     if not required_scopes.intersection(scopes):
         raise HarnessContractError("scope_denied", "The requested draft action is not in the caller scope.", "/headers/X-TileSim-Scopes", status=403)
     return principal, harness_workspace(handler)
+
+
+def _agent_flow_scope(handler: SimpleHTTPRequestHandler, required: str) -> tuple[str, str]:
+    principal, scopes = harness_principal(handler)
+    if required not in scopes:
+        raise AgentFlowError("scope_denied", "The requested flow action is not in the caller scope.", status=403, field_path="/headers/X-TileSim-Scopes")
+    return principal, harness_workspace(handler)
+
+
+def _agent_flow_idempotency_key(handler: SimpleHTTPRequestHandler) -> str:
+    key = handler.headers.get("Idempotency-Key", "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9._:-]{8,128}", key):
+        raise AgentFlowError("missing_idempotency_key", "A stable Idempotency-Key is required for flow mutation.", field_path="/headers/Idempotency-Key")
+    return key
+
+
+def _agent_flow_body(handler: SimpleHTTPRequestHandler) -> dict[str, Any]:
+    try:
+        length = int(handler.headers.get("Content-Length", "0"))
+    except ValueError as error:
+        raise AgentFlowError("invalid_request", "Content-Length is invalid.", field_path="/headers/Content-Length") from error
+    if length <= 0 or length > MAX_REQUEST_BYTES:
+        raise AgentFlowError("input_too_large", "Flow request body is outside the bounded input size.", field_path="/")
+    try:
+        value = json.loads(handler.rfile.read(length), parse_constant=reject_nonfinite_json)
+    except (ValueError, json.JSONDecodeError) as error:
+        raise AgentFlowError("invalid_json", "Flow request body is not strict JSON.", field_path="/") from error
+    if not isinstance(value, dict):
+        raise AgentFlowError("invalid_json", "Flow request body must be an object.", field_path="/")
+    return value
+
+
+def _agent_flow_last_event_id(handler: SimpleHTTPRequestHandler, query_after: str | None) -> int:
+    """Parse the flow cursor exactly as published by the Flow contract.
+
+    ``int()`` accepts signs and surrounding whitespace, while the public
+    ``FlowLastEventId`` parameter is deliberately restricted to ASCII digits.
+    Keep the HTTP adapter fail-closed so malformed cursors cannot be silently
+    normalized into a valid replay position.
+    """
+    raw = handler.headers.get("Last-Event-ID")
+    if raw is None:
+        raw = query_after if query_after is not None else "0"
+    if not re.fullmatch(r"[0-9]+", raw):
+        raise AgentFlowError(
+            "invalid_last_event_id",
+            "Last-Event-ID must be a sequence integer.",
+            field_path="/headers/Last-Event-ID",
+        )
+    try:
+        return int(raw)
+    except ValueError as error:
+        # Python's integer string conversion limit protects the process from
+        # unbounded cursors; expose the same stable contract error instead of
+        # leaking the interpreter exception.
+        raise AgentFlowError(
+            "invalid_last_event_id",
+            "Last-Event-ID must be a sequence integer.",
+            field_path="/headers/Last-Event-ID",
+        ) from error
+
+
+def _strict_event_cursor(raw: str | None) -> int:
+    """Parse a durable event cursor without Python's permissive ``int`` rules.
+
+    All Agent replay endpoints use the same cursor contract: an omitted
+    ``Last-Event-ID`` starts at zero, while a supplied value must be ASCII
+    digits only.  In particular, signs, whitespace, an empty header and
+    unbounded integer strings are rejected instead of being normalized into a
+    valid replay position.
+    """
+    value = "0" if raw is None else raw
+    if not re.fullmatch(r"[0-9]+", value):
+        raise ValueError("Last-Event-ID must be a sequence integer.")
+    try:
+        return int(value)
+    except ValueError as error:
+        # Python may reject an extremely long decimal string because of its
+        # integer conversion safety limit.  Keep that as the same protocol
+        # failure instead of leaking an interpreter-specific message.
+        raise ValueError("Last-Event-ID must be a sequence integer.") from error
+
+
+def _assert_event_replay_contiguous(events: list[dict[str, Any]], after: int) -> None:
+    """Fail closed when a durable replay contains a sequence gap."""
+    expected = after + 1
+    for event in events:
+        sequence = event.get("sequence")
+        if type(sequence) is not int or sequence != expected:
+            raise ValueError("Event sequence is not contiguous.")
+        expected += 1
+
+
+def create_agent_flow(handler: SimpleHTTPRequestHandler) -> None:
+    try:
+        principal, workspace_id = _agent_flow_scope(handler, "agent:start_flow")
+        key = _agent_flow_idempotency_key(handler)
+        document = _agent_flow_body(handler)
+        response, replay = agent_flow_service.start(document, principal=principal, workspace_id=workspace_id, idempotency_key=key)
+        return write_json(handler, HTTPStatus.OK if replay else HTTPStatus.CREATED, {"flow": response, "idempotent_replay": replay})
+    except (AgentFlowError, AgentFlowStoreError, HarnessContractError) as error:
+        return agent_flow_error(handler, error)
+
+
+def get_agent_flow(handler: SimpleHTTPRequestHandler, flow_id: str) -> None:
+    try:
+        principal, workspace_id = _agent_flow_scope(handler, "agent:read_flow")
+        response = agent_flow_service.get(flow_id, principal=principal, workspace_id=workspace_id)
+        return write_json(handler, HTTPStatus.OK, {"flow": response})
+    except (AgentFlowError, AgentFlowStoreError, HarnessContractError) as error:
+        return agent_flow_error(handler, error)
+
+
+def agent_flow_events(handler: SimpleHTTPRequestHandler, flow_id: str) -> None:
+    try:
+        principal, workspace_id = _agent_flow_scope(handler, "agent:read_flow")
+        query_after = parse_qs(urlparse(handler.path).query, keep_blank_values=True).get("after_sequence", [None])[0]
+        after = _agent_flow_last_event_id(handler, query_after)
+        flow, events = agent_flow_service.events(flow_id, principal=principal, workspace_id=workspace_id, after_sequence=after)
+        return write_json(handler, HTTPStatus.OK, {"flow": flow, "events": events, "after_sequence": after, "terminal": flow["status"] in {"completed", "draft_ready", "stale", "refused", "cancelled", "failed"}})
+    except (AgentFlowError, AgentFlowStoreError, HarnessContractError) as error:
+        return agent_flow_error(handler, error)
+
+
+def stream_agent_flow_events(handler: SimpleHTTPRequestHandler, flow_id: str) -> None:
+    try:
+        principal, workspace_id = _agent_flow_scope(handler, "agent:read_flow")
+        query_after = parse_qs(urlparse(handler.path).query, keep_blank_values=True).get("after_sequence", [None])[0]
+        after = _agent_flow_last_event_id(handler, query_after)
+        flow, events = agent_flow_service.events(flow_id, principal=principal, workspace_id=workspace_id, after_sequence=after)
+        handler.send_response(HTTPStatus.OK)
+        handler.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        handler.send_header("Cache-Control", "no-store")
+        handler.send_header("Connection", "close")
+        add_contract_headers(handler)
+        add_cors_headers(handler)
+        handler.end_headers()
+        for event in events:
+            responses.write_sse_event(handler, event="flow", event_id=str(event["sequence"]), data=event)
+        if flow["status"] in {"completed", "draft_ready", "stale", "refused", "cancelled", "failed"}:
+            responses.write_sse_event(handler, event="terminal", data=flow)
+    except (AgentFlowError, AgentFlowStoreError, HarnessContractError) as error:
+        return agent_flow_error(handler, error)
+    except (BrokenPipeError, ConnectionResetError, OSError):
+        return None
+
+
+def resume_agent_flow(handler: SimpleHTTPRequestHandler, flow_id: str) -> None:
+    try:
+        principal, workspace_id = _agent_flow_scope(handler, "agent:resume_flow")
+        key = _agent_flow_idempotency_key(handler)
+        document = _agent_flow_body(handler)
+        response, replay = agent_flow_service.resume(
+            flow_id,
+            document,
+            principal=principal,
+            workspace_id=workspace_id,
+            idempotency_key=key,
+        )
+        flow = dict(response)
+        events = flow.pop("events", [])
+        action = flow.pop("action", document.get("action"))
+        flow.pop("idempotent_replay", None)
+        return write_json(
+            handler,
+            HTTPStatus.OK,
+            {
+                "flow": flow,
+                "events": events,
+                "idempotent_replay": replay,
+                "action": action,
+            },
+        )
+    except (AgentFlowError, AgentFlowStoreError, HarnessContractError) as error:
+        return agent_flow_error(handler, error)
+
+
+def revoke_agent_flow_authorization(handler: SimpleHTTPRequestHandler, flow_id: str) -> None:
+    """Revoke the immutable authorization envelope for a durable flow.
+
+    This is a security mutation rather than a user resume action.  It uses the
+    same resume scope because the published Flow contract has no broader
+    write scope, and it requires an idempotency key so a lost response cannot
+    produce a second terminal event.
+    """
+
+    try:
+        principal, workspace_id = _agent_flow_scope(handler, "agent:resume_flow")
+        key = _agent_flow_idempotency_key(handler)
+        document = _agent_flow_body(handler)
+        response, replay = agent_flow_service.revoke_authorization(
+            flow_id,
+            document,
+            principal=principal,
+            workspace_id=workspace_id,
+            idempotency_key=key,
+        )
+        # The durable replay row stores the original response verbatim.  The
+        # HTTP envelope still reports whether this request was the replay so a
+        # client can distinguish a fresh terminal transition from an exact
+        # idempotent retry.
+        payload = dict(response)
+        payload["idempotent_replay"] = replay
+        return write_json(handler, HTTPStatus.OK, payload)
+    except (AgentFlowError, AgentFlowStoreError, HarnessContractError) as error:
+        return agent_flow_error(handler, error)
 
 
 def _stage2_current_snapshot(handler: SimpleHTTPRequestHandler, supplied: str | None) -> str:
@@ -776,13 +1113,17 @@ def stage2_draft_events(handler: SimpleHTTPRequestHandler, draft_id: str) -> Non
         if draft is None or draft["principal"] != principal or draft["workspace_id"] != workspace_id:
             raise HarnessStoreError("draft_not_found", "Draft was not found.")
         try:
-            after = int(handler.headers.get("Last-Event-ID", "0") or "0")
+            after = _strict_event_cursor(handler.headers.get("Last-Event-ID"))
         except ValueError as error:
             raise HarnessContractError("invalid_last_event_id", "Last-Event-ID must be a sequence integer.", "/headers/Last-Event-ID") from error
         all_events = agent_harness_store.list_events(draft["operation_id"])
         if after > 0 and not any(event["sequence"] == after for event in all_events):
             raise HarnessStoreError("event_not_found", "Last-Event-ID is not present in the durable event log.")
         events = agent_harness_store.list_events(draft["operation_id"], after_sequence=after)
+        try:
+            _assert_event_replay_contiguous(events, after)
+        except ValueError as error:
+            raise HarnessStoreError("event_sequence_gap", "Draft event sequence has a durable gap.") from error
         return write_json(handler, HTTPStatus.OK, {"draft_id": draft_id, "events": events, "after_sequence": after, "terminal": draft["status"] in {"deleted", "expired", "stale"}})
     except (HarnessContractError, HarnessStoreError) as error:
         return harness_error(handler, error)
@@ -795,12 +1136,17 @@ def stream_stage2_draft_events(handler: SimpleHTTPRequestHandler, draft_id: str)
         if draft is None or draft["principal"] != principal or draft["workspace_id"] != workspace_id:
             raise HarnessStoreError("draft_not_found", "Draft was not found.")
         try:
-            after = int(handler.headers.get("Last-Event-ID", "0") or "0")
+            after = _strict_event_cursor(handler.headers.get("Last-Event-ID"))
         except ValueError as error:
             raise HarnessContractError("invalid_last_event_id", "Last-Event-ID must be a sequence integer.", "/headers/Last-Event-ID") from error
         all_events = agent_harness_store.list_events(draft["operation_id"])
         if after > 0 and not any(event["sequence"] == after for event in all_events):
             raise HarnessStoreError("event_not_found", "Last-Event-ID is not present in the durable event log.")
+        events = agent_harness_store.list_events(draft["operation_id"], after_sequence=after)
+        try:
+            _assert_event_replay_contiguous(events, after)
+        except ValueError as error:
+            raise HarnessStoreError("event_sequence_gap", "Draft event sequence has a durable gap.") from error
         handler.send_response(HTTPStatus.OK)
         handler.send_header("Content-Type", "text/event-stream; charset=utf-8")
         handler.send_header("Cache-Control", "no-store")
@@ -808,7 +1154,7 @@ def stream_stage2_draft_events(handler: SimpleHTTPRequestHandler, draft_id: str)
         add_contract_headers(handler)
         add_cors_headers(handler)
         handler.end_headers()
-        for event in agent_harness_store.list_events(draft["operation_id"], after_sequence=after):
+        for event in events:
             responses.write_sse_event(handler, event="workflow", event_id=str(event["sequence"]), data=event)
         if draft["status"] in {"deleted", "expired", "stale"}:
             responses.write_sse_event(handler, event="terminal", data={"draft_id": draft_id, "state": draft["status"]})
@@ -1288,7 +1634,7 @@ def stage3_execution_events(handler: SimpleHTTPRequestHandler, operation_id: str
         execution_record, operation = _get_stage3_for_request(handler, operation_id)
         raw_after = handler.headers.get("Last-Event-ID", "0")
         try:
-            after = int(raw_after or "0")
+            after = _strict_event_cursor(raw_after)
         except ValueError as error:
             raise HarnessContractError("invalid_last_event_id", "Last-Event-ID must be a sequence integer.", "/headers/Last-Event-ID") from error
         events = agent_harness_store.list_events(operation_id)
@@ -1316,7 +1662,7 @@ def stream_stage3_execution_events(handler: SimpleHTTPRequestHandler, operation_
         execution_record, operation = _get_stage3_for_request(handler, operation_id)
         raw_after = handler.headers.get("Last-Event-ID", "0")
         try:
-            after = int(raw_after or "0")
+            after = _strict_event_cursor(raw_after)
         except ValueError as error:
             raise HarnessContractError("invalid_last_event_id", "Last-Event-ID must be a sequence integer.", "/headers/Last-Event-ID") from error
         events = agent_harness_store.list_events(operation_id)
@@ -1441,6 +1787,150 @@ def _optimization_detail_for(handler: SimpleHTTPRequestHandler, session_id: str,
     if session.get("backend_identity") != harness_backend_identity():
         raise OptimizationError("backend_identity_mismatch", "Optimization session backend identity is stale.")
     return principal, workspace, detail
+
+
+def _optimization_authorization_session(handler: SimpleHTTPRequestHandler, session_id: str, required: str) -> tuple[str, str, dict[str, Any]]:
+    principal, workspace, detail = _optimization_detail_for(handler, session_id, required)
+    session = detail["session"]
+    if session.get("schema_set_revision") != SCHEMA_SET_REVISION or session.get("backend_identity") != harness_backend_identity():
+        raise OptimizationError("schema_revision_mismatch", "Authorization session identity is stale.")
+    return principal, workspace, detail
+
+
+def get_optimization_authorization(handler: SimpleHTTPRequestHandler, session_id: str) -> None:
+    try:
+        _principal, _workspace, detail = _optimization_authorization_session(handler, session_id, "agent:read_draft")
+        return write_json(handler, HTTPStatus.OK, {"authorization": detail.get("authorization"), "session_id": session_id, "provenance": OPTIMIZATION_PROVENANCE})
+    except OptimizationError as error:
+        return harness_error(handler, error)
+
+
+def create_optimization_authorization(handler: SimpleHTTPRequestHandler, session_id: str) -> None:
+    try:
+        principal, workspace, detail = _optimization_authorization_session(handler, session_id, "agent:approve_draft")
+        key = handler.headers.get("Idempotency-Key", "").strip()
+        if not re.fullmatch(r"[A-Za-z0-9._:-]{8,128}", key):
+            raise OptimizationError("missing_idempotency_key", "Idempotency-Key is required for authorization writes.", field_path="/headers/Idempotency-Key")
+        body = harness_json_body(handler)
+        session = detail["session"]
+        request_digest = harness_canonical_sha256(body)
+        replay = optimization_store.authorization_request(session_id, key, request_digest)
+        if replay is not None:
+            current = optimization_store.get(session_id)
+            return write_json(
+                handler,
+                HTTPStatus.OK,
+                {
+                    "authorization": replay,
+                    "session": current,
+                    "detail": optimization_store.detail(session_id),
+                    "idempotent_replay": True,
+                    "provenance": OPTIMIZATION_PROVENANCE,
+                },
+            )
+        existing = detail.get("authorization")
+        if isinstance(existing, dict):
+            if existing.get("status") == "active":
+                # A second issuance would create two competing envelopes for
+                # one session.  The caller must revoke first and create a new
+                # session rather than silently replacing the old grant.
+                raise OptimizationError("authorization_already_issued", "This session already has an active authorization envelope.")
+            raise OptimizationError("authorization_inactive", "This session authorization is no longer active.")
+        normalized = validate_authorization(body, session=session)
+        requested_level = normalized["autonomy_level"]
+        if requested_level == "bounded_autonomous" and (os.environ.get("TILESIM_AGENT_AUTONOMY", AGENT_AUTONOMY_MODE).strip().lower() != "auto" or os.environ.get("TILESIM_AGENT_TOOLS", "on" if AGENT_TOOLS_ENABLED else "off").strip().lower() not in {"on", "true", "1"}):
+            raise OptimizationError("autonomy_disabled", "Bounded autonomous optimization is disabled by the local Bridge flag.")
+        allowlist = normalized["tool_allowlist"]
+        # The autonomous loop dispatches through ``_harness_dispatch``.  The
+        # optimization registry also contains descriptive/session operations
+        # (for example ``validate_draft`` and ``resume_execution``) that have
+        # no tool-gateway handler; advertising those names would create an
+        # authorization that can never be executed.  Keep the allow-list bound
+        # to the actual closed gateway registry until a dedicated dispatcher is
+        # published for any additional operation.
+        published = set(harness_tools.TOOL_DEFINITIONS)
+        if not isinstance(allowlist, list) or any(item not in published for item in allowlist):
+            raise OptimizationError("invalid_tool_allowlist", "Authorization tool_allowlist contains an unpublished tool.", field_path="/tool_allowlist")
+        envelope = issue_authorization(
+            session=session,
+            grants=normalized["parameter_grants"],
+            objective=normalized["objective"],
+            budget=normalized["budget"],
+            tool_allowlist=allowlist,
+            allowed_pages=normalized["allowed_pages"],
+            allowed_actions=normalized["allowed_actions"],
+            autonomy_level=requested_level,
+            issued_by=principal,
+            ttl_seconds=normalized["ttl_seconds"],
+        )
+        optimization_store.set_authorization(session_id, envelope)
+        optimization_store.record_authorization_request(session_id, key, request_digest, envelope)
+        autonomous_accepted = False
+        if requested_level == "bounded_autonomous" and os.environ.get("TILESIM_AGENT_AUTONOMY", AGENT_AUTONOMY_MODE).strip().lower() == "auto" and os.environ.get("TILESIM_AGENT_TOOLS", "on" if AGENT_TOOLS_ENABLED else "off").strip().lower() in {"on", "true", "1"}:
+            candidate = optimization_store.candidate(session_id)
+            if candidate is None:
+                raise OptimizationError("candidate_not_found", "The session has no initial candidate.")
+            grant = optimization_store.approve_autonomous(session_id, candidate["candidate_id"], principal=principal, authorization_digest=envelope["authorization_digest"], expires_at=(datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat())
+            with optimization_workers_lock:
+                thread = optimization_workers.get(session_id)
+                if thread is None or not thread.is_alive():
+                    thread = threading.Thread(target=_optimization_worker, args=(session_id, candidate["candidate_id"], grant), daemon=True)
+                    optimization_workers[session_id] = thread
+                    thread.start()
+            autonomous_accepted = True
+        return write_json(handler, HTTPStatus.CREATED, {"authorization": envelope, "session": optimization_store.get(session_id), "detail": optimization_store.detail(session_id), "autonomous_started": autonomous_accepted, "idempotent_replay": False, "provenance": OPTIMIZATION_PROVENANCE})
+    except (OptimizationError, AuthorizationError) as error:
+        if isinstance(error, AuthorizationError):
+            wrapped = OptimizationError(error.code, str(error), field_path=error.field_path)
+        else:
+            wrapped = error
+        return harness_error(handler, wrapped)
+
+
+def revoke_optimization_authorization(handler: SimpleHTTPRequestHandler, session_id: str) -> None:
+    try:
+        principal, _workspace, detail = _optimization_authorization_session(handler, session_id, "agent:approve_draft")
+        key = handler.headers.get("Idempotency-Key", "").strip()
+        if not re.fullmatch(r"[A-Za-z0-9._:-]{8,128}", key):
+            raise OptimizationError("missing_idempotency_key", "Idempotency-Key is required for authorization writes.", field_path="/headers/Idempotency-Key")
+        body = harness_json_body(handler)
+        request_digest = harness_canonical_sha256(body)
+        replay_key = f"revoke:{key}"
+        replay = optimization_store.authorization_request(session_id, replay_key, request_digest)
+        if replay is not None:
+            current = optimization_store.get(session_id)
+            return write_json(
+                handler,
+                HTTPStatus.OK,
+                {
+                    "authorization": replay,
+                    "session": current,
+                    "detail": optimization_store.detail(session_id),
+                    "idempotent_replay": True,
+                    "provenance": OPTIMIZATION_PROVENANCE,
+                },
+            )
+        if body:
+            raise OptimizationError("payload_conflict", "Authorization revoke does not accept a request body.")
+        authorization = detail.get("authorization")
+        if not isinstance(authorization, dict):
+            raise OptimizationError("authorization_not_found", "No authorization envelope exists for this session.")
+        verified = verify_authorization(authorization, session=detail["session"], principal=principal, workspace_id=detail["session"]["workspace_id"], schema_set_revision=SCHEMA_SET_REVISION, backend_identity=harness_backend_identity())
+        if not verified.get("valid") and verified.get("code") not in {"authorization_inactive", "authorization_expired"}:
+            raise OptimizationError(verified.get("code", "authorization_invalid"), "Authorization envelope failed verification.")
+        revoked = revoke_authorization(authorization, actor=principal)
+        revoked, replayed = optimization_store.revoke_authorization_idempotent(
+            session_id,
+            revoked,
+            idempotency_key=replay_key,
+            request_digest=request_digest,
+        )
+        return write_json(handler, HTTPStatus.OK, {"authorization": revoked, "session": optimization_store.get(session_id), "detail": optimization_store.detail(session_id), "idempotent_replay": replayed, "provenance": OPTIMIZATION_PROVENANCE})
+    except HarnessContractError as error:
+        return harness_error(handler, error)
+    except (OptimizationError, AuthorizationError) as error:
+        wrapped = OptimizationError(error.code, str(error), field_path=getattr(error, "field_path", "/")) if isinstance(error, AuthorizationError) else error
+        return harness_error(handler, wrapped)
 
 
 def _optimization_stage2_records(session: dict[str, Any], candidate: dict[str, Any], approval: dict[str, Any]) -> dict[str, Any]:
@@ -1594,10 +2084,50 @@ def _optimization_verified_evaluation(session: dict[str, Any], candidate: dict[s
 
 
 def _optimization_stop_reason(session_id: str, reason: str, detail: str) -> dict[str, Any]:
-    return {"schema_identity": OPTIMIZATION_SCHEMA_IDENTITIES["stop_reason"], "contract_revision": OPTIMIZATION_CONTRACT_REVISION, "session_id": session_id, "reason": reason, "detail": detail, "provenance": OPTIMIZATION_PROVENANCE}
+    # Keep the durable 2026-10-19 union fail-closed.  Internal lifecycle
+    # markers (notably ``authorization_revoked``) are intentionally richer
+    # than that published union; callers must not leak them as an invalid
+    # schema value.  Preserve the marker in the human-readable detail so the
+    # audit/event stream still explains why the stop happened.
+    allowed = {
+        "improvement_reached",
+        "budget_exhausted",
+        "iteration_limit",
+        "run_limit",
+        "time_limit",
+        "failure_limit",
+        "no_improvement",
+        "objective_unavailable",
+        "cancelled",
+        "failed",
+        "recovery_required",
+    }
+    published_reason = reason if reason in allowed else "objective_unavailable"
+    published_detail = detail if reason in allowed else f"[{reason}] {detail}"
+    return {"schema_identity": OPTIMIZATION_SCHEMA_IDENTITIES["stop_reason"], "contract_revision": OPTIMIZATION_CONTRACT_REVISION, "session_id": session_id, "reason": published_reason, "detail": published_detail, "provenance": OPTIMIZATION_PROVENANCE}
 
 
-def _optimization_next_candidate(session: dict[str, Any], candidate: dict[str, Any], evaluation: dict[str, Any]) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+def _optimization_agent_stop_reason(session_id: str, reason: str, detail: str) -> dict[str, Any]:
+    """Map an Agent decision reason into the published optimization union.
+
+    The model's decision vocabulary is intentionally smaller/different from
+    the durable optimization stop-reason schema.  Keep that translation in
+    one deterministic boundary instead of leaking internal loop sentinels to
+    the client contract.
+    """
+    mapped = {
+        "objective_reached": "improvement_reached",
+        "no_improvement": "no_improvement",
+        "out_of_scope": "objective_unavailable",
+        "needs_human": "objective_unavailable",
+        "model_call_limit": "budget_exhausted",
+        "tool_budget_exhausted": "budget_exhausted",
+        "consecutive_denials": "budget_exhausted",
+    }.get(reason, reason if reason in {"improvement_reached", "budget_exhausted", "iteration_limit", "run_limit", "time_limit", "failure_limit", "no_improvement", "objective_unavailable", "cancelled", "failed", "recovery_required"} else "objective_unavailable")
+    return _optimization_stop_reason(session_id, mapped, detail)
+
+
+def _optimization_next_candidate(session: dict[str, Any], candidate: dict[str, Any], evaluation: dict[str, Any], authorization: dict[str, Any] | None = None) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     session = optimization_store.get(session["session_id"]) or session
     candidates = optimization_store.candidates(session["session_id"])
     budget = session["budget"]
@@ -1623,18 +2153,515 @@ def _optimization_next_candidate(session: dict[str, Any], candidate: dict[str, A
         if proposed == current_value:
             proposed = current_value - 1 if direction == "minimize" else current_value + 1
     if proposed == current_value:
-        return None, _optimization_stop_reason(session["session_id"], "no_improvement", "The next candidate would duplicate the current configuration.")
+        return None, {
+            "_wait_for_user": True,
+            "code": "no_safe_candidate",
+            "question": "规则回退会重复当前配置，无法安全生成新的候选。请调整参数或取消探索。",
+        }
+    if authorization is not None:
+        from services.agent_loop import authorize_action
+        verdict = authorize_action(
+            authorization=authorization,
+            action={"kind": "propose_candidate", "config": {path: proposed}},
+            state={"rounds": len(candidates), "run_count": session.get("run_count", 0), "candidate_digests": [item.get("candidate_digest") for item in candidates]},
+        )
+        if verdict.get("verdict") != "allow":
+            if verdict.get("code") == "duplicate_candidate":
+                # A duplicate is a control-flow hand-off, not a successful
+                # optimization stop.  Keep the evaluated candidate and let
+                # the user choose a new parameter/strategy or cancel.
+                return None, {
+                    "_wait_for_user": True,
+                    "code": "duplicate_candidate",
+                    "question": "规则回退生成的候选已存在，已暂停等待人工介入；不会重复提交。请调整参数或取消探索。",
+                }
+            return None, _optimization_stop_reason(session["session_id"], str(verdict.get("code", "authorization_denied")), "The deterministic fallback was outside the authorization grant.")
     config = _optimization_set_pointer(candidate["config"], path, proposed)
     status, _issues, _fields, _unsupported, _budget, _risks = _stage2_validate_payload(config)
     if status != "valid":
         return None, _optimization_stop_reason(session["session_id"], "no_improvement", "The bounded parameter change was rejected by the formal validator.")
-    if any(existing.get("candidate_digest") == optimization_digest({"session_id": session["session_id"], "sequence": len(candidates), "parent_candidate_id": candidate["candidate_id"], "config": config}) for existing in candidates):
-        return None, _optimization_stop_reason(session["session_id"], "no_improvement", "The proposed candidate is a duplicate.")
-    next_candidate = optimization_candidate_document(session=session, sequence=len(candidates), parent_candidate_id=candidate["candidate_id"], config=config)
+    config_digest = harness_canonical_sha256(config)
+    if any(
+        isinstance(existing.get("config"), dict)
+        and harness_canonical_sha256(existing["config"]) == config_digest
+        for existing in candidates
+    ):
+        return None, {
+            "_wait_for_user": True,
+            "code": "duplicate_candidate",
+            "question": "规则回退生成的候选已存在，已暂停等待人工介入；不会重复提交。请调整参数或取消探索。",
+        }
+    next_candidate = optimization_candidate_document(session=session, sequence=len(candidates), parent_candidate_id=candidate["candidate_id"], config=config, origin="rule", authorization_id=session.get("authorization_id"))
     next_candidate["diff"] = {"parent_candidate_id": candidate["candidate_id"], "changed_fields": [path]}
     next_candidate["expected_side_effects"] = ["one bounded Stage-3 execution", "verified metrics read through the allow-listed gateway"]
     next_candidate["reason"] = {"objective": evaluation["objective"], "parameter_pointer": path, "step": proposed}
-    return optimization_store.add_candidate(session["session_id"], next_candidate), None
+    return optimization_store.add_candidate(session["session_id"], next_candidate, event_state="running" if authorization is not None else "waiting_approval"), None
+
+
+def _optimization_autonomous_enabled(session: dict[str, Any]) -> bool:
+    mode = os.environ.get("TILESIM_AGENT_AUTONOMY", AGENT_AUTONOMY_MODE).strip().lower()
+    authorization = session.get("authorization")
+    tools_enabled = os.environ.get("TILESIM_AGENT_TOOLS", "on" if AGENT_TOOLS_ENABLED else "off").strip().lower() in {"on", "true", "1"}
+    return tools_enabled and mode == "auto" and isinstance(authorization, dict) and authorization.get("autonomy_level") == "bounded_autonomous"
+
+
+def _optimization_agent_enabled(session: dict[str, Any]) -> bool:
+    """Whether the model may propose the next candidate in this worker.
+
+    ``propose`` intentionally shares the read/decision loop with ``auto``;
+    only the latter is allowed to derive and consume an approval without a
+    human click.  Keeping this separate from ``_optimization_autonomous_enabled``
+    preserves the default/off and human-approval submission semantics.
+    """
+    mode = os.environ.get("TILESIM_AGENT_AUTONOMY", AGENT_AUTONOMY_MODE).strip().lower()
+    authorization = session.get("authorization")
+    tools_enabled = os.environ.get("TILESIM_AGENT_TOOLS", "on" if AGENT_TOOLS_ENABLED else "off").strip().lower() in {"on", "true", "1"}
+    return tools_enabled and mode in {"propose", "auto"} and isinstance(authorization, dict)
+
+
+def _optimization_set_agent_event(session_id: str, node: str, payload: dict[str, Any]) -> None:
+    # Events are intentionally digest-only; full model text never enters the
+    # durable optimization event log.  Persistence is part of the safety
+    # boundary, not an optional telemetry side effect: if the event cannot be
+    # committed, callers must fail closed instead of continuing an autonomous
+    # turn with an incomplete audit trail.  The surrounding worker converts
+    # the raised OptimizationError into a bounded intervention outcome.
+    try:
+        optimization_store.record_agent_event(session_id, node, payload)
+    except OptimizationError:
+        raise
+    except Exception as error:
+        # The worker may already have consumed a tool/run when this audit
+        # append fails.  Treat the outcome as unknown and force the durable
+        # recovery boundary; never continue (or manufacture a rule fallback)
+        # with an incomplete event trail.
+        raise OptimizationError(
+            "event_persistence_failed",
+            "Agent event persistence failed; manual recovery is required.",
+            unknown_outcome=True,
+        ) from error
+
+
+def _optimization_authorized_tool_payload(
+    *,
+    session: dict[str, Any],
+    authorization: dict[str, Any],
+    tool_name: str,
+    arguments: dict[str, Any],
+    idempotency_key: str,
+) -> dict[str, Any]:
+    """Bind one model tool call to the current authorization/session identity.
+
+    The model only supplies ``arguments``.  Every identity field is refreshed
+    from the durable session immediately before dispatch, and the snapshot is
+    passed to the closed gateway so a run from another input snapshot cannot be
+    observed accidentally.
+    """
+
+    current_authorization = session.get("authorization")
+    if not isinstance(current_authorization, dict):
+        raise OptimizationError("authorization_inactive", "Authorization is no longer available.")
+    authorization_digest = authorization.get("authorization_digest")
+    if (
+        current_authorization.get("authorization_digest") != authorization_digest
+        or current_authorization.get("status") != "active"
+    ):
+        raise OptimizationError("authorization_inactive", "Authorization changed while the Agent was deciding.")
+    verified = verify_authorization(
+        authorization,
+        session=session,
+        principal=session.get("principal", ""),
+        workspace_id=session.get("workspace_id", ""),
+        schema_set_revision=SCHEMA_SET_REVISION,
+        backend_identity=harness_backend_identity(),
+    )
+    if not verified.get("valid"):
+        raise OptimizationError(str(verified.get("code") or "authorization_inactive"), "Authorization binding failed before tool dispatch.")
+    snapshot_digest = authorization.get("input_snapshot_digest")
+    if not isinstance(snapshot_digest, str) or session.get("input_snapshot_digest") != snapshot_digest:
+        raise OptimizationError("snapshot_mismatch", "Tool call snapshot does not match the authorized session.")
+    payload = {
+        **arguments,
+        "principal": session["principal"],
+        "scope": harness_tools.TOOL_DEFINITIONS[tool_name].scope,
+        "idempotency_key": idempotency_key,
+    }
+    # Catalog inspection has no run identity. Run-bound readers carry the
+    # snapshot fence into ``harness_tools.dispatch`` for its manifest check.
+    if "run_id" in arguments:
+        payload["snapshot_digest"] = snapshot_digest
+    return payload
+
+
+def _optimization_pointer_apply(base: dict[str, Any], changes: dict[str, Any]) -> dict[str, Any]:
+    result = json.loads(json.dumps(base, ensure_ascii=False))
+    for pointer, value in changes.items():
+        tokens = [item.replace("~1", "/").replace("~0", "~") for item in pointer.lstrip("/").split("/")]
+        current: Any = result
+        for token in tokens[:-1]:
+            current = current[int(token)] if isinstance(current, list) else current[token]
+        leaf = tokens[-1]
+        if isinstance(current, list):
+            current[int(leaf)] = value
+        else:
+            current[leaf] = value
+    return result
+
+
+def _optimization_agent_next_candidate(session: dict[str, Any], candidate: dict[str, Any], evaluation: dict[str, Any]) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Ask the model for the next candidate; deterministic rule fallback is explicit."""
+    # A worker keeps a local session snapshot while the durable store records
+    # each candidate/evaluation. Refresh here so authorization counters and
+    # revocation status from prior turns cannot be lost between rounds.
+    session = optimization_store.get(session["session_id"]) or session
+    authorization = session.get("authorization")
+    if not isinstance(authorization, dict):
+        return _optimization_next_candidate(session, candidate, evaluation, authorization)
+    # These failures invalidate the authority/identity fence.  They are not
+    # provider degradation and must never enter the deterministic candidate
+    # fallback path: doing so could submit a candidate after revoke or after
+    # the session moved to a different workspace/schema/backend.
+    security_fence_errors = {
+        "authorization_inactive",
+        "authorization_revoked",
+        "authorization_required",
+        "authorization_expired",
+        "authorization_invalid",
+        "authorization_digest_mismatch",
+        "invalid_tool_allowlist",
+        "protected_field",
+        "snapshot_mismatch",
+        "schema_revision_mismatch",
+        "backend_identity_mismatch",
+        "principal_mismatch",
+        "workspace_mismatch",
+        "session_not_found",
+    }
+    try:
+        verify = verify_authorization(
+            authorization,
+            session=session,
+            principal=session["principal"],
+            workspace_id=session["workspace_id"],
+            schema_set_revision=SCHEMA_SET_REVISION,
+            backend_identity=harness_backend_identity(),
+        )
+        if not verify.get("valid"):
+            return None, _optimization_stop_reason(session["session_id"], "authorization_revoked", "The autonomous authorization is no longer active.")
+        try:
+            created_at = datetime.fromisoformat(str(session.get("created_at", "")).replace("Z", "+00:00"))
+            elapsed_seconds = max(0.0, (datetime.now(timezone.utc) - created_at).total_seconds())
+        except (TypeError, ValueError):
+            elapsed_seconds = float(session.get("budget", {}).get("max_seconds", 900))
+        candidates = optimization_store.candidates(session["session_id"])
+        evaluations = optimization_store.evaluations(session["session_id"])
+        try:
+            attempt_history = build_attempt_history(session=session, candidates=candidates, evaluations=evaluations)
+        except OptimizationError as error:
+            # A malformed or cross-boundary history is an evidence failure,
+            # not provider degradation.  Never fall back to a rule candidate
+            # when the Agent cannot be shown a trustworthy attempt ledger.
+            _optimization_set_agent_event(
+                session["session_id"],
+                "agent.history_rejected",
+                {"code": error.code},
+            )
+            return None, _optimization_agent_stop_reason(
+                session["session_id"],
+                "objective_unavailable",
+                f"[attempt_history:{error.code}] Attempt history could not be verified; human review is required.",
+            )
+        objective = evaluation.get("objective") if isinstance(evaluation.get("objective"), dict) else {}
+        evidence = evaluation.get("evidence") if isinstance(evaluation.get("evidence"), list) else []
+        primary_evidence = evidence[0] if evidence and isinstance(evidence[0], dict) else {}
+        round_state = {
+            "round": len(candidates),
+            "run_count": session.get("run_count", 0),
+            # The signed authorization has separate counters for formal run
+            # creations and execution time.  Keep these values in the state
+            # passed through the deterministic veto so a replan cannot regain
+            # either budget by omitting an internal field.
+            "run_creations": session.get("run_count", 0),
+            "failure_count": session.get("failure_count", 0),
+            "model_calls": int(session.get("agent_model_calls", 0) or 0),
+            "best_metric": objective.get("value"),
+            "elapsed_seconds": elapsed_seconds,
+            "execution_time_ms": max(0, int(elapsed_seconds * 1000)),
+            # The model receives the last verified observation and the
+            # identity needed to ask the allow-listed metrics tool for a
+            # focused follow-up.  This is an evidence reference, not a
+            # frontend/server recomputation or an unbounded result payload.
+            "last_verified_evaluation": {
+                "metric_path": objective.get("metric_path"),
+                "direction": objective.get("direction"),
+                "value": objective.get("value"),
+                "status": objective.get("status"),
+                "run_id": primary_evidence.get("run_id"),
+                "manifest_digest": primary_evidence.get("manifest_digest"),
+                "json_pointer": primary_evidence.get("json_pointer"),
+                "tool_output_digest": primary_evidence.get("tool_output_digest"),
+            },
+            "initial_observations": [{
+                "kind": "verified_evaluation",
+                "objective": objective,
+                "evidence": {
+                    "run_id": primary_evidence.get("run_id"),
+                    "manifest_digest": primary_evidence.get("manifest_digest"),
+                    "json_pointer": primary_evidence.get("json_pointer"),
+                    "tool_output_digest": primary_evidence.get("tool_output_digest"),
+                },
+                "provenance": evaluation.get("provenance", OPTIMIZATION_PROVENANCE),
+            }],
+            # Do not copy the full candidate configuration into the model
+            # prompt.  The model receives only the bounded change/metric
+            # summary below; the canonical config remains server-side for the
+            # authorization and Stage-2 validation fences.
+            "run_id": primary_evidence.get("run_id"),
+            "objective_metric_path": objective.get("metric_path"),
+            "candidate_digests": [item.get("candidate_digest") for item in candidates],
+            "candidate_config_digests": [
+                optimization_digest(item.get("config"))
+                for item in candidates
+                if isinstance(item, dict) and isinstance(item.get("config"), dict)
+            ],
+            # The model receives only a bounded, identity-bound attempt
+            # summary.  Full candidate configurations remain server-side and
+            # are never copied into a prompt.
+            "attempt_history": attempt_history.get("entries", []),
+            "attempt_history_digest": attempt_history.get("history_digest"),
+            "attempt_history_truncated": bool(attempt_history.get("truncated")),
+            "attempt_history_omitted_count": int(attempt_history.get("omitted_count", 0) or 0),
+        }
+        def model_call(*, messages, tools, state):
+            # Optimization turns are isolated by their durable session identity; a panel model
+            # selection in another browser tab cannot change an in-flight decision.
+            return assistant_model.agent_decision(
+                messages,
+                tools=tools,
+                scope=assistant_model.bind_selection_scope(
+                    session["session_id"], session["principal"], session["workspace_id"]
+                ),
+            )
+        def tool_dispatch(*, tool_name, arguments, idempotency_key, state):
+            current_session = optimization_store.get(session["session_id"])
+            if not isinstance(current_session, dict):
+                raise OptimizationError("session_not_found", "Optimization session disappeared during Agent turn.")
+            current_authorization = current_session.get("authorization")
+            if not isinstance(current_authorization, dict):
+                raise OptimizationError("authorization_inactive", "Authorization is no longer available.")
+            operation_id = current_session.get("active_operation_id")
+            if not isinstance(operation_id, str) or not operation_id:
+                return {"outcome": "rejected", "error_code": "operation_unavailable"}
+            # Resolve the permission from the actual gateway definition.  The
+            # optimization registry is descriptive and does not cover every
+            # read tool (notably ``get_run_status``); falling back to a generic
+            # evidence scope would make an otherwise authorized call fail or,
+            # worse, obscure the closed-scope boundary.
+            gateway_definition = harness_tools.TOOL_DEFINITIONS.get(tool_name)
+            if gateway_definition is None:
+                raise OptimizationError("tool_not_authorized", "Tool is not in the closed gateway registry.")
+            try:
+                payload = _optimization_authorized_tool_payload(
+                    session=current_session,
+                    authorization=current_authorization,
+                    tool_name=tool_name,
+                    arguments=arguments,
+                    idempotency_key=idempotency_key,
+                )
+                return _harness_dispatch(operation_id, tool_name, payload, current_session["principal"], {gateway_definition.scope})
+            except Exception as error:
+                if getattr(error, "code", None) in {
+                    "authorization_inactive",
+                    "authorization_revoked",
+                    "authorization_required",
+                    "authorization_expired",
+                    "authorization_invalid",
+                    "authorization_digest_mismatch",
+                    "invalid_tool_allowlist",
+                    "protected_field",
+                    "snapshot_mismatch",
+                    "schema_revision_mismatch",
+                    "backend_identity_mismatch",
+                    "principal_mismatch",
+                    "workspace_mismatch",
+                }:
+                    raise
+                return {"outcome": "rejected", "error_code": getattr(error, "code", "tool_error")}
+        # ``verify_authorization`` above has already checked the immutable
+        # envelope.  Pass its materialized budget through unchanged so the
+        # worker and its audit receipt share one signed source of truth.
+        authorization_budget = authorization.get("budget") if isinstance(authorization.get("budget"), dict) else {}
+        turn = run_agent_turn(authorization=authorization, state=round_state, model_call=model_call, tool_dispatch=tool_dispatch, limits=authorization_budget, emit=lambda kind, payload: _optimization_set_agent_event(session["session_id"], kind, payload))
+        security_error = turn.get("security_error") if isinstance(turn, dict) else None
+        if security_error in security_fence_errors:
+            _optimization_set_agent_event(
+                session["session_id"],
+                "agent.verdict",
+                {"verdict": "deny", "code": security_error, "hint": "Authorization or identity binding changed; no fallback candidate was created."},
+            )
+            return None, _optimization_agent_stop_reason(
+                session["session_id"],
+                "authorization_revoked",
+                f"The authorization/identity fence failed ({security_error}); autonomous work stopped.",
+            )
+        decision = turn.get("decision") if isinstance(turn, dict) else {"kind": "stop", "reason": "needs_human"}
+        _optimization_set_agent_event(session["session_id"], "agent.step", {"kind": decision.get("kind"), "authorization_id": authorization.get("authorization_id"), "attempt_history_digest": round_state.get("attempt_history_digest")})
+        model_calls_used = max(0, int(turn.get("model_calls", 0) or 0) - int(round_state.get("model_calls", 0) or 0))
+        tool_calls_used = int(turn.get("tool_calls_used", 0) or 0)
+        remaining = turn.get("remaining_budget")
+        if not isinstance(remaining, dict):
+            remaining = {
+                "model_calls": max(0, int(authorization_budget.get("max_model_calls", 0) or 0) - int(turn.get("model_calls", 0) or 0)),
+                "tool_calls_per_round": max(0, int(authorization_budget.get("max_tool_calls_per_round", 0) or 0) - tool_calls_used),
+                "navigation_attempts": max(0, int(authorization_budget.get("max_navigation_attempts", 0) or 0) - int(round_state.get("navigation_attempts", 0) or 0)),
+                "run_creations": max(0, int(authorization_budget.get("max_run_creations", 0) or 0) - int(round_state.get("run_creations", 0) or 0)),
+                "execution_time_ms": max(0, int(authorization_budget.get("max_execution_time_ms", 0) or 0) - int(round_state.get("execution_time_ms", 0) or 0)),
+            }
+        optimization_store.record_agent_turn(session["session_id"], {"kind": decision.get("kind"), "denials": turn.get("denials", 0), "stop": turn.get("stop"), "model_calls_used": model_calls_used, "tool_calls_used": tool_calls_used, "remaining_budget": remaining, "authorization_digest": authorization.get("authorization_digest"), "max_model_calls": authorization_budget.get("max_model_calls"), "max_tool_calls_per_round": authorization_budget.get("max_tool_calls_per_round"), "max_navigation_attempts": authorization_budget.get("max_navigation_attempts"), "max_run_creations": authorization_budget.get("max_run_creations"), "max_execution_time_ms": authorization_budget.get("max_execution_time_ms"), "allowed_pages": authorization.get("allowed_pages", []), "allowed_actions": authorization.get("allowed_actions", []), "attempt_history_digest": round_state.get("attempt_history_digest"), "attempt_history_truncated": bool(round_state.get("attempt_history_truncated")), "summary": str(decision.get("reason", decision.get("question", decision.get("expected_effect", ""))))[:2000]})
+        if decision.get("kind") == "propose_candidate":
+            from services.agent_loop import authorize_action
+            verdict = authorize_action(authorization=authorization, action=decision, state=round_state)
+            _optimization_set_agent_event(session["session_id"], "agent.verdict", verdict)
+            if verdict.get("code") == "duplicate_candidate":
+                return None, {
+                    "_wait_for_user": True,
+                    "code": "duplicate_candidate",
+                    "question": "模型建议的候选已存在，已暂停等待人工介入；不会重复提交。请调整参数或取消探索。",
+                }
+            if verdict.get("verdict") == "allow":
+                proposed = decision.get("config")
+                if isinstance(proposed, dict) and all(isinstance(key, str) and key.startswith("/") for key in proposed):
+                    config = _optimization_pointer_apply(candidate.get("config", {}), proposed)
+                elif isinstance(proposed, dict):
+                    config = proposed
+                else:
+                    config = None
+                if isinstance(config, dict):
+                    status, issues, *_ = _stage2_validate_payload(config)
+                    if status == "valid":
+                        next_candidate = optimization_candidate_document(session=session, sequence=len(optimization_store.candidates(session["session_id"])), parent_candidate_id=candidate["candidate_id"], config=config, origin="model", authorization_id=authorization.get("authorization_id"))
+                        next_candidate["diff"] = {"parent_candidate_id": candidate["candidate_id"], "changed_fields": sorted(proposed)}
+                        next_candidate["reason"] = {"model": str(decision.get("reason", "model proposal"))[:240], "expected_effect": str(decision.get("expected_effect", ""))[:240]}
+                        return optimization_store.add_candidate(session["session_id"], next_candidate, event_state="running"), None
+                    # Authorization is necessary but not sufficient: the
+                    # formal Stage-2 validator remains the final schema gate.
+                    # Do not silently discard an otherwise authorized model
+                    # proposal; leave a bounded verdict and use the explicit
+                    # deterministic fallback so the audit trail explains why
+                    # the model candidate was not submitted.
+                    issue = issues[0] if isinstance(issues, list) and issues and isinstance(issues[0], dict) else {}
+                    verdict = {
+                        "verdict": "deny",
+                        "code": "schema_violation",
+                        "field_path": issue.get("field_path", "/config"),
+                        "hint": "The formal Stage-2 validator rejected this candidate.",
+                    }
+                    _optimization_set_agent_event(session["session_id"], "agent.verdict", verdict)
+                    _optimization_set_agent_event(
+                        session["session_id"],
+                        "agent.degraded",
+                        {"code": "stage2_validation_rejected", "field_path": verdict["field_path"]},
+                    )
+                    fallback, fallback_reason = _optimization_next_candidate(session, candidate, evaluation, authorization)
+                    if fallback is not None:
+                        fallback["origin"] = "rule"
+                        fallback["authorization_id"] = authorization.get("authorization_id")
+                        _optimization_set_agent_event(
+                            session["session_id"],
+                            "agent.degraded",
+                            {"code": "rule_fallback", "authorization_id": authorization.get("authorization_id")},
+                        )
+                    return fallback, fallback_reason
+            # A denial is an observation, not an exception; after the loop's
+            # bounded denial budget the rule path is visibly marked degraded.
+            # A duplicate candidate is different from an ordinary malformed
+            # proposal: the canonical config digest proves that this exact
+            # attempt was already persisted.  Do not map that hand-off to a
+            # published terminal stop reason (which would make the worker
+            # mark the session completed).  Preserve the current candidate
+            # and return the same explicit user-intervention sentinel used by
+            # deterministic fallback de-duplication.
+            if verdict.get("code") == "duplicate_candidate":
+                return None, {
+                    "_wait_for_user": True,
+                    "code": "duplicate_candidate",
+                    "question": "该候选已经尝试过，已暂停等待人工介入；请调整参数或取消探索。",
+                }
+        if decision.get("kind") == "stop":
+            # ``run_agent_turn`` converts ProviderError into a bounded
+            # ``stop/needs_human`` decision so the provider's raw exception
+            # never crosses the decision boundary.  That stop is still a
+            # degradation signal, not a model-requested terminal outcome:
+            # follow the explicit rule fallback and leave an agent.degraded
+            # event instead of parking the session without a next candidate.
+            provider_error = any(
+                isinstance(item, dict) and item.get("code") == "provider_error"
+                for item in (turn.get("observations", []) if isinstance(turn, dict) else [])
+            )
+            if provider_error:
+                fallback, fallback_reason = _optimization_next_candidate(session, candidate, evaluation, authorization)
+                if fallback is not None:
+                    fallback["origin"] = "rule"
+                    fallback["authorization_id"] = authorization.get("authorization_id")
+                    _optimization_set_agent_event(
+                        session["session_id"],
+                        "agent.degraded",
+                        {"code": "rule_fallback", "reason": "provider_error", "authorization_id": authorization.get("authorization_id")},
+                    )
+                return fallback, fallback_reason
+            if int(turn.get("denials", 0) or 0) >= 3 or turn.get("stop") == "consecutive_denials":
+                fallback, fallback_reason = _optimization_next_candidate(session, candidate, evaluation, authorization)
+                if fallback is not None:
+                    fallback["origin"] = "rule"
+                    fallback["authorization_id"] = authorization.get("authorization_id")
+                    _optimization_set_agent_event(
+                        session["session_id"],
+                        "agent.degraded",
+                        {"code": "rule_fallback", "reason": "consecutive_denials", "authorization_id": authorization.get("authorization_id")},
+                    )
+                return fallback, fallback_reason
+            return None, _optimization_agent_stop_reason(session["session_id"], str(decision.get("reason", "no_improvement")), "The model requested a bounded stop.")
+        if decision.get("kind") == "ask_user":
+            # This is an internal hand-off marker.  It is consumed by the
+            # worker below and never serialized as an unsupported stop reason.
+            return None, {"_wait_for_user": True, "question": str(decision.get("question", "需要用户确认下一步。"))[:240]}
+    except Exception as error:
+        error_code = getattr(error, "code", None)
+        if isinstance(error_code, str) and error_code.startswith("attempt_history"):
+            return None, _optimization_agent_stop_reason(
+                session["session_id"],
+                "objective_unavailable",
+                f"[attempt_history:{error_code}] Attempt history could not be verified; human review is required.",
+            )
+        if error_code in security_fence_errors:
+            _optimization_set_agent_event(
+                session["session_id"],
+                "agent.verdict",
+                {"verdict": "deny", "code": error_code, "hint": "Authorization or identity binding changed; no fallback candidate was created."},
+            )
+            return None, _optimization_agent_stop_reason(
+                session["session_id"],
+                "authorization_revoked",
+                f"The authorization/identity fence failed ({error_code}); autonomous work stopped.",
+            )
+        _optimization_set_agent_event(session["session_id"], "agent.degraded", {"code": "provider_error", "type": type(error).__name__})
+        fallback, reason = _optimization_next_candidate(session, candidate, evaluation, authorization)
+        if fallback is not None:
+            fallback["origin"] = "rule"
+            fallback["authorization_id"] = authorization.get("authorization_id")
+            _optimization_set_agent_event(session["session_id"], "agent.degraded", {"code": "rule_fallback", "authorization_id": authorization.get("authorization_id")})
+        return fallback, reason
+    observations = turn.get("observations", []) if isinstance(turn, dict) else []
+    provider_error = any(isinstance(item, dict) and item.get("code") == "provider_error" for item in observations)
+    if not provider_error and int(turn.get("denials", 0) or 0) < 3:
+        stop_reason = str(turn.get("stop") or "needs_human")
+        return None, _optimization_agent_stop_reason(session["session_id"], stop_reason, "The bounded model turn did not produce an authorized candidate.")
+    fallback, reason = _optimization_next_candidate(session, candidate, evaluation, authorization)
+    if fallback is not None:
+        fallback["origin"] = "rule"
+        fallback["authorization_id"] = authorization.get("authorization_id")
+        _optimization_set_agent_event(session["session_id"], "agent.degraded", {"code": "rule_fallback", "authorization_id": authorization.get("authorization_id")})
+    return fallback, reason
 
 
 def _optimization_set_terminal_summary(session_id: str, state: str, stop_reason: dict[str, Any], *, best_candidate_id: str | None = None) -> None:
@@ -1642,7 +2669,48 @@ def _optimization_set_terminal_summary(session_id: str, state: str, stop_reason:
     optimization_store.set_summary(session_id, summary)
 
 
-def _optimization_worker(session_id: str, candidate_id: str, approval: dict[str, Any]) -> None:
+def _optimization_elapsed_execution_ms(session: dict[str, Any]) -> int:
+    """Return bounded wall-clock time consumed by an authorized session."""
+    try:
+        created = datetime.fromisoformat(str(session.get("created_at", "")).replace("Z", "+00:00"))
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        return max(0, int((datetime.now(timezone.utc) - created.astimezone(timezone.utc)).total_seconds() * 1000))
+    except (TypeError, ValueError, OverflowError):
+        # An invalid durable timestamp is not a reason to grant unlimited
+        # execution time.  Treat it as exhausted and let the caller stop.
+        return 2**63 - 1
+
+
+def _optimization_authorization_budget_stop(session: dict[str, Any], authorization: dict[str, Any]) -> dict[str, Any] | None:
+    """Check signed run-count/time limits immediately before submission."""
+    budget = authorization.get("budget") if isinstance(authorization.get("budget"), dict) else {}
+    run_creations = int(session.get("run_count", 0) or 0)
+    max_run_creations = budget.get("max_run_creations")
+    if isinstance(max_run_creations, int) and run_creations >= max_run_creations:
+        return _optimization_stop_reason(
+            session["session_id"],
+            "budget_exhausted",
+            "The signed maximum run-creation budget has been reached.",
+        )
+    execution_time_ms = _optimization_elapsed_execution_ms(session)
+    max_execution_time_ms = budget.get("max_execution_time_ms")
+    if isinstance(max_execution_time_ms, int) and execution_time_ms >= max_execution_time_ms:
+        return _optimization_stop_reason(
+            session["session_id"],
+            "budget_exhausted",
+            "The signed maximum execution-time budget has been reached.",
+        )
+    return None
+
+
+def _optimization_authorized_execution(authorization: dict[str, Any]) -> bool:
+    """Require the signed user-facing execute grant before formal submit."""
+    allowed_actions = authorization.get("allowed_actions")
+    return isinstance(allowed_actions, (list, tuple, set)) and "execute" in allowed_actions
+
+
+def _optimization_worker(session_id: str, candidate_id: str, approval: dict[str, Any], *, _nested: bool = False) -> None:
     try:
         detail = optimization_store.detail(session_id)
         if detail is None:
@@ -1664,15 +2732,85 @@ def _optimization_worker(session_id: str, candidate_id: str, approval: dict[str,
                     break
                 time.sleep(0.1)
         optimization_store.mark_running(session_id)
-        optimization_store.consume_approval(session_id, approval["approval_id"], principal=session["principal"], candidate_digest=candidate["candidate_digest"])
+        # Re-verify the authorization immediately before consuming the
+        # single-use grant and before _optimization_submit_formal can run.  A
+        # revoke racing with a model proposal therefore cannot buy one extra
+        # submission.
+        if candidate.get("authorization_id"):
+            current_auth = optimization_store.authorization(session_id)
+            check = verify_authorization(current_auth or {}, session=session, principal=session["principal"], workspace_id=session["workspace_id"], schema_set_revision=SCHEMA_SET_REVISION, backend_identity=harness_backend_identity())
+            if not check.get("valid"):
+                optimization_store.transition(session_id, "completed", expected={"running", "queued"}, error={"code": "authorization_revoked"})
+                _optimization_set_terminal_summary(session_id, "completed", _optimization_stop_reason(session_id, "authorization_revoked", "Authorization was revoked before the next submission."), best_candidate_id=candidate_id)
+                return
+            if not _optimization_authorized_execution(current_auth or {}):
+                stop_reason = _optimization_stop_reason(
+                    session_id,
+                    "objective_unavailable",
+                    "The signed authorization does not include the execute action; no run was created.",
+                )
+                _optimization_set_agent_event(
+                    session_id,
+                    "agent.verdict",
+                    {"verdict": "deny", "code": "action_not_authorized", "field_path": "/allowed_actions"},
+                )
+                optimization_store.transition(session_id, "completed", expected={"running", "queued"}, error={"code": "action_not_authorized"})
+                _optimization_set_terminal_summary(session_id, "completed", stop_reason, best_candidate_id=candidate_id)
+                return
+            budget_stop = _optimization_authorization_budget_stop(session, current_auth or {})
+            if budget_stop is not None:
+                optimization_store.transition(session_id, "completed", expected={"running", "queued"}, error={"code": "budget_exhausted"})
+                _optimization_set_terminal_summary(session_id, "completed", budget_stop, best_candidate_id=candidate_id)
+                return
+        if candidate.get("authorization_id"):
+            # Keep revoke from interleaving between the final authorization
+            # check/consume and the formal submission.  The durable store
+            # fence rechecks the active digest while holding SQLite's write
+            # transaction; a revoke that arrives first therefore stops here,
+            # while one that arrives after this block observes a submission
+            # already attempted and follows the normal recovery boundary.
+            authorization = optimization_store.authorization(session_id)
+            if not isinstance(authorization, dict):
+                raise OptimizationError("authorization_required", "Autonomous submission requires authorization.")
+            with optimization_store.authorization_submission_fence(
+                session_id,
+                principal=session["principal"],
+                workspace_id=session["workspace_id"],
+                schema_set_revision=SCHEMA_SET_REVISION,
+                backend_identity=harness_backend_identity(),
+                input_snapshot_digest=session["input_snapshot_digest"],
+                authorization_digest=str(authorization.get("authorization_digest", "")),
+            ) as current_session:
+                optimization_store._consume_approval_locked(
+                    session_id,
+                    approval["approval_id"],
+                    principal=session["principal"],
+                    candidate_digest=candidate["candidate_digest"],
+                    approval_digest=approval.get("approval_digest"),
+                    authorization_digest=str(authorization.get("authorization_digest", "")),
+                )
+                session = current_session
+                operation_id = _optimization_submit_formal(current_session, candidate, approval)
+        else:
+            optimization_store.consume_approval(session_id, approval["approval_id"], principal=session["principal"], candidate_digest=candidate["candidate_digest"], approval_digest=approval.get("approval_digest"))
+            operation_id = _optimization_submit_formal(session, candidate, approval)
         optimization_store.record_iteration(session_id, candidate_id, "running", {"candidate_digest": candidate["candidate_digest"], "approval_digest": approval["approval_digest"]})
         optimization_store.record_tool(session_id, "submit_execution", {"candidate_digest": candidate["candidate_digest"]}, iteration_id=None, idempotency_key=f"optimization-submit:{candidate_id}", outcome="started")
-        operation_id = _optimization_submit_formal(session, candidate, approval)
         optimization_store.set_active_operation(session_id, operation_id)
         optimization_store.record_tool(session_id, "get_operation_status", {"operation_id": operation_id}, iteration_id=None, idempotency_key=f"optimization-status:{candidate_id}", outcome="succeeded", result={"operation_id": operation_id})
         # The Stage-3 queue is durable; poll only its redacted record and never
         # copy run/artifact payloads into the optimization store.
-        deadline = time.monotonic() + min(session["budget"]["max_seconds"], MAX_BUDGET_SECONDS)
+        execution_deadline_seconds = min(session["budget"]["max_seconds"], MAX_BUDGET_SECONDS)
+        if candidate.get("authorization_id") and isinstance(authorization, dict):
+            auth_budget = authorization.get("budget") if isinstance(authorization.get("budget"), dict) else {}
+            max_execution_time_ms = auth_budget.get("max_execution_time_ms")
+            if isinstance(max_execution_time_ms, int):
+                elapsed_ms = _optimization_elapsed_execution_ms(session)
+                execution_deadline_seconds = min(
+                    execution_deadline_seconds,
+                    max(0, max_execution_time_ms - elapsed_ms) / 1000,
+                )
+        deadline = time.monotonic() + execution_deadline_seconds
         while time.monotonic() < deadline:
             current_session = optimization_store.get(session_id)
             if current_session is None or current_session.get("state") == "cancelled":
@@ -1689,13 +2827,69 @@ def _optimization_worker(session_id: str, candidate_id: str, approval: dict[str,
                     optimization_store.save_evaluation(session_id, candidate_id, evaluation)
                     optimization_store.record_iteration(session_id, candidate_id, "completed", {"operation_id": operation_id, "result_digest": optimization_digest(execution.get("result")), "evaluation": evaluation, "provenance": OPTIMIZATION_PROVENANCE})
                     optimization_store.save_checkpoint(session_id, {"session_id": session_id, "candidate_id": candidate_id, "operation_id": operation_id, "evaluation": evaluation, "schema_set_revision": session["schema_set_revision"], "backend_identity": session["backend_identity"], "input_snapshot_digest": session["input_snapshot_digest"]})
-                    next_candidate, stop_reason = _optimization_next_candidate(session, candidate, evaluation)
+                    next_candidate, stop_reason = (_optimization_agent_next_candidate(session, candidate, evaluation) if _optimization_agent_enabled(session) else _optimization_next_candidate(session, candidate, evaluation))
                     if next_candidate is not None:
-                        optimization_store.transition(session_id, "waiting_approval", expected={"running"})
                         optimization_store.set_active_operation(session_id, None)
+                        if _optimization_autonomous_enabled(session):
+                            # Derive and consume one approval for this exact
+                            # candidate, then continue in this same worker
+                            # thread.  No per-round worker is created.
+                            auth = optimization_store.authorization(session_id)
+                            if not isinstance(auth, dict):
+                                raise OptimizationError("authorization_required", "Autonomous submission requires authorization.")
+                            check = verify_authorization(auth, session=optimization_store.get(session_id) or session, principal=session["principal"], workspace_id=session["workspace_id"], schema_set_revision=SCHEMA_SET_REVISION, backend_identity=harness_backend_identity())
+                            if not check.get("valid"):
+                                optimization_store.transition(session_id, "completed", expected={"running"}, error={"code": "authorization_revoked"})
+                                _optimization_set_terminal_summary(session_id, "completed", _optimization_stop_reason(session_id, "authorization_revoked", "Authorization was revoked before the next submission."), best_candidate_id=candidate_id)
+                                return
+                            grant = optimization_store.approve_autonomous(session_id, next_candidate["candidate_id"], principal=session["principal"], authorization_digest=auth["authorization_digest"], expires_at=(datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat())
+                            # Same-thread continuation; this is deliberately a
+                            # direct call rather than spawning one thread per
+                            # model turn.
+                            # Continue in this same worker thread.  The nested
+                            # call must return ownership to the outer frame
+                            # immediately: otherwise the outer frame would
+                            # clear the inner round's active operation and the
+                            # inner ``finally`` would unregister a still-live
+                            # worker, opening a second-concurrency window.
+                            _optimization_worker(session_id, next_candidate["candidate_id"], grant, _nested=True)
+                            return
+                        else:
+                            optimization_store.transition(session_id, "waiting_approval", expected={"running"})
                     else:
-                        optimization_store.transition(session_id, "completed", expected={"running"})
-                        _optimization_set_terminal_summary(session_id, "completed", stop_reason or _optimization_stop_reason(session_id, "no_improvement", "No next candidate was produced."), best_candidate_id=candidate_id)
+                        if isinstance(stop_reason, dict) and stop_reason.get("_wait_for_user"):
+                            # Interactive hand-offs (including duplicate or
+                            # no-safe fallback candidates) return control to
+                            # a human. Keep the evaluated candidate reviewable
+                            # and do not manufacture a terminal summary.
+                            optimization_store.mark_candidate_waiting_approval(session_id, candidate_id)
+                            _optimization_set_agent_event(
+                                session_id,
+                                "agent.ask_user",
+                                {
+                                    "code": stop_reason.get("code", "needs_human"),
+                                    "question": stop_reason.get("question", "需要用户确认下一步。"),
+                                },
+                            )
+                            optimization_store.transition(session_id, "waiting_approval", expected={"running"})
+                        else:
+                            terminal_summary = stop_reason or _optimization_stop_reason(
+                                session_id,
+                                "no_improvement",
+                                "No next candidate was produced.",
+                            )
+                            # Persist the summary before publishing the terminal
+                            # state.  Readers poll the session and can observe
+                            # ``completed`` between two SQLite transactions;
+                            # ordering the writes prevents a transient terminal
+                            # document with no stop reason.
+                            _optimization_set_terminal_summary(
+                                session_id,
+                                "completed",
+                                terminal_summary,
+                                best_candidate_id=candidate_id,
+                            )
+                            optimization_store.transition(session_id, "completed", expected={"running"})
                         optimization_store.set_active_operation(session_id, None)
                 elif execution["state"] == "recovery_required":
                     optimization_store.transition(session_id, "recovery_required", expected={"running"}, error={"code": "execution_recovery_required", "unknown_outcome": True})
@@ -1715,9 +2909,25 @@ def _optimization_worker(session_id: str, candidate_id: str, approval: dict[str,
             current = optimization_store.get(session_id)
             if current and current.get("state") in {"cancelled", "paused"}:
                 return
+            if error.code == "authorization_inactive":
+                # A revoke may win the final submission fence after the
+                # worker has already entered its running state.  This is a
+                # bounded, known stop—not a generic worker failure—and must
+                # remain visible as an authorization stop without retrying.
+                if current and current.get("state") in {"running", "queued", "retrying"}:
+                    optimization_store.transition(session_id, "completed", expected={"running", "queued", "retrying"}, error={"code": "authorization_revoked"})
+                    _optimization_set_terminal_summary(session_id, "completed", _optimization_stop_reason(session_id, "authorization_revoked", "Authorization was revoked before the next submission."), best_candidate_id=candidate_id)
+                return
             state = "recovery_required" if error.unknown_outcome else "failed"
             optimization_store.increment_failure(session_id)
-            optimization_store.transition(session_id, state, expected={"running", "queued", "retrying"}, error={"code": error.code, "retryable": error.retryable, "unknown_outcome": error.unknown_outcome})
+            # Event persistence may fail after the worker has already moved
+            # into the explicit human hand-off state.  That state must still
+            # be recoverable; otherwise a missing audit event would leave an
+            # apparently approvable session outside the recovery boundary.
+            expected_states = {"running", "queued", "retrying"}
+            if error.unknown_outcome:
+                expected_states.add("waiting_approval")
+            optimization_store.transition(session_id, state, expected=expected_states, error={"code": error.code, "retryable": error.retryable, "unknown_outcome": error.unknown_outcome})
             _optimization_set_terminal_summary(session_id, state, _optimization_stop_reason(session_id, "recovery_required" if error.unknown_outcome else "failed", error.code), best_candidate_id=candidate_id)
         except OptimizationError:
             pass
@@ -1728,8 +2938,9 @@ def _optimization_worker(session_id: str, candidate_id: str, approval: dict[str,
         except OptimizationError:
             pass
     finally:
-        with optimization_workers_lock:
-            optimization_workers.pop(session_id, None)
+        if not _nested:
+            with optimization_workers_lock:
+                optimization_workers.pop(session_id, None)
 
 
 def create_optimization_session(handler: SimpleHTTPRequestHandler) -> None:
@@ -1765,13 +2976,24 @@ def get_optimization_session(handler: SimpleHTTPRequestHandler, session_id: str)
 def optimization_events(handler: SimpleHTTPRequestHandler, session_id: str) -> None:
     try:
         _principal, _workspace, detail = _optimization_detail_for(handler, session_id)
-        raw_after = handler.headers.get("Last-Event-ID", "0")
-        try: after = int(raw_after or "0")
-        except ValueError as error: raise OptimizationError("invalid_last_event_id", "Last-Event-ID must be an integer.", field_path="/headers/Last-Event-ID") from error
-        events = [event for event in detail["events"] if event["sequence"] > after]
+        raw_after = handler.headers.get("Last-Event-ID")
+        try:
+            after = _strict_event_cursor(raw_after)
+        except ValueError as error:
+            raise OptimizationError("invalid_last_event_id", "Last-Event-ID must be an integer.", field_path="/headers/Last-Event-ID") from error
         if after and not any(event["sequence"] == after for event in detail["events"]):
             raise OptimizationError("event_not_found", "Last-Event-ID is not in the durable optimization event log.")
-        return write_json(handler, HTTPStatus.OK, {"session_id": session_id, "events": events, "after_sequence": after, "terminal": detail["session"]["state"] in OPTIMIZATION_TERMINAL_STATES, "provenance": OPTIMIZATION_PROVENANCE})
+        events = [event for event in detail["events"] if event["sequence"] > after]
+        try:
+            _assert_event_replay_contiguous(events, after)
+        except ValueError as error:
+            raise OptimizationError("event_sequence_gap", "Optimization event sequence has a durable gap.") from error
+        # ``recovery_required`` is a stop point for observation even though a
+        # reviewed recovery action may later move the session back to
+        # waiting_approval.  Keep JSON replay aligned with the SSE terminal
+        # frame and the browser adapter's terminal-state set.
+        terminal = detail["session"]["state"] in OPTIMIZATION_TERMINAL_STATES or detail["session"]["state"] in {"recovery_required", "manual_intervention_required"}
+        return write_json(handler, HTTPStatus.OK, {"session_id": session_id, "events": events, "after_sequence": after, "terminal": terminal, "provenance": OPTIMIZATION_PROVENANCE})
     except OptimizationError as error:
         return harness_error(handler, error)
 
@@ -1779,15 +3001,19 @@ def optimization_events(handler: SimpleHTTPRequestHandler, session_id: str) -> N
 def optimization_event_stream(handler: SimpleHTTPRequestHandler, session_id: str) -> None:
     try:
         _principal, _workspace, detail = _optimization_detail_for(handler, session_id)
-        raw_after = handler.headers.get("Last-Event-ID", "0")
+        raw_after = handler.headers.get("Last-Event-ID")
         try:
-            after = int(raw_after or "0")
+            after = _strict_event_cursor(raw_after)
         except ValueError as error:
             raise OptimizationError("invalid_last_event_id", "Last-Event-ID must be an integer.", field_path="/headers/Last-Event-ID") from error
         all_events = detail["events"]
         if after and not any(event["sequence"] == after for event in all_events):
             raise OptimizationError("event_not_found", "Last-Event-ID is not in the durable optimization event log.")
         events = [event for event in all_events if event["sequence"] > after]
+        try:
+            _assert_event_replay_contiguous(events, after)
+        except ValueError as error:
+            raise OptimizationError("event_sequence_gap", "Optimization event sequence has a durable gap.") from error
         handler.send_response(HTTPStatus.OK)
         handler.send_header("Content-Type", "text/event-stream; charset=utf-8")
         handler.send_header("Cache-Control", "no-store")
@@ -1796,8 +3022,15 @@ def optimization_event_stream(handler: SimpleHTTPRequestHandler, session_id: str
         add_cors_headers(handler)
         handler.end_headers()
         for event in events:
+            # ``workflow`` is the durable compatibility frame and owns the
+            # Last-Event-ID cursor.  Publish an additive typed frame for Agent
+            # diagnostics so consumers can route those events by name.  The
+            # typed frame intentionally has no id: the workflow frame is the
+            # single replay fence for reconnects.
             responses.write_sse_event(handler, event="workflow", event_id=str(event["sequence"]), data=event)
-        if detail["session"]["state"] in OPTIMIZATION_TERMINAL_STATES or detail["session"]["state"] == "recovery_required":
+            if event.get("node") in OPTIMIZATION_AGENT_EVENT_NAMES:
+                responses.write_sse_event(handler, event=str(event["node"]), data=event)
+        if detail["session"]["state"] in OPTIMIZATION_TERMINAL_STATES or detail["session"]["state"] in {"recovery_required", "manual_intervention_required"}:
             responses.write_sse_event(handler, event="terminal", data={"session_id": session_id, "state": detail["session"]["state"]})
     except (BrokenPipeError, ConnectionResetError, OSError):
         return
@@ -2235,12 +3468,22 @@ def get_batch(handler: SimpleHTTPRequestHandler, batch_id: str) -> None:
 def batch_events(handler: SimpleHTTPRequestHandler, batch_id: str) -> None:
     try:
         _principal, _workspace, detail = _batch_detail_for(handler, batch_id)
-        try: after = int(handler.headers.get("Last-Event-ID", "0") or "0")
+        try: after = _strict_event_cursor(handler.headers.get("Last-Event-ID"))
         except ValueError as error: raise BatchError("invalid_last_event_id", "Last-Event-ID must be an integer.", field_path="/headers/Last-Event-ID") from error
         all_events = detail["events"]
         if after and not any(item["sequence"] == after for item in all_events):
             raise BatchError("event_not_found", "Last-Event-ID is not present in the batch event log.")
-        return write_json(handler, HTTPStatus.OK, {"batch_id": batch_id, "events": [item for item in all_events if item["sequence"] > after], "after_sequence": after, "terminal": detail["batch"]["state"] in BATCH_TERMINAL_STATES, "provenance": BATCH_PROVENANCE})
+        # Recovery is a terminal observation boundary for this replay.  The
+        # state may later resume only after explicit acknowledgement, so the
+        # durable polling/SSE adapters must stop here instead of waiting for a
+        # frame that will never arrive on this connection.
+        terminal = detail["batch"]["state"] in BATCH_TERMINAL_STATES or detail["batch"]["state"] == "recovery_required"
+        events = [item for item in all_events if item["sequence"] > after]
+        try:
+            _assert_event_replay_contiguous(events, after)
+        except ValueError as error:
+            raise BatchError("event_sequence_gap", "Batch event sequence has a durable gap.") from error
+        return write_json(handler, HTTPStatus.OK, {"batch_id": batch_id, "events": events, "after_sequence": after, "terminal": terminal, "provenance": BATCH_PROVENANCE})
     except BatchError as error:
         return harness_error(handler, error)
 
@@ -2248,14 +3491,18 @@ def batch_events(handler: SimpleHTTPRequestHandler, batch_id: str) -> None:
 def batch_event_stream(handler: SimpleHTTPRequestHandler, batch_id: str) -> None:
     try:
         _principal, _workspace, detail = _batch_detail_for(handler, batch_id)
-        try: after = int(handler.headers.get("Last-Event-ID", "0") or "0")
+        try: after = _strict_event_cursor(handler.headers.get("Last-Event-ID"))
         except ValueError as error: raise BatchError("invalid_last_event_id", "Last-Event-ID must be an integer.", field_path="/headers/Last-Event-ID") from error
         if after and not any(item["sequence"] == after for item in detail["events"]):
             raise BatchError("event_not_found", "Last-Event-ID is not present in the batch event log.")
+        events = [item for item in detail["events"] if item["sequence"] > after]
+        try:
+            _assert_event_replay_contiguous(events, after)
+        except ValueError as error:
+            raise BatchError("event_sequence_gap", "Batch event sequence has a durable gap.") from error
         handler.send_response(HTTPStatus.OK); handler.send_header("Content-Type", "text/event-stream; charset=utf-8"); handler.send_header("Cache-Control", "no-store"); handler.send_header("Connection", "close"); add_contract_headers(handler); add_cors_headers(handler); handler.end_headers()
-        for event in detail["events"]:
-            if event["sequence"] > after:
-                responses.write_sse_event(handler, event="workflow", event_id=str(event["sequence"]), data=event)
+        for event in events:
+            responses.write_sse_event(handler, event="workflow", event_id=str(event["sequence"]), data=event)
         if detail["batch"]["state"] in BATCH_TERMINAL_STATES or detail["batch"]["state"] == "recovery_required":
             responses.write_sse_event(handler, event="terminal", data={"batch_id": batch_id, "state": detail["batch"]["state"]})
     except (BrokenPipeError, ConnectionResetError, OSError):
@@ -2473,12 +3720,40 @@ def api_manifest() -> dict:
         agent_orchestration_capability_contract=(
             AGENT_ORCHESTRATION_CAPABILITY_CONTRACT
         ),
+        agent_flow_contract=AGENT_FLOW_CONTRACT,
         trace_package_contract=TRACE_PACKAGE_CONTRACT,
     )
 
 
 def add_cors_headers(handler: SimpleHTTPRequestHandler) -> None:
     return responses.add_cors_headers(handler)
+
+
+def assistant_model_scope(
+    handler: SimpleHTTPRequestHandler,
+    *,
+    required: bool = False,
+) -> str | None:
+    """Read the non-secret browser session scope used to isolate model choices.
+
+    The scope is deliberately not an auth credential.  It only selects an in-memory model binding;
+    the normal Bridge principal/workspace headers still govern protected operations.  A malformed
+    scope is rejected instead of being silently treated as the legacy shared scope.
+    """
+
+    raw = handler.headers.get(assistant_model.SELECTION_SCOPE_HEADER, "").strip()
+    if not raw:
+        if required:
+            raise ValueError(
+                "The assistant model session scope header is required for this route."
+            )
+        return None
+    try:
+        principal = handler.headers.get("X-TileSim-Principal", "local-user").strip() or "local-user"
+        workspace = handler.headers.get("X-TileSim-Workspace", "local-workspace").strip() or "local-workspace"
+        return assistant_model.bind_selection_scope(raw, principal, workspace)
+    except ValueError as error:
+        raise ValueError("The assistant model session scope is invalid.") from error
 
 
 def write_json_file(handler: SimpleHTTPRequestHandler, path: Path) -> None:
@@ -2512,6 +3787,19 @@ def load_reports(run: dict) -> dict:
 
 def report_paths_for(run_dir: Path) -> dict[str, Path]:
     return run_repository.report_paths_for(run_dir, REPORT_FILE_NAMES)
+
+
+def validate_execution_replay(run_id: str, path: Path) -> str | None:
+    """Validate the canonical replay before publishing an S6 run as completed."""
+    try:
+        run_repository.inspect_artifact(
+            run_id,
+            path,
+            JSON_ARTIFACT_DEFINITIONS["execution-replay"],
+        )
+    except run_repository.ArtifactContractError as error:
+        return f"Canonical execution replay artifact failed verification: {error}"
+    return None
 
 
 def json_artifact_paths_for(run_dir: Path) -> dict[str, Path]:
@@ -2740,6 +4028,7 @@ def execute_run(run_id: str, scenario: dict, fidelity_policy: str) -> None:
         runs_lock=runs_lock,
         report_paths_for=report_paths_for,
         is_valid_json_file=is_valid_json_file,
+        validate_execution_replay=validate_execution_replay,
         update_run_metadata=update_run_metadata,
         now=now,
         process_runner=subprocess.run,
@@ -2784,6 +4073,14 @@ class BridgeHandler(SimpleHTTPRequestHandler):
     def do_GET(self) -> None:
         _remember_bridge_server(self)
         path = urlparse(self.path).path
+        if path.startswith("/api/agent/flows/"):
+            parts = path.strip("/").split("/")
+            if len(parts) == 4 and parts[:3] == ["api", "agent", "flows"]:
+                return get_agent_flow(self, parts[3])
+            if len(parts) == 5 and parts[:4] == ["api", "agent", "flows", parts[3]] and parts[4] == "events":
+                return agent_flow_events(self, parts[3])
+            if len(parts) == 6 and parts[:5] == ["api", "agent", "flows", parts[3], "events"] and parts[5] == "stream":
+                return stream_agent_flow_events(self, parts[3])
         if path == "/api/agent/optimization/sessions":
             return list_optimization_sessions(self)
         if path == "/api/agent/batches":
@@ -2800,6 +4097,8 @@ class BridgeHandler(SimpleHTTPRequestHandler):
             parts = path.strip("/").split("/")
             if len(parts) == 5 and parts[:4] == ["api", "agent", "optimization", "sessions"]:
                 return get_optimization_session(self, parts[4])
+            if len(parts) == 6 and parts[:4] == ["api", "agent", "optimization", "sessions"] and parts[5] == "authorization":
+                return get_optimization_authorization(self, parts[4])
             if len(parts) == 6 and parts[:4] == ["api", "agent", "optimization", "sessions"] and parts[5] == "events":
                 return optimization_events(self, parts[4])
             if len(parts) == 7 and parts[:4] == ["api", "agent", "optimization", "sessions"] and parts[5:] == ["events", "stream"]:
@@ -2878,7 +4177,11 @@ class BridgeHandler(SimpleHTTPRequestHandler):
                 ),
             )
         if path == "/api/agent/assistant-model":
-            descriptor = assistant_model.build_descriptor()
+            try:
+                scope = assistant_model_scope(self)
+            except ValueError as error:
+                return write_error(self, HTTPStatus.BAD_REQUEST, "invalid_assistant_model_session", str(error), field_path="/headers/X-TileSim-Assistant-Session", retryable=False)
+            descriptor = assistant_model.build_descriptor(scope=scope)
             descriptor["schema_set_revision"] = SCHEMA_SET_REVISION
             return write_json(self, HTTPStatus.OK, descriptor)
         if path == "/api/agent/assistant-model-catalogue":
@@ -2919,16 +4222,29 @@ class BridgeHandler(SimpleHTTPRequestHandler):
                 return harness_error(self, error)
             if operation.get("principal") != principal:
                 return harness_error(self, HarnessContractError("operation_access_denied", "Operation is not owned by this principal.", "/operation_id", status=403))
-            raw_after = self.headers.get("Last-Event-ID", "0")
+            raw_after = self.headers.get("Last-Event-ID")
             try:
-                after = int(raw_after or "0")
+                after = _strict_event_cursor(raw_after)
             except ValueError:
                 return harness_error(self, HarnessContractError("invalid_last_event_id", "Last-Event-ID must be a sequence integer.", "/headers/Last-Event-ID"))
             all_events = agent_harness_store.list_events(parts[3])
             if after > 0 and not any(event["sequence"] == after for event in all_events):
                 return harness_error(self, HarnessStoreError("event_not_found", "Last-Event-ID is not present in the durable event log."))
             events = agent_harness_store.list_events(parts[3], after_sequence=after)
-            return write_json(self, HTTPStatus.OK, {"operation": harness_public_operation(operation), "events": events, "after_sequence": after, "terminal": operation.get("workflow_state") in {"completed", "failed", "cancelled"}})
+            try:
+                _assert_event_replay_contiguous(events, after)
+            except ValueError:
+                return harness_error(self, HarnessStoreError("event_sequence_gap", "Operation event sequence has a durable gap."))
+            return write_json(
+                self,
+                HTTPStatus.OK,
+                {
+                    "operation": harness_public_operation(operation),
+                    "events": events,
+                    "after_sequence": after,
+                    "terminal": operation.get("workflow_state") in GENERIC_HARNESS_OBSERVATION_BOUNDARY_STATES,
+                },
+            )
         if len(parts) == 6 and parts[:3] == ["api", "agent", "operations"] and parts[4:] == ["events", "stream"]:
             return self.stream_harness_events(parts[3])
         if len(parts) == 4 and parts[:3] == ["api", "agent", "checkpoints"]:
@@ -2988,7 +4304,7 @@ class BridgeHandler(SimpleHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
         self.send_header(
             "Access-Control-Allow-Headers",
-            "Content-Type, X-Request-ID, Idempotency-Key, Last-Event-ID",
+            "Content-Type, X-Request-ID, Idempotency-Key, Last-Event-ID, X-TileSim-Principal, X-TileSim-Workspace, X-TileSim-Scopes, X-TileSim-Assistant-Session",
         )
         self.send_header("Content-Length", "0")
         self.end_headers()
@@ -3121,15 +4437,19 @@ class BridgeHandler(SimpleHTTPRequestHandler):
             return harness_error(self, error)
         if operation.get("principal") != principal:
             return harness_error(self, HarnessContractError("operation_access_denied", "Operation is not owned by this principal.", "/operation_id", status=403))
-        raw_last = self.headers.get("Last-Event-ID", "0")
+        raw_last = self.headers.get("Last-Event-ID")
         try:
-            after = int(raw_last or "0")
+            after = _strict_event_cursor(raw_last)
         except ValueError:
-            return harness_error(self, HarnessContractError("missing_event_id", "Last-Event-ID must be a sequence integer for SSE recovery.", "/headers/Last-Event-ID"))
+            return harness_error(self, HarnessContractError("invalid_last_event_id", "Last-Event-ID must be a sequence integer for SSE recovery.", "/headers/Last-Event-ID"))
         all_events = agent_harness_store.list_events(operation_id)
         if after > 0 and not any(event["sequence"] == after for event in all_events):
             return harness_error(self, HarnessStoreError("event_not_found", "Last-Event-ID is not present in the durable event log."))
         events = agent_harness_store.list_events(operation_id, after_sequence=after)
+        try:
+            _assert_event_replay_contiguous(events, after)
+        except ValueError:
+            return harness_error(self, HarnessStoreError("event_sequence_gap", "Operation event sequence has a durable gap."))
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
@@ -3140,7 +4460,7 @@ class BridgeHandler(SimpleHTTPRequestHandler):
         try:
             for event in events:
                 responses.write_sse_event(self, event="workflow", event_id=str(event["sequence"]), data=event)
-            if operation.get("workflow_state") in EXECUTION_TERMINAL_STATES | {"completed", "failed", "cancelled"}:
+            if operation.get("workflow_state") in GENERIC_HARNESS_OBSERVATION_BOUNDARY_STATES:
                 responses.write_sse_event(self, event="terminal", data={"operation_id": operation_id, "state": operation["workflow_state"]})
         except (BrokenPipeError, ConnectionResetError, OSError):
             return
@@ -3192,9 +4512,50 @@ class BridgeHandler(SimpleHTTPRequestHandler):
             except (HarnessContractError, HarnessStoreError) as error:
                 return harness_error(self, error)
         if len(parts) == 4 and parts[:3] == ["api", "agent", "operations"]:
-            if not agent_harness_store.delete_operation(parts[3]):
-                return harness_error(self, HarnessStoreError("operation_not_found", "Operation was not found."))
-            return write_json(self, HTTPStatus.OK, {"operation_id": parts[3], "deleted": True})
+            try:
+                # This is the user-erasure route.  Keep it on the coordinator
+                # so it resolves every associated store and calls the
+                # harness' permanent graph purge; ``delete_operation`` is the
+                # legacy retention/tombstone wrapper and must never be used
+                # for this endpoint.
+                principal, scopes = harness_principal(self)
+                if "agent:read_run" not in scopes and "agent:write_draft" not in scopes:
+                    raise HarnessContractError("scope_denied", "Operation deletion is not in the caller scope.", status=403)
+                workspace_id = harness_workspace(self)
+                operation = agent_harness_store.get_operation(parts[3])
+                if operation is None:
+                    return write_json(self, HTTPStatus.OK, {"operation_id": parts[3], "deleted": True, "status": "not_found"})
+                if operation.get("principal") != principal:
+                    raise HarnessContractError("operation_access_denied", "Operation is not owned by this principal.", "/operation_id", status=403)
+                key = self.headers.get("Idempotency-Key", "").strip() or f"operation-delete:{parts[3]}"
+                # Resolve the complete Agent-owned graph before deleting any
+                # store.  Passing only the harness id here used to bypass the
+                # coordinator's preflight and made the route's permanent
+                # erasure semantics depend on whichever store happened to be
+                # named by the caller.  The resolver returns exact IDs (or an
+                # explicit not-applicable result) and refuses a partial
+                # association lookup, so retries cannot silently leave a
+                # child flow/batch/optimization record behind.
+                result = agent_deletion_coordinator.delete_resource(
+                    resource_id=parts[3],
+                    idempotency_key=key,
+                    principal=principal,
+                    # The published v1 operation identity predates the
+                    # workspace field.  Keep principal as the mandatory
+                    # owner fence for those legacy roots; a successor record
+                    # may opt into workspace binding and will be checked by
+                    # the coordinator when present.
+                    workspace_id=(
+                        operation.get("workspace_id")
+                        if isinstance(operation.get("workspace_id"), str)
+                        else None
+                    ),
+                )
+                if result.get("status") == "deletion_incomplete":
+                    return write_json(self, HTTPStatus.CONFLICT, {"operation_id": parts[3], "deleted": False, **result})
+                return write_json(self, HTTPStatus.OK, {"operation_id": parts[3], "deleted": result.get("status") == "deleted", **result})
+            except (HarnessContractError, HarnessStoreError) as error:
+                return harness_error(self, error)
         if len(parts) == 3 and parts[:2] == ["api", "runs"]:
             return self.delete_run(parts[2])
         return write_error(
@@ -3209,6 +4570,12 @@ class BridgeHandler(SimpleHTTPRequestHandler):
         _remember_bridge_server(self)
         path = urlparse(self.path).path
         parts = path.strip("/").split("/")
+        if path == "/api/agent/flows":
+            return create_agent_flow(self)
+        if len(parts) == 5 and parts[:4] == ["api", "agent", "flows", parts[3]] and parts[4] == "resume":
+            return resume_agent_flow(self, parts[3])
+        if len(parts) == 6 and parts[:4] == ["api", "agent", "flows", parts[3]] and parts[4:] == ["authorization", "revoke"]:
+            return revoke_agent_flow_authorization(self, parts[3])
         if path == "/api/agent/optimization/sessions":
             return create_optimization_session(self)
         if path == "/api/agent/batches":
@@ -3219,6 +4586,10 @@ class BridgeHandler(SimpleHTTPRequestHandler):
             return batch_action(self, parts[3], parts[4])
         if len(parts) == 8 and parts[:4] == ["api", "agent", "optimization", "sessions"] and parts[5] == "candidates" and parts[7] == "approve":
             return approve_optimization_candidate(self, parts[4], parts[6])
+        if len(parts) == 6 and parts[:4] == ["api", "agent", "optimization", "sessions"] and parts[5] == "authorization":
+            return create_optimization_authorization(self, parts[4])
+        if len(parts) == 7 and parts[:4] == ["api", "agent", "optimization", "sessions"] and parts[5:] == ["authorization", "revoke"]:
+            return revoke_optimization_authorization(self, parts[4])
         if len(parts) == 6 and parts[:4] == ["api", "agent", "optimization", "sessions"] and parts[5] in {"pause", "resume", "cancel", "retry"}:
             return optimization_action(self, parts[4], parts[5])
         if path == "/api/agent/executions":
@@ -3245,6 +4616,8 @@ class BridgeHandler(SimpleHTTPRequestHandler):
             return self.call_harness_tool()
         if path == "/api/agent/scenario-plan":
             return self.plan_agent_scenario()
+        if path == "/api/agent/intent":
+            return self.classify_agent_intent()
         if path == "/api/agent/scenario-chat":
             return self.stream_agent_scenario_chat()
         if path == "/api/agent/result-analysis":
@@ -3574,6 +4947,22 @@ class BridgeHandler(SimpleHTTPRequestHandler):
         reasoning trace inside the provider reply is dropped by the provider adapter instead of being
         returned or retained.
         """
+        # Model calls must carry an explicit browser/session binding.  The
+        # legacy process-wide selection scope is retained only for direct
+        # Python compatibility; HTTP model routes fail closed when a
+        # caller omits the binding so one tab cannot inherit another
+        # user's selected model.
+        try:
+            scope = assistant_model_scope(self, required=True)
+        except ValueError as error:
+            return write_error(
+                self,
+                HTTPStatus.BAD_REQUEST,
+                "invalid_assistant_model_session",
+                str(error),
+                field_path="/headers/X-TileSim-Assistant-Session",
+                retryable=False,
+            )
         try:
             length = int(self.headers.get("Content-Length", "0"))
             if length <= 0 or length > MAX_REQUEST_BYTES:
@@ -3592,7 +4981,7 @@ class BridgeHandler(SimpleHTTPRequestHandler):
                 retryable=False,
             )
         try:
-            plan = assistant_model.plan(instruction)
+            plan = assistant_model.plan(instruction, scope=scope)
         except ProviderTimeoutError:
             return write_error(
                 self,
@@ -3612,6 +5001,55 @@ class BridgeHandler(SimpleHTTPRequestHandler):
         plan["schema_set_revision"] = SCHEMA_SET_REVISION
         return write_json(self, HTTPStatus.OK, plan)
 
+    def classify_agent_intent(self) -> None:
+        """Return a model proposal constrained to the caller's published page catalog."""
+        raw_scope = self.headers.get(assistant_model.SELECTION_SCOPE_HEADER, "").strip()
+        try:
+            scope = assistant_model_scope(self, required=True)
+        except ValueError as error:
+            return write_error(
+                self,
+                HTTPStatus.BAD_REQUEST,
+                "invalid_assistant_model_session",
+                str(error),
+                field_path="/headers/X-TileSim-Assistant-Session",
+                retryable=False,
+            )
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if length <= 0 or length > MAX_REQUEST_BYTES:
+                raise ValueError("Request body is outside the supported size limit.")
+            request = json.loads(self.rfile.read(length), parse_constant=reject_nonfinite_json)
+            if not isinstance(request, dict):
+                raise ValueError("Request body must be a JSON object.")
+            required = {"schema_identity", "contract_revision", "session_id", "user_goal", "current_page", "page_catalog", "run_id", "run_context_revision", "backend_identity", "schema_set_revision", "input_snapshot_digest"}
+            if set(request) != required or request.get("schema_identity") != agent_intent.REQUEST_SCHEMA_IDENTITY or request.get("contract_revision") != agent_intent.CONTRACT_REVISION:
+                raise ValueError("Intent request does not match the published contract.")
+            if request.get("session_id") != raw_scope:
+                raise ValueError("Intent request session_id must match the assistant session scope.")
+            if not isinstance(request["user_goal"], str) or not request["user_goal"].strip() or len(request["user_goal"]) > 20_000:
+                raise ValueError("Intent goal is invalid.")
+            # Intent classification is bound to this Bridge instance, not to
+            # an arbitrary identity object supplied by a browser or model.
+            # A stale backend must fail before any Provider call or response
+            # mirroring can occur.
+            current_backend_identity = harness_backend_identity()
+            agent_intent.validate_request(request, SCHEMA_SET_REVISION, current_backend_identity)
+        except (ValueError, json.JSONDecodeError, ProviderStructuredOutputError):
+            return write_error(self, HTTPStatus.BAD_REQUEST, "invalid_agent_intent_request", "The intent request is invalid.", retryable=False)
+        try:
+            result = agent_intent.classify(
+                request,
+                SCHEMA_SET_REVISION,
+                expected_backend_identity=current_backend_identity,
+                scope=scope,
+            )
+        except ProviderTimeoutError:
+            return write_error(self, HTTPStatus.SERVICE_UNAVAILABLE, "agent_intent_provider_timeout", "The intent model is unavailable.", retryable=True)
+        except ProviderError:
+            return write_error(self, HTTPStatus.SERVICE_UNAVAILABLE, "agent_intent_provider_unavailable", "The intent model is unavailable.", retryable=True)
+        return write_json(self, HTTPStatus.OK, result)
+
     def stream_agent_scenario_chat(self) -> None:
         """Answer one conversation turn as a server-sent event stream.
 
@@ -3623,6 +5061,10 @@ class BridgeHandler(SimpleHTTPRequestHandler):
         ordinary JSON response *before* the stream starts, so a client can fall back to its local rules
         without having to parse a half-open stream.
         """
+        try:
+            scope = assistant_model_scope(self, required=True)
+        except ValueError as error:
+            return write_error(self, HTTPStatus.BAD_REQUEST, "invalid_assistant_model_session", str(error), field_path="/headers/X-TileSim-Assistant-Session", retryable=False)
         try:
             length = int(self.headers.get("Content-Length", "0"))
             if length <= 0 or length > MAX_REQUEST_BYTES:
@@ -3664,7 +5106,9 @@ class BridgeHandler(SimpleHTTPRequestHandler):
                 retryable=False,
             )
         try:
-            assistant_model.require_channel()
+            # Capture one immutable config before opening the SSE response.  The stream must not
+            # re-read a mutable session selection after another tab switches its model.
+            config = assistant_model.require_channel(scope)
         except ProviderTimeoutError:
             return write_error(
                 self,
@@ -3691,18 +5135,22 @@ class BridgeHandler(SimpleHTTPRequestHandler):
         self.end_headers()
 
         try:
-            for event, data in assistant_model.stream_events(conversation, panel_values):
+            truncated = False
+            for event, data in assistant_model.stream_events(conversation, panel_values, config=config):
                 if event == "plan":
                     # Stamped here for the same reason the one-shot route stamps it: a plan is a
                     # contract-bound payload, and a client has to be able to tell which published
                     # contract set judged the values it is being offered.
                     data = {**data, "schema_set_revision": SCHEMA_SET_REVISION}
+                if event == "truncated":
+                    truncated = True
                 write_sse_event(self, event=event, data=data)
-            write_sse_event(
-                self,
-                event="done",
-                data={"schema_version": assistant_model.CHAT_SCHEMA_VERSION},
-            )
+            if not truncated:
+                write_sse_event(
+                    self,
+                    event="done",
+                    data={"schema_version": assistant_model.CHAT_SCHEMA_VERSION},
+                )
         except ProviderTimeoutError:
             write_sse_event(
                 self,
@@ -3731,6 +5179,10 @@ class BridgeHandler(SimpleHTTPRequestHandler):
     def stream_agent_result_analysis(self) -> None:
         """Stream a read-only answer grounded in the current run's report projection."""
 
+        try:
+            scope = assistant_model_scope(self, required=True)
+        except ValueError as error:
+            return write_error(self, HTTPStatus.BAD_REQUEST, "invalid_assistant_model_session", str(error), field_path="/headers/X-TileSim-Assistant-Session", retryable=False)
         try:
             length = int(self.headers.get("Content-Length", "0"))
             if length <= 0 or length > MAX_REQUEST_BYTES:
@@ -3770,7 +5222,7 @@ class BridgeHandler(SimpleHTTPRequestHandler):
                 retryable=False,
             )
         try:
-            assistant_model.require_channel()
+            config = assistant_model.require_channel(scope)
         except ProviderTimeoutError:
             return write_error(
                 self,
@@ -3797,13 +5249,17 @@ class BridgeHandler(SimpleHTTPRequestHandler):
         self.end_headers()
 
         try:
-            for event, data in assistant_model.stream_result_analysis_events(conversation, context):
+            truncated = False
+            for event, data in assistant_model.stream_result_analysis_events(conversation, context, config=config):
+                if event == "truncated":
+                    truncated = True
                 write_sse_event(self, event=event, data=data)
-            write_sse_event(
-                self,
-                event="done",
-                data={"schema_version": assistant_model.RESULT_ANALYSIS_CHAT_SCHEMA_VERSION},
-            )
+            if not truncated:
+                write_sse_event(
+                    self,
+                    event="done",
+                    data={"schema_version": assistant_model.RESULT_ANALYSIS_CHAT_SCHEMA_VERSION},
+                )
         except ProviderTimeoutError:
             write_sse_event(
                 self,
@@ -3839,7 +5295,10 @@ class BridgeHandler(SimpleHTTPRequestHandler):
         already had.
         """
         try:
-            catalogue = assistant_model.build_catalogue()
+            scope = assistant_model_scope(self, required=True)
+            catalogue = assistant_model.build_catalogue(scope=scope)
+        except ValueError as error:
+            return write_error(self, HTTPStatus.BAD_REQUEST, "invalid_assistant_model_session", str(error), field_path="/headers/X-TileSim-Assistant-Session", retryable=False)
         except ProviderTimeoutError:
             return write_error(
                 self,
@@ -3870,12 +5329,16 @@ class BridgeHandler(SimpleHTTPRequestHandler):
         return write_json(self, HTTPStatus.OK, catalogue)
 
     def select_agent_assistant_model(self) -> None:
-        """Make one model identity the identity this Bridge process uses.
+        """Make one model identity the identity this assistant session uses.
 
-        The switch takes effect for the next request without restarting anything, and the reply says
+        The switch takes effect for the next request in this session without restarting anything, and the reply says
         plainly that it was **not persisted**, because the saved configuration belongs to the
         launcher.  Nothing here writes a document and nothing here creates a run.
         """
+        try:
+            scope = assistant_model_scope(self, required=True)
+        except ValueError as error:
+            return write_error(self, HTTPStatus.BAD_REQUEST, "invalid_assistant_model_session", str(error), field_path="/headers/X-TileSim-Assistant-Session", retryable=False)
         try:
             length = int(self.headers.get("Content-Length", "0"))
             if length <= 0 or length > MAX_REQUEST_BYTES:
@@ -3893,7 +5356,7 @@ class BridgeHandler(SimpleHTTPRequestHandler):
                 retryable=False,
             )
         try:
-            selection = assistant_model.select_model(request.get("model"))
+            selection = assistant_model.select_model(request.get("model"), scope=scope)
         except ValueError as error:
             return write_error(
                 self,
@@ -4178,6 +5641,33 @@ class BridgeHandler(SimpleHTTPRequestHandler):
                     "A run can only be deleted after its terminal status is recorded.",
                     retryable=False,
                 )
+        # Filesystem artifacts are only one part of the user-owned evidence
+        # graph. Resolve and erase Agent Harness associations before removing
+        # the run directory. The four SQLite stores cannot share a transaction;
+        # a partial result is therefore surfaced as retryable
+        # ``deletion_incomplete`` and leaves the run available for retry.
+        principal = self.headers.get("X-TileSim-Principal", "local-user").strip() or "local-user"
+        workspace_id = self.headers.get("X-TileSim-Workspace", "local-workspace").strip() or "local-workspace"
+        deletion_key = self.headers.get("Idempotency-Key", "").strip() or f"run-delete:{run_id}"
+        deletion = agent_deletion_coordinator.delete_resource(
+            resource_id=run_id,
+            idempotency_key=deletion_key,
+            principal=principal,
+            workspace_id=workspace_id,
+        )
+        if deletion.get("status") == "deletion_incomplete":
+            return write_json(
+                self,
+                HTTPStatus.CONFLICT,
+                {
+                    "run_id": run_id,
+                    "deleted": False,
+                    "status": "deletion_incomplete",
+                    "retryable": True,
+                    "deletion": deletion,
+                },
+            )
+        with runs_lock:
             runs.pop(run_id, None)
 
         try:

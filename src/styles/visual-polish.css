@@ -1,0 +1,958 @@
+/*
+ * Visual polish layer
+ *
+ * The workbench is intentionally evidence-first and dense. This layer adds
+ * atmosphere and interaction feedback without turning a technical report into
+ * a marketing dashboard: low-contrast grid texture, small semantic accents,
+ * and motion that only runs when the user has not requested reduced motion.
+ */
+
+:root {
+  --motion-panel: 220ms;
+  --motion-route: 180ms;
+  --motion-disclosure: 240ms;
+}
+
+/* Desktop workspaces should use the canvas the user paid for. Individual
+   evidence blocks still own their readable internal measures, but the route
+   shell must not stop at an arbitrary 1760px and strand a wide monitor's
+   right-hand side. */
+.workspace {
+  width: 100%;
+  max-width: none;
+}
+
+/* Keep the primary run action in the submit card's own flow. The assistant
+   launcher is a fixed bottom-right affordance, so right-aligning both controls
+   makes them compete for the same corner on short or narrow screens. */
+.run-submit-actions {
+  justify-content: flex-start;
+}
+
+@media (max-width: 760px) {
+  /* The launcher is intentionally fixed to the lower-right corner. Reserve
+     its touch zone at the end of the long form so the final run action stays
+     visible above it when the user reaches the bottom of the page. */
+  .run-submit-actions {
+    padding-bottom: 92px;
+  }
+}
+
+/* On a wide monitor two columns turn every select and number input into a
+   banner. Four fluid columns keep controls scan-friendly and remove needless
+   vertical rows while preserving the existing one-column mobile breakpoints. */
+@media (min-width: 1680px) {
+  .experiment-identity-panel .form-grid--identity,
+  .control-sections .form-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px 14px;
+  }
+
+  .experiment-identity-panel .form-grid--identity {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .experiment-identity-panel .field--wide {
+    grid-column: span 2;
+  }
+
+  /* Keep the module navigator a compact control rail. The surrounding input
+     surface still fills the canvas, while the tabs stop growing into oversized
+     tiles and remain fully visible when a desktop capture is cropped. */
+  .experiment-module-navigation {
+    max-width: 1704px;
+  }
+
+  /* The semantic engine selectors used to remain one full-width row each
+     after the quick-control grid became responsive. Keep this secondary
+     editor dense too, so a wide monitor does not turn two choices into two
+     kilometre-long rails. */
+  .structured-block--engine {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .structured-block--engine > .structured-block__header {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 2200px) {
+  /* Module tabs are navigation, not hero tiles. Cap their measure on an
+     ultrawide canvas so the fourth tab remains inside the visible workbench
+     instead of becoming a clipped sliver when the page is viewed in a docked
+     or cropped desktop window. */
+  .experiment-module-navigation {
+    grid-template-columns: repeat(4, minmax(0, 420px));
+    justify-content: start;
+  }
+
+  /* At the very widest desktop sizes, one more quick-control column keeps
+     numeric fields at a practical reading width instead of stretching them
+     toward the monitor edges. */
+  .control-sections .form-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .structured-block--engine {
+    grid-template-columns: repeat(2, minmax(0, 760px));
+    justify-content: start;
+  }
+}
+
+body {
+  background-color: var(--canvas);
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--line) 23%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--line) 23%, transparent) 1px, transparent 1px),
+    radial-gradient(circle at 16% -10%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 31rem);
+  background-size:
+    32px 32px,
+    32px 32px,
+    auto;
+  background-attachment: fixed;
+}
+
+.app-sidebar {
+  box-shadow: 8px 0 28px -26px color-mix(in srgb, var(--ink) 65%, transparent);
+}
+
+.app-header {
+  box-shadow:
+    0 1px 0 var(--line),
+    0 12px 28px -28px color-mix(in srgb, var(--ink) 55%, transparent);
+}
+
+.page-heading > div {
+  position: relative;
+  padding-left: 12px;
+}
+
+.page-heading > div::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 3px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--accent);
+  content: "";
+  transform: translateY(-50%);
+}
+
+.nav-link {
+  position: relative;
+  overflow: hidden;
+}
+
+.nav-link::after {
+  position: absolute;
+  inset: 7px auto 7px 0;
+  width: 0;
+  border-radius: 0 999px 999px 0;
+  background: var(--nav-active-mark);
+  content: "";
+  transition: width var(--motion-interaction) var(--ease-emphasized);
+}
+
+.nav-link:hover::after,
+.nav-link.active::after {
+  width: 3px;
+}
+
+.nav-link svg {
+  transition:
+    transform var(--motion-interaction) var(--ease-emphasized),
+    color var(--motion-fast) var(--ease-standard);
+}
+
+.nav-link:hover svg,
+.nav-link.active svg {
+  color: var(--nav-active-mark);
+  transform: translateX(2px);
+}
+
+.panel {
+  position: relative;
+}
+
+.panel > .panel-header,
+.panel > summary.panel-header {
+  position: relative;
+}
+
+.panel > .panel-header::before,
+.panel > summary.panel-header::before {
+  position: absolute;
+  top: -1px;
+  left: var(--space-panel);
+  width: 26px;
+  height: 3px;
+  border-radius: 0 0 999px 999px;
+  background: var(--accent);
+  content: "";
+  opacity: 0.82;
+}
+
+.panel-header .section-kicker {
+  color: var(--accent-ink);
+}
+
+.stat-card {
+  overflow: hidden;
+  box-shadow: var(--shadow-hairline);
+  transition:
+    border-color var(--motion-interaction) var(--ease-standard),
+    box-shadow var(--motion-interaction) var(--ease-standard),
+    transform var(--motion-interaction) var(--ease-emphasized);
+}
+
+.stat-card::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 22%, transparent));
+  content: "";
+  opacity: 0.72;
+}
+
+.stat-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--line));
+  box-shadow: var(--shadow);
+  transform: translateY(-2px);
+}
+
+.visualization-panel {
+  box-shadow: var(--shadow-hairline);
+  transition:
+    border-color var(--motion-interaction) var(--ease-standard),
+    box-shadow var(--motion-interaction) var(--ease-standard),
+    transform var(--motion-interaction) var(--ease-emphasized);
+}
+
+.visualization-panel:hover {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
+  box-shadow: var(--shadow);
+  transform: translateY(-1px);
+}
+
+.visualization-title-icon {
+  transition:
+    transform var(--motion-interaction) var(--ease-emphasized),
+    background-color var(--motion-fast) var(--ease-standard);
+}
+
+.visualization-panel:hover .visualization-title-icon {
+  background: color-mix(in srgb, var(--accent-soft) 72%, var(--accent));
+  transform: translateY(-1px) rotate(-3deg);
+}
+
+.visualization-data > summary {
+  transition:
+    color var(--motion-fast) var(--ease-standard),
+    background-color var(--motion-fast) var(--ease-standard);
+}
+
+.visualization-data > summary:hover {
+  color: var(--accent-ink);
+  background: color-mix(in srgb, var(--accent-soft) 52%, transparent);
+}
+
+.status-pill {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 7%, transparent);
+}
+
+.evidence-friendly-summary {
+  position: relative;
+  overflow: hidden;
+}
+
+.evidence-friendly-summary::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    color-mix(in srgb, var(--panel) 22%, transparent) 45%,
+    transparent 70%
+  );
+  content: "";
+  opacity: 0;
+  transform: translateX(-55%);
+}
+
+.route-view-enter-active,
+.route-view-leave-active {
+  transition: transform var(--motion-route) var(--ease-emphasized);
+  will-change: transform;
+}
+
+.route-view-enter-from,
+.route-view-leave-to {
+  /* Keep route content readable while it slides; opacity changes on a full
+   * page surface create inaccessible intermediate contrast states. */
+  opacity: 1;
+}
+
+.route-view-enter-from {
+  transform: translateY(8px);
+}
+
+.route-view-leave-to {
+  transform: translateY(-4px);
+}
+
+.input-mode-enter-active,
+.input-mode-leave-active {
+  transition: transform var(--motion-panel) var(--ease-emphasized);
+  will-change: transform;
+}
+
+.input-mode-enter-from {
+  transform: translateY(10px) scale(0.995);
+}
+
+.input-mode-leave-to {
+  transform: translateY(-6px) scale(0.997);
+}
+
+/* The component already owns this transition in the template. The previous
+ * token was the global 0ms base duration, which made the switch look abrupt. */
+.module-panel-enter-active,
+.module-panel-leave-active {
+  transition: transform var(--motion-panel) var(--ease-emphasized);
+  will-change: transform;
+}
+
+.module-panel-enter-from,
+.module-panel-leave-to {
+  opacity: 1;
+}
+
+.segmented-control button,
+.topology-view-tabs button,
+.topology-filter-group button,
+.topology-view-more > summary {
+  position: relative;
+  transition:
+    color var(--motion-interaction) var(--ease-standard),
+    border-color var(--motion-interaction) var(--ease-standard),
+    background-color var(--motion-interaction) var(--ease-standard),
+    box-shadow var(--motion-interaction) var(--ease-standard),
+    transform var(--motion-interaction) var(--ease-emphasized);
+}
+
+.segmented-control button::after,
+.topology-view-tabs button::after,
+.topology-filter-group button::after {
+  position: absolute;
+  right: 10px;
+  bottom: 2px;
+  left: 10px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--accent);
+  content: "";
+  opacity: 0;
+  transform: scaleX(0.45);
+  transition:
+    opacity var(--motion-interaction) var(--ease-standard),
+    transform var(--motion-interaction) var(--ease-emphasized);
+}
+
+.segmented-control button.active::after,
+.topology-view-tabs button.active::after,
+.topology-filter-group button.active::after {
+  opacity: 0.9;
+  transform: scaleX(1);
+}
+
+.experiment-module-card {
+  transition:
+    border-color var(--motion-interaction) var(--ease-standard),
+    background-color var(--motion-interaction) var(--ease-standard),
+    box-shadow var(--motion-interaction) var(--ease-standard),
+    transform var(--motion-interaction) var(--ease-emphasized);
+}
+
+.experiment-module-card::before {
+  transition:
+    width var(--motion-interaction) var(--ease-emphasized),
+    background-color var(--motion-interaction) var(--ease-standard);
+}
+
+.experiment-module-card__icon {
+  transition:
+    color var(--motion-interaction) var(--ease-standard),
+    border-color var(--motion-interaction) var(--ease-standard),
+    background-color var(--motion-interaction) var(--ease-standard),
+    transform var(--motion-interaction) var(--ease-emphasized);
+}
+
+.experiment-module-card:hover .experiment-module-card__icon,
+.experiment-module-card.is-active .experiment-module-card__icon {
+  border-color: color-mix(in srgb, var(--accent) 56%, var(--line));
+  background: color-mix(in srgb, var(--accent-soft) 72%, var(--panel-strong));
+  transform: translateY(-1px) scale(1.04);
+}
+
+details > summary {
+  transition:
+    color var(--motion-interaction) var(--ease-standard),
+    background-color var(--motion-interaction) var(--ease-standard);
+}
+
+.field input,
+.field select,
+.field textarea,
+.structured-block select,
+.runtime-evidence-controls select,
+.topology-zoom-controls__select {
+  transition:
+    color var(--motion-interaction) var(--ease-standard),
+    border-color var(--motion-interaction) var(--ease-standard),
+    background-color var(--motion-interaction) var(--ease-standard),
+    box-shadow var(--motion-interaction) var(--ease-standard);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Foundation keeps these tokens at zero so the application is deterministic
+   * before this optional polish layer is loaded. The normal desktop experience
+   * opts into short, readable feedback here; reduced-motion below puts every
+   * shared token back to zero. */
+  :root {
+    --motion-fast: 120ms;
+    --motion-base: 180ms;
+  }
+
+  /* The palette editor is also the live theme preview. Keep its own mount
+   * instantaneous so the preview and contrast audit always see one palette. */
+  .theme-menu.menu-pop-enter-active,
+  .theme-menu.menu-pop-leave-active {
+    transition: none;
+  }
+
+  .menu-pop-enter-active,
+  .menu-pop-leave-active {
+    transition:
+      opacity var(--motion-panel) var(--ease-standard),
+      transform var(--motion-panel) var(--ease-emphasized);
+  }
+
+  .modal-fade-enter-active,
+  .modal-fade-leave-active {
+    transition: opacity var(--motion-panel) var(--ease-standard);
+  }
+
+  .modal-fade-enter-active .modal-card,
+  .modal-fade-leave-active .modal-card {
+    transition:
+      opacity var(--motion-panel) var(--ease-standard),
+      transform var(--motion-panel) var(--ease-emphasized);
+  }
+
+  .toast-shift-enter-active,
+  .toast-shift-leave-active,
+  .toast-shift-move,
+  .heading-swap-enter-active,
+  .heading-swap-leave-active {
+    transition:
+      opacity var(--motion-panel) var(--ease-standard),
+      transform var(--motion-panel) var(--ease-emphasized);
+  }
+
+  details[open] > :not(summary) {
+    animation-duration: var(--motion-disclosure);
+  }
+
+  .agent-copilot-entry__trigger {
+    transition:
+      color var(--motion-interaction) var(--ease-standard),
+      border-color var(--motion-interaction) var(--ease-standard),
+      background-color var(--motion-interaction) var(--ease-standard),
+      box-shadow var(--motion-interaction) var(--ease-standard),
+      transform var(--motion-interaction) var(--ease-emphasized);
+  }
+
+  .agent-copilot-entry__trigger:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-raised);
+  }
+
+  /* Theme tokens are changed atomically. Keep their host surfaces out of the
+   * shared colour interpolation so contrast checks and live status colours
+   * never expose a half-applied palette. Interaction motion stays on the
+   * foreground affordances below. */
+  body,
+  .app-sidebar,
+  .app-header,
+  .panel {
+    transition-duration: 0ms;
+  }
+
+  .new-run-button {
+    transition:
+      transform var(--motion-interaction) var(--ease-emphasized),
+      border-color 0ms var(--ease-standard),
+      background-color 0ms var(--ease-standard),
+      box-shadow var(--motion-interaction) var(--ease-standard);
+  }
+
+  .nav-link {
+    transition:
+      color 0ms var(--ease-standard),
+      background-color 0ms var(--ease-standard),
+      transform var(--motion-interaction) var(--ease-emphasized);
+  }
+
+  .bridge-card {
+    transition:
+      border-color 0ms var(--ease-standard),
+      background-color 0ms var(--ease-standard);
+  }
+
+  .experiment-module-stage > .control-sections > .schema-control-group,
+  .experiment-module-stage > .structured-stack > *,
+  .json-editor-section > .json-toolbar,
+  .json-editor-section > .json-grid > *,
+  .trace-package-state {
+    animation: ts-module-detail-in var(--motion-panel) var(--ease-emphasized) backwards;
+  }
+
+  .experiment-module-stage > .control-sections > .schema-control-group:nth-child(2),
+  .experiment-module-stage > .structured-stack > :nth-child(2),
+  .json-editor-section > .json-grid > :nth-child(2) {
+    animation-delay: 45ms;
+  }
+
+  .experiment-module-stage > .control-sections > .schema-control-group:nth-child(3),
+  .experiment-module-stage > .structured-stack > :nth-child(3) {
+    animation-delay: 90ms;
+  }
+
+  .experiment-module-stage > .control-sections > .schema-control-group:nth-child(n + 4),
+  .experiment-module-stage > .structured-stack > :nth-child(n + 4) {
+    animation-delay: 125ms;
+  }
+
+  .stat-card {
+    transition-property: color, background-color, border-color, box-shadow, transform;
+  }
+
+  /* Theme tokens change atomically. Interpolating a report surface while the
+     appearance toggle is settling can expose muted evidence text against an
+     in-between background (and make an AA-safe pair fail in the same frame).
+     Keep the visualization surface transition-only for its interaction edge;
+     chart and boundary text must always resolve against the final theme. */
+  .visualization-panel {
+    transition-property: border-color, box-shadow, transform;
+  }
+
+  .button,
+  .icon-button,
+  .text-button {
+    transition-duration: var(--motion-interaction);
+  }
+
+  .view-stack > :where(.panel, .stat-grid, .two-column-layout, .analysis-stage, .evidence-strip) {
+    animation: ts-view-enter var(--motion-enter) var(--ease-emphasized) backwards;
+  }
+
+  .view-stack > :where(.panel, .stat-grid, .two-column-layout, .analysis-stage, .evidence-strip):nth-child(2) {
+    animation-delay: 45ms;
+  }
+
+  .view-stack > :where(.panel, .stat-grid, .two-column-layout, .analysis-stage, .evidence-strip):nth-child(3) {
+    animation-delay: 90ms;
+  }
+
+  .view-stack > :where(.panel, .stat-grid, .two-column-layout, .analysis-stage, .evidence-strip):nth-child(n + 4) {
+    animation-delay: 135ms;
+  }
+
+  .evidence-friendly-summary:hover::after {
+    opacity: 1;
+    transform: translateX(55%);
+    transition:
+      opacity var(--motion-interaction) var(--ease-standard),
+      transform 520ms var(--ease-emphasized);
+  }
+
+  details[open] > :not(summary) {
+    animation: ts-detail-reveal var(--motion-disclosure) var(--ease-emphasized) backwards;
+  }
+}
+
+@keyframes ts-view-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ts-detail-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ts-module-detail-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Execution replay is composed from child components. Keep its interaction
+   layer global so the controls and timeline retain their visual treatment
+   across Vue scoped-style boundaries. */
+.execution-replay-panel {
+  border-color: color-mix(in srgb, var(--line-strong) 78%, var(--accent) 22%);
+  box-shadow: 0 14px 34px -30px color-mix(in srgb, var(--ink) 72%, transparent);
+  animation: ts-replay-panel-in var(--motion-panel) var(--ease-emphasized) backwards;
+}
+
+.execution-replay-panel .replay-coverage-status {
+  padding: 5px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.execution-replay-panel .replay-identity {
+  align-items: center;
+  padding-block: 5px 13px;
+}
+
+.execution-replay-panel .replay-identity > span {
+  padding: 4px 8px;
+  border-left: 2px solid color-mix(in srgb, var(--accent) 58%, var(--line));
+  background: color-mix(in srgb, var(--surface-subtle) 78%, transparent);
+}
+
+.execution-replay-panel .replay-controls {
+  background: color-mix(in srgb, var(--surface-subtle) 82%, var(--canvas));
+}
+
+.execution-replay-panel .replay-controls__group {
+  flex-wrap: nowrap;
+}
+
+@media (max-width: 900px) {
+  .execution-replay-panel .replay-controls {
+    align-items: stretch;
+    padding: 10px 14px;
+  }
+
+  .execution-replay-panel .replay-controls__group {
+    flex: 1 1 calc(50% - 4px);
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  /* Keep the primary transport easy to find, while letting the secondary
+     step groups share a row. A full-width stack here makes a narrow desktop
+     replay feel like a form instead of a player and pushes the timeline below
+     the fold. */
+  .execution-replay-panel .replay-controls__group--primary {
+    flex-basis: 100%;
+  }
+
+  .execution-replay-panel .replay-controls__group .button {
+    min-width: 0;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 560px) {
+  .execution-replay-panel .replay-controls__group {
+    flex-basis: 100%;
+  }
+}
+
+.execution-replay-panel .replay-controls .button {
+  min-height: 34px;
+  transition:
+    color var(--motion-interaction) var(--ease-standard),
+    background-color var(--motion-interaction) var(--ease-standard),
+    border-color var(--motion-interaction) var(--ease-standard),
+    box-shadow var(--motion-interaction) var(--ease-standard),
+    transform var(--motion-interaction) var(--ease-emphasized);
+}
+
+.execution-replay-panel .replay-controls .button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 12px -9px color-mix(in srgb, var(--ink) 70%, transparent);
+}
+
+.execution-replay-panel .replay-controls .button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.execution-replay-panel .replay-controls__play {
+  box-shadow: 0 5px 12px -10px color-mix(in srgb, var(--accent) 85%, transparent);
+}
+
+.execution-replay-panel .replay-cursor-readout {
+  min-width: 9ch;
+  padding: 5px 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--line));
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--accent-soft) 64%, var(--surface));
+  text-align: right;
+}
+
+.execution-replay-panel .replay-track__canvas {
+  border-color: color-mix(in srgb, var(--line-strong) 78%, var(--accent) 22%);
+  background: color-mix(in srgb, var(--surface-subtle) 82%, var(--canvas));
+}
+
+.execution-replay-panel .replay-marker {
+  /* Dense timelines can contain thousands of markers. Avoid a transition on
+     every node; selected/hovered markers still receive the focused motion. */
+  transition: none;
+}
+
+.execution-replay-panel .replay-marker:hover {
+  transition: transform var(--motion-route) var(--ease-emphasized);
+  transform: translateY(-2px);
+}
+
+.execution-replay-panel .replay-marker.is-selected {
+  transition:
+    background-color var(--motion-route) var(--ease-standard),
+    border-color var(--motion-route) var(--ease-standard),
+    box-shadow var(--motion-route) var(--ease-standard),
+    opacity var(--motion-route) var(--ease-standard),
+    transform var(--motion-route) var(--ease-emphasized);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--accent) 68%, transparent),
+    0 5px 12px -9px var(--accent);
+}
+
+.execution-replay-panel .replay-cursor {
+  /* The cursor is driven by the single RAF playback clock. A longer CSS
+     transition would trail the actual simulated time, especially at 4–8x. */
+  transition: none;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger) 32%, transparent);
+}
+
+.execution-replay-panel .replay-details,
+.execution-replay-panel .replay-topology,
+.execution-replay-panel .replay-collective {
+  background: color-mix(in srgb, var(--surface-subtle) 88%, var(--canvas));
+}
+
+.execution-replay-panel .replay-details__heading h3,
+.execution-replay-panel .replay-topology h3,
+.execution-replay-panel .replay-collective h3 {
+  letter-spacing: -0.015em;
+}
+
+.execution-replay-panel .replay-route-row__select,
+.execution-replay-panel .replay-collective__step {
+  transition:
+    color var(--motion-interaction) var(--ease-standard),
+    background-color var(--motion-interaction) var(--ease-standard),
+    border-color var(--motion-interaction) var(--ease-standard),
+    transform var(--motion-interaction) var(--ease-emphasized);
+}
+
+.execution-replay-panel .replay-route-row__select:hover,
+.execution-replay-panel .replay-collective__step:hover {
+  transform: translateX(2px);
+}
+
+.execution-replay-panel .replay-collective__table tbody tr {
+  transition: background-color var(--motion-interaction) var(--ease-standard);
+}
+
+.execution-replay-panel .replay-collective__table tbody tr:hover td {
+  background: color-mix(in srgb, var(--accent-soft) 52%, var(--surface));
+}
+
+.execution-replay-panel .replay-topology__svg {
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface-subtle) 86%, var(--canvas));
+}
+
+.execution-replay-panel .replay-topology__links line,
+.execution-replay-panel .replay-topology__nodes rect {
+  transition:
+    stroke var(--motion-route) var(--ease-standard),
+    stroke-width var(--motion-route) var(--ease-standard),
+    fill var(--motion-route) var(--ease-standard);
+}
+
+.execution-replay-panel .replay-marker--active {
+  animation: ts-replay-active-pulse 1200ms var(--ease-standard) infinite;
+}
+
+.execution-replay-panel .replay-marker--event.replay-marker--active {
+  animation: ts-replay-event-pulse 900ms var(--ease-standard) infinite;
+}
+
+.execution-replay-panel .replay-topology__links line.is-highlighted {
+  animation: ts-replay-link-flow 1000ms var(--ease-standard) infinite alternate;
+}
+
+.execution-replay-panel .replay-topology__links line.is-active {
+  stroke-dasharray: 8 5;
+  animation:
+    ts-replay-link-flow 1000ms var(--ease-standard) infinite alternate,
+    ts-replay-link-dash 900ms linear infinite;
+}
+
+.execution-replay-panel .replay-topology__nodes g.is-active rect {
+  animation: ts-replay-node-active 1200ms var(--ease-standard) infinite;
+}
+
+@keyframes ts-replay-active-pulse {
+  0%,
+  100% {
+    filter: none;
+    transform: scale(1);
+  }
+  50% {
+    filter: brightness(1.08);
+    transform: scale(1.035);
+  }
+}
+
+@keyframes ts-replay-event-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px color-mix(in srgb, var(--warning) 18%, transparent),
+      0 0 0 0 color-mix(in srgb, var(--warning) 0%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--warning) 28%, transparent),
+      0 0 0 7px color-mix(in srgb, var(--warning) 10%, transparent);
+  }
+}
+
+@keyframes ts-replay-link-flow {
+  from {
+    stroke-width: 4;
+    opacity: 0.72;
+  }
+  to {
+    stroke-width: 5;
+    opacity: 1;
+  }
+}
+
+@keyframes ts-replay-link-dash {
+  to {
+    stroke-dashoffset: -26;
+  }
+}
+
+@keyframes ts-replay-node-active {
+  0%,
+  100% {
+    filter: none;
+  }
+  50% {
+    filter: brightness(1.06);
+  }
+}
+
+@keyframes ts-replay-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 0ms;
+    --motion-base: 0ms;
+    --motion-panel: 0ms;
+    --motion-route: 0ms;
+    --motion-disclosure: 0ms;
+    --motion-interaction: 0ms;
+  }
+
+  .route-view-enter-active,
+  .route-view-leave-active,
+  .input-mode-enter-active,
+  .input-mode-leave-active,
+  .module-panel-enter-active,
+  .module-panel-leave-active,
+  .segmented-control button,
+  .topology-view-tabs button,
+  .topology-filter-group button,
+  .topology-view-more > summary,
+  .experiment-module-card,
+  .experiment-module-card::before,
+  .experiment-module-card__icon,
+  .field input,
+  .field select,
+  .field textarea,
+  .structured-block select,
+  .runtime-evidence-controls select,
+  .topology-zoom-controls__select {
+    transition-duration: 0ms;
+  }
+
+  .experiment-module-stage > .control-sections > .schema-control-group,
+  .experiment-module-stage > .structured-stack > *,
+  .json-editor-section > .json-toolbar,
+  .json-editor-section > .json-grid > *,
+  .trace-package-state {
+    animation: none;
+  }
+
+  .stat-card:hover,
+  .visualization-panel:hover,
+  .nav-link:hover svg,
+  .execution-replay-panel .replay-controls .button:hover:not(:disabled),
+  .execution-replay-panel .replay-marker:hover,
+  .execution-replay-panel .replay-route-row__select:hover,
+  .execution-replay-panel .replay-collective__step:hover {
+    transform: none;
+  }
+
+  .execution-replay-panel {
+    animation: none;
+  }
+
+  .execution-replay-panel .replay-cursor {
+    transition: none;
+  }
+
+  .execution-replay-panel .replay-marker--active,
+  .execution-replay-panel .replay-marker--event.replay-marker--active,
+  .execution-replay-panel .replay-topology__links line.is-highlighted,
+  .execution-replay-panel .replay-topology__links line.is-active,
+  .execution-replay-panel .replay-topology__nodes g.is-active rect {
+    animation: none;
+  }
+
+  .execution-replay-panel .replay-topology__links line.is-active {
+    stroke-dasharray: none;
+  }
+}

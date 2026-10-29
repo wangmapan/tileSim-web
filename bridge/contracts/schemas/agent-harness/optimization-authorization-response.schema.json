@@ -1,0 +1,25 @@
+{
+  "$id": "tilesim.agent_harness.optimization_authorization_response.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["authorization", "session", "detail", "provenance"],
+  "properties": {
+    "authorization": { "$ref": "./optimization-authorization.schema.json" },
+    "session": { "$ref": "./optimization-session.schema.json" },
+    "detail": { "type": "object" },
+    "idempotent_replay": { "type": "boolean" },
+    "autonomous_started": { "type": "boolean" },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deployment_mode", "source_mode", "claim_scope", "production_status"],
+      "properties": {
+        "deployment_mode": { "const": "local_dev" },
+        "source_mode": { "const": "synthetic_trace" },
+        "claim_scope": { "const": "exploratory" },
+        "production_status": { "const": "not_for_production" }
+      }
+    }
+  }
+}

@@ -19,10 +19,10 @@ This adapter is deliberately **separate** from the read-only evidence Provider
 * the streamed variant forwards ``prose`` events (the model's own answer, re-sent in full each time) and
   one final ``plan`` event.  The transcript itself is never persisted: it lives in the browser and is
   replayed by the client, not stored by the Bridge.
-* the model identity can be **switched for the lifetime of this process** (see :func:`select_model`),
-  which is what lets the panel offer the service's own model catalogue instead of asking an operator to
-  retype an identity.  The switch is deliberately session-scoped and is reported as such: the saved
-  configuration belongs to the launcher, and nothing in this module writes it.
+* the model identity can be switched for one assistant session (see :func:`select_model`), which is
+  what lets the panel offer the service's own model catalogue without asking an operator to retype an
+  identity.  The switch is deliberately session-scoped and is reported as such: the saved configuration
+  belongs to the launcher, and nothing in this module writes it.
 
 Configuration is read from the process environment that the Windows launcher forwards into WSL
 (``TILESIM_ASSISTANT_BASE_URL``, ``TILESIM_ASSISTANT_API_KEY``, ``TILESIM_ASSISTANT_MODEL``,
@@ -33,9 +33,12 @@ line: :class:`AssistantModelConfig` excludes it from ``repr``.
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import os
 import re
+import threading
+import time
 from dataclasses import dataclass, field
 from typing import Any, Iterator
 from urllib.parse import urlsplit, urlunsplit
@@ -66,6 +69,7 @@ BASE_URL_ENV = "TILESIM_ASSISTANT_BASE_URL"
 API_KEY_ENV = "TILESIM_ASSISTANT_API_KEY"
 MODEL_ENV = "TILESIM_ASSISTANT_MODEL"
 TIMEOUT_ENV = "TILESIM_ASSISTANT_TIMEOUT_MS"
+AGENT_TOOLS_ENV = "TILESIM_AGENT_TOOLS"
 
 DEFAULT_TIMEOUT_MS = 120_000
 MINIMUM_TIMEOUT_MS = 1_000
@@ -87,6 +91,12 @@ MAXIMUM_REASON_CHARACTERS = 240
 MAXIMUM_CONVERSATION_MESSAGES = 12
 MAXIMUM_CONVERSATION_CHARACTERS = 12_000
 MAXIMUM_ANSWER_CHARACTERS = 24_000
+# The autonomous path is deliberately bounded independently of the prose
+# channel.  These caps are enforced before a model decision can reach the
+# deterministic Agent loop.
+MAXIMUM_TOOL_CALLS_PER_TURN = 4
+MAXIMUM_TOOL_ARGUMENT_CHARACTERS = 8_000
+AGENT_DECISION_SCHEMA_VERSION = "tilesim.bridge.agent_decision.v1"
 MAXIMUM_PANEL_VALUES = 128
 MAXIMUM_PANEL_VALUE_CHARACTERS = 120
 
@@ -114,13 +124,76 @@ MAXIMUM_MODEL_IDENTITIES = 500
 CONVERSATION_ROLES = frozenset({"user", "assistant"})
 PANEL_VALUE_KEY_PATTERN = re.compile(r"[A-Za-z0-9_]{1,64}\Z")
 
-# The model this process is currently using, when a panel selection replaced the configured one.
-#
-# It is one reference to an immutable string, so a reader in another request thread sees either the
-# previous identity or the new one and never a half-written value.  It is deliberately *not* written
-# anywhere: the saved configuration is owned by the launcher, and this process only ever holds its own
-# choice until it is restarted.
-_session_model: str | None = None
+# A model selection belongs to one assistant session, never to the Bridge process.  The browser sends
+# an opaque, per-tab/session scope in ``X-TileSim-Assistant-Session``.  Keeping only a bounded model
+# identity and an expiry in memory avoids credentials/transcripts while preventing one user's choice
+# from changing another user's in-flight request.  ``_LEGACY_SELECTION_SCOPE`` is retained only for
+# old direct Python callers that do not provide a scope; HTTP callers should always send one.
+SELECTION_SCOPE_HEADER = "X-TileSim-Assistant-Session"
+MAXIMUM_SELECTION_SCOPE_CHARACTERS = 128
+SELECTION_SCOPE_TTL_SECONDS = 8 * 60 * 60
+MAXIMUM_SELECTION_SCOPES = 512
+_SELECTION_SCOPE_PATTERN = re.compile(r"[A-Za-z0-9._:-]{1,128}\Z")
+_LEGACY_SELECTION_SCOPE = "__legacy__"
+_selection_lock = threading.RLock()
+_selection_models: dict[str, tuple[str, float]] = {}
+
+
+def validate_selection_scope(raw: Any) -> str:
+    """Validate one non-secret scope used to isolate model selection state."""
+
+    if not isinstance(raw, str):
+        raise ValueError("The assistant model session scope must be one string.")
+    scope = raw.strip()
+    if not scope or len(scope) > MAXIMUM_SELECTION_SCOPE_CHARACTERS or not _SELECTION_SCOPE_PATTERN.fullmatch(scope):
+        raise ValueError("The assistant model session scope is invalid.")
+    return scope
+
+
+def bind_selection_scope(session_id: str, principal: str = "local-user", workspace_id: str = "local-workspace") -> str:
+    """Derive a non-secret scope key bound to session, principal, and workspace identities."""
+
+    session = validate_selection_scope(session_id)
+    subject = validate_selection_scope(principal)
+    workspace = validate_selection_scope(workspace_id)
+    return hashlib.sha256(f"{session}\x00{subject}\x00{workspace}".encode("utf-8")).hexdigest()
+
+
+def _selection_key(scope: str | None) -> str:
+    # No-scope direct calls remain compatible with the pre-scope Python adapter.  HTTP handlers only
+    # use this path for legacy clients; the web client always sends a generated session scope.
+    return _LEGACY_SELECTION_SCOPE if scope is None else validate_selection_scope(scope)
+
+
+def _prune_selection_models(now: float | None = None) -> None:
+    current = time.monotonic() if now is None else now
+    expired = [key for key, (_, expires_at) in _selection_models.items() if expires_at <= current]
+    for key in expired:
+        _selection_models.pop(key, None)
+    if len(_selection_models) <= MAXIMUM_SELECTION_SCOPES:
+        return
+    # Evict the oldest-expiring entries first.  This is bounded housekeeping, not user data storage.
+    for key, _ in sorted(_selection_models.items(), key=lambda item: item[1][1])[: len(_selection_models) - MAXIMUM_SELECTION_SCOPES]:
+        _selection_models.pop(key, None)
+
+
+def _selected_model_for_scope(scope: str | None) -> str | None:
+    key = _selection_key(scope)
+    with _selection_lock:
+        _prune_selection_models()
+        selected = _selection_models.get(key)
+        return selected[0] if selected is not None else None
+
+
+def agent_tools_enabled() -> bool:
+    """Return whether the opt-in tool-decision channel is enabled.
+
+    The default is intentionally off; callers must gate autonomous routes with
+    this helper while the ordinary prose channel remains byte-for-byte
+    unchanged for existing installations.
+    """
+
+    return os.environ.get(AGENT_TOOLS_ENV, "off").strip().lower() in {"1", "true", "on", "yes"}
 
 # The answer is prose plus one trailing settings block.  The fence is the marker the client is told
 # about; `_visible_prose` holds a partially streamed fence back so it never leaks into the prose.
@@ -376,32 +449,42 @@ def validate_model_id(raw: Any) -> str:
     return model
 
 
-def session_model() -> str | None:
-    """The model in force because of a panel selection, or ``None`` for the configured identity."""
+def session_model(scope: str | None = None) -> str | None:
+    """Return the selected model for one assistant session, if any."""
 
-    return _session_model
-
-
-def select_session_model(model: str) -> None:
-    """Make one already-validated identity the model this process uses."""
-
-    global _session_model
-    _session_model = model
+    return _selected_model_for_scope(scope)
 
 
-def clear_session_model() -> None:
-    """Drop a panel selection, so the configured identity is read again."""
+def select_session_model(model: str, scope: str | None = None) -> None:
+    """Bind one already-validated identity to one assistant session scope."""
 
-    global _session_model
-    _session_model = None
+    key = _selection_key(scope)
+    with _selection_lock:
+        _prune_selection_models()
+        _selection_models[key] = (model, time.monotonic() + SELECTION_SCOPE_TTL_SECONDS)
 
 
-def config_from_environment() -> AssistantModelConfig | None:
+def clear_session_model(scope: str | None = None) -> None:
+    """Drop one session's panel selection, so its configured identity is read again.
+
+    A no-argument call is reserved for process shutdown/test cleanup and clears the bounded map; HTTP
+    callers always provide their bound scope and therefore cannot revoke another session's selection.
+    """
+
+    with _selection_lock:
+        if scope is None:
+            _selection_models.clear()
+        else:
+            _selection_models.pop(_selection_key(scope), None)
+
+
+def config_from_environment(scope: str | None = None) -> AssistantModelConfig | None:
     """Return the channel configuration, or ``None`` when the channel is not configured at all.
 
-    A model the panel selected for this process takes the place of the configured identity, so a
-    switch is honoured by the very next request without restarting anything.  Every other part of the
-    configuration - the endpoint, the credential, the timeout - always comes from the environment.
+    A model the panel selected for this assistant scope takes the place of the configured identity.
+    Every other part of the configuration - the endpoint, the credential, the timeout - always comes
+    from the environment.  The returned dataclass is immutable and is the snapshot a request should
+    carry through its complete stream.
     """
 
     base_url = os.environ.get(BASE_URL_ENV, "").strip()
@@ -421,7 +504,12 @@ def config_from_environment() -> AssistantModelConfig | None:
     if missing:
         raise ProviderUnavailableError("The assistant model channel is only partially configured.")
     try:
-        model = validate_model_id(_session_model if _session_model is not None else configured_model)
+        selected = _selected_model_for_scope(scope)
+    except ValueError:
+        # Scope syntax is a request-binding error, not a Provider configuration error.
+        raise
+    try:
+        model = validate_model_id(selected if selected is not None else configured_model)
     except ValueError as error:
         # A structural identity error is a misconfiguration, and the descriptor reports a
         # misconfiguration rather than failing a request, so it keeps the provider error class that
@@ -446,11 +534,11 @@ def _provider_config(config: AssistantModelConfig) -> ProviderConfig:
     )
 
 
-def build_descriptor() -> dict[str, Any]:
+def build_descriptor(*, scope: str | None = None) -> dict[str, Any]:
     """Describe the channel for the client without ever exposing the credential."""
 
     try:
-        config = config_from_environment()
+        config = config_from_environment(scope)
     except ProviderError as error:
         return {
             "schema_version": DESCRIPTOR_SCHEMA_VERSION,
@@ -531,14 +619,14 @@ def _extract_model_identities(reply: dict[str, Any]) -> list[str]:
     return identities
 
 
-def build_catalogue(*, transport=None) -> dict[str, Any]:
+def build_catalogue(*, transport=None, scope: str | None = None) -> dict[str, Any]:
     """Read the model identities the configured service publishes.
 
     The read uses the credential the channel already holds, so the key stays inside this process and
     never reaches a browser.  Nothing is cached: the caller decides when a refresh is worth a request.
     """
 
-    config = require_channel()
+    config = require_channel(scope)
     send = transport if transport is not None else get_json
     reply = send(_provider_config(config), _models_endpoint(config.endpoint))
     models = _extract_model_identities(reply)
@@ -549,12 +637,12 @@ def build_catalogue(*, transport=None) -> dict[str, Any]:
         "models": models,
         "count": len(models),
         "selected_model": config.model,
-        "session_override": _session_model is not None,
+        "session_override": session_model(scope) is not None,
     }
 
 
-def select_model(raw: Any) -> dict[str, Any]:
-    """Make one model identity the identity this process will use from the next request on.
+def select_model(raw: Any, *, scope: str | None = None) -> dict[str, Any]:
+    """Make one model identity the identity this assistant session uses from the next request on.
 
     The choice is **session-scoped on purpose**.  The saved configuration belongs to the launcher, and
     this module never writes it, so the reply states plainly that nothing was persisted: a panel
@@ -563,8 +651,8 @@ def select_model(raw: Any) -> dict[str, Any]:
     """
 
     model = validate_model_id(raw)
-    previous = require_channel().model
-    select_session_model(model)
+    previous = require_channel(scope).model
+    select_session_model(model, scope)
     return {
         "schema_version": SELECTION_SCHEMA_VERSION,
         "protocol": PROTOCOL,
@@ -834,14 +922,14 @@ def validate_result_analysis_context(raw: Any) -> dict[str, Any]:
     }
 
 
-def require_channel() -> AssistantModelConfig:
+def require_channel(scope: str | None = None) -> AssistantModelConfig:
     """Return the channel configuration, refusing the request when the channel is not configured.
 
     Called before a stream starts so an unconfigured Bridge answers with one ordinary error response
     instead of an event stream that immediately carries an error.
     """
 
-    config = config_from_environment()
+    config = config_from_environment(scope)
     if config is None:
         raise ProviderUnavailableError("No assistant model channel is configured.")
     return config
@@ -1168,6 +1256,263 @@ def iter_completion_chunks(config: AssistantModelConfig, payload: dict) -> Itera
             pass
 
 
+def iter_decision_chunks(config: AssistantModelConfig, payload: dict) -> Iterator[dict]:
+    """Yield OpenAI-compatible SSE chunks for the bounded Agent decision path.
+
+    This is kept as a named adapter instead of reusing the prose stream so a
+    caller can audit that ``tools`` and ``tool_choice`` are sent only on the
+    opt-in Agent path.  The framing and provider error semantics intentionally
+    match :func:`iter_completion_chunks`.
+    """
+
+    response = open_json_stream(_provider_config(config), payload)
+    try:
+        if response.headers.get_content_type() != "text/event-stream":
+            raise ProviderStructuredOutputError("The assistant model did not answer with a stream.")
+        try:
+            for raw_line in response:
+                line = raw_line.decode("utf-8", errors="replace").strip()
+                if not line or line.startswith(":") or not line.startswith("data:"):
+                    continue
+                data = line[len("data:") :].strip()
+                if data == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(data)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(chunk, dict):
+                    yield chunk
+        except (TimeoutError, OSError) as error:
+            if isinstance(error, TimeoutError):
+                raise ProviderTimeoutError("The assistant model timed out while deciding.") from error
+            raise ProviderUnavailableError("The assistant model decision stream was interrupted.") from error
+    finally:
+        try:
+            response.close()
+        except OSError:
+            pass
+
+
+def _agent_stop(parse_error: str | None = None) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "schema_version": AGENT_DECISION_SCHEMA_VERSION,
+        "kind": "stop",
+        "reason": "needs_human",
+    }
+    if parse_error:
+        # Never echo arbitrary Provider text into the decision/event stream.
+        result["parse_error"] = parse_error[:MAXIMUM_REASON_CHARACTERS]
+    return result
+
+
+def _decision_has_only_keys(value: dict[str, Any], allowed: set[str]) -> bool:
+    """Keep the model-facing decision union closed.
+
+    The provider response is untrusted JSON.  Ignoring an extra key would let a
+    future/unknown decision shape look valid to the downstream authorization
+    loop, so reject it before normalizing the union member.  The schema version
+    is optional on input for compatibility with providers that omit it, but a
+    supplied version must name this exact adapter contract.
+    """
+
+    if not set(value).issubset(allowed):
+        return False
+    supplied = value.get("schema_version")
+    return supplied is None or supplied == AGENT_DECISION_SCHEMA_VERSION
+
+
+def _decision_from_object(value: Any) -> dict[str, Any]:
+    """Normalize one model JSON object into the closed Agent decision union."""
+
+    if not isinstance(value, dict):
+        return _agent_stop("invalid_decision")
+    kind = value.get("kind")
+    if kind == "tool_call":
+        if not _decision_has_only_keys(value, {"schema_version", "kind", "tool_name", "arguments", "reason"}):
+            return _agent_stop("unknown_decision_field")
+        tool_name = value.get("tool_name")
+        arguments = value.get("arguments")
+        if not isinstance(tool_name, str) or not tool_name or not isinstance(arguments, dict):
+            return _agent_stop("invalid_tool_call")
+        result: dict[str, Any] = {
+            "schema_version": AGENT_DECISION_SCHEMA_VERSION,
+            "kind": "tool_call",
+            "tool_name": tool_name,
+            "arguments": arguments,
+        }
+        reason = value.get("reason")
+        if isinstance(reason, str) and reason.strip():
+            result["reason"] = reason.strip()[:MAXIMUM_REASON_CHARACTERS]
+        return result
+    if kind == "propose_candidate":
+        if not _decision_has_only_keys(value, {"schema_version", "kind", "config", "reason", "expected_effect"}):
+            return _agent_stop("unknown_decision_field")
+        config = value.get("config")
+        if not isinstance(config, dict):
+            return _agent_stop("invalid_candidate")
+        result = {
+            "schema_version": AGENT_DECISION_SCHEMA_VERSION,
+            "kind": "propose_candidate",
+            "config": config,
+        }
+        for field_name in ("reason", "expected_effect"):
+            field_value = value.get(field_name)
+            if isinstance(field_value, str) and field_value.strip():
+                result[field_name] = field_value.strip()[:MAXIMUM_REASON_CHARACTERS]
+        return result
+    if kind == "ask_user":
+        if not _decision_has_only_keys(value, {"schema_version", "kind", "question", "reason"}):
+            return _agent_stop("unknown_decision_field")
+        # ``ask_user`` is a bounded, non-mutating escape hatch for ambiguity
+        # the model cannot resolve inside the authorization envelope.  Keep it
+        # as an explicit union member so the decision loop can return control
+        # to the human without pretending that it proposed or executed a
+        # candidate.  The prompt remains bounded and is never treated as an
+        # instruction to the Bridge.
+        question = value.get("question", value.get("reason"))
+        if not isinstance(question, str) or not question.strip():
+            return _agent_stop("invalid_user_question")
+        return {
+            "schema_version": AGENT_DECISION_SCHEMA_VERSION,
+            "kind": "ask_user",
+            "question": question.strip()[:MAXIMUM_REASON_CHARACTERS],
+        }
+    if kind == "stop":
+        if not _decision_has_only_keys(value, {"schema_version", "kind", "reason"}):
+            return _agent_stop("unknown_decision_field")
+        if value.get("reason") in {"no_improvement", "objective_reached", "out_of_scope", "needs_human"}:
+            return {
+                "schema_version": AGENT_DECISION_SCHEMA_VERSION,
+                "kind": "stop",
+                "reason": value["reason"],
+            }
+    return _agent_stop("invalid_decision")
+
+
+def _tool_call_decision(tool_name: Any, arguments_text: str, reason: Any = None) -> dict[str, Any]:
+    if not isinstance(tool_name, str) or not tool_name:
+        return _agent_stop("missing_tool_name")
+    if len(arguments_text) > MAXIMUM_TOOL_ARGUMENT_CHARACTERS:
+        return _agent_stop("tool_arguments_too_large")
+    try:
+        arguments = json.loads(arguments_text)
+    except (TypeError, json.JSONDecodeError):
+        return _agent_stop("invalid_tool_arguments")
+    if not isinstance(arguments, dict):
+        return _agent_stop("invalid_tool_arguments")
+    # ``propose_candidate`` and ``stop`` are represented as tools by
+    # OpenAI-compatible providers, but are surfaced as the same closed union
+    # as their JSON-decision counterparts.
+    if tool_name == "propose_candidate":
+        return _decision_from_object({**arguments, "kind": "propose_candidate"})
+    if tool_name == "stop":
+        return _decision_from_object({**arguments, "kind": "stop"})
+    if tool_name == "ask_user":
+        return _decision_from_object({**arguments, "kind": "ask_user"})
+    result: dict[str, Any] = {
+        "schema_version": AGENT_DECISION_SCHEMA_VERSION,
+        "kind": "tool_call",
+        "tool_name": tool_name,
+        "arguments": arguments,
+    }
+    if isinstance(reason, str) and reason.strip():
+        result["reason"] = reason.strip()[:MAXIMUM_REASON_CHARACTERS]
+    return result
+
+
+def agent_decision(
+    conversation: list[dict[str, Any]],
+    *,
+    tools: list[dict[str, Any]],
+    transport=None,
+    scope: str | None = None,
+    config: AssistantModelConfig | None = None,
+) -> dict[str, Any]:
+    """Read one bounded model decision without exposing a prose/fence parser.
+
+    Tool-call argument fragments are accumulated by their OpenAI ``index`` and
+    parsed only after the stream terminates.  Any malformed or oversized
+    decision is converted to a fail-closed ``needs_human`` stop; it is never
+    guessed or partially dispatched.
+    """
+
+    config = config or require_channel(scope)
+    if not isinstance(conversation, list) or not isinstance(tools, list):
+        return _agent_stop("invalid_decision_input")
+    send = transport if transport is not None else iter_decision_chunks
+    payload = {
+        "model": config.model,
+        "messages": copy.deepcopy(conversation),
+        "stream": True,
+        "tools": copy.deepcopy(tools),
+        "tool_choice": "auto",
+    }
+    arguments_by_index: dict[int, str] = {}
+    names_by_index: dict[int, str] = {}
+    reasons_by_index: dict[int, str] = {}
+    content_parts: list[str] = []
+    seen_tool_indices: set[int] = set()
+    for chunk in send(config, payload):
+        if not isinstance(chunk, dict):
+            continue
+        choices = chunk.get("choices")
+        if not isinstance(choices, list):
+            continue
+        for choice in choices:
+            if not isinstance(choice, dict):
+                continue
+            delta = choice.get("delta")
+            if not isinstance(delta, dict):
+                continue
+            content = delta.get("content")
+            if isinstance(content, str) and content:
+                content_parts.append(content)
+            tool_calls = delta.get("tool_calls")
+            if not isinstance(tool_calls, list):
+                continue
+            for call in tool_calls:
+                if not isinstance(call, dict):
+                    continue
+                raw_index = call.get("index", 0)
+                index = raw_index if isinstance(raw_index, int) and raw_index >= 0 else 0
+                if index not in seen_tool_indices:
+                    # One model decision is one tool call.  The stream may
+                    # fragment that call across many deltas, but accepting a
+                    # second index and silently selecting the first would drop
+                    # an untrusted action from the audit path.
+                    if seen_tool_indices:
+                        return _agent_stop("multiple_tool_calls")
+                    seen_tool_indices.add(index)
+                function = call.get("function")
+                if not isinstance(function, dict):
+                    continue
+                name = function.get("name")
+                if isinstance(name, str) and name:
+                    if index in names_by_index and names_by_index[index] != name:
+                        return _agent_stop("multiple_tool_calls")
+                    names_by_index[index] = name
+                fragment = function.get("arguments")
+                if isinstance(fragment, str):
+                    arguments_by_index[index] = arguments_by_index.get(index, "") + fragment
+                    if len(arguments_by_index[index]) > MAXIMUM_TOOL_ARGUMENT_CHARACTERS:
+                        return _agent_stop("tool_arguments_too_large")
+                reason = function.get("reason")
+                if isinstance(reason, str):
+                    reasons_by_index[index] = reason
+    if arguments_by_index or names_by_index:
+        index = min(set(arguments_by_index) | set(names_by_index))
+        return _tool_call_decision(names_by_index.get(index), arguments_by_index.get(index, ""), reasons_by_index.get(index))
+    content = "".join(content_parts).strip()
+    if not content or len(content) > MAXIMUM_TOOL_ARGUMENT_CHARACTERS:
+        return _agent_stop("invalid_decision" if not content else "decision_too_large")
+    try:
+        decoded = json.loads(content)
+    except json.JSONDecodeError:
+        return _agent_stop("invalid_decision_json")
+    return _decision_from_object(decoded)
+
+
 def _visible_prose(answer: str) -> str:
     """The prose part of an answer that is still arriving.
 
@@ -1301,6 +1646,8 @@ def stream_events(
     panel_values: dict[str, str],
     *,
     transport=None,
+    scope: str | None = None,
+    config: AssistantModelConfig | None = None,
 ) -> Iterator[tuple[str, dict[str, Any]]]:
     """Answer one conversation turn as a stream of ``(event_name, payload)`` pairs.
 
@@ -1310,7 +1657,7 @@ def stream_events(
     mapping in the HTTP layer instead of here.
     """
 
-    config = require_channel()
+    config = config or require_channel(scope)
     send = transport if transport is not None else iter_completion_chunks
     payload = {
         "model": config.model,
@@ -1330,7 +1677,16 @@ def stream_events(
         answer += delta
         if len(answer) > MAXIMUM_ANSWER_CHARACTERS:
             answer = answer[:MAXIMUM_ANSWER_CHARACTERS]
-            break
+            yield (
+                "truncated",
+                {
+                    "schema_version": CHAT_SCHEMA_VERSION,
+                    "reason_code": "output_truncated",
+                    "limit": MAXIMUM_ANSWER_CHARACTERS,
+                    "text_characters": len(answer),
+                },
+            )
+            return
         visible = _visible_prose(answer)
         if len(visible) > emitted:
             emitted = len(visible)
@@ -1357,6 +1713,8 @@ def stream_result_analysis_events(
     context: dict[str, Any],
     *,
     transport=None,
+    scope: str | None = None,
+    config: AssistantModelConfig | None = None,
 ) -> Iterator[tuple[str, dict[str, Any]]]:
     """Stream a read-only answer grounded in one validated report projection.
 
@@ -1365,7 +1723,7 @@ def stream_result_analysis_events(
     server's ordinary done marker.
     """
 
-    config = require_channel()
+    config = config or require_channel(scope)
     send = transport if transport is not None else iter_completion_chunks
     payload = {
         "model": config.model,
@@ -1381,7 +1739,16 @@ def stream_result_analysis_events(
         answer += delta
         if len(answer) > MAXIMUM_ANSWER_CHARACTERS:
             answer = answer[:MAXIMUM_ANSWER_CHARACTERS]
-            break
+            yield (
+                "truncated",
+                {
+                    "schema_version": RESULT_ANALYSIS_CHAT_SCHEMA_VERSION,
+                    "reason_code": "output_truncated",
+                    "limit": MAXIMUM_ANSWER_CHARACTERS,
+                    "text_characters": len(answer),
+                },
+            )
+            return
         visible = answer.rstrip()
         if len(visible) > emitted:
             emitted = len(visible)
@@ -1399,10 +1766,10 @@ def stream_result_analysis_events(
         )
 
 
-def plan(instruction: str, *, transport=None) -> dict[str, Any]:
+def plan(instruction: str, *, transport=None, scope: str | None = None, config: AssistantModelConfig | None = None) -> dict[str, Any]:
     """Ask the model for one scenario plan and validate it against the parameter catalogue."""
 
-    config = config_from_environment()
+    config = config or config_from_environment(scope)
     if config is None:
         raise ProviderUnavailableError("No assistant model channel is configured.")
     send = transport if transport is not None else post_json

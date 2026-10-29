@@ -26,6 +26,7 @@
     "topologyInput": { "$ref": "topology-input.schema.json" },
     "tailCauseChainReport": { "$ref": "tail-cause-chain-report.schema.json" },
     "executionEnvelope": { "$ref": "execution-envelope.schema.json" },
+    "executionReplay": { "$ref": "execution-replay.schema.json" },
     "runtimeEventTrace": { "$ref": "runtime-evidence.schema.json#/$defs/trace" },
     "runtimeEventSummary": { "$ref": "runtime-evidence.schema.json#/$defs/eventSummary" },
     "runtimeRequestSummaries": { "$ref": "runtime-evidence.schema.json#/$defs/requestSummaries" },
@@ -66,6 +67,20 @@
     },
     "agentOrchestrationWorkloadProfileV2": {
       "$ref": "../agent_orchestration_phase2/schemas/workload-profile.schema.json"
-    }
+    },
+    "agentFlowArtifactBinding": { "$ref": "agent-flow/artifact-binding.schema.json" },
+    "agentFlowIdentityBinding": { "$ref": "agent-flow/identity-binding.schema.json" },
+    "agentFlowNavigationObservation": { "$ref": "agent-flow/navigation-observation.schema.json" },
+    "agentFlowStartRequest": { "$ref": "agent-flow/start-request.schema.json" },
+    "agentFlowResumeRequest": { "$ref": "agent-flow/resume-request.schema.json" },
+    "agentFlowState": { "$ref": "agent-flow/state.schema.json" },
+    "agentFlowEvent": { "$ref": "agent-flow/event.schema.json" },
+    "agentFlowStartResponse": { "$ref": "agent-flow/start-response.schema.json" },
+    "agentFlowStatusResponse": { "$ref": "agent-flow/status-response.schema.json" },
+    "agentFlowEventsResponse": { "$ref": "agent-flow/events-response.schema.json" },
+    "agentFlowResumeResponse": { "$ref": "agent-flow/resume-response.schema.json" },
+    "agentIntentPageEntry": { "$ref": "agent-intent/page-entry.schema.json" },
+    "agentIntentRequest": { "$ref": "agent-intent/request.schema.json" },
+    "agentIntentResponse": { "$ref": "agent-intent/response.schema.json" }
   }
 }

@@ -292,7 +292,28 @@ function committedDescriptorRevision(repository, revision) {
 
 function extractRevision(repository, revision, destination) {
   const archive = git(repository, ["archive", "--format=tar", revision], { binary: true });
-  const result = spawnSync("tar", ["-xf", "-", "-C", destination], {
+  // Do not delegate extraction to the platform `tar` command. Windows' bsdtar
+  // rejects some UTF-8 entry names (for example `发布Windows测试包.cmd`) from
+  // a git archive with "Invalid empty pathname", while Python's tarfile keeps
+  // the archive's UTF-8 names intact on every supported host.
+  const extractionProgram = [
+    "import os,sys,tarfile",
+    "destination=sys.argv[1]",
+    "with tarfile.open(fileobj=sys.stdin.buffer,mode='r|*') as archive:",
+    "    root=os.path.realpath(destination)",
+    "    for member in archive:",
+    "        if member.issym() or member.islnk():",
+    "            raise RuntimeError('archive links are not allowed: '+member.name)",
+    "        target=os.path.realpath(os.path.join(root,member.name))",
+    "        try:",
+    "            inside=os.path.commonpath((root,target)) == root",
+    "        except ValueError:",
+    "            inside=False",
+    "        if not inside:",
+    "            raise RuntimeError('archive member escapes extraction root: '+member.name)",
+    "        archive.extract(member,destination)",
+  ].join("\n");
+  const result = spawnSync("python", ["-X", "utf8", "-c", extractionProgram, destination], {
     input: archive,
     encoding: "utf8",
     stdio: ["pipe", "pipe", "pipe"],
@@ -331,7 +352,10 @@ function buildCommittedSnapshot(extractedRoot, releaseMetadata) {
     encoding: "utf8",
     stdio: ["pipe", "pipe", "pipe"],
   });
-  if (result.status !== 0) fail("runtime_snapshot_failed", result.stderr.trim() || "Runtime snapshot build failed.");
+  if (result.status !== 0) {
+    const detail = result.stderr?.toString?.().trim() || result.error?.message || "Runtime snapshot build failed.";
+    fail("runtime_snapshot_failed", detail);
+  }
   return JSON.parse(result.stdout);
 }
 

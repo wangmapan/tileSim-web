@@ -74,11 +74,31 @@ const selectedLabel = computed(() => {
 
 <style scoped>
 .agent-context-bar {
+  position: relative;
   min-width: 0;
-  padding: 10px 14px;
+  margin: 10px 12px 8px;
+  padding: 12px 12px 10px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-panel);
   border-bottom: 1px solid var(--line);
-  background: var(--surface-subtle);
+  background: color-mix(in srgb, var(--accent-soft) 42%, var(--panel));
   color: var(--ink);
+  box-shadow: var(--shadow-hairline);
+  transition:
+    border-color var(--motion-interaction) var(--ease-standard),
+    background-color var(--motion-interaction) var(--ease-standard),
+    box-shadow var(--motion-interaction) var(--ease-standard);
+}
+
+.agent-context-bar:has(.agent-context-bar__availability[data-state="stale"]) {
+  border-left-color: var(--warning);
+  background: color-mix(in srgb, var(--warning-soft) 48%, var(--panel));
+}
+
+.agent-context-bar:has(.agent-context-bar__availability[data-state="unavailable"]) {
+  border-left-color: var(--line-strong);
+  background: var(--surface-inset);
 }
 
 .agent-context-bar__summary {
@@ -100,6 +120,24 @@ const selectedLabel = computed(() => {
   font-size: var(--text-micro);
 }
 
+.agent-context-bar__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent-ink);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.agent-context-bar__eyebrow::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  content: "";
+}
+
 .agent-context-bar__summary strong,
 .agent-context-bar__summary > div > span:last-child,
 .agent-context-bar__details dd {
@@ -108,11 +146,13 @@ const selectedLabel = computed(() => {
 
 .agent-context-bar__availability {
   flex: none;
-  padding: 2px 7px;
+  padding: 3px 8px;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-pill);
   color: var(--neutral-ink);
+  background: var(--panel);
   font-size: var(--text-micro);
+  font-weight: 650;
   white-space: nowrap;
 }
 
@@ -127,21 +167,28 @@ const selectedLabel = computed(() => {
 }
 
 .agent-context-bar__stale {
-  margin: 8px 0 0;
+  margin: 9px 0 0;
+  padding: 7px 8px;
+  border-top: 1px dashed color-mix(in srgb, var(--warning) 40%, var(--line));
+  border-bottom: 1px dashed color-mix(in srgb, var(--warning) 40%, var(--line));
   color: var(--warning-ink);
+  background: color-mix(in srgb, var(--warning-soft) 46%, transparent);
   font-size: var(--text-xs);
   line-height: 1.45;
 }
 
 .agent-context-bar__details {
-  margin-top: 7px;
+  margin-top: 8px;
   color: var(--muted);
   font-size: var(--text-micro);
 }
 
 .agent-context-bar__details summary {
-  width: max-content;
+  width: fit-content;
+  padding: 2px 0;
+  color: var(--accent-ink);
   cursor: pointer;
+  font-weight: 650;
 }
 
 .agent-context-bar__details dl {

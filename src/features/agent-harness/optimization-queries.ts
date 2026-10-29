@@ -10,11 +10,14 @@ import {
   observeAgentOptimizationEvents,
   type AgentOptimizationBinding,
 } from "../../lib/api/agent-optimization";
-import type { AgentHarnessOptimizationCreateRequest } from "../../lib/api/agent-harness";
+import {
+  AGENT_HARNESS_SUCCESSOR_SCHEMA_SET_REVISION,
+  type AgentHarnessOptimizationCreateRequest,
+} from "../../lib/api/agent-harness";
 
 export function useAgentOptimizationSessionsQuery(enabled: MaybeRefOrGetter<boolean> = true) {
   return useQuery({
-    queryKey: ["agent-harness", "optimization-sessions"],
+    queryKey: ["agent-harness", "optimization-sessions", AGENT_HARNESS_SUCCESSOR_SCHEMA_SET_REVISION],
     queryFn: listAgentOptimizationSessions,
     enabled: computed(() => Boolean(toValue(enabled))),
     staleTime: 0,
@@ -30,7 +33,13 @@ export function useAgentOptimizationSessionQuery(
   const id = computed(() => toValue(sessionId) || "");
   const expected = computed(() => toValue(binding) || null);
   return useQuery({
-    queryKey: computed(() => ["agent-harness", "optimization-session", id.value, expected.value]),
+    queryKey: computed(() => [
+      "agent-harness",
+      "optimization-session",
+      id.value,
+      AGENT_HARNESS_SUCCESSOR_SCHEMA_SET_REVISION,
+      expected.value,
+    ]),
     queryFn: () => getAgentOptimizationSession(id.value, expected.value),
     enabled: computed(() => Boolean(id.value)),
     staleTime: 0,
@@ -45,7 +54,16 @@ export function useCreateAgentOptimizationSessionMutation() {
     mutationFn: (request: AgentHarnessOptimizationCreateRequest) => createAgentOptimizationSession(request),
     onSuccess: (detail) => {
       queryClient.invalidateQueries({ queryKey: ["agent-harness", "optimization-sessions"] });
-      queryClient.setQueryData(["agent-harness", "optimization-session", detail.session.session_id, null], detail);
+      queryClient.setQueryData(
+        [
+          "agent-harness",
+          "optimization-session",
+          detail.session.session_id,
+          AGENT_HARNESS_SUCCESSOR_SCHEMA_SET_REVISION,
+          null,
+        ],
+        detail,
+      );
     },
   });
 }
@@ -89,21 +107,23 @@ export function useAgentOptimizationEventsQuery(
   });
 }
 
-/** Advisory SSE for low-latency updates; the session query remains the durable polling fallback. */
+/** Advisory durable-event replay; the session query remains the source-of-truth polling fallback. */
 export function useAgentOptimizationEventStream(sessionId: MaybeRefOrGetter<string | null | undefined>) {
   const id = computed(() => toValue(sessionId) || "");
   const lastSequence = ref(0);
   const active = ref(false);
   let controller: AbortController | null = null;
-  const start = async (value: string) => {
-    controller?.abort();
-    controller = new AbortController();
+  let streamToken = 0;
+  const start = async (value: string, token: number) => {
+    const localController = new AbortController();
+    controller = localController;
     active.value = true;
     try {
       await observeAgentOptimizationEvents(value, {
         lastEventSequence: lastSequence.value,
-        signal: controller.signal,
+        signal: localController.signal,
         onEvent: (event) => {
+          if (token !== streamToken) return;
           const sequence = event.sequence;
           if (typeof sequence === "number" && sequence === lastSequence.value + 1) lastSequence.value = sequence;
         },
@@ -111,17 +131,24 @@ export function useAgentOptimizationEventStream(sessionId: MaybeRefOrGetter<stri
     } catch {
       // The paired TanStack Query keeps polling after any SSE disconnect or gap.
     } finally {
-      active.value = false;
+      if (token === streamToken) active.value = false;
     }
   };
   watch(
     id,
     (value) => {
+      streamToken += 1;
+      controller?.abort();
+      controller = null;
       lastSequence.value = 0;
-      if (value) void start(value);
+      active.value = false;
+      if (value) void start(value, streamToken);
     },
     { immediate: true },
   );
-  onBeforeUnmount(() => controller?.abort());
+  onBeforeUnmount(() => {
+    streamToken += 1;
+    controller?.abort();
+  });
   return { active, lastSequence };
 }

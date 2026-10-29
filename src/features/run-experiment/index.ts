@@ -94,6 +94,7 @@ export {
   validateAgentStructuredInputs,
 } from "./parameter-edit";
 export { readExperimentInputDraft, saveExperimentInputDraft } from "./input-draft-session";
+export { templateHydrationRequestIsCurrent } from "./template-hydration";
 export type {
   AppliedParameterEdit,
   ParameterApplyOutcome,

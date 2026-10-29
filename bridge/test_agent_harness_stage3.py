@@ -26,6 +26,7 @@ class Stage3HttpTest(unittest.TestCase):
 
         self.server = server
         self.temp = tempfile.TemporaryDirectory()
+        self.original_agent_harness_store = server.agent_harness_store
         if server.agent_harness_queue is not None:
             server.agent_harness_queue.stop()
         server.agent_harness_store = DurableHarnessStore(Path(self.temp.name) / "stage3.sqlite")
@@ -97,6 +98,9 @@ class Stage3HttpTest(unittest.TestCase):
         self.httpd.shutdown()
         self.httpd.server_close()
         self.server.agent_harness_store.close()
+        self.server.agent_harness_store = self.original_agent_harness_store
+        self.server.agent_deletion_coordinator.stores["harness"] = self.original_agent_harness_store
+        self.server.agent_harness_queue = None
         self.temp.cleanup()
 
     def call(self, path: str, payload: dict | None = None, *, headers: dict | None = None, method: str | None = None):

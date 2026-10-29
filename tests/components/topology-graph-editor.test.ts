@@ -46,7 +46,7 @@ describe("TopologyGraphEditor", () => {
     expect(wrapper.find(".topology-view-more").exists()).toBe(false);
     expect(wrapper.find(".topology-domain-node").exists()).toBe(false);
     expect(wrapper.find(".topology-membership").exists()).toBe(false);
-    expect(wrapper.text()).toContain("空白区域可平移画布");
+    expect(wrapper.text()).not.toContain("空白区域可平移画布");
   });
 
   it("zooms only the graph scene without changing the canvas viewport or topology JSON", async () => {
@@ -227,10 +227,11 @@ describe("TopologyGraphEditor", () => {
     expect(wrapper.find(".topology-editor__error").text()).toContain("/custom_inputs/topology/topology/links");
   });
 
-  it("keeps module bindings in a separate advanced disclosure", () => {
+  it("keeps module bindings visible without an advanced disclosure", () => {
     const wrapper = mountEditor();
-    expect(wrapper.find(".topology-editor__advanced").exists()).toBe(true);
-    expect(wrapper.find(".topology-editor__advanced").attributes("open")).toBeUndefined();
+    expect(wrapper.find(".topology-model-settings").exists()).toBe(true);
+    expect(wrapper.find(".topology-model-settings summary").exists()).toBe(false);
+    expect(wrapper.find(".topology-module-binding").exists()).toBe(true);
   });
 
   it("arranges cards by domain without changing the topology JSON", async () => {
@@ -251,7 +252,7 @@ describe("TopologyGraphEditor", () => {
     expect(coordinates[0]?.[1]).not.toBe(coordinates[2]?.[1]);
     expect(wrapper.find("textarea").element.value).toBe(source);
     expect(wrapper.emitted("update:modelValue")).toBeUndefined();
-    expect(wrapper.text()).toContain("已按 domain 分组排布");
+    expect(wrapper.get(".topology-direct-canvas").attributes("data-arrangement-applied")).toBe("true");
   });
 
   it("requires confirmation before clearing the canvas and preserves network models", async () => {
@@ -284,7 +285,7 @@ describe("TopologyGraphEditor", () => {
 
     expect(wrapper.find("[data-fullscreen-arrange]").exists()).toBe(true);
     await wrapper.get("[data-fullscreen-arrange]").trigger("click");
-    expect(wrapper.find(".topology-direct-canvas__arranged-note").exists()).toBe(true);
+    expect(wrapper.get(".topology-direct-canvas").attributes("data-arrangement-applied")).toBe("true");
 
     Object.defineProperty(document, "fullscreenElement", { configurable: true, value: null });
     document.dispatchEvent(new Event("fullscreenchange"));
@@ -367,14 +368,14 @@ describe("TopologyGraphEditor", () => {
   it("drops the arranged state and clamps old positions when the topology shape changes", async () => {
     const wrapper = mountEditor();
     await wrapper.get(".topology-arrange-button").trigger("click");
-    expect(wrapper.find(".topology-direct-canvas__arranged-note").exists()).toBe(true);
+    expect(wrapper.get(".topology-direct-canvas").attributes("data-arrangement-applied")).toBe("true");
 
     const next = structuredClone(topology);
     next.topology.devices = [{ device_id: "gpu0", device_type: "GPU" }];
     next.topology.domains[0].member_devices = ["gpu0"];
     await wrapper.setProps({ modelValue: JSON.stringify(next) });
 
-    expect(wrapper.find(".topology-direct-canvas__arranged-note").exists()).toBe(false);
+    expect(wrapper.get(".topology-direct-canvas").attributes("data-arrangement-applied")).toBeUndefined();
     const transform = wrapper.get(".topology-device").attributes("transform") || "";
     const coordinates = transform.match(/translate\(([^,]+),([^)]+)\)/);
     expect(Number(coordinates?.[1])).toBeGreaterThanOrEqual(62);
@@ -407,7 +408,7 @@ describe("TopologyGraphEditor", () => {
   it("supports English labels", () => {
     setLocale("en-US");
     const wrapper = mountEditor();
-    expect(wrapper.get(".topology-editor__toolbar strong").text()).toBe("GPU connections");
-    expect(wrapper.text()).toContain("Drag the empty workspace to pan");
+    expect(wrapper.get(".topology-editor__toolbar strong").text()).toBe("Topology links");
+    expect(wrapper.text()).not.toContain("Drag the empty workspace to pan");
   });
 });

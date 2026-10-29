@@ -112,6 +112,11 @@ describe("every publisher holds its revision steady", () => {
     expect(appSource).not.toContain('endpoint.includes("/agent/harness-capabilities")');
   });
 
+  it("does not label the finite durable event replay as live status", () => {
+    expect(experimentViewSource).toContain('t("事件回放")');
+    expect(experimentViewSource).not.toContain('t("实时状态")');
+  });
+
   it("forwards a page's publication unless that exact context already stands", () => {
     expect(appSource).toContain("current?.page_id === publication.context.page_id");
     expect(appSource).toContain("current.context_revision === publication.context.context_revision");

@@ -149,7 +149,11 @@ class HarnessHttpGatewayTest(unittest.TestCase):
         import server
         self.server = server
         self.temp = tempfile.TemporaryDirectory()
+        self.original_agent_harness_store = server.agent_harness_store
+        if server.agent_harness_queue is not None:
+            server.agent_harness_queue.stop()
         server.agent_harness_store = DurableHarnessStore(Path(self.temp.name) / "harness-http.sqlite3")
+        server.agent_harness_queue = None
         self.httpd = server.ThreadingHTTPServer(("127.0.0.1", 0), server.BridgeHandler)
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
         self.thread.start()
@@ -161,6 +165,9 @@ class HarnessHttpGatewayTest(unittest.TestCase):
         self.httpd.server_close()
         self.server.ensure_harness_queue().stop()
         self.server.agent_harness_store.close()
+        self.server.agent_harness_store = self.original_agent_harness_store
+        self.server.agent_deletion_coordinator.stores["harness"] = self.original_agent_harness_store
+        self.server.agent_harness_queue = None
         self.temp.cleanup()
 
     def request(self, path: str, payload: dict | None = None, *, headers: dict | None = None):
@@ -191,6 +198,49 @@ class HarnessHttpGatewayTest(unittest.TestCase):
         status, missing_event = self.request(f"/api/agent/operations/{operation_id}/events", headers={"Last-Event-ID": "999"})
         self.assertEqual(status, HTTPStatus.NOT_FOUND)
         self.assertEqual(missing_event["error"]["code"], "event_not_found")
+
+    def test_http_event_replay_rejects_noncanonical_cursors(self):
+        status, created = self.request("/api/agent/operations", {"operation_kind": "read_only", "idempotency_key": "http-cursor"})
+        self.assertEqual(status, HTTPStatus.ACCEPTED)
+        operation_id = created["operation"]["operation_id"]
+        for cursor in ("+1", "-0", "", "9" * 5000):
+            with self.subTest(cursor=cursor[:8] or "empty"):
+                status, payload = self.request(
+                    f"/api/agent/operations/{operation_id}/events",
+                    headers={"Last-Event-ID": cursor},
+                )
+                self.assertEqual(status, HTTPStatus.BAD_REQUEST)
+                self.assertEqual(payload["error"]["code"], "invalid_last_event_id")
+
+    def test_http_recovery_boundary_is_terminal_for_replay_and_sse(self):
+        if self.server.agent_harness_queue is not None:
+            self.server.agent_harness_queue.stop()
+            self.server.agent_harness_queue = None
+        operation, replayed = self.server.agent_harness_store.create_operation(
+            idempotency_key="http-recovery-boundary",
+            request_payload={"operation_kind": "read_only"},
+            schema_set_revision=self.server.SCHEMA_SET_REVISION,
+            backend_identity=self.server.harness_backend_identity(),
+            principal="local-user",
+        )
+        self.assertFalse(replayed)
+        operation_id = operation["operation_id"]
+        self.server.agent_harness_store.transition(operation_id, "recovery_required", expected={"queued"})
+        self.server.harness_operation_event(operation_id, node="recovery", state="recovery_required", terminal=True)
+
+        status, replay = self.request(f"/api/agent/operations/{operation_id}/events")
+        self.assertEqual(status, HTTPStatus.OK)
+        self.assertTrue(replay["terminal"])
+        self.assertEqual(replay["operation"]["workflow_state"], "recovery_required")
+
+        request = urllib.request.Request(
+            f"{self.base}/api/agent/operations/{operation_id}/events/stream",
+            headers={**self.headers, "Accept": "text/event-stream"},
+        )
+        with urllib.request.urlopen(request, timeout=5) as response:
+            stream = response.read().decode("utf-8")
+        self.assertIn("event: terminal", stream)
+        self.assertIn('"state":"recovery_required"', stream)
 
 
 if __name__ == "__main__":

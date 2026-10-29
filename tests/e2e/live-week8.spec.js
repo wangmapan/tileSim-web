@@ -189,7 +189,6 @@ test("deployed Week 8 Bridge exposes the formal F8 schema-driven experiment surf
   await latency.fill("1000");
   await expect(latency).toHaveAttribute("aria-invalid", "true");
   await expect(page.locator("button.run-submit")).toBeDisabled();
-  await page.locator(".experiment-request-preview summary").click();
   await expect(page.locator(".request-preview-error code")).toHaveText("/overrides/fabric/scale_out_latency_us");
 
   const results = await new AxeBuilder({ page }).analyze();

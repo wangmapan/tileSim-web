@@ -247,7 +247,7 @@ function semanticField(field: string, value: unknown) {
               <p class="section-kicker">{{ t("报告审计") }}</p>
               <h2>
                 {{ t("归因守恒与传播审计") }}
-                <InlineHelp :text="t('直接展示归因报告的审计结论；守恒通过不代表传播链完整。')" />
+                <InlineHelp :text="t('直接展示归因报告的审计结论；守恒通过不代表传播链完整。')" :interactive="false" />
               </h2>
             </div>
             <span
@@ -358,7 +358,7 @@ function semanticField(field: string, value: unknown) {
               <p class="section-kicker">{{ t("有序解释") }}</p>
               <h2>
                 {{ t("共享时间轴上的原因链") }}
-                <InlineHelp :text="t('这是报告提供的有序解释，不应单独视为现实因果证明。')" />
+                <InlineHelp :text="t('这是报告提供的有序解释，不应单独视为现实因果证明。')" :interactive="false" />
               </h2>
             </div>
             <span>{{ t("{count} 条原因记录", { count: state.bundle.tail.cause_chain.length }) }}</span>

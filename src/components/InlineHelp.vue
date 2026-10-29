@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { CircleHelp } from "@lucide/vue";
+import { useId } from "vue";
 import { useI18n } from "../i18n";
 
 const props = withDefaults(
@@ -7,11 +8,13 @@ const props = withDefaults(
     text: string;
     label?: string;
     interactive?: boolean;
+    placement?: "start" | "center" | "end";
   }>(),
-  { label: "", interactive: true },
+  { label: "", interactive: true, placement: "center" },
 );
 
 const { t } = useI18n();
+const tooltipId = useId();
 </script>
 
 <template>
@@ -21,7 +24,7 @@ const { t } = useI18n();
       type="button"
       class="inline-help__trigger"
       :aria-label="props.label || t('查看说明')"
-      :title="props.text"
+      :aria-describedby="tooltipId"
       aria-haspopup="true"
       @click.stop.prevent
     >
@@ -32,11 +35,13 @@ const { t } = useI18n();
       class="inline-help__trigger inline-help__trigger--passive"
       role="img"
       :aria-label="props.label || t('查看说明')"
-      :title="props.text"
+      :aria-describedby="tooltipId"
     >
       <CircleHelp :size="15" :stroke-width="1.9" aria-hidden="true" />
     </span>
-    <span class="inline-help__bubble" role="tooltip">{{ props.text }}</span>
+    <span :id="tooltipId" class="inline-help__bubble" :class="`inline-help__bubble--${props.placement}`" role="tooltip">
+      {{ props.text }}
+    </span>
   </span>
 </template>
 
@@ -48,7 +53,6 @@ const { t } = useI18n();
   align-items: center;
   vertical-align: middle;
   margin-left: 5px;
-  overflow: clip;
 }
 
 .inline-help__trigger {
@@ -72,11 +76,6 @@ const { t } = useI18n();
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 10%, transparent);
   outline: none;
-}
-
-.inline-help:has(.inline-help__trigger:hover),
-.inline-help:has(.inline-help__trigger:focus-visible) {
-  overflow: visible;
 }
 
 .inline-help__bubble {
@@ -120,12 +119,41 @@ const { t } = useI18n();
   transform: translateX(-50%) rotate(45deg);
 }
 
+.inline-help__bubble--start {
+  left: 0;
+  transform: translate(0, -3px);
+}
+
+.inline-help__bubble--start::before {
+  left: 10px;
+  transform: rotate(45deg);
+}
+
+.inline-help__bubble--end {
+  right: 0;
+  left: auto;
+  transform: translate(0, -3px);
+}
+
+.inline-help__bubble--end::before {
+  right: 10px;
+  left: auto;
+  transform: rotate(45deg);
+}
+
 .inline-help:hover .inline-help__bubble,
 .inline-help:focus-within .inline-help__bubble {
   display: block;
   opacity: 1;
   visibility: visible;
   transform: translate(-50%, 0);
+}
+
+.inline-help:hover .inline-help__bubble--start,
+.inline-help:focus-within .inline-help__bubble--start,
+.inline-help:hover .inline-help__bubble--end,
+.inline-help:focus-within .inline-help__bubble--end {
+  transform: translate(0, 0);
 }
 
 @media (max-width: 720px) {
@@ -140,6 +168,17 @@ const { t } = useI18n();
     right: 7px;
     left: auto;
     transform: translateX(0) rotate(45deg);
+  }
+
+  .inline-help__bubble--start {
+    right: auto;
+    left: 0;
+  }
+
+  .inline-help__bubble--start::before {
+    right: auto;
+    left: 10px;
+    transform: rotate(45deg);
   }
 
   .inline-help:hover .inline-help__bubble,

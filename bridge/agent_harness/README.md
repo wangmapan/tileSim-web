@@ -23,7 +23,7 @@ snapshot、manifest/SHA/bytes/Pointers 不匹配均 fail closed。没有 shell/p
 
 - `GET /api/agent/harness-capabilities`、`GET /api/agent/tools`
 - `GET/POST /api/agent/operations`，`GET/DELETE /api/agent/operations/{operation_id}`
-- `GET /api/agent/operations/{operation_id}/events` 与 `/events/stream`（Last-Event-ID 为 sequence）
+- `GET /api/agent/operations/{operation_id}/events` 与 `/events/stream`（Last-Event-ID 为 sequence；`/events/stream` 是当前 durable 事件的可恢复回放，发送已有事件/终态后关闭连接，客户端应以 polling 作为持续观察真源，不宣称实时长连接）
 - `POST /api/agent/operations/{operation_id}/{cancel|resume|retry}`、`POST .../checkpoint`
 - `GET /api/agent/checkpoints/{checkpoint_id}`、`POST /api/agent/tools/call`
 

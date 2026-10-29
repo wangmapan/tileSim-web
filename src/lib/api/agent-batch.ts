@@ -38,6 +38,21 @@ const PUBLISHED_SCHEMA_SET_REVISIONS: ReadonlySet<string> = new Set([
   AGENT_HARNESS_SCHEMA_SET_REVISION,
   AGENT_HARNESS_SUCCESSOR_SCHEMA_SET_REVISION,
 ]);
+const BATCH_EVENT_STATES = new Set([
+  "draft",
+  "validated",
+  "waiting_approval",
+  "queued",
+  "running",
+  "paused",
+  "completed",
+  "failed",
+  "cancelled",
+  "recovery_required",
+  "manual_intervention_required",
+]);
+const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/u;
+const ISO_DATE_TIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/u;
 
 export interface AgentBatchBinding {
   schema_set_revision: string;
@@ -83,6 +98,54 @@ function assertBatch(value: unknown, binding?: AgentBatchBinding | null): AgentH
   }
   return value as unknown as AgentHarnessBatchSession;
 }
+
+function assertBatchEvent(value: unknown, batchId: string, previousSequence: number): Record<string, unknown> {
+  if (!isRecord(value)) throw error("invalid_batch_event", "Batch event is not an object.", "/events");
+  const allowed = [
+    "schema_identity",
+    "contract_revision",
+    "batch_id",
+    "event_id",
+    "sequence",
+    "state",
+    "node",
+    "payload_digest",
+    "created_at",
+    "provenance",
+  ];
+  const unknown = Object.keys(value).find((key) => !allowed.includes(key));
+  if (unknown) throw error("invalid_batch_event", "Batch event contains an unknown field.", `/events/${unknown}`);
+  if (value.schema_identity !== "tilesim.agent_harness.batch_event.v1")
+    throw error("schema_identity_mismatch", "Batch event schema identity is not published.", "/events/schema_identity");
+  if (value.contract_revision !== AGENT_HARNESS_BATCH_CONTRACT_REVISION)
+    throw error("contract_revision_mismatch", "Batch event contract revision is stale.", "/events/contract_revision");
+  if (value.batch_id !== batchId || typeof value.event_id !== "string" || !value.event_id)
+    throw error("batch_id_mismatch", "Batch event does not belong to the requested batch.", "/events/batch_id");
+  if (
+    typeof value.sequence !== "number" ||
+    !Number.isSafeInteger(value.sequence) ||
+    value.sequence !== previousSequence + 1
+  )
+    throw error("event_sequence_gap", "Batch event sequence is not contiguous.", "/events/sequence");
+  if (typeof value.state !== "string" || !BATCH_EVENT_STATES.has(value.state))
+    throw error("invalid_batch_event", "Batch event state is not published.", "/events/state");
+  if (
+    typeof value.node !== "string" ||
+    !value.node ||
+    typeof value.payload_digest !== "string" ||
+    !DIGEST_PATTERN.test(value.payload_digest)
+  )
+    throw error("invalid_batch_event", "Batch event payload identity is invalid.", "/events/payload_digest");
+  if (
+    typeof value.created_at !== "string" ||
+    !ISO_DATE_TIME_PATTERN.test(value.created_at) ||
+    Number.isNaN(Date.parse(value.created_at))
+  )
+    throw error("invalid_batch_event", "Batch event timestamp is invalid.", "/events/created_at");
+  if (stable(value.provenance) !== stable(BATCH_PROVENANCE))
+    throw error("provenance_mismatch", "Batch event provenance is not preserved.", "/events/provenance");
+  return value;
+}
 function assertDetail(
   value: unknown,
   binding?: AgentBatchBinding | null,
@@ -94,8 +157,9 @@ function assertDetail(
   if (expectedBatchId && batch.batch_id !== expectedBatchId)
     throw error("batch_id_mismatch", "Batch response does not match the requested batch.", "/batch/batch_id");
   const events = value.events as Array<Record<string, unknown>>;
-  if (events.some((event, index) => event.sequence !== index + 1))
-    throw error("event_sequence_gap", "Batch event sequence is not contiguous.", "/events");
+  let previousSequence = 0;
+  for (const event of events)
+    previousSequence = (assertBatchEvent(event, batch.batch_id, previousSequence), event.sequence as number);
   if (
     events.some((event) => event.batch_id !== batch.batch_id) ||
     (value.candidates as Array<Record<string, unknown>>).some((candidate) => candidate.batch_id !== batch.batch_id)
@@ -103,6 +167,14 @@ function assertDetail(
     throw error("batch_id_mismatch", "Batch detail contains records from another batch.", "/events");
   return { ...(value as unknown as AgentHarnessBatchDetail), batch, events };
 }
+
+const BATCH_TERMINAL_STATES = new Set([
+  "completed",
+  "failed",
+  "cancelled",
+  "recovery_required",
+  "manual_intervention_required",
+]);
 
 export async function listAgentBatches(): Promise<AgentHarnessBatchSession[]> {
   const response = await client.listBatches();
@@ -156,20 +228,23 @@ export async function getAgentBatchEvents(
 ): Promise<AgentHarnessBatchEventsResponse> {
   const response = await client.batchEvents(batchId, lastEventId);
   assertResponseMetadata(response.schemaSetRevision, response.apiVersion);
-  if (
-    !Array.isArray(response.payload.events) ||
-    response.payload.provenance?.production_status !== "not_for_production"
-  )
-    throw error("invalid_batch_events", "Batch events are not bounded local-dev data.");
   if (response.payload.batch_id !== batchId)
     throw error("batch_id_mismatch", "Batch event replay belongs to another batch.", "/batch_id");
-  const after = Number(lastEventId);
-  const events = response.payload.events as Array<Record<string, unknown>>;
   if (
-    !Number.isInteger(after) ||
-    events.some((event, index) => event.sequence !== after + index + 1 || event.batch_id !== batchId)
+    !Array.isArray(response.payload.events) ||
+    !Number.isSafeInteger(response.payload.after_sequence) ||
+    typeof response.payload.terminal !== "boolean" ||
+    stable(response.payload.provenance) !== stable(BATCH_PROVENANCE)
   )
-    throw error("event_sequence_gap", "Batch event replay is not contiguous.", "/events");
+    throw error("invalid_batch_events", "Batch events are not bounded local-dev data.");
+  const after = Number(lastEventId);
+  if (response.payload.after_sequence !== after)
+    throw error("event_sequence_gap", "Batch event replay cursor does not match the request.", "/after_sequence");
+  const events = response.payload.events as Array<Record<string, unknown>>;
+  if (!Number.isSafeInteger(after) || after < 0)
+    throw error("invalid_event_sequence", "Batch event cursor is invalid.", "/headers/Last-Event-ID");
+  let previous = after;
+  for (const event of events) previous = (assertBatchEvent(event, batchId, previous), event.sequence as number);
   return response.payload;
 }
 export interface ObserveAgentBatchOptions {
@@ -178,7 +253,9 @@ export interface ObserveAgentBatchOptions {
   onEvent?: (event: Record<string, unknown>) => void;
 }
 export async function observeAgentBatchEvents(batchId: string, options: ObserveAgentBatchOptions = {}): Promise<void> {
-  const after = options.lastEventSequence || 0;
+  const after = options.lastEventSequence ?? 0;
+  if (!Number.isSafeInteger(after) || after < 0)
+    throw error("invalid_event_sequence", "Batch event cursor is invalid.", "/last_event_sequence");
   let lastSequence = after;
   const response = await fetch(`${apiRoots()[0]}${agentHarnessPaths.batchEventStream(batchId)}`, {
     cache: "no-store",
@@ -196,22 +273,33 @@ export async function observeAgentBatchEvents(batchId: string, options: ObserveA
   );
   if (!response.body || !(response.headers.get("content-type") || "").includes("text/event-stream"))
     throw error("sse_unavailable", "Batch event stream is unavailable.");
+  let sawTerminal = false;
   for await (const frame of readSseFrames(response)) {
-    if (!frame.data) continue;
+    if (!frame.data) throw error("invalid_batch_event", "Batch event frame is empty.", "/event/data");
     const value = parseJsonLossless(frame.data);
     if (!isRecord(value) || value.batch_id !== batchId)
       throw error("batch_id_mismatch", "Batch event belongs to another batch.", "/batch_id");
-    if (frame.event === "terminal") continue;
-    if (
-      value.schema_identity !== "tilesim.agent_harness.batch_event.v1" ||
-      value.contract_revision !== AGENT_HARNESS_BATCH_CONTRACT_REVISION ||
-      stable(value.provenance) !== stable(BATCH_PROVENANCE) ||
-      typeof value.sequence !== "number" ||
-      !Number.isInteger(value.sequence) ||
-      value.sequence !== lastSequence + 1
-    )
-      throw error("event_sequence_gap", "Batch event stream is not contiguous.", "/sequence");
+    if (frame.event === "terminal") {
+      if (
+        Object.keys(value).some((key) => !["batch_id", "state"].includes(key)) ||
+        typeof value.state !== "string" ||
+        !BATCH_TERMINAL_STATES.has(value.state)
+      )
+        throw error("invalid_batch_event", "Batch terminal frame is not a published terminal state.", "/terminal");
+      sawTerminal = true;
+      continue;
+    }
+    if (frame.event !== "workflow") throw error("invalid_batch_event", "Batch event type is not published.", "/event");
+    assertBatchEvent(value, batchId, lastSequence);
+    if (!/^[0-9]+$/u.test(frame.id) || Number(frame.id) !== value.sequence)
+      throw error("event_sequence_gap", "Batch event id does not match its sequence.", "/event/id");
     lastSequence = value.sequence;
     options.onEvent?.(value);
   }
+  if (!sawTerminal)
+    throw error(
+      "incomplete_batch_stream",
+      "Batch event stream ended before a terminal state was published.",
+      "/event/terminal",
+    );
 }

@@ -29,6 +29,7 @@ const props = withDefaults(
     modelValue?: AgentCopilotPanelState;
     context: PageContextEnvelope | null;
     blocks: readonly AgentTypedBlock[];
+    flowResumePending?: boolean;
     currentTask?: string;
     statusLabel?: string;
     initialWidth?: number;
@@ -68,6 +69,7 @@ const props = withDefaults(
   {
     modelValue: "closed",
     currentTask: "当前页面助手",
+    flowResumePending: false,
     statusLabel: "可以开始",
     initialWidth: 420,
     focusOnOpen: false,
@@ -104,6 +106,16 @@ const emit = defineEmits<{
   submit: [payload: AgentCopilotSubmitPayload];
   answer: [payload: { question_id: string; option_id: string; serialized_value: string }];
   apply: [blockId: string];
+  "report-confirm": [blockId: string];
+  "flow-resume": [
+    payload: {
+      blockId: string;
+      action: "clarify_intent" | "confirm_report" | "confirm_draft" | "cancel" | "reject";
+      intent?: "explain" | "existing_run_analysis" | "user_report" | "configuration_draft";
+    },
+  ];
+  "navigation-confirm": [blockId: string];
+  "navigation-cancel": [blockId: string];
   cancel: [];
   resize: [width: number];
   /** The user picked one of the published model identities. */
@@ -114,7 +126,7 @@ const emit = defineEmits<{
   "select-session": [sessionId: string];
   "delete-session": [sessionId: string];
   "clear-all-sessions": [];
-  start: [task: "configure" | "analyze" | "learn"];
+  start: [task: "capabilities" | "configure" | "analyze"];
   "execution-cancel": [operationId: string];
   "execution-retry": [operationId: string];
   "execution-resume": [operationId: string];
@@ -231,6 +243,7 @@ onMounted(() => {
       ref="trigger"
       class="agent-copilot-entry__trigger"
       type="button"
+      aria-label="打开 TileSim 助手"
       aria-controls="tilesim-agent-copilot"
       :aria-expanded="state !== 'closed'"
       @click="open"
@@ -265,6 +278,7 @@ onMounted(() => {
           :model-value="state"
           :context="context"
           :blocks="blocks"
+          :flow-resume-pending="flowResumePending"
           :current-task="currentTask"
           :status-label="statusLabel"
           :initial-width="initialWidth"
@@ -296,6 +310,10 @@ onMounted(() => {
           @submit="emit('submit', $event)"
           @answer="emit('answer', $event)"
           @apply="emit('apply', $event)"
+          @report-confirm="emit('report-confirm', $event)"
+          @flow-resume="emit('flow-resume', $event)"
+          @navigation-confirm="emit('navigation-confirm', $event)"
+          @navigation-cancel="emit('navigation-cancel', $event)"
           @cancel="emit('cancel')"
           @resize="emit('resize', $event)"
           @select-model="emit('select-model', $event)"
@@ -351,20 +369,34 @@ onMounted(() => {
   right: 16px;
   bottom: 16px;
   margin: 0;
-  min-height: 36px;
-  padding: 7px 11px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-control);
-  color: var(--ink);
-  background: var(--panel);
+  min-height: 42px;
+  padding: 8px 13px 8px 38px;
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--line-strong));
+  border-radius: 10px;
+  color: var(--nav-text);
+  background: var(--nav);
   box-shadow: var(--shadow-raised);
   cursor: pointer;
   font-weight: 600;
 }
 
+.agent-copilot-entry__trigger::before {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  margin-left: -27px;
+  border-radius: 7px;
+  color: var(--nav);
+  background: var(--hero-accent, var(--accent));
+  content: "✦";
+  font-size: 13px;
+  line-height: 20px;
+  text-align: center;
+}
+
 .agent-copilot-entry__trigger:hover {
   border-color: var(--accent);
-  background: var(--surface-muted);
+  background: var(--nav-soft);
 }
 
 .agent-copilot-entry__panel-host {
@@ -378,8 +410,8 @@ onMounted(() => {
    host to the rail width as well; otherwise its old open width remains a
    pointer-event surface over the workspace controls beneath it. */
 .agent-copilot-entry[data-state="collapsed"] .agent-copilot-entry__panel-host {
-  flex: 0 0 52px;
-  width: 52px;
+  flex: 0 0 58px;
+  width: 58px;
 }
 
 .agent-copilot-entry__loading,

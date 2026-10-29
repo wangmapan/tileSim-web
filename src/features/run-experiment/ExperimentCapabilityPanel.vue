@@ -34,10 +34,7 @@ function statusClass(value) {
   <details class="panel form-section capability-panel capability-disclosure">
     <summary class="form-section-title">
       <span>{{ t("能力") }}</span>
-      <div>
-        <h2>{{ t("执行依赖与边界") }}</h2>
-        <InlineHelp v-if="!props.compact" :text="t('必要时查看执行门槛与版本信息。')" :interactive="false" />
-      </div>
+      <h2>{{ t("执行依赖与边界") }}</h2>
       <div class="capability-disclosure-state">
         <span :class="surface.contractStatus === 'supported' ? 'available' : 'partial'">{{
           surface.contractStatus
@@ -60,7 +57,7 @@ function statusClass(value) {
           <small>{{ capabilities.dependencies?.gpu_hardware?.reason || t("尚未发现") }}</small>
         </section>
         <section>
-          <strong>{{ t("Hotspot Cycle") }}</strong>
+          <strong>{{ t("Hotspot Cycle") }}<InlineHelp :text="t('仅覆盖信用链路热点，不代表全栈 Cycle。')" /></strong>
           <span :class="capabilities.dependencies?.verilator_cycle?.available ? 'available' : 'unavailable'">
             {{ capabilities.dependencies?.verilator_cycle?.available ? t("RTL 已构建") : t("未构建") }}
           </span>
@@ -78,19 +75,9 @@ function statusClass(value) {
           <small>{{ capabilities.dependencies?.astra_sim?.reason || t("未配置真实 executable/Chakra root") }}</small>
         </section>
       </div>
-      <p class="capability-boundary-note">
-        {{ t("Cycle 仅表示") }} <strong>{{ t("信用链路热点细化") }}</strong
-        >{{
-          t("，不是全栈 Cycle。当前网页尚未开放显式窗口请求，因此即使 Verilator 已构建也不会显示为可提交的 fidelity。")
-        }}
-      </p>
-
       <section class="experiment-schema-panel">
         <header>
-          <div>
-            <strong>{{ t("实验编排契约") }}</strong>
-            <InlineHelp :text="t('顶层选项来自 create-run schema 与运行时 capabilities 的交集。')" />
-          </div>
+          <strong>{{ t("实验编排契约") }}</strong>
           <span :class="surface.contractStatus === 'supported' ? 'available' : 'partial'">{{
             surface.contractStatus
           }}</span>
@@ -152,10 +139,7 @@ function statusClass(value) {
 
       <section class="backend-identity-panel">
         <header>
-          <div>
-            <strong>{{ t("本地后端部署身份") }}</strong>
-            <InlineHelp :text="t('运行门禁同时校验源码版本、CLI 构建和工作树状态摘要。')" />
-          </div>
+          <strong>{{ t("本地后端部署身份") }}</strong>
           <span :class="statusClass(identity.execution_ready)">
             {{ identity.execution_ready ? t("执行就绪") : t("禁止执行") }}
           </span>
@@ -194,21 +178,19 @@ function statusClass(value) {
             </dd>
           </div>
           <div>
-            <dt>{{ t("版本一致性") }}</dt>
+            <dt>{{ t("版本一致性") }}<InlineHelp :text="t('源码 revision 与 CLI build revision 必须一致。')" /></dt>
             <dd>
               <span :class="statusClass(identity.versions_match)">{{
                 identity.versions_match ? t("一致") : t("不一致")
               }}</span>
-              <small>{{ t("源码 revision 与 CLI build revision") }}</small>
             </dd>
           </div>
           <div>
-            <dt>{{ t("工作树摘要") }}</dt>
+            <dt>{{ t("工作树摘要") }}<InlineHelp :text="t('源码变化后会关闭执行。')" /></dt>
             <dd>
               <span :class="statusClass(identity.state_digests_match)">{{
                 identity.state_digests_match ? t("一致") : t("不一致")
               }}</span>
-              <small>{{ t("源码变化后 execution_ready 会自动关闭") }}</small>
             </dd>
           </div>
         </dl>

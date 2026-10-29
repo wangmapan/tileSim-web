@@ -12,6 +12,7 @@ const importInput = ref(null);
 const headerKickers = {
   overview: "实验结果",
   execution: "实验结果",
+  replay: "实验结果",
   metrics: "实验结果",
   fabric: "实验结果",
   attribution: "实验结果",

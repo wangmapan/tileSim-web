@@ -4,6 +4,7 @@ import { topologyModuleBindingMaxItems } from "../../src/features/run-experiment
 import {
   addDomain,
   addModuleBinding,
+  addTopologyDevice,
   appendRequestRow,
   clearParticipants,
   cloneJson,
@@ -16,6 +17,8 @@ import {
   nextModuleBindingName,
   parseJsonDocument,
   patchJsonDocument,
+  participantDeviceIdsOf,
+  requestParticipantCountIssue,
   removeDevice,
   removeDomain,
   removeModuleBinding,
@@ -31,6 +34,7 @@ import {
   seedStructuredInput,
   serializeJsonDocument,
   setDeviceCount,
+  setGpuCount,
   setDomainMember,
   setDomainModuleBinding,
   setDomainType,
@@ -247,6 +251,38 @@ describe("request table validation", () => {
     expect(issues.some((issue) => issue.field === "tp_degree")).toBe(true);
     expect(issues.some((issue) => issue.field === "participants")).toBe(true);
   });
+
+  it("requires explicit participants to match tp_degree", () => {
+    const issues = validateRuntimeRequests([
+      { request_id: "a", tp_degree: 2, participants: ["gpu0", "gpu1", "gpu2"] },
+    ]).issues;
+    expect(issues).toHaveLength(1);
+    expect(issues[0].field).toBe("tp_degree");
+    expect(issues[0].message).toContain("参与设备数量");
+  });
+
+  it.each([
+    ["participants missing", { request_id: "a", tp_degree: 2 }, null],
+    ["participants empty", { request_id: "a", tp_degree: 2, participants: [] }, null],
+    ["participants match", { request_id: "a", tp_degree: 2, participants: ["gpu0", "gpu1"] }, null],
+  ])("keeps engine-derived or valid participants: %s", (_label, row, expected) => {
+    expect(requestParticipantCountIssue(0, row)).toEqual(expected);
+  });
+
+  it("reports a non-integer TP when explicit participants are present", () => {
+    const issue = requestParticipantCountIssue(0, { request_id: "a", tp_degree: 2.5, participants: ["gpu0", "gpu1"] });
+    expect(issue?.field).toBe("tp_degree");
+    expect(issue?.message).toContain("必须等于参与设备数量");
+  });
+
+  it.each([
+    ["non-string", ["gpu0", 1]],
+    ["empty", ["gpu0", ""]],
+  ])("reports an invalid participant identity: %s", (_label, participants) => {
+    const issue = requestParticipantCountIssue(0, { request_id: "a", tp_degree: 2, participants });
+    expect(issue?.field).toBe("participants");
+    expect(issue?.message).toContain("非空字符串");
+  });
 });
 
 describe("request row operations", () => {
@@ -328,6 +364,22 @@ describe("request row operations", () => {
 });
 
 describe("device inventory operations", () => {
+  it("keeps fabric nodes out of the GPU participant inventory", () => {
+    const doc = topology();
+    addTopologyDevice(doc, "Switch", "sw");
+    addTopologyDevice(doc, "NIC", "nic");
+    expect(participantDeviceIdsOf(doc)).toEqual(["gpu0", "gpu1"]);
+    const change = setGpuCount(doc, 3);
+    expect(change.added).toEqual(["gpu2"]);
+    expect((topologyDevicesOf(doc) as JsonObject[]).map((device) => device.device_type)).toEqual([
+      "GPU",
+      "GPU",
+      "Switch",
+      "NIC",
+      "GPU",
+    ]);
+  });
+
   it("grows to the requested count with consecutive gpu{n} names", () => {
     const doc = topology();
     const change = setDeviceCount(doc, 4);

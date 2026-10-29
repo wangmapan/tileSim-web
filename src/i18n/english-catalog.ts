@@ -9,6 +9,34 @@ export const coreEnglishCatalog: Readonly<Record<string, string>> = {
     "Scheduling follows the selected profile; policy.batch_scheduler does not override it. Fill positive capacities, request tokens, sufficient KV, and TP/participants first.",
   "回放按观测记录顺序，不会重新执行引擎调度；请勿将合成记录标作真实观测。":
     "Replay follows the recorded order and does not run engine scheduling again; do not label synthetic records as observations.",
+  执行回放: "Execution replay",
+  按时间查看已报告执行记录: "Inspect reported execution records along the timeline",
+  "按时间查看已报告的运行期事件、网络路径和集合通信步骤。":
+    "Inspect reported runtime events, network paths, and collective steps along the timeline.",
+  "回放只播放后端已报告的证据，不从拓扑或汇总指标推断路径、步骤或数据包。":
+    "Replay only plays backend-reported evidence; it does not infer paths, steps, or packets from topology or aggregate metrics.",
+  回放范围: "Replay scope",
+  "先确认运行身份、时间范围和证据覆盖状态；页面不会把缺失字段补成动画。":
+    "Confirm run identity, time range, and evidence coverage first; missing fields are not turned into animations.",
+  播放控制: "Playback controls",
+  "使用播放、暂停、逐步前进和慢放速度控制查看记录；减少动态效果时可改用按事件前进。":
+    "Use play, pause, step, and slow-motion controls to inspect records; with reduced motion, advance one event at a time.",
+  时间轴与详情: "Timeline and details",
+  "时间轴只排列已报告的阶段、事件和路径。选择任一条目后，右侧详情会定位到同一份证据。":
+    "The timeline orders only reported stages, events, and paths. Selecting an item focuses the same evidence in the details panel.",
+  路径与集合通信: "Paths and collectives",
+  "拓扑高亮和集合步骤均来自后端 canonical 工件，不从拓扑连线推断实际路径，也不把聚合指标拆成伪事件。":
+    "Topology highlights and collective steps come from canonical backend artifacts; paths are not inferred and aggregates are not split into fake events.",
+  "当前运行已报告并通过身份校验的回放字段范围。":
+    "The replay fields reported and identity-validated for the current run.",
+  实际路径: "Actual path",
+  "后端 Fabric 工件明确报告的设备节点序列，不由前端拓扑推断。":
+    "The device sequence explicitly reported by a backend Fabric artifact, never inferred from the frontend topology.",
+  集合步骤: "Collective step",
+  "后端报告的 collective round/chunk 记录，保留原始步骤边界。":
+    "A backend-reported collective round/chunk record that preserves original step boundaries.",
+  "复核回放时核对 Schema identity、工件 SHA-256、JSON Pointer 和时间字段；缺失路径或步骤不会被前端生成。":
+    "Review Schema identity, artifact SHA-256, JSON Pointer, and timing fields; missing paths or steps are never generated in the frontend.",
   "vllm.0.6.tilesim_pd.v1 未开放：缺少完整放置、handoff 与 dense host 前置。":
     "vllm.0.6.tilesim_pd.v1 is unavailable because placement, handoff, and dense-host prerequisites are incomplete.",
   实验结果: "Experiment results",
@@ -86,6 +114,8 @@ export const coreEnglishCatalog: Readonly<Record<string, string>> = {
   "点击任一环节，查看它在本次实验中做了什么。内存、设备计算和多设备协同是并列关系。":
     "Select any stage to see what it did in this experiment. Memory, device compute, and multi-device coordination are peers.",
   导出完整技术报告: "Export full technical report",
+  导出结果解读报告: "Export run interpretation report",
+  "导出结果解读报告失败：{message}": "Failed to export run interpretation report: {message}",
   三个并列资源环节: "Three peer resource stages",
   后端原始说明: "Original backend explanation",
   "执行宿主（S7）": "Execution host (S7)",
@@ -953,6 +983,7 @@ export const coreEnglishCatalog: Readonly<Record<string, string>> = {
   任务已创建: "Task created",
   准备输入: "Preparing inputs",
   实时状态: "Live status",
+  事件回放: "Event replay",
   轮询恢复: "Polling fallback",
   "模拟已完成，完整报告已载入。": "Simulation completed and the full report was loaded.",
   "运行失败：{message}{fieldPath}": "Run failed: {message}{fieldPath}",
@@ -976,10 +1007,10 @@ export const coreEnglishCatalog: Readonly<Record<string, string>> = {
     "Quick controls suit comparative experiments; JSON suits exact reproduction.",
   快捷控制: "Quick controls",
   "JSON 输入": "JSON input",
-  显示字段契约: "Show field contracts",
-  隐藏字段契约: "Hide field contracts",
   "S1 · 调度、批处理与 KV 准入": "S1 · scheduling, batching, and KV admission",
   "调度、批处理与 KV 准入": "Scheduling, batching, and KV admission",
+  工作负载与运行策略: "Workload and runtime policy",
+  "负载输入、调度与 KV 准入": "Workload input, scheduling, and KV admission",
   通信负载输入: "Communication workload input",
   "Scale-up 与 Scale-out": "Scale-up and Scale-out",
   等待后端参数描述契约: "Awaiting backend parameter descriptor contract",

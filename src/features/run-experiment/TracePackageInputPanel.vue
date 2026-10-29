@@ -40,7 +40,7 @@ const selectedPackage = computed(
       <span><PackageSearch :size="18" /></span>
       <div>
         <h2>{{ t("Trace package") }}</h2>
-        <InlineHelp :text="t('从 Bridge 受控目录选择已经过 TileSimCLI 检查的语义 Trace 包。')" />
+        <InlineHelp :text="t('从受控目录选择已检查的 Trace package。')" />
       </div>
       <button class="text-button" :disabled="status === 'loading'" @click="emit('refresh')">
         <RefreshCw :size="14" :class="{ spin: status === 'loading' }" />{{ t("刷新目录") }}
@@ -122,23 +122,23 @@ const selectedPackage = computed(
         </section>
         <dl class="trace-identity-fields">
           <div>
-            <dt>{{ t("生成工具") }} <small>producer</small></dt>
+            <dt>{{ t("生成工具") }}</dt>
             <dd>{{ selectedPackage.producer?.name || "—" }} / {{ selectedPackage.producer?.version || "—" }}</dd>
           </div>
           <div>
-            <dt>{{ t("实验标识") }} <small>experiment_id</small></dt>
+            <dt>{{ t("实验标识") }}</dt>
             <dd>{{ selectedPackage.experiment_id || "—" }}</dd>
           </div>
           <div>
-            <dt>{{ t("物理运行标识") }} <small>physical_run_id</small></dt>
+            <dt>{{ t("物理运行标识") }}</dt>
             <dd>{{ selectedPackage.physical_run_id || "—" }}</dd>
           </div>
           <div>
-            <dt>{{ t("入口边界") }} <small>boundary</small></dt>
+            <dt>{{ t("入口边界") }}</dt>
             <dd>{{ selectedPackage.entry_boundary || "—" }}</dd>
           </div>
           <div>
-            <dt>{{ t("入口 Trace 类型") }} <small>trace kind</small></dt>
+            <dt>{{ t("入口 Trace 类型") }}</dt>
             <dd>{{ selectedPackage.entry_trace_kind || "—" }}</dd>
           </div>
           <div class="trace-manifest-digest">
@@ -151,7 +151,7 @@ const selectedPackage = computed(
           <TriangleAlert v-else :size="17" />
           <p>
             <strong
-              >{{ t("Artifact 完整性") }} ·
+              >{{ t("Artifact 完整性") }} <InlineHelp :text="t('完整性检查不代表校准或验证通过。')" /> ·
               {{ selectedPackage.artifact_integrity.complete ? t("完整") : t("失败") }}</strong
             >
             <small>
@@ -171,14 +171,6 @@ const selectedPackage = computed(
             {{ t(semanticRoleLabels[role] || role) }}
           </li>
         </ul>
-        <p class="trace-integrity-scope">{{ t("完整性检查不代表校准或验证通过。") }}</p>
-        <p class="trace-contract-gap" role="status">
-          {{
-            t(
-              "Bridge contract gap：当前 inspect schema 未暴露对象数量、evidence_only/executable、observed/inferred 或 snapshot digest；这些元数据保持未知。",
-            )
-          }}
-        </p>
         <p v-if="!selectedPackage.submission_available" class="field-error">
           {{ selectedPackage.unavailable_reason }}；{{ t("首版仅开放 synthetic_trace，不构成校准或留出验证证据。") }}
         </p>

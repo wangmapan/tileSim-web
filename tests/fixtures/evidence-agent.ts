@@ -182,6 +182,49 @@ export const f9Health: HealthResponse = {
   cli_available: true,
 };
 
+const f9AgentFlowManifest = {
+  contract_revision: "2026-10-28.flow.v2" as const,
+  runtime_mode: "deterministic_transition_adapter" as const,
+  langgraph_runtime_status: "optional_not_active" as const,
+  activation_boundary: "local_dev_only" as const,
+  schema_identities: [
+    "tilesim.agent_flow.artifact_binding.v1",
+    "tilesim.agent_flow.identity_binding.v1",
+    "tilesim.agent_flow.navigation_observation.v1",
+    "tilesim.agent_flow.start_request.v1",
+    "tilesim.agent_flow.resume_request.v1",
+    "tilesim.agent_flow.state.v1",
+    "tilesim.agent_flow.event.v1",
+    "tilesim.agent_flow.start_response.v1",
+    "tilesim.agent_flow.status_response.v1",
+    "tilesim.agent_flow.events_response.v1",
+    "tilesim.agent_flow.resume_response.v1",
+    "tilesim.agent_flow.revoke_request.v1",
+    "tilesim.agent_flow.revoke_response.v1",
+  ] as [string, string, string, string, string, string, string, string, string, string, string, string, string],
+  endpoints: {
+    start: "POST /api/agent/flows" as const,
+    status: "GET /api/agent/flows/{flow_id}" as const,
+    events: "GET /api/agent/flows/{flow_id}/events" as const,
+    stream: "GET /api/agent/flows/{flow_id}/events/stream" as const,
+    resume: "POST /api/agent/flows/{flow_id}/resume" as const,
+    revoke_authorization: "POST /api/agent/flows/{flow_id}/authorization/revoke" as const,
+  },
+  scopes: {
+    start: "agent:start_flow" as const,
+    read: "agent:read_flow" as const,
+    resume: "agent:resume_flow" as const,
+  },
+  idempotency_header: "Idempotency-Key" as const,
+  event_resume_header: "Last-Event-ID" as const,
+  local_dev: true as const,
+  source_mode: "synthetic_trace" as const,
+  claim_scope: "exploratory" as const,
+  production_status: "not_for_production" as const,
+  create_run: false as const,
+  provider_acceptance: "pending" as const,
+};
+
 export const f9ApiManifest: ApiManifestResponse = {
   schema_version: "tilesim.bridge.manifest.v1",
   api_version: "tilesim.bridge.api.v1",
@@ -230,6 +273,7 @@ export const f9ApiManifest: ApiManifestResponse = {
     catalog_revision: "sha256:726e59ba8b38adc7441b945a0faf47ab5d6f4ab244f76d7fe98b87005fa6aa7b",
     contract_package_revision: "sha256:1fa372e1fc4eafe5b819aedd29f258732b8a53fab6b9559e964f6ee1164a4fe3",
   },
+  agent_flow: f9AgentFlowManifest,
   run_creation: {
     idempotency_header: "Idempotency-Key",
     idempotency_required: true,

@@ -179,7 +179,7 @@ function addOne() {
     localError.value = "";
     emit("notice", {
       tone: "info",
-      message: t("已新增域 {domain}（{type}），绑定网络模型 {module}。成员设备还是空的，勾选要加入的卡。", {
+      message: t("已新增域 {domain}（{type}），绑定网络模型 {module}。成员设备还是空的，勾选要加入的节点。", {
         domain: id,
         type: domainTypeLabel(preferred),
         module: binding.name,
@@ -347,15 +347,7 @@ function dropDomain(index: number) {
       <div>
         <span
           ><strong>{{ t("域清单") }}</strong
-          ><InlineHelp
-            :text="
-              t(
-                '最多 {max} 个域。域就是「一批卡共用的同一套网络」；新增域自动命名 su0、so0，并绑定一个已存在的网络模型。',
-                {
-                  max: topologyDomainMaxItems,
-                },
-              )
-            "
+          ><InlineHelp :text="t('域用于分组节点并指定通信模型；最多 {max} 个。', { max: topologyDomainMaxItems })"
         /></span>
       </div>
       <button type="button" class="button button--secondary" @click="addOne">
@@ -368,7 +360,7 @@ function dropDomain(index: number) {
       {{ t("topology JSON 缺少 domains 数组，域清单暂不可编辑。") }}
     </p>
     <p v-else-if="!domains.length" class="structured-note">
-      {{ t("当前没有域。点「新增域」创建第一个，再勾选它包含哪些卡。") }}
+      {{ t("当前没有域。点「新增域」创建第一个，再勾选它包含哪些节点。") }}
     </p>
 
     <ul v-else class="domain-inventory__rows">
@@ -438,7 +430,7 @@ function dropDomain(index: number) {
           <legend>
             {{ domainLabel("member_devices") }}
             <small>{{
-              t("已选 {selected} / 共 {total} 张卡", {
+              t("已选 {selected} / 共 {total} 个节点", {
                 selected: domainMembers(index).length,
                 total: deviceIds.length,
               })
@@ -453,7 +445,7 @@ function dropDomain(index: number) {
             <span>{{ device }}</span>
           </label>
           <small v-if="!deviceIds.length" class="domain-member-empty">{{
-            t("还没有设备，先在「设备清单」里加卡。")
+            t("还没有设备，先在「设备清单」里添加节点。")
           }}</small>
         </fieldset>
         <button

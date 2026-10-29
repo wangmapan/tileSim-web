@@ -125,27 +125,339 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
+function boundedString(value: unknown, maximum: number, allowEmpty = false): value is string {
+  return typeof value === "string" && value.length <= maximum && (allowEmpty || value.trim().length > 0);
+}
+
 function isChatMessage(value: unknown): value is AssistantChatMessage {
-  return isRecord(value) && (value.role === "user" || value.role === "assistant") && typeof value.content === "string";
+  return (
+    isRecord(value) &&
+    Object.keys(value).every((key) => key === "role" || key === "content") &&
+    (value.role === "user" || value.role === "assistant") &&
+    boundedString(value.content, maxMessageLength)
+  );
+}
+
+function isValidTimestamp(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/.test(value) &&
+    Number.isFinite(Date.parse(value))
+  );
 }
 
 function isTypedBlock(value: unknown): value is AgentTypedBlock {
-  if (!isRecord(value) || typeof value.block_type !== "string" || typeof value.block_id !== "string") return false;
+  if (!isRecord(value) || typeof value.block_type !== "string" || !boundedString(value.block_id, 256)) return false;
   // Typed blocks are already closed-world renderable values. Keep a conservative
   // allow-list here so old or tampered localStorage data can never reintroduce
   // provider payloads into the panel.
-  return [
-    "user_message",
-    "assistant_message",
-    "explanation",
-    "capability_result",
-    "draft_summary",
-    "validation_result",
-    "clarification",
-    "unsupported",
-    "parameter_edits",
-    "formal_error",
-  ].includes(value.block_type);
+  if (
+    ![
+      "user_message",
+      "assistant_message",
+      "explanation",
+      "capability_result",
+      "draft_summary",
+      "validation_result",
+      "clarification",
+      "unsupported",
+      "parameter_edits",
+      "report_action",
+      "agent_navigation",
+      "agent_flow",
+      "formal_error",
+    ].includes(value.block_type)
+  )
+    return false;
+  if (value.block_type === "agent_navigation") {
+    const allowed = [
+      "block_type",
+      "block_id",
+      "flow_id",
+      "event_sequence",
+      "binding",
+      "target_pages",
+      "required_capabilities",
+      "authorization",
+      "status",
+      "detail",
+      "observation",
+      "created_at",
+    ];
+    if (Object.keys(value).some((key) => !allowed.includes(key))) return false;
+    if (
+      (value.flow_id !== undefined && !boundedString(value.flow_id, 128)) ||
+      (value.event_sequence !== undefined &&
+        (typeof value.event_sequence !== "number" || !Number.isSafeInteger(value.event_sequence) || value.event_sequence < 0)) ||
+      !Array.isArray(value.target_pages) ||
+      value.target_pages.length > 32 ||
+      value.target_pages.some((page) => !boundedString(page, 128)) ||
+      new Set(value.target_pages).size !== value.target_pages.length ||
+      !Array.isArray(value.required_capabilities) ||
+      value.required_capabilities.length > 32 ||
+      value.required_capabilities.some((capability) => !boundedString(capability, 128)) ||
+      !["pending", "running", "succeeded", "waiting_user", "stale", "failed"].includes(value.status as string) ||
+      !boundedString(value.detail, 2_000) ||
+      !isRecord(value.authorization)
+    )
+      return false;
+    const authorization = value.authorization;
+    const numericBudget: Array<[string, number]> = [
+      ["max_navigation_attempts", 8],
+      ["max_model_calls", 60],
+      ["max_tool_calls_per_round", 4],
+      ["max_run_creations", 1],
+      ["max_execution_time_ms", 3_600_000],
+    ];
+    if (
+      Object.keys(authorization).some(
+        (key) =>
+          ![
+            // The authorization identity is part of the user-visible typed
+            // block because a reload must re-submit the exact signed grant.
+            // Keep it in the closed-world persistence allow-list; otherwise
+            // every navigation proposal carrying a digest is discarded on
+            // hydration and cannot be resumed safely.
+            "authorization_id",
+            "authorization_digest",
+            "max_navigation_attempts",
+            "max_model_calls",
+            "max_tool_calls_per_round",
+            "max_run_creations",
+            "max_execution_time_ms",
+            "allowed_pages",
+            "allowed_actions",
+          ].includes(key),
+      ) ||
+      (authorization.authorization_id !== undefined &&
+        (!boundedString(authorization.authorization_id, 128) ||
+          !/^authz-[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(authorization.authorization_id))) ||
+      (authorization.authorization_digest !== undefined &&
+        (typeof authorization.authorization_digest !== "string" ||
+          !/^sha256:[0-9a-f]{64}$/u.test(authorization.authorization_digest))) ||
+      numericBudget.some(
+        ([key, maximum]) =>
+          !Number.isSafeInteger(authorization[key]) ||
+          Number(authorization[key]) <= 0 ||
+          Number(authorization[key]) > maximum,
+      ) ||
+      !Array.isArray(authorization.allowed_pages) ||
+      !Array.isArray(authorization.allowed_actions) ||
+      authorization.allowed_pages.length === 0 ||
+      authorization.allowed_pages.length > 32 ||
+      authorization.allowed_pages.some((page) => !boundedString(page, 128)) ||
+      new Set(authorization.allowed_pages).size !== authorization.allowed_pages.length ||
+      authorization.allowed_actions.length === 0 ||
+      authorization.allowed_actions.some((action) => action !== "navigate")
+    )
+      return false;
+    if (value.binding !== undefined) {
+      if (!isRecord(value.binding)) return false;
+      if (
+        !boundedString(value.binding.session_id, 128) ||
+        (value.binding.flow_id !== null && !boundedString(value.binding.flow_id, 128)) ||
+        (value.binding.run_id !== null && !boundedString(value.binding.run_id, 128)) ||
+        (value.binding.run_context_revision !== null && !boundedString(value.binding.run_context_revision, 256)) ||
+        !isRecord(value.binding.backend_identity) ||
+        typeof value.binding.schema_set_revision !== "string" ||
+        !/^sha256:[0-9a-f]{64}$/u.test(value.binding.schema_set_revision) ||
+        !Array.isArray(value.binding.artifact_bindings)
+      )
+        return false;
+    }
+    return true;
+  }
+  if (value.block_type !== "agent_flow") return true;
+  const statuses = [
+    "created",
+    "running",
+    "waiting_user",
+    "draft_ready",
+    "completed",
+    "stale",
+    "refused",
+    "cancelled",
+    "failed",
+  ];
+  if (!boundedString(value.flow_id, 128) || !/^flow-[A-Za-z0-9]+$/u.test(value.flow_id)) return false;
+  if (!statuses.includes(value.status as string) || !boundedString(value.phase, 128)) return false;
+  if (!boundedString(value.title, 256) || !boundedString(value.detail, 2_000)) return false;
+  if (value.page_id !== undefined && value.page_id !== null && !boundedString(value.page_id, 128)) return false;
+  if (value.context_revision !== undefined && value.context_revision !== null && !boundedString(value.context_revision, 256))
+    return false;
+  if (
+    !["validated", "deterministic_fallback", "partial", "truncated", "missing", "provider_unavailable"].includes(
+      value.evidence_status as string,
+    ) ||
+    !["not_started", "ready", "ready_with_limitations", "not_applicable"].includes(value.report_status as string)
+  )
+    return false;
+  if (value.terminal_reason !== null && !boundedString(value.terminal_reason, 256)) return false;
+  if (value.user_goal !== undefined && !boundedString(value.user_goal, 2_000)) return false;
+  if (value.local_notice !== undefined && !boundedString(value.local_notice, 2_000)) return false;
+  if (
+    value.event_sequence !== undefined &&
+    (typeof value.event_sequence !== "number" ||
+      !Number.isSafeInteger(value.event_sequence) ||
+      value.event_sequence < 0)
+  )
+    return false;
+  if (value.pending_action !== null) {
+    if (!isRecord(value.pending_action)) return false;
+    if (
+      Object.keys(value.pending_action).some((key) => !["action", "prompt", "reason", "intent_options"].includes(key))
+    )
+      return false;
+    if (
+      !("action" in value.pending_action) ||
+      !["clarify_intent", "confirm_report", "confirm_draft", "confirm_navigation"].includes(
+        value.pending_action.action as string,
+      )
+    )
+      return false;
+    if (!boundedString(value.pending_action.prompt, 2_000) || !boundedString(value.pending_action.reason, 2_000))
+      return false;
+    if (value.pending_action.intent_options !== undefined) {
+      if (!Array.isArray(value.pending_action.intent_options) || value.pending_action.intent_options.length > 16)
+        return false;
+      if (
+        value.pending_action.intent_options.some(
+          (option) =>
+            !isRecord(option) ||
+            Object.keys(option).some((key) => !["intent", "label"].includes(key)) ||
+            !["explain", "existing_run_analysis", "user_report", "configuration_draft"].includes(
+              option.intent as string,
+            ) ||
+            !boundedString(option.label, 256),
+        )
+      )
+        return false;
+    }
+  }
+  if (
+    ["completed", "draft_ready", "stale", "refused", "cancelled", "failed"].includes(value.status as string) &&
+    value.pending_action !== null
+  )
+    return false;
+  const binding = value.binding;
+  if (!isRecord(binding)) return false;
+  const requiredBindingFields = [
+    "session_id",
+    "flow_id",
+    "run_id",
+    "run_context_revision",
+    "backend_identity",
+    "schema_set_revision",
+    "input_snapshot_digest",
+    "artifact_bindings",
+  ];
+  if (
+    requiredBindingFields.some((field) => !Object.prototype.hasOwnProperty.call(binding, field)) ||
+    Object.keys(binding).some((key) => !requiredBindingFields.includes(key))
+  )
+    return false;
+  if (!boundedString(binding.session_id, 128) || binding.flow_id !== value.flow_id) return false;
+  if (binding.run_id !== null && !boundedString(binding.run_id, 128)) return false;
+  if (binding.run_context_revision !== null && !boundedString(binding.run_context_revision, 256)) return false;
+  if ((binding.run_id === null) !== (binding.run_context_revision === null)) return false;
+  if (!isRecord(binding.backend_identity)) return false;
+  if (typeof binding.schema_set_revision !== "string" || !/^sha256:[0-9a-f]{64}$/u.test(binding.schema_set_revision))
+    return false;
+  if (
+    binding.input_snapshot_digest !== null &&
+    (typeof binding.input_snapshot_digest !== "string" || !/^sha256:[0-9a-f]{64}$/u.test(binding.input_snapshot_digest))
+  )
+    return false;
+  if (!Array.isArray(binding.artifact_bindings) || binding.artifact_bindings.length > 256) return false;
+  return binding.artifact_bindings.every(
+    (artifact) =>
+      isRecord(artifact) &&
+      Object.keys(artifact).every((key) => ["artifact_id", "schema_identity", "sha256", "bytes"].includes(key)) &&
+      boundedString(artifact.artifact_id, 256) &&
+      boundedString(artifact.schema_identity, 256) &&
+      typeof artifact.sha256 === "string" &&
+      /^[0-9a-f]{64}$/u.test(artifact.sha256) &&
+      typeof artifact.bytes === "string" &&
+      /^(?:0|[1-9][0-9]*)$/u.test(artifact.bytes),
+  );
+}
+
+const capabilityFieldKeys = [
+  "field_id",
+  "aliases",
+  "value_type",
+  "canonical_unit",
+  "accepted_units",
+  "request_json_pointer",
+  "enum_values",
+  "minimum",
+  "maximum",
+  "integer_only",
+  "capability_state",
+] as const;
+
+function restoreCapability(value: unknown): Phase1CapabilityProjection | null {
+  if (
+    !isRecord(value) ||
+    ![
+      "catalog_identity",
+      "catalog_revision",
+      "capability_snapshot_revision",
+      "schema_set_revision",
+      "target_request_identity",
+      "fields",
+    ].every((key) => Object.prototype.hasOwnProperty.call(value, key)) ||
+    Object.keys(value).some(
+      (key) =>
+        ![
+          "catalog_identity",
+          "catalog_revision",
+          "capability_snapshot_revision",
+          "schema_set_revision",
+          "target_request_identity",
+          "fields",
+        ].includes(key),
+    )
+  )
+    return null;
+  if (
+    value.catalog_identity !== "tilesim.bridge.agent_orchestration_capability_catalog.v1" ||
+    value.target_request_identity !== "tilesim.bridge.create_run_request.v1" ||
+    !boundedString(value.catalog_revision, 256) ||
+    !boundedString(value.capability_snapshot_revision, 256) ||
+    !boundedString(value.schema_set_revision, 256) ||
+    !Array.isArray(value.fields) ||
+    value.fields.length > 256
+  )
+    return null;
+  for (const field of value.fields) {
+    if (
+      !isRecord(field) ||
+      Object.keys(field).some((key) => !capabilityFieldKeys.includes(key as (typeof capabilityFieldKeys)[number])) ||
+      capabilityFieldKeys.some((key) => !Object.prototype.hasOwnProperty.call(field, key)) ||
+      !boundedString(field.field_id, 256) ||
+      !Array.isArray(field.aliases) ||
+      field.aliases.length > 32 ||
+      field.aliases.some((alias) => !boundedString(alias, 256, true)) ||
+      !["enum", "integer", "number"].includes(field.value_type as string) ||
+      !boundedString(field.canonical_unit, 128, true) ||
+      !Array.isArray(field.accepted_units) ||
+      field.accepted_units.length > 32 ||
+      field.accepted_units.some((unit) => !boundedString(unit, 128, true)) ||
+      !boundedString(field.request_json_pointer, 512) ||
+      !Array.isArray(field.enum_values) ||
+      field.enum_values.length > 256 ||
+      field.enum_values.some((entry) => !boundedString(entry, 256, true)) ||
+      (field.minimum !== null && !boundedString(field.minimum, 128, true)) ||
+      (field.maximum !== null && !boundedString(field.maximum, 128, true)) ||
+      typeof field.integer_only !== "boolean" ||
+      !["available", "conditional", "not_exposed", "unsupported", "unresolved_not_executed", "unavailable"].includes(
+        field.capability_state as string,
+      )
+    )
+      return null;
+  }
+  return sanitizePersistedValue(value) as unknown as Phase1CapabilityProjection;
 }
 
 function restoreBlock(value: unknown): AgentTypedBlock | null {
@@ -165,7 +477,14 @@ function restoreBlock(value: unknown): AgentTypedBlock | null {
 }
 
 function restoreSession(value: unknown): AgentSessionRecord | null {
-  if (!isRecord(value) || typeof value.id !== "string" || !value.id || typeof value.created_at !== "string")
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    !value.id ||
+    !isValidTimestamp(value.created_at) ||
+    (value.updated_at !== undefined && !isValidTimestamp(value.updated_at)) ||
+    (value.expires_at !== undefined && !isValidTimestamp(value.expires_at))
+  )
     return null;
   const messages = Array.isArray(value.messages)
     ? value.messages
@@ -180,22 +499,23 @@ function restoreSession(value: unknown): AgentSessionRecord | null {
     id: value.id.slice(0, 160),
     title: cleanTitle(value.title),
     created_at: value.created_at,
-    updated_at: typeof value.updated_at === "string" ? value.updated_at : value.created_at,
-    expires_at:
-      typeof value.expires_at === "string"
-        ? value.expires_at
-        : expiryFrom(typeof value.updated_at === "string" ? value.updated_at : value.created_at),
+    updated_at: isValidTimestamp(value.updated_at) ? value.updated_at : value.created_at,
+    expires_at: isValidTimestamp(value.expires_at)
+      ? value.expires_at
+      : expiryFrom(isValidTimestamp(value.updated_at) ? value.updated_at : value.created_at),
     messages,
     blocks,
     context_revision: typeof value.context_revision === "string" ? value.context_revision.slice(0, 512) : null,
     last_instruction: typeof value.last_instruction === "string" ? clipText(value.last_instruction) : null,
-    capability: isRecord(value.capability)
-      ? (sanitizePersistedValue(value.capability) as unknown as Phase1CapabilityProjection)
-      : null,
+    capability: restoreCapability(value.capability),
     turn_sequence:
-      typeof value.turn_sequence === "number" && Number.isSafeInteger(value.turn_sequence) ? value.turn_sequence : 0,
+      typeof value.turn_sequence === "number" && Number.isSafeInteger(value.turn_sequence) && value.turn_sequence >= 0
+        ? value.turn_sequence
+        : 0,
     edit_sequence:
-      typeof value.edit_sequence === "number" && Number.isSafeInteger(value.edit_sequence) ? value.edit_sequence : 0,
+      typeof value.edit_sequence === "number" && Number.isSafeInteger(value.edit_sequence) && value.edit_sequence >= 0
+        ? value.edit_sequence
+        : 0,
   };
 }
 
@@ -299,25 +619,37 @@ export const useAgentSessionsStore = defineStore("agent-sessions", () => {
     const payload: PersistedAgentSessions = {
       version: storageVersion,
       active_session_id: activeSessionId.value,
-      sessions: sessions.value,
+      // Budget trimming below is persistence-only. Do not mutate the live
+      // record arrays: a quota failure or an oversized cache must never erase
+      // text that is still visible in the open conversation.
+      sessions: sessions.value.map((session) => ({
+        ...session,
+        blocks: [...session.blocks],
+        messages: [...session.messages],
+      })),
     };
     try {
       let serialized = JSON.stringify(payload);
       // Old sessions are trimmed from the least-recently-updated end until the
       // browser cache stays within the explicit retention budget.
-      while (serializedBytes(serialized) > AGENT_SESSION_MAX_BYTES && sessions.value.length > 1) {
-        const removableIndex = [...sessions.value]
+      while (serializedBytes(serialized) > AGENT_SESSION_MAX_BYTES && payload.sessions.length > 1) {
+        const removableIndex = [...payload.sessions]
           .map((session, index) => ({ session, index }))
           .reverse()
           .find(({ session }) => session.id !== activeSessionId.value)?.index;
         if (removableIndex === undefined) break;
-        sessions.value.splice(removableIndex, 1);
-        serialized = JSON.stringify({ ...payload, sessions: sessions.value });
+        payload.sessions.splice(removableIndex, 1);
+        serialized = JSON.stringify(payload);
       }
       // A single session must also respect the total cache budget. Trim only
       // persisted history, leaving the current in-memory transcript intact so
       // the panel does not unexpectedly lose visible content mid-turn.
-      const active = currentRecord();
+      const active = payload.sessions.find((session) => session.id === activeSessionId.value);
+      if (!active) {
+        window.localStorage.setItem(storageKey, serialized);
+        persistenceError.value = false;
+        return;
+      }
       while (serializedBytes(serialized) > AGENT_SESSION_MAX_BYTES) {
         if (active.blocks.length > 1) active.blocks.shift();
         else if (active.messages.length > 1) active.messages.shift();

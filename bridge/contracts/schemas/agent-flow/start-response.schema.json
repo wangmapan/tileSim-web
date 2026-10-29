@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tilesim.agent_flow.start_response.v1",
+  "title": "AgentFlowStartResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["flow", "idempotent_replay"],
+  "properties": {
+    "flow": { "$ref": "state.schema.json" },
+    "idempotent_replay": { "type": "boolean" }
+  }
+}

@@ -1,4 +1,5 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { format, resolveConfig } from "prettier";
 
@@ -9,15 +10,35 @@ const outputPath = resolve(root, "src/contracts/generated/agent-harness.ts");
 const prettierConfig = (await resolveConfig(outputPath)) ?? {};
 
 const CONTRACT_REVISION = "2026-10-17.wpa.v1";
-const SCHEMA_SET_REVISION = "sha256:29c1b985068c3f4be921fa48cebe5bbe3502079d3a13d263e6bcdbad4fc6ec73";
+function canonicalBridgeRevision() {
+  for (const executable of ["python", "python3"]) {
+    try {
+      const value = execFileSync(
+        executable,
+        [
+          "-c",
+          "from pathlib import Path; from contracts.schema_set import compute_schema_set_revision; import sys; print(compute_schema_set_revision(Path(sys.argv[1])))",
+          "contracts",
+        ],
+        { cwd: resolve(root, "bridge"), encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+      ).trim();
+      if (/^sha256:[0-9a-f]{64}$/u.test(value)) return value;
+    } catch {
+      // Try the platform's alternate Python executable below.
+    }
+  }
+  throw new Error("Unable to compute canonical Bridge schema-set revision. Python is required.");
+}
+const SCHEMA_SET_REVISION = canonicalBridgeRevision();
 const SUCCESSOR_CONTRACT_REVISION = "2026-10-18.wpb.v1";
 const EXECUTION_CONTRACT_REVISION = "2026-10-18.wpc.v1";
 const OPTIMIZATION_CONTRACT_REVISION = "2026-10-19.wpd.v1";
+const AUTHORIZATION_CONTRACT_REVISION = "2026-10-28.wpf.v1";
 const BATCH_CONTRACT_REVISION = "2026-10-19.wpe.v1";
 // Keep the generated successor client bound to the canonical Bridge contract
 // set.  This value includes the Stage 3A schemas and the restored WP-A
 // workflow enum; `bridge/check_schema_set_revision.py` is the runtime oracle.
-const SUCCESSOR_SCHEMA_SET_REVISION = "sha256:75db95b271671c336276f5082810e2eb5b3362b1d8aa2cb0a81a59af416a8c84";
+const SUCCESSOR_SCHEMA_SET_REVISION = SCHEMA_SET_REVISION;
 const schemaNames = [
   "agent-operation",
   "agent-turn",
@@ -129,8 +150,25 @@ for (const [file, identity] of batchSchemas) {
   const schema = JSON.parse(await readFile(resolve(schemaDirectory, file), "utf8"));
   if (schema.$id !== identity) throw new Error(`Batch schema identity drift: ${file}`);
 }
+const authorizationSchemas = [
+  ["optimization-authorization-request.schema.json", "tilesim.agent_harness.optimization_authorization_request.v1"],
+  ["optimization-authorization.schema.json", "tilesim.agent_harness.optimization_authorization.v1"],
+  ["optimization-authorization-response.schema.json", "tilesim.agent_harness.optimization_authorization_response.v1"],
+];
+for (const [file, identity] of authorizationSchemas) {
+  const schema = JSON.parse(await readFile(resolve(schemaDirectory, file), "utf8"));
+  if (schema.$id !== identity) throw new Error(`Authorization schema identity drift: ${file}`);
+}
 if (openapi["x-tilesim-contract"]?.agent_harness?.optimization?.contract_revision !== OPTIMIZATION_CONTRACT_REVISION) {
   throw new Error("OpenAPI optimization contract revision drift.");
+}
+if (openapi["x-tilesim-contract"]?.agent_harness?.optimization?.authorization_contract_revision !== AUTHORIZATION_CONTRACT_REVISION) {
+  throw new Error("OpenAPI authorization contract revision drift.");
+}
+for (const identity of authorizationSchemas.map(([, identity]) => identity)) {
+  if (!openapi["x-tilesim-contract"]?.agent_harness?.optimization?.authorization_schema_identities?.includes(identity)) {
+    throw new Error(`OpenAPI authorization schema identity drift: ${identity}`);
+  }
 }
 for (const [path, operationId] of [
   ["/agent/optimization/sessions", "createOptimizationSession"],
@@ -140,6 +178,9 @@ for (const [path, operationId] of [
   ["/agent/optimization/sessions/{session_id}/events/stream", "streamOptimizationSessionEvents"],
   ["/agent/optimization/sessions/{session_id}/candidates/{candidate_id}/approve", "approveOptimizationCandidate"],
   ["/agent/optimization/sessions/{session_id}/{action}", "mutateOptimizationSession"],
+  ["/agent/optimization/sessions/{session_id}/authorization", "getOptimizationAuthorization"],
+  ["/agent/optimization/sessions/{session_id}/authorization", "createOptimizationAuthorization"],
+  ["/agent/optimization/sessions/{session_id}/authorization/revoke", "revokeOptimizationAuthorization"],
 ]) {
   const operation = Object.values(openapi.paths?.[path] ?? {}).find(
     (candidate) => candidate?.operationId === operationId,
@@ -195,6 +236,7 @@ export const AGENT_HARNESS_SUCCESSOR_CONTRACT_REVISION = ${JSON.stringify(SUCCES
 export const AGENT_HARNESS_SUCCESSOR_SCHEMA_SET_REVISION = ${JSON.stringify(SUCCESSOR_SCHEMA_SET_REVISION)} as const;
 export const AGENT_HARNESS_EXECUTION_CONTRACT_REVISION = ${JSON.stringify(EXECUTION_CONTRACT_REVISION)} as const;
 export const AGENT_HARNESS_OPTIMIZATION_CONTRACT_REVISION = ${JSON.stringify(OPTIMIZATION_CONTRACT_REVISION)} as const;
+export const AGENT_HARNESS_AUTHORIZATION_CONTRACT_REVISION = ${JSON.stringify(AUTHORIZATION_CONTRACT_REVISION)} as const;
 export const AGENT_HARNESS_BATCH_CONTRACT_REVISION = ${JSON.stringify(BATCH_CONTRACT_REVISION)} as const;
 export const AGENT_HARNESS_TOOL_REGISTRY_REVISION = "2026-10-17.tools.v1" as const;
 export const AGENT_HARNESS_BATCH_TOOL_REGISTRY_REVISION = "2026-10-19.tools.v3" as const;
@@ -267,6 +309,10 @@ export type AgentHarnessOptimizationSchemaIdentity =
   | "tilesim.agent_harness.optimization_approval.v1"
   | "tilesim.agent_harness.optimization_summary.v1"
   | "tilesim.agent_harness.optimization_event.v1";
+export type AgentHarnessAuthorizationSchemaIdentity =
+  | "tilesim.agent_harness.optimization_authorization_request.v1"
+  | "tilesim.agent_harness.optimization_authorization.v1"
+  | "tilesim.agent_harness.optimization_authorization_response.v1";
 
 export type AgentHarnessBatchState = "draft" | "validated" | "waiting_approval" | "queued" | "running" | "paused" | "completed" | "failed" | "cancelled" | "recovery_required" | "manual_intervention_required";
 export type AgentHarnessBatchSchemaIdentity =
@@ -715,11 +761,61 @@ export interface AgentHarnessOptimizationSession {
   schema_set_revision: string; backend_identity: AgentHarnessBackendIdentity; policy_revision: string;
   objective: Record<string, unknown>; constraints: Array<Record<string, unknown>>; budget: Record<string, number>;
   base_config: Record<string, unknown>; execution_request?: Record<string, unknown> | null;
-  local_dev: true; automatic_submission: false; state?: AgentHarnessOptimizationState;
+  local_dev: true; automatic_submission: false; autonomy?: "off" | "propose" | "auto";
+  authorization_id?: string | null; authorization_digest?: string | null;
+  authorization?: AgentHarnessOptimizationAuthorization | null;
+  agent_turns?: Array<Record<string, unknown>>; state?: AgentHarnessOptimizationState;
   current_candidate_id?: string | null; current_iteration?: number; run_count?: number; failure_count?: number;
   active_operation_id?: string | null; summary?: Record<string, unknown> | null;
   created_at?: string; updated_at?: string; provenance: Record<string, unknown>;
   error?: Record<string, unknown> | null;
+}
+export interface AgentHarnessOptimizationAuthorizationBudget {
+  max_rounds: number; max_runs: number; max_seconds: number; max_failures: number;
+  max_model_calls: number; max_tool_calls_per_round: number; max_navigation_attempts: number;
+  max_run_creations: number; max_execution_time_ms: number;
+}
+export interface AgentHarnessOptimizationAuthorizationParameterGrant {
+  pointer: string; min: number; max: number; step: number; kind: "int" | "integer" | "number" | "float";
+}
+export interface AgentHarnessOptimizationAuthorizationObjective {
+  metric_path: string; direction: "minimize" | "maximize"; minimum_improvement: number; plateau_rounds: number;
+}
+export interface AgentHarnessOptimizationAuthorizationRequest {
+  autonomy_level: "bounded_autonomous" | "human_approves_each";
+  budget: {
+    max_rounds?: number; max_runs?: number; max_seconds?: number; max_failures?: number;
+    max_model_calls: number; max_tool_calls_per_round: number; max_navigation_attempts: number;
+    max_run_creations: number; max_execution_time_ms: number;
+  };
+  parameter_grants: Array<Omit<AgentHarnessOptimizationAuthorizationParameterGrant, "kind"> & { kind?: AgentHarnessOptimizationAuthorizationParameterGrant["kind"] }>;
+  objective: { metric_path: string; direction: "minimize" | "maximize"; minimum_improvement?: number; plateau_rounds?: number };
+  tool_allowlist: string[];
+  allowed_pages: string[];
+  allowed_actions: string[];
+  ttl_seconds?: number;
+}
+export interface AgentHarnessOptimizationAuthorization {
+  schema_identity: "tilesim.agent_harness.optimization_authorization.v1";
+  contract_revision: typeof AGENT_HARNESS_AUTHORIZATION_CONTRACT_REVISION;
+  authorization_id: string; session_id: string; principal: string; workspace_id: string;
+  schema_set_revision: string; backend_identity: AgentHarnessBackendIdentity; input_snapshot_digest: string;
+  autonomy_level: "bounded_autonomous" | "human_approves_each";
+  budget: AgentHarnessOptimizationAuthorizationBudget;
+  parameter_grants: AgentHarnessOptimizationAuthorizationParameterGrant[];
+  objective: AgentHarnessOptimizationAuthorizationObjective;
+  tool_allowlist: string[]; allowed_pages: string[]; allowed_actions: string[];
+  protected: Record<string, unknown>; status: "active" | "exhausted" | "revoked" | "expired";
+  issued_by: string; issued_at: string; expires_at: string; revoked_at: string | null;
+  provenance: Record<string, unknown>; authorization_digest: string;
+}
+export interface AgentHarnessOptimizationAuthorizationGetResponse {
+  authorization: AgentHarnessOptimizationAuthorization | null; session_id: string; provenance: Record<string, unknown>;
+}
+export interface AgentHarnessOptimizationAuthorizationResponse {
+  authorization: AgentHarnessOptimizationAuthorization;
+  session: AgentHarnessOptimizationSession; detail: AgentHarnessOptimizationDetail;
+  idempotent_replay?: boolean; autonomous_started?: boolean; provenance: Record<string, unknown>;
 }
 export interface AgentHarnessOptimizationCandidate { schema_identity: "tilesim.agent_harness.optimization_candidate.v1"; contract_revision: typeof AGENT_HARNESS_OPTIMIZATION_CONTRACT_REVISION; candidate_id: string; session_id: string; candidate_digest: string; config: Record<string, unknown>; diff: Record<string, unknown>; status: string; approval_id?: string | null; approval_digest?: string | null; provenance: Record<string, unknown>; [key: string]: unknown; }
 export interface AgentHarnessOptimizationDetail { session: AgentHarnessOptimizationSession; candidate: AgentHarnessOptimizationCandidate | null; candidates: AgentHarnessOptimizationCandidate[]; iterations: Array<Record<string, unknown>>; evaluations?: Array<Record<string, unknown>>; events: Array<Record<string, unknown>>; checkpoint: Record<string, unknown> | null; approval: Record<string, unknown> | null; tool_invocations: Array<Record<string, unknown>>; summary?: Record<string, unknown> | null; }
@@ -773,7 +869,10 @@ export const agentHarnessPaths = {
   executionAction: (operationId: string, action: "cancel" | "retry" | "resume") => \`\${agentHarnessPaths.execution(operationId)}/\${action}\`,
   optimizationSessions: () => "/agent/optimization/sessions",
   optimizationSession: (sessionId: string) => \`/agent/optimization/sessions/\${encodeURIComponent(sessionId)}\`,
+  optimizationAuthorization: (sessionId: string) => \`/agent/optimization/sessions/\${encodeURIComponent(sessionId)}/authorization\`,
+  optimizationAuthorizationRevoke: (sessionId: string) => \`/agent/optimization/sessions/\${encodeURIComponent(sessionId)}/authorization/revoke\`,
   optimizationEvents: (sessionId: string) => \`\${agentHarnessPaths.optimizationSession(sessionId)}/events\`,
+  optimizationEventStream: (sessionId: string) => \`\${agentHarnessPaths.optimizationSession(sessionId)}/events/stream\`,
   optimizationApprove: (sessionId: string, candidateId: string) => \`\${agentHarnessPaths.optimizationSession(sessionId)}/candidates/\${encodeURIComponent(candidateId)}/approve\`,
   optimizationAction: (sessionId: string, action: "pause" | "resume" | "cancel" | "retry") => \`\${agentHarnessPaths.optimizationSession(sessionId)}/\${action}\`,
   batches: () => "/agent/batches",
@@ -924,10 +1023,26 @@ export class GeneratedAgentHarnessClient {
   optimizationSession(sessionId: string) {
     return this.transport.request<AgentHarnessOptimizationSessionResponse>(agentHarnessPaths.optimizationSession(sessionId));
   }
+  optimizationAuthorization(sessionId: string) {
+    return this.transport.request<AgentHarnessOptimizationAuthorizationGetResponse>(agentHarnessPaths.optimizationAuthorization(sessionId));
+  }
+  createOptimizationAuthorization(sessionId: string, body: AgentHarnessOptimizationAuthorizationRequest, idempotencyKey: string) {
+    return this.transport.request<AgentHarnessOptimizationAuthorizationResponse>(agentHarnessPaths.optimizationAuthorization(sessionId), {
+      method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey }, body: JSON.stringify(body),
+    });
+  }
+  revokeOptimizationAuthorization(sessionId: string, idempotencyKey: string) {
+    return this.transport.request<AgentHarnessOptimizationAuthorizationResponse>(agentHarnessPaths.optimizationAuthorizationRevoke(sessionId), {
+      method: "POST", headers: { "Idempotency-Key": idempotencyKey },
+    });
+  }
   optimizationEvents(sessionId: string, lastEventId = "0") {
     const headers: Record<string, string> = {};
     if (lastEventId !== "0") headers["Last-Event-ID"] = lastEventId;
     return this.transport.request<AgentHarnessOptimizationSessionEventsResponse>(agentHarnessPaths.optimizationEvents(sessionId), { headers });
+  }
+  optimizationEventStream(sessionId: string) {
+    return agentHarnessPaths.optimizationEventStream(sessionId);
   }
   approveOptimizationCandidate(sessionId: string, candidateId: string, body: AgentHarnessOptimizationApprovalRequest, idempotencyKey: string) {
     return this.transport.request<AgentHarnessOptimizationSessionResponse>(agentHarnessPaths.optimizationApprove(sessionId, candidateId), {

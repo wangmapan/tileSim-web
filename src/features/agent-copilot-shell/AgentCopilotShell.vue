@@ -7,15 +7,7 @@ import {
   type PageContextEnvelope,
 } from "../../entities/agent-context";
 import AgentComposer from "./AgentComposer.vue";
-import AgentContextBar from "./AgentContextBar.vue";
 import AgentTypedBlockList from "./AgentTypedBlockList.vue";
-import {
-  AgentHarnessOperationCard,
-  AgentHarnessTaskCenter,
-  AgentHarnessToolTimeline,
-  AgentHarnessOptimizationPanel,
-  AgentHarnessBatchPanel,
-} from "../agent-harness";
 import type {
   AgentHarnessBatchDetail,
   AgentHarnessBatchSession,
@@ -41,6 +33,7 @@ const props = withDefaults(
     modelValue: AgentCopilotPanelState;
     context: PageContextEnvelope | null;
     blocks: readonly AgentTypedBlock[];
+    flowResumePending?: boolean;
     currentTask?: string;
     statusLabel?: string;
     initialWidth?: number;
@@ -85,6 +78,7 @@ const props = withDefaults(
   }>(),
   {
     currentTask: "当前页面助手",
+    flowResumePending: false,
     statusLabel: "可以开始",
     initialWidth: 420,
     minimumWidth: 340,
@@ -122,6 +116,16 @@ const emit = defineEmits<{
   answer: [payload: { question_id: string; option_id: string; serialized_value: string }];
   /** The user pressed "应用到面板" on a parameter-edits block. */
   apply: [blockId: string];
+  "report-confirm": [blockId: string];
+  "flow-resume": [
+    payload: {
+      blockId: string;
+      action: "clarify_intent" | "confirm_report" | "confirm_draft" | "confirm_navigation" | "cancel" | "reject";
+      intent?: "explain" | "existing_run_analysis" | "user_report" | "configuration_draft";
+    },
+  ];
+  "navigation-confirm": [blockId: string];
+  "navigation-cancel": [blockId: string];
   /** The user stopped a streamed answer. */
   cancel: [];
   resize: [width: number];
@@ -133,7 +137,7 @@ const emit = defineEmits<{
   "select-session": [sessionId: string];
   "delete-session": [sessionId: string];
   "clear-all-sessions": [];
-  start: [task: "configure" | "analyze" | "learn"];
+  start: [task: "capabilities" | "configure" | "analyze"];
   "execution-cancel": [operationId: string];
   "execution-retry": [operationId: string];
   "execution-resume": [operationId: string];
@@ -229,29 +233,6 @@ const modelUnavailableText = computed(() =>
 function onModelChange(event: Event): void {
   const target = event.target;
   if (target instanceof HTMLSelectElement && target.value) emit("select-model", target.value);
-}
-
-function onOptimizationApprove(sessionId: string, candidateId: string): void {
-  emit("optimization-approve", sessionId, candidateId);
-}
-function onOptimizationPause(sessionId: string): void {
-  emit("optimization-pause", sessionId);
-}
-function onOptimizationResume(sessionId: string): void {
-  emit("optimization-resume", sessionId);
-}
-function onOptimizationRetry(sessionId: string): void {
-  emit("optimization-retry", sessionId);
-}
-function onOptimizationCancel(sessionId: string): void {
-  emit("optimization-cancel", sessionId);
-}
-function onBatchCreate(payload: {
-  candidateSetText: string;
-  objectivePath: string;
-  direction: "minimize" | "maximize";
-}): void {
-  emit("batch-create", payload);
 }
 
 function onSessionChange(event: Event): void {
@@ -387,7 +368,7 @@ onBeforeUnmount(() => {
     id="tilesim-agent-copilot"
     ref="panel"
     class="agent-copilot-shell"
-    :class="`agent-copilot-shell--${modelValue}`"
+    :class="[`agent-copilot-shell--${modelValue}`, { 'is-resizing': resizing }]"
     :style="panelStyle"
     :data-state="modelValue"
     aria-label="TileSim 助手"
@@ -415,111 +396,93 @@ onBeforeUnmount(() => {
       <button type="button" aria-label="关闭 TileSim 助手" @click="setState('closed')">关闭</button>
     </div>
 
-    <header v-show="modelValue !== 'collapsed'" class="agent-copilot-shell__header">
-      <div>
-        <span>小拓 · TileSim 助手</span>
-        <strong>{{ currentTask }}</strong>
+    <header
+      v-show="modelValue !== 'collapsed'"
+      class="agent-copilot-shell__header"
+      :data-busy="busy"
+      :data-context-state="attachmentStatus.state"
+    >
+      <div class="agent-copilot-shell__brand">
+        <span class="agent-copilot-shell__brandline">
+          <span class="agent-copilot-shell__brandmark" aria-hidden="true">✦</span>
+          <span>小拓 · TileSim 助手</span>
+          <span
+            v-if="busy || attachmentStatus.state === 'stale'"
+            class="agent-copilot-shell__presence"
+            aria-hidden="true"
+          ></span>
+          <em v-if="busy || attachmentStatus.state === 'stale'">
+            {{ busy ? "生成中" : "页面已更新" }}
+          </em>
+        </span>
+        <strong>告诉我你想做什么</strong>
       </div>
       <div class="agent-copilot-shell__header-actions">
-        <button type="button" @click="setState('collapsed')">收起</button>
+        <button type="button" title="收起助手侧栏" @click="setState('collapsed')">收起</button>
         <button
           type="button"
           :aria-pressed="modelValue === 'expanded'"
+          :title="modelValue === 'expanded' ? '恢复标准宽度' : '展开助手侧栏'"
           @click="setState(modelValue === 'expanded' ? 'open' : 'expanded')"
         >
           {{ modelValue === "expanded" ? "恢复" : "展开" }}
         </button>
-        <button type="button" @click="setState('closed')">关闭</button>
+        <button type="button" title="关闭助手侧栏" @click="setState('closed')">关闭</button>
       </div>
     </header>
 
-    <div
-      v-if="sessions.length"
-      v-show="modelValue !== 'collapsed'"
-      class="agent-copilot-shell__sessions"
-      data-agent-sessions
+    <details
+      v-if="modelValue !== 'collapsed' && (sessions.length || modelChannel)"
+      class="agent-copilot-shell__settings"
     >
-      <label :for="sessionSelectId">会话</label>
-      <select :id="sessionSelectId" :value="activeSessionId" title="切换已保存的助手会话" @change="onSessionChange">
-        <option v-for="session in sessions" :key="session.id" :value="session.id">
-          {{ session.title }}{{ session.message_count ? ` · ${session.message_count} 条消息` : "" }}
-        </option>
-      </select>
-      <button type="button" aria-label="新建会话" title="新建会话" @click="emit('new-session')">新建</button>
-      <button
-        type="button"
-        aria-label="删除当前会话"
-        title="删除当前会话"
-        @click="emit('delete-session', activeSessionId)"
-      >
-        删除
-      </button>
-      <button type="button" aria-label="清理全部本地会话" title="清理全部本地会话" @click="emit('clear-all-sessions')">
-        清理全部
-      </button>
-      <p v-if="retentionNotice" class="agent-copilot-shell__retention">{{ retentionNotice }}</p>
-    </div>
-
-    <div v-if="modelChannel && modelValue !== 'collapsed'" class="agent-copilot-shell__model" data-agent-model-bar>
-      <label :for="modelSelectId">模型</label>
-      <template v-if="modelOptions.length">
-        <select
-          :id="modelSelectId"
-          :value="modelSelected"
-          :disabled="modelPending"
-          title="选择本次会话使用的模型；切换只在后端本次运行期间有效，要长期生效请在启动器里保存"
-          @change="onModelChange"
-        >
-          <option v-for="model in modelOptions" :key="model" :value="model">{{ model }}</option>
+      <summary>设置</summary>
+      <div v-if="sessions.length" class="agent-copilot-shell__sessions" data-agent-sessions>
+        <label :for="sessionSelectId">会话</label>
+        <select :id="sessionSelectId" :value="activeSessionId" title="切换已保存的助手会话" @change="onSessionChange">
+          <option v-for="session in sessions" :key="session.id" :value="session.id">
+            {{ session.title }}{{ session.message_count ? ` · ${session.message_count} 条消息` : "" }}
+          </option>
         </select>
-        <span>{{ modelPending ? "正在切换…" : "本次运行有效" }}</span>
-      </template>
-      <template v-else>
-        <span>{{ modelPending ? "正在读取模型列表…" : modelUnavailableText }}</span>
-        <button type="button" :disabled="modelPending" @click="emit('refresh-models')">重试</button>
-      </template>
-    </div>
+        <button type="button" aria-label="新建会话" title="新建会话" @click="emit('new-session')">新建</button>
+        <button
+          type="button"
+          aria-label="删除当前会话"
+          title="删除当前会话"
+          @click="emit('delete-session', activeSessionId)"
+        >
+          删除
+        </button>
+        <button
+          type="button"
+          aria-label="清理全部本地会话"
+          title="清理全部本地会话"
+          @click="emit('clear-all-sessions')"
+        >
+          清理全部
+        </button>
+        <p v-if="retentionNotice" class="agent-copilot-shell__retention">{{ retentionNotice }}</p>
+      </div>
 
-    <AgentContextBar v-show="modelValue !== 'collapsed'" :context="context" :attachment-status="attachmentStatus" />
-
-    <div v-if="harnessAvailable" v-show="modelValue !== 'collapsed'" class="agent-copilot-shell__harness">
-      <AgentHarnessOperationCard v-if="harnessProjection" :projection="harnessProjection" />
-      <AgentHarnessToolTimeline :items="harnessToolTimeline" />
-      <AgentHarnessTaskCenter
-        v-if="harnessTaskCenter.length || harnessDrafts.length || harnessExecutions.length"
-        :items="harnessTaskCenter"
-        :drafts="harnessDrafts"
-        :executions="harnessExecutions"
-        @cancel="emit('execution-cancel', $event)"
-        @retry="emit('execution-retry', $event)"
-        @resume="emit('execution-resume', $event)"
-      />
-      <AgentHarnessOptimizationPanel
-        :sessions="optimizationSessions"
-        :detail="optimizationDetail"
-        :pending="optimizationPending"
-        :create-pending="optimizationCreatePending"
-        @approve="onOptimizationApprove"
-        @pause="onOptimizationPause"
-        @resume="onOptimizationResume"
-        @retry="onOptimizationRetry"
-        @cancel="onOptimizationCancel"
-        @create="emit('optimization-create', $event)"
-      />
-      <AgentHarnessBatchPanel
-        :batches="batchSessions"
-        :detail="batchDetail"
-        :pending="batchPending"
-        :create-pending="batchCreatePending"
-        @create="onBatchCreate"
-        @approve="emit('batch-approve', $event)"
-        @start="emit('batch-start', $event)"
-        @pause="emit('batch-pause', $event)"
-        @resume="emit('batch-resume', $event)"
-        @retry="emit('batch-retry', $event)"
-        @cancel="emit('batch-cancel', $event)"
-      />
-    </div>
+      <div v-if="modelChannel" class="agent-copilot-shell__model" data-agent-model-bar>
+        <label :for="modelSelectId">模型</label>
+        <template v-if="modelOptions.length">
+          <select
+            :id="modelSelectId"
+            :value="modelSelected"
+            :disabled="modelPending"
+            title="选择本次会话使用的模型；切换只在后端本次运行期间有效，要长期生效请在启动器里保存"
+            @change="onModelChange"
+          >
+            <option v-for="model in modelOptions" :key="model" :value="model">{{ model }}</option>
+          </select>
+          <span>{{ modelPending ? "正在切换…" : "本次运行有效" }}</span>
+        </template>
+        <template v-else>
+          <span>{{ modelPending ? "正在读取模型列表…" : modelUnavailableText }}</span>
+          <button type="button" :disabled="modelPending" @click="emit('refresh-models')">重试</button>
+        </template>
+      </div>
+    </details>
 
     <div
       v-show="modelValue !== 'collapsed'"
@@ -531,8 +494,13 @@ onBeforeUnmount(() => {
     >
       <AgentTypedBlockList
         :blocks="blocks"
+        :flow-resume-pending="flowResumePending"
         @answer="emit('answer', $event)"
         @apply="emit('apply', $event)"
+        @report-confirm="emit('report-confirm', $event)"
+        @flow-resume="emit('flow-resume', $event)"
+        @navigation-confirm="emit('navigation-confirm', $event)"
+        @navigation-cancel="emit('navigation-cancel', $event)"
         @start="emit('start', $event)"
       />
     </div>
@@ -553,13 +521,19 @@ onBeforeUnmount(() => {
         本机存储不可用，本次对话只保留到页面关闭
       </span>
       <span v-if="allowParameterEdit">描述场景或接着追问 · 仅在确认后写入，不会创建运行</span>
-      <span v-else>{{ canDraft ? "仅生成草案 · 不会开始运行" : "仅解释当前页面 · 不会修改实验或开始运行" }}</span>
+       <span v-else>{{ canDraft ? "仅生成草案 · 不会开始运行" : "仅解释当前页面 · 不会修改实验或开始运行" }}</span>
     </div>
   </aside>
 </template>
 
 <style scoped>
 .agent-copilot-shell {
+  --agent-header-bg: #102b3e;
+  --agent-header-text: #eff8fb;
+  --agent-header-soft: #c7dbe5;
+  --agent-header-muted: #91aebb;
+  --agent-ink: var(--ink);
+  --agent-panel: var(--panel);
   position: relative;
   z-index: 35;
   width: var(--agent-copilot-panel-width);
@@ -568,25 +542,35 @@ onBeforeUnmount(() => {
   height: 100dvh;
   display: flex;
   flex-direction: column;
-  border-left: 1px solid var(--line-strong);
-  color: var(--ink);
-  background: var(--panel);
-  box-shadow: -8px 0 24px rgb(20 33 44 / 8%);
+  border-left: 1px solid color-mix(in srgb, var(--agent-header-bg) 28%, var(--line-strong));
+  color: var(--agent-ink);
+  background: var(--agent-panel);
+  box-shadow: -16px 0 40px rgb(18 31 43 / 14%);
   overflow: hidden;
-  animation: agent-panel-in 260ms var(--ease-emphasized) backwards;
+  transition:
+    width var(--motion-panel, 220ms) var(--ease-emphasized, ease),
+    box-shadow var(--motion-panel, 220ms) var(--ease-standard, ease),
+    border-color var(--motion-interaction, 150ms) var(--ease-standard, ease);
+  animation: agent-panel-in 320ms var(--ease-emphasized) backwards;
+}
+
+.agent-copilot-shell.is-resizing {
+  transition: none;
 }
 
 .agent-copilot-shell--expanded {
-  box-shadow: -12px 0 34px rgb(20 33 44 / 12%);
+  box-shadow: -20px 0 54px rgb(18 31 43 / 22%);
 }
 
 .agent-copilot-shell--collapsed {
-  width: 52px;
+  width: 58px;
+  border-left-color: var(--nav-border);
+  background: var(--agent-header-bg);
 }
 
 .agent-copilot-shell__resize {
   position: absolute;
-  z-index: 2;
+  z-index: 4;
   inset: 0 auto 0 -5px;
   width: 10px;
   padding: 0;
@@ -600,8 +584,9 @@ onBeforeUnmount(() => {
   content: "";
   position: absolute;
   inset: 0 auto 0 4px;
-  width: 1px;
+  width: 2px;
   background: transparent;
+  transition: background-color var(--motion-interaction) var(--ease-standard);
 }
 
 .agent-copilot-shell__resize:hover::after,
@@ -610,43 +595,117 @@ onBeforeUnmount(() => {
 }
 
 .agent-copilot-shell__header {
+  position: relative;
   min-width: 0;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  min-height: 60px;
-  padding: 9px 10px 9px 14px;
-  border-bottom: 1px solid var(--line);
-  background: var(--panel);
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--accent) 18%, transparent);
+  gap: 14px;
+  min-height: 86px;
+  padding: 16px 14px 15px 18px;
+  border-bottom: 1px solid color-mix(in srgb, var(--agent-header-text) 15%, var(--agent-header-bg));
+  color: var(--agent-header-text);
+  background: var(--agent-header-bg);
+  box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--accent) 76%, transparent);
+  isolation: isolate;
 }
 
-.agent-copilot-shell__header > div:first-child {
+.agent-copilot-shell__header::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(108deg, color-mix(in srgb, var(--accent) 18%, transparent), transparent 46%),
+    linear-gradient(180deg, transparent 54%, color-mix(in srgb, #000 17%, transparent));
+  content: "";
+  pointer-events: none;
+}
+
+.agent-copilot-shell__header[data-busy="true"]::after {
+  position: absolute;
+  right: 14px;
+  bottom: 0;
+  left: 18px;
+  height: 2px;
+  background: var(--accent);
+  content: "";
+  animation: agent-header-progress 1.4s var(--ease-standard) infinite;
+  transform-origin: left;
+}
+
+.agent-copilot-shell__brand {
   display: grid;
   min-width: 0;
+  gap: 2px;
 }
 
-.agent-copilot-shell__header > div:first-child span {
-  display: inline-flex;
+.agent-copilot-shell__brandline {
+  display: flex;
   align-items: center;
+  min-width: 0;
   gap: 6px;
-  color: var(--muted);
-  font-size: var(--text-micro);
-}
-
-.agent-copilot-shell__header > div:first-child span::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 13%, transparent);
-}
-
-.agent-copilot-shell__header > div:first-child strong {
-  overflow: hidden;
+  color: var(--agent-header-soft);
   font-size: var(--text-sm);
+  line-height: 1.2;
+}
+
+.agent-copilot-shell__brandline > span:not(.agent-copilot-shell__brandmark):not(.agent-copilot-shell__presence) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-copilot-shell__brandline em {
+  flex: 0 0 auto;
+  color: var(--hero-accent, var(--accent));
+  font-size: var(--text-xs);
+  font-style: normal;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.agent-copilot-shell__brandmark {
+  display: grid;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--hero-accent, var(--accent)) 58%, transparent);
+  border-radius: 7px;
+  color: var(--agent-header-bg);
+  background: var(--hero-accent, var(--accent));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--hero-accent, var(--accent)) 13%, transparent);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.agent-copilot-shell__presence,
+.agent-copilot-shell__rail-status {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--positive);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--positive) 18%, transparent);
+}
+
+.agent-copilot-shell__header[data-context-state="stale"] .agent-copilot-shell__presence,
+.agent-copilot-shell__rail-status[data-stale="true"] {
+  background: var(--warning);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--warning) 18%, transparent);
+}
+
+.agent-copilot-shell__header[data-busy="true"] .agent-copilot-shell__presence {
+  animation: agent-presence-pulse 1.1s ease-in-out infinite;
+  background: var(--hero-accent, var(--accent));
+}
+
+.agent-copilot-shell__brand strong {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--agent-header-text);
+  font-size: 20px;
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -660,25 +719,14 @@ onBeforeUnmount(() => {
 
 .agent-copilot-shell__header-actions button,
 .agent-copilot-shell__rail button {
-  min-height: 32px;
+  min-height: 30px;
   padding: 5px 7px;
   border: 1px solid transparent;
   border-radius: var(--radius-control);
-  color: var(--ink-soft);
+  color: var(--agent-header-soft);
   background: transparent;
   cursor: pointer;
   font-size: var(--text-xs);
-}
-
-.agent-copilot-shell__header-actions button:hover,
-.agent-copilot-shell__rail button:hover {
-  border-color: var(--line);
-  color: var(--ink);
-  background: var(--surface-muted);
-}
-
-.agent-copilot-shell__header-actions button,
-.agent-copilot-shell__rail button {
   transition:
     color var(--motion-interaction) var(--ease-standard),
     background-color var(--motion-interaction) var(--ease-standard),
@@ -687,211 +735,311 @@ onBeforeUnmount(() => {
 }
 
 .agent-copilot-shell__header-actions button:hover,
-.agent-copilot-shell__rail button:hover {
+.agent-copilot-shell__header-actions button:focus-visible,
+.agent-copilot-shell__rail button:hover,
+.agent-copilot-shell__rail button:focus-visible {
+  border-color: color-mix(in srgb, var(--agent-header-text) 22%, transparent);
+  color: var(--agent-header-text);
+  background: color-mix(in srgb, var(--agent-header-text) 10%, transparent);
   transform: translateY(-1px);
 }
 
+.agent-copilot-shell__header-actions button:last-child:hover,
+.agent-copilot-shell__header-actions button:last-child:focus-visible {
+  border-color: color-mix(in srgb, var(--danger) 70%, transparent);
+  color: var(--danger-ink);
+}
+
+.agent-copilot-shell__sessions,
 .agent-copilot-shell__model {
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 14px;
-  border-bottom: 1px solid var(--line);
-  color: var(--muted);
-  background: var(--surface-subtle);
-  font-size: var(--text-micro);
+  padding: 9px 12px;
+  border-top: 1px solid var(--line);
+  font-size: var(--text-sm);
 }
 
 .agent-copilot-shell__sessions {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 6px 14px;
-  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
   color: var(--muted);
   background: var(--panel);
-  font-size: var(--text-micro);
 }
 
-.agent-copilot-shell__sessions label {
+.agent-copilot-shell__model {
+  color: var(--muted);
+  background: var(--surface-subtle);
+}
+
+.agent-copilot-shell__sessions::before,
+.agent-copilot-shell__model::before {
+  display: grid;
   flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--accent-ink);
+  background: var(--accent-soft);
+  font-size: 12px;
+  font-weight: 700;
 }
 
-.agent-copilot-shell__sessions select {
+.agent-copilot-shell__sessions::before {
+  content: "↺";
+}
+
+.agent-copilot-shell__model::before {
+  content: "◈";
+}
+
+.agent-copilot-shell__sessions label,
+.agent-copilot-shell__model label {
+  flex: 0 0 auto;
+  color: var(--ink-soft);
+  font-weight: 650;
+}
+
+.agent-copilot-shell__sessions select,
+.agent-copilot-shell__model select {
   min-width: 0;
   flex: 1 1 auto;
-  padding: 4px 6px;
+  max-width: 100%;
+  padding: 5px 7px;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-control);
   color: var(--ink);
   background: var(--panel);
   font: inherit;
   text-overflow: ellipsis;
+  transition:
+    border-color var(--motion-interaction) var(--ease-standard),
+    box-shadow var(--motion-interaction) var(--ease-standard),
+    background-color var(--motion-interaction) var(--ease-standard);
 }
 
-.agent-copilot-shell__sessions button {
+.agent-copilot-shell__sessions select:focus-visible,
+.agent-copilot-shell__model select:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+.agent-copilot-shell__sessions button,
+.agent-copilot-shell__model button {
   flex: 0 0 auto;
-  min-height: 27px;
-  padding: 3px 7px;
+  min-height: 28px;
+  padding: 4px 8px;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-control);
   color: var(--ink-soft);
   background: var(--panel);
   cursor: pointer;
   font: inherit;
+  transition:
+    color var(--motion-interaction) var(--ease-standard),
+    border-color var(--motion-interaction) var(--ease-standard),
+    background-color var(--motion-interaction) var(--ease-standard),
+    transform var(--motion-interaction) var(--ease-emphasized);
 }
 
-.agent-copilot-shell__sessions button:hover {
+.agent-copilot-shell__sessions button:hover,
+.agent-copilot-shell__model button:hover {
   border-color: var(--accent);
-  color: var(--ink);
-  background: var(--surface-muted);
-}
-
-.agent-copilot-shell__model label {
-  flex: 0 0 auto;
-}
-
-.agent-copilot-shell__model select {
-  min-width: 0;
-  flex: 1 1 auto;
-  max-width: 100%;
-  padding: 3px 6px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-control);
-  color: var(--ink);
-  background: var(--panel);
-  font: inherit;
-}
-
-.agent-copilot-shell__model select:disabled {
-  color: var(--muted);
+  color: var(--accent-ink);
+  background: var(--accent-soft);
+  transform: translateY(-1px);
 }
 
 .agent-copilot-shell__model span {
   flex: 0 0 auto;
+  max-width: 42%;
   overflow-wrap: anywhere;
   text-align: right;
 }
 
+.agent-copilot-shell__settings {
+  flex: 0 0 auto;
+  min-width: 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-soft);
+  background: var(--surface-inset);
+}
+
+.agent-copilot-shell__settings > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 32px;
+  padding: 6px 14px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  font-weight: 650;
+  list-style: none;
+}
+
+.agent-copilot-shell__settings > summary::-webkit-details-marker {
+  display: none;
+}
+
+.agent-copilot-shell__settings > summary::after {
+  color: var(--muted);
+  content: "⌄";
+  font-size: 16px;
+  line-height: 1;
+  transform: rotate(0deg);
+  transition: transform var(--motion-interaction) var(--ease-standard);
+}
+
+.agent-copilot-shell__settings[open] > summary::after {
+  transform: rotate(180deg);
+}
+
+.agent-copilot-shell__settings > summary:hover,
+.agent-copilot-shell__settings > summary:focus-visible {
+  color: var(--accent-ink);
+  background: var(--surface-muted);
+}
+
+.agent-copilot-shell__settings > summary:focus-visible {
+  outline: none;
+  box-shadow: inset var(--ring);
+}
+
 .agent-copilot-shell__retention {
   flex: 1 1 100%;
-  margin: 0;
+  margin: 0 0 0 30px;
   color: var(--muted);
-  font-size: 0.75rem;
-  line-height: 1.45;
-}
-
-.agent-copilot-shell__harness {
-  flex: 0 1 min(34dvh, 420px);
-  min-width: 0;
-  min-height: 0;
-  max-height: 100%;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-color: var(--line-strong) transparent;
-}
-
-.agent-copilot-shell__harness > :deep(*) {
-  min-width: 0;
-  max-width: 100%;
-}
-
-.agent-copilot-shell__model button {
-  flex: 0 0 auto;
-  min-height: 26px;
-  padding: 2px 8px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-control);
-  color: var(--ink);
-  background: var(--panel);
-  cursor: pointer;
-  font: inherit;
-}
-
-.agent-copilot-shell__model button:disabled {
-  cursor: default;
-  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
 }
 
 .agent-copilot-shell__timeline {
+  position: relative;
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  background: color-mix(in srgb, var(--surface-subtle) 88%, var(--canvas));
+  font-size: var(--text-md);
+  line-height: 1.55;
+  background: var(--surface-subtle);
   scrollbar-color: var(--line-strong) transparent;
 }
 
-/* Grid items otherwise retain their min-content width. Long evidence paths and
-   model responses must wrap inside the bounded panel instead of widening its
-   fixed host by a few pixels. */
+.agent-copilot-shell__timeline::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 64px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface-subtle) 82%, transparent), transparent);
+  content: "";
+  pointer-events: none;
+}
+
 .agent-copilot-shell__timeline > :deep(*) {
+  position: relative;
   min-width: 0;
   max-width: 100%;
 }
+
 .agent-copilot-shell__footer {
   min-width: 0;
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 4px 10px;
-  padding: 6px 14px;
+  padding: 7px 14px 8px;
   border-top: 1px solid var(--line);
   color: var(--muted);
-  background: var(--surface-subtle);
-  font-size: var(--text-micro);
-}
-
-@keyframes agent-panel-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  background: var(--surface-inset);
+  font-size: var(--text-xs);
 }
 
 .agent-copilot-shell__footer span {
   overflow-wrap: anywhere;
 }
 
+.agent-copilot-shell__footer > span:first-child {
+  color: var(--accent-ink);
+  font-weight: 650;
+}
+
 .agent-copilot-shell__persistence-warning {
-  color: var(--warning);
+  color: var(--warning-ink);
 }
 
 .agent-copilot-shell__rail {
   display: flex;
   align-items: center;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px 5px;
+  gap: 12px;
+  min-height: 100%;
+  padding: 16px 5px;
+  color: var(--agent-header-text);
+  background: var(--agent-header-bg);
 }
 
 .agent-copilot-shell__rail > strong {
-  color: var(--accent);
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--hero-accent, var(--accent)) 55%, transparent);
+  border-radius: 8px;
+  color: var(--agent-header-bg);
+  background: var(--hero-accent, var(--accent));
   font-size: var(--text-xs);
 }
 
 .agent-copilot-shell__rail-status {
   width: 7px;
   height: 7px;
-  border-radius: 50%;
-  background: var(--positive);
-}
-
-.agent-copilot-shell__rail-status[data-stale="true"] {
-  background: var(--warning);
 }
 
 .agent-copilot-shell__rail button {
-  min-width: 34px;
-  padding: 5px 3px;
+  min-width: 36px;
+  color: var(--agent-header-soft);
+  padding: 6px 3px;
   writing-mode: vertical-rl;
+}
+
+@keyframes agent-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes agent-header-progress {
+  0% {
+    opacity: 0.35;
+    transform: scaleX(0.2);
+  }
+  55% {
+    opacity: 1;
+    transform: scaleX(0.82);
+  }
+  100% {
+    opacity: 0.35;
+    transform: scaleX(0.25);
+  }
+}
+
+@keyframes agent-presence-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 13%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 5%, transparent);
+  }
 }
 
 @media (max-width: 720px) {
@@ -915,10 +1063,8 @@ onBeforeUnmount(() => {
     width: min(var(--agent-copilot-panel-width), 48vw);
   }
 
-  /* The scoped media rule has the same specificity as the base collapsed
-     rule; keep the rail narrow instead of restoring the open panel width. */
   .agent-copilot-shell.agent-copilot-shell--collapsed {
-    width: 52px;
+    width: 58px;
   }
 }
 

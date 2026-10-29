@@ -556,6 +556,109 @@ def _validate_runtime_evidence(value: dict, schema_identity: str) -> None:
                 nonnegative_integer(request.get(field), pointer + "/" + field)
 
 
+def _validate_execution_replay(value: dict, run_id: str) -> None:
+    """Validate the canonical replay fields before exposing them to the UI.
+
+    The replay artifact is intentionally a projection of executed backend state:
+    paths and link events must be present in the Fabric record itself, while
+    collective round/chunk rows must come from the S5 plan.  This validator does
+    not infer either from topology or aggregate metrics.
+    """
+    def uint64(item: object, pointer: str) -> None:
+        if type(item) is not int or item < 0 or item > 18_446_744_073_709_551_615:
+            _contract_error("Execution replay requires a uint64 integer.", pointer)
+
+    if value.get("run_id") != run_id:
+        _contract_error("Execution replay is not bound to this run.", "/run_id")
+    for field in ("start_time_ps", "finish_time_ps", "end_time_ps"):
+        uint64(value.get(field), "/" + field)
+    if value["finish_time_ps"] != value["end_time_ps"]:
+        _contract_error("Execution replay finish and end times must agree.", "/finish_time_ps")
+    fabric = value.get("fabric")
+    if not isinstance(fabric, dict) or not isinstance(fabric.get("timeline"), list):
+        _contract_error("Execution replay Fabric timeline is missing.", "/fabric/timeline")
+    module_stats = fabric.get("module_stats")
+    if not isinstance(module_stats, list):
+        _contract_error("Execution replay Fabric module_stats is missing.", "/fabric/module_stats")
+    seen_module_ids: set[str] = set()
+    for index, stats in enumerate(module_stats):
+        pointer = f"/fabric/module_stats/{index}"
+        if not isinstance(stats, dict):
+            _contract_error("Execution replay module statistics must be objects.", pointer)
+        for field in ("module_id", "module_kind", "fidelity_level"):
+            if not isinstance(stats.get(field), str) or not stats[field]:
+                _contract_error("Execution replay module statistic identity is invalid.", pointer + "/" + field)
+        module_id = stats["module_id"]
+        if module_id in seen_module_ids:
+            _contract_error("Execution replay module statistic IDs must be unique.", pointer + "/module_id")
+        seen_module_ids.add(module_id)
+        for field in ("total_bytes", "transfers_executed"):
+            uint64(stats.get(field), pointer + "/" + field)
+        for field in (
+            "total_queue_delay_us",
+            "total_congestion_delay_us",
+            "total_runtime_us",
+            "total_algorithm_rounds",
+        ):
+            if type(stats.get(field)) not in (int, float) or isinstance(stats.get(field), bool) or stats[field] < 0:
+                _contract_error("Execution replay module statistic value is invalid.", pointer + "/" + field)
+    for index, row in enumerate(fabric["timeline"]):
+        pointer = f"/fabric/timeline/{index}"
+        if not isinstance(row, dict):
+            _contract_error("Fabric replay records must be objects.", pointer)
+        for field in ("request_id", "collective_id", "phase_id", "module_id", "domain_id"):
+            if not isinstance(row.get(field), str):
+                _contract_error("Fabric replay record identity is invalid.", pointer + "/" + field)
+        for field in ("start_time_ps", "finish_time_ps"):
+            uint64(row.get(field), pointer + "/" + field)
+        if row["finish_time_ps"] < row["start_time_ps"]:
+            _contract_error("Fabric replay interval ends before it starts.", pointer)
+        actual_path = row.get("actual_path")
+        if not isinstance(actual_path, list) or any(not isinstance(node, str) or not node for node in actual_path):
+            _contract_error("Fabric replay actual_path must be a node-id array.", pointer + "/actual_path")
+        endpoints = row.get("link_endpoints")
+        if not isinstance(endpoints, dict):
+            _contract_error("Fabric replay link_endpoints must be an object.", pointer + "/link_endpoints")
+        for link_id, endpoint in endpoints.items():
+            if not isinstance(link_id, str) or not isinstance(endpoint, dict) or any(
+                not isinstance(endpoint.get(field), str) or not endpoint[field]
+                for field in ("source", "destination")
+            ):
+                _contract_error("Fabric replay link endpoint is invalid.", pointer + "/link_endpoints")
+        events = row.get("execution_events")
+        if not isinstance(events, list):
+            _contract_error("Fabric replay execution_events must be an array.", pointer + "/execution_events")
+        for event_index, event in enumerate(events):
+            event_pointer = f"{pointer}/execution_events/{event_index}"
+            if not isinstance(event, dict) or any(not isinstance(event.get(field), str) for field in ("kind", "phase_id", "link_id", "port_id")):
+                _contract_error("Fabric replay event identity is invalid.", event_pointer)
+            uint64(event.get("time_ps"), event_pointer + "/time_ps")
+            uint64(event.get("attempt"), event_pointer + "/attempt")
+    steps = value.get("collective_steps")
+    if not isinstance(steps, list):
+        _contract_error("Execution replay collective_steps must be an array.", "/collective_steps")
+    for index, step in enumerate(steps):
+        pointer = f"/collective_steps/{index}"
+        if not isinstance(step, dict):
+            _contract_error("Collective replay steps must be objects.", pointer)
+        for field in ("step_id", "collective_id", "phase_id", "source_device", "destination_device", "state"):
+            if not isinstance(step.get(field), str):
+                _contract_error("Collective replay step identity is invalid.", pointer + "/" + field)
+        for field in ("round", "chunk", "start_time_ps", "end_time_ps", "bytes"):
+            uint64(step.get(field), pointer + "/" + field)
+        # Planned-but-uncompleted steps are valid canonical evidence with no
+        # completion timestamp yet; the backend publishes end_time_ps=0 for
+        # those states so the UI can keep them out of playback without
+        # inventing a duration. Completed steps must have a real interval.
+        if step["end_time_ps"] < step["start_time_ps"] and not (
+            step["end_time_ps"] == 0 and step["state"] != "completed"
+        ):
+            _contract_error("Collective replay interval ends before it starts.", pointer)
+        dependencies = step.get("dependencies")
+        if not isinstance(dependencies, list) or any(not isinstance(item, str) for item in dependencies):
+            _contract_error("Collective replay dependencies must be a string array.", pointer + "/dependencies")
+
+
 _ATTRIBUTION_TARGETS = {
     "metrics/request_metrics": ("request", "request_id"),
     "evidence/des_events": ("des_event", "event_id"),
@@ -749,6 +852,8 @@ def inspect_artifact(run_id: str, path: Path, definition: dict) -> dict:
             _validate_runtime_evidence(value, schema_identity)
         elif schema_identity == "tilesim.request_attribution.v1":
             _validate_request_attribution(value, run_id, path)
+        elif schema_identity == "tilesim.execution_replay.v1":
+            _validate_execution_replay(value, run_id)
     return {
         "body": body,
         "value": value,

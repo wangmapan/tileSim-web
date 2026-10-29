@@ -31,14 +31,10 @@
   --shadow-raised: 0 1px 3px rgba(16, 30, 42, 0.07), 0 20px 44px -18px rgba(16, 30, 42, 0.22);
   --shadow-overlay: 0 2px 6px rgba(16, 30, 42, 0.08), 0 34px 68px -22px rgba(16, 30, 42, 0.3);
   --shadow-hairline: 0 1px 2px rgba(16, 30, 42, 0.04);
-  /* `fast` and `base` must stay at 0ms. They drive transitions on surfaces the
-     end-to-end suite toggles and then measures in the very next statement —
-     `.app-sidebar`'s background on an appearance switch, `.panel`'s border and
-     fill — so a non-zero duration there makes axe sample a mid-transition
-     blend and report colour-contrast violations that do not exist once the
-     transition settles. Motion lives in `--motion-slow` and in the entrance
-     timings below, which run on mount only and are flattened again under
-     `prefers-reduced-motion: reduce`. */
+  /* Keep the foundation defaults deterministic. The visual-polish layer opts
+     these shared tokens into short feedback for normal desktop motion, while
+     reduced-motion restores zero duration before accessibility assertions can
+     sample a mid-transition colour blend. */
   --motion-fast: 0ms;
   --motion-base: 0ms;
   --motion-interaction: 150ms;
@@ -868,13 +864,17 @@ html[data-theme="custom"] .app-header {
   transform: translateX(1px);
 }
 .workspace {
-  /* Anchor professional tools to the navigation edge on wide monitors.
-     Centering a narrow canvas left hundreds of pixels of dead space between
-     the sidebar and the first field, while the header still spanned the screen. */
+  /* Keep a readable default width for analysis pages. The experiment route
+     opts into the full app-main width below because its form surface benefits
+     from the additional desktop canvas. */
   width: min(1760px, 100%);
   min-width: 0;
   margin: 0 auto 0 0;
   padding: 0 32px 56px;
+}
+.workspace:has(.experiment-layout) {
+  width: 100%;
+  max-width: none;
 }
 .workspace > :first-child:not(.evidence-strip) {
   margin-top: 24px;

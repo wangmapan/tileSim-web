@@ -23,6 +23,7 @@ import {
   topologyModuleBindingMaxItems,
 } from "./input-schema-meta";
 import type { ExperimentControlDescriptor, ParameterValue } from "./types";
+import { topologyNodeType } from "./topology-node-types";
 
 export type JsonObject = Record<string, unknown>;
 
@@ -113,6 +114,30 @@ export type RequestIssue = {
   message: string;
 };
 
+/**
+ * An explicit participant list is the concrete realization of TP. Keep the
+ * two values aligned at the editor boundary instead of letting a request
+ * carry a misleading degree that the backend would interpret differently.
+ */
+export function requestParticipantCountIssue(index: number, row: JsonObject): RequestIssue | null {
+  const participants = row.participants;
+  if (!Array.isArray(participants) || participants.length === 0) return null;
+  if (participants.some((participant) => typeof participant !== "string" || participant.length === 0)) {
+    return {
+      index,
+      field: "participants",
+      message: `第 ${index + 1} 行：participants 每一项都必须是非空字符串。`,
+    };
+  }
+  const tp = row.tp_degree;
+  if (typeof tp === "number" && Number.isInteger(tp) && tp === participants.length) return null;
+  return {
+    index,
+    field: "tp_degree",
+    message: `第 ${index + 1} 行：并行卡数必须等于参与设备数量（当前为 ${typeof tp === "number" ? tp : "未设置"}，参与设备为 ${participants.length} 个）。`,
+  };
+}
+
 function integerIssue(
   index: number,
   field: RequestIssue["field"],
@@ -199,6 +224,9 @@ export function validateRuntimeRequests(
           field: "participants",
           message: `第 ${index + 1} 行：participants 每一项都必须是非空字符串。`,
         });
+      } else {
+        const countIssue = requestParticipantCountIssue(index, row);
+        if (countIssue) issues.push(countIssue);
       }
     }
     if (row.phase !== undefined && row.phase !== "prefill" && row.phase !== "decode" && row.phase !== "request") {
@@ -392,6 +420,15 @@ export function deviceIdsOf(document: JsonObject): string[] {
     .filter((value): value is string => typeof value === "string");
 }
 
+/** Request pairing only follows compute endpoints; fabric nodes are graph-only. */
+export function participantDeviceIdsOf(document: JsonObject): string[] {
+  const devices = topologyDevicesOf(document) || [];
+  return devices
+    .filter((entry) => isJsonObject(entry) && topologyNodeType(entry.device_type).participant)
+    .map((entry) => (isJsonObject(entry) ? entry.device_id : undefined))
+    .filter((value): value is string => typeof value === "string");
+}
+
 export type DeviceReference = { domains: string[]; links: number[] };
 
 export function deviceReferences(document: JsonObject, deviceId: string): DeviceReference {
@@ -419,6 +456,25 @@ export function nextDeviceId(existing: readonly string[]): string {
     if (!used.has(candidate)) return candidate;
   }
   throw new StructuredInputError("无法生成新的 device_id。");
+}
+
+/** Adds one explicitly typed topology node without changing request participants. */
+export function addTopologyDevice(document: JsonObject, deviceType: string, prefix: string): string {
+  const topology = topologyOf(document);
+  if (!topology) throw new StructuredInputError("topology JSON 缺少 topology 对象。");
+  const devices = arrayChild(topology, "devices");
+  if (!devices) throw new StructuredInputError("topology JSON 缺少 devices 数组。");
+  if (devices.length >= topologyDeviceMaxItems)
+    throw new StructuredInputError(`设备不能超过 ${topologyDeviceMaxItems} 台。`);
+  const existing = new Set(deviceIdsOf(document));
+  let index = 0;
+  let id = `${prefix}${index}`;
+  while (existing.has(id)) {
+    index += 1;
+    id = `${prefix}${index}`;
+  }
+  devices.push({ device_id: id, device_type: deviceType });
+  return id;
 }
 
 /**
@@ -506,6 +562,37 @@ export function setDeviceCount(document: JsonObject, count: number): DeviceCount
     if (!deviceId) break;
     const references = removeDevice(document, deviceId);
     removed.push(deviceId);
+    if (references.domains.length || references.links.length) cleaned.push(references);
+  }
+  return { added, removed, cleaned };
+}
+
+/** Resizes only GPU endpoints; switches, NICs and other fabric nodes remain intact. */
+export function setGpuCount(document: JsonObject, count: number): DeviceCountChange {
+  const topology = topologyOf(document);
+  if (!topology) throw new StructuredInputError("topology JSON 缺少 topology 对象。");
+  const devices = arrayChild(topology, "devices");
+  if (!devices) throw new StructuredInputError("topology JSON 缺少 devices 数组。");
+  if (!Number.isInteger(count) || count < 0) throw new StructuredInputError("GPU 卡数必须是非负整数。");
+  if (count > topologyDeviceMaxItems) throw new StructuredInputError(`GPU 卡数不能超过 ${topologyDeviceMaxItems}。`);
+  const gpuEntries = () =>
+    (topologyDevicesOf(document) || []).filter(
+      (entry) => isJsonObject(entry) && topologyNodeType(entry.device_type).participant,
+    );
+  const existing = deviceIdsOf(document);
+  const added: string[] = [];
+  while (gpuEntries().length < count) {
+    const deviceId = nextDeviceId(existing.concat(added));
+    devices.push({ device_id: deviceId, device_type: "GPU" });
+    added.push(deviceId);
+  }
+  const removed: string[] = [];
+  const cleaned: DeviceReference[] = [];
+  while (gpuEntries().length > count) {
+    const target = [...gpuEntries()].at(-1);
+    if (!isJsonObject(target) || typeof target.device_id !== "string") break;
+    const references = removeDevice(document, target.device_id);
+    removed.push(target.device_id);
     if (references.domains.length || references.links.length) cleaned.push(references);
   }
   return { added, removed, cleaned };

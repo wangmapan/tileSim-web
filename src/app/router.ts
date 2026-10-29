@@ -3,6 +3,7 @@ import { createRouter, createWebHistory, type RouteLocationNormalized, type Rout
 export const routeViewIds = [
   "overview",
   "execution",
+  "replay",
   "metrics",
   "fabric",
   "attribution",
@@ -75,6 +76,12 @@ export const router = createRouter({
         Object.keys(to.query).some((key) => key.startsWith("evidence_") && key !== "evidence_request")
           ? { name: "raw_evidence", query: to.query, hash: to.hash, replace: true }
           : true,
+    },
+    {
+      path: "/replay",
+      name: "replay",
+      component: () => import("../views/ReplayView.vue"),
+      meta: { workspace: "professional" },
     },
     {
       path: "/raw-evidence",

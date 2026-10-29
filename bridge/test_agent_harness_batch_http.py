@@ -57,6 +57,68 @@ class BatchHttpTests(unittest.TestCase):
         _, events = self.call(f"/api/agent/batches/{batch_id}/events")
         self.assertGreaterEqual(len(events["events"]), 1); self.assertEqual(events["provenance"]["production_status"], "not_for_production")
 
+    def test_event_replay_rejects_signed_empty_and_unbounded_cursors(self):
+        identity = self.server.harness_backend_identity()
+        body = {
+            "schema_identity": "tilesim.agent_harness.batch_session.v1",
+            "contract_revision": "2026-10-19.wpe.v1",
+            "input_snapshot_digest": canonical_sha256({"batch": "cursor-validation"}),
+            "schema_set_revision": self.server.SCHEMA_SET_REVISION,
+            "backend_identity": identity,
+            "plan": {"kind": "cursor-validation"},
+            "candidate_set": [{"scenario_id": "s1_des_example"}],
+            "objective": {"metric_path": "/metrics/p95", "direction": "minimize"},
+            "local_dev": True, "approval_required": True, "auto_execute": False,
+        }
+        _, created = self.call("/api/agent/batches", body, "batch-cursor-validation")
+        batch_id = created["batch"]["batch_id"]
+        for cursor in ("+1", "-0", "", "9" * 5000):
+            with self.subTest(cursor=cursor[:8] or "empty"):
+                request = urllib.request.Request(
+                    self.base + f"/api/agent/batches/{batch_id}/events/stream",
+                    headers={**self.headers, "Accept": "text/event-stream", "Last-Event-ID": cursor},
+                    method="GET",
+                )
+                with self.assertRaises(urllib.error.HTTPError) as raised:
+                    urllib.request.urlopen(request, timeout=5)
+                self.assertEqual(raised.exception.code, 400)
+                payload = json.loads(raised.exception.read())
+                self.assertEqual(payload["error"]["code"], "invalid_last_event_id")
+
+    def test_recovery_is_a_terminal_observation_for_replay(self):
+        identity = self.server.harness_backend_identity()
+        body = {
+            "schema_identity": "tilesim.agent_harness.batch_session.v1",
+            "contract_revision": "2026-10-19.wpe.v1",
+            "input_snapshot_digest": canonical_sha256({"batch": "recovery-terminal"}),
+            "schema_set_revision": self.server.SCHEMA_SET_REVISION,
+            "backend_identity": identity,
+            "plan": {"kind": "recovery-terminal"},
+            "candidate_set": [{"scenario_id": "s1_des_example"}],
+            "objective": {"metric_path": "/metrics/p95", "direction": "minimize"},
+            "local_dev": True, "approval_required": True, "auto_execute": False,
+        }
+        _, created = self.call("/api/agent/batches", body, "batch-recovery-terminal")
+        batch_id = created["batch"]["batch_id"]
+        self.server.batch_store.transition(batch_id, "queued", expected={"waiting_approval"})
+        self.server.batch_store.transition(
+            batch_id,
+            "recovery_required",
+            expected={"queued"},
+            error={"code": "unknown_outcome", "unknown_outcome": True},
+        )
+        status, replay = self.call(f"/api/agent/batches/{batch_id}/events")
+        self.assertEqual(status, 200)
+        self.assertTrue(replay["terminal"])
+        request = urllib.request.Request(
+            self.base + f"/api/agent/batches/{batch_id}/events/stream",
+            headers={**self.headers, "Accept": "text/event-stream"}, method="GET",
+        )
+        with urllib.request.urlopen(request, timeout=5) as response:
+            stream = response.read().decode()
+        self.assertIn("event: terminal", stream)
+        self.assertIn('"state":"recovery_required"', stream)
+
     def test_approved_batch_runs_each_slot_through_formal_execution_projection(self):
         self.server._optimization_submit_formal = lambda _session, candidate, _approval: f"op-batch-{candidate['candidate_id']}"
         self.server._batch_verified_evaluation = lambda batch, candidate, execution: {

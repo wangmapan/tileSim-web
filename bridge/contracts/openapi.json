@@ -36,6 +36,27 @@
       "conversation_storage": "client_session_only",
       "model_selection_storage": "bridge_process_only"
     },
+    "agent_intent": {
+      "endpoint": "POST /api/agent/intent",
+      "request_schema_identity": "tilesim.agent_intent.request.v1",
+      "response_schema_identity": "tilesim.agent_intent.response.v1",
+      "page_entry_schema_identity": "tilesim.agent_intent.page_entry.v1",
+      "contract_revision": "2026-10-28.agent-intent.v1",
+      "protocol": "tilesim.agent_intent.v1",
+      "execution": "read_only_model_proposal",
+      "candidate_page_source": "frontend_published_page_catalog"
+    },
+    "legacy_contracts": {
+      "assistant_intent": {
+        "status": "legacy_compatibility",
+        "schema_identities": [
+          "tilesim.assistant_intent.request.v1",
+          "tilesim.assistant_intent.response.v1"
+        ],
+        "replacement": "agent_intent",
+        "routable": false
+      }
+    },
     "trace_packages": {
       "catalog_endpoint": "GET /api/trace-packages",
       "inspect_endpoint": "POST /api/trace-packages/{package_id}/inspect",
@@ -83,6 +104,7 @@
       "stage2_run_side_effects": false,
       "optimization": {
         "contract_revision": "2026-10-19.wpd.v1",
+        "authorization_contract_revision": "2026-10-28.wpf.v1",
         "schema_identities": [
           "tilesim.agent_harness.optimization_session.v1",
           "tilesim.agent_harness.optimization_candidate.v1",
@@ -98,6 +120,11 @@
           "tilesim.agent_harness.optimization_action.v1",
           "tilesim.agent_harness.optimization_summary.v1",
           "tilesim.agent_harness.optimization_event.v1"
+        ],
+        "authorization_schema_identities": [
+          "tilesim.agent_harness.optimization_authorization_request.v1",
+          "tilesim.agent_harness.optimization_authorization.v1",
+          "tilesim.agent_harness.optimization_authorization_response.v1"
         ],
         "local_dev": true,
         "automatic_submission": false,
@@ -132,6 +159,48 @@
         "execution_endpoint": "POST /api/agent/executions"
       }
     },
+    "agent_flow": {
+      "contract_revision": "2026-10-28.flow.v2",
+      "runtime_mode": "deterministic_transition_adapter",
+      "langgraph_runtime_status": "optional_not_active",
+      "activation_boundary": "local_dev_only",
+      "schema_identities": [
+        "tilesim.agent_flow.artifact_binding.v1",
+        "tilesim.agent_flow.identity_binding.v1",
+        "tilesim.agent_flow.navigation_observation.v1",
+        "tilesim.agent_flow.start_request.v1",
+        "tilesim.agent_flow.resume_request.v1",
+        "tilesim.agent_flow.state.v1",
+        "tilesim.agent_flow.event.v1",
+        "tilesim.agent_flow.start_response.v1",
+        "tilesim.agent_flow.status_response.v1",
+        "tilesim.agent_flow.events_response.v1",
+        "tilesim.agent_flow.resume_response.v1",
+        "tilesim.agent_flow.revoke_request.v1",
+        "tilesim.agent_flow.revoke_response.v1"
+      ],
+      "endpoints": {
+        "start": "POST /api/agent/flows",
+        "status": "GET /api/agent/flows/{flow_id}",
+        "events": "GET /api/agent/flows/{flow_id}/events",
+        "stream": "GET /api/agent/flows/{flow_id}/events/stream",
+        "resume": "POST /api/agent/flows/{flow_id}/resume",
+        "revoke_authorization": "POST /api/agent/flows/{flow_id}/authorization/revoke"
+      },
+      "scopes": {
+        "start": "agent:start_flow",
+        "read": "agent:read_flow",
+        "resume": "agent:resume_flow"
+      },
+      "idempotency_header": "Idempotency-Key",
+      "event_resume_header": "Last-Event-ID",
+      "local_dev": true,
+      "source_mode": "synthetic_trace",
+      "claim_scope": "exploratory",
+      "production_status": "not_for_production",
+      "create_run": false,
+      "provider_acceptance": "pending"
+    },
     "known_report_schema_identities": {
       "run": ["wind_tunnel.run.v1alpha1"],
       "metrics": ["tilesim.metrics_report.v1"],
@@ -140,6 +209,7 @@
       "design_space": ["tilesim.design_space_report.v1"],
       "topology": ["tilesim.s6_topology_input.v1"],
       "execution_envelope": ["tilesim.s7_execution_envelope.v1"],
+      "execution_replay": ["tilesim.execution_replay.v1"],
       "run_bound_des_evidence": ["tilesim.s7_run_bound_des_evidence.v1"]
     },
     "report_files": {
@@ -149,6 +219,7 @@
       "tail": "tail-cause-chain.json",
       "design_space": "design-space.json",
       "execution_envelope": "execution-envelope.json",
+      "execution_replay": "execution-replay.json",
       "run_bound_des_evidence": "week8-run-evidence.json",
       "runtime_events": "runtime-events.json",
       "runtime_summary": "runtime-summary.json",
@@ -255,6 +326,13 @@
         "run_id_pointer": "/run_id",
         "forbid_self_sha256": true,
         "descriptor_artifact_id": "request_attribution"
+      },
+      "execution-replay": {
+        "file_name": "execution-replay.json",
+        "report_kind": null,
+        "schema_identities": ["tilesim.execution_replay.v1"],
+        "run_id_pointer": "/run_id",
+        "forbid_self_sha256": true
       }
     },
     "run_creation": {
@@ -394,6 +472,23 @@
         "x-client-response-type": "AssistantModelDescriptorResponse",
         "responses": {
           "200": { "$ref": "#/components/responses/AssistantModelDescriptor" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/intent": {
+      "post": {
+        "operationId": "agentIntent",
+        "x-client-request-type": "AgentIntentRequest",
+        "x-client-response-type": "AgentIntentResponse",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "./schemas/agent-intent/request.schema.json" } } }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/AgentIntent" },
+          "400": { "$ref": "#/components/responses/Error" },
+          "503": { "$ref": "#/components/responses/Error" },
           "default": { "$ref": "#/components/responses/Error" }
         }
       }
@@ -855,6 +950,52 @@
         }
       }
     },
+    "/agent/optimization/sessions/{session_id}/authorization": {
+      "parameters": [{ "$ref": "#/components/parameters/SessionId" }],
+      "get": {
+        "operationId": "getOptimizationAuthorization",
+        "x-client-response-type": "OptimizationAuthorizationGetResponse",
+        "responses": {
+          "200": { "$ref": "#/components/responses/OptimizationAuthorizationGetResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "post": {
+        "operationId": "createOptimizationAuthorization",
+        "x-client-request-type": "OptimizationAuthorizationRequest",
+        "x-client-response-type": "OptimizationAuthorizationResponse",
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "./schemas/agent-harness/optimization-authorization-request.schema.json" } }
+          }
+        },
+        "responses": {
+          "201": { "$ref": "#/components/responses/OptimizationAuthorizationResponse" },
+          "200": { "$ref": "#/components/responses/OptimizationAuthorizationResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/optimization/sessions/{session_id}/authorization/revoke": {
+      "parameters": [{ "$ref": "#/components/parameters/SessionId" }],
+      "post": {
+        "operationId": "revokeOptimizationAuthorization",
+        "x-client-response-type": "OptimizationAuthorizationResponse",
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": { "schema": { "type": "object", "additionalProperties": false, "maxProperties": 0 } }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/OptimizationAuthorizationResponse" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
     "/agent/optimization/sessions/{session_id}/events": {
       "parameters": [{ "$ref": "#/components/parameters/SessionId" }],
       "get": {
@@ -1035,6 +1176,103 @@
         }
       }
     },
+     "/agent/flows": {
+       "post": {
+         "operationId": "startAgentFlow",
+         "x-client-request-type": "AgentFlowStartRequest",
+         "x-client-response-type": "AgentFlowStartResponse",
+         "parameters": [
+           { "$ref": "#/components/parameters/IdempotencyKey" },
+           { "$ref": "#/components/parameters/FlowPrincipal" },
+           { "$ref": "#/components/parameters/FlowWorkspace" },
+           { "$ref": "#/components/parameters/FlowScopes" }
+         ],
+         "requestBody": {
+           "required": true,
+           "content": { "application/json": { "schema": { "$ref": "./schemas/agent-flow/start-request.schema.json" } } }
+         },
+         "responses": {
+           "201": { "$ref": "#/components/responses/AgentFlowStartResponse" },
+           "200": { "$ref": "#/components/responses/AgentFlowStartResponse" },
+           "default": { "$ref": "#/components/responses/Error" }
+         }
+       }
+     },
+     "/agent/flows/{flow_id}": {
+       "parameters": [
+         { "$ref": "#/components/parameters/FlowId" },
+         { "$ref": "#/components/parameters/FlowPrincipal" },
+         { "$ref": "#/components/parameters/FlowWorkspace" },
+         { "$ref": "#/components/parameters/FlowScopes" }
+       ],
+       "get": {
+         "operationId": "getAgentFlow",
+         "x-client-response-type": "AgentFlowStatusResponse",
+         "responses": {
+           "200": { "$ref": "#/components/responses/AgentFlowStatusResponse" },
+           "default": { "$ref": "#/components/responses/Error" }
+         }
+       }
+     },
+     "/agent/flows/{flow_id}/events": {
+       "parameters": [
+         { "$ref": "#/components/parameters/FlowId" },
+         { "$ref": "#/components/parameters/FlowPrincipal" },
+         { "$ref": "#/components/parameters/FlowWorkspace" },
+         { "$ref": "#/components/parameters/FlowScopes" }
+       ],
+       "get": {
+         "operationId": "getAgentFlowEvents",
+         "x-client-response-type": "AgentFlowEventsResponse",
+         "parameters": [{ "$ref": "#/components/parameters/FlowLastEventId" }],
+         "responses": {
+           "200": { "$ref": "#/components/responses/AgentFlowEventsResponse" },
+           "default": { "$ref": "#/components/responses/Error" }
+         }
+       }
+     },
+     "/agent/flows/{flow_id}/events/stream": {
+       "parameters": [
+         { "$ref": "#/components/parameters/FlowId" },
+         { "$ref": "#/components/parameters/FlowPrincipal" },
+         { "$ref": "#/components/parameters/FlowWorkspace" },
+         { "$ref": "#/components/parameters/FlowScopes" }
+       ],
+       "get": {
+         "operationId": "streamAgentFlowEvents",
+         "parameters": [{ "$ref": "#/components/parameters/FlowLastEventId" }],
+         "responses": {
+           "200": {
+              "description": "Replayable deterministic agent-flow SSE",
+             "content": { "text/event-stream": { "schema": { "type": "string" } } }
+           },
+           "default": { "$ref": "#/components/responses/Error" }
+         }
+       }
+     },
+     "/agent/flows/{flow_id}/resume": {
+       "parameters": [
+         { "$ref": "#/components/parameters/FlowId" },
+         { "$ref": "#/components/parameters/FlowPrincipal" },
+         { "$ref": "#/components/parameters/FlowWorkspace" },
+         { "$ref": "#/components/parameters/FlowScopes" }
+       ],
+       "post": {
+         "operationId": "resumeAgentFlow",
+         "x-client-request-type": "AgentFlowResumeRequest",
+         "x-client-response-type": "AgentFlowResumeResponse",
+         "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+         "requestBody": {
+           "required": true,
+           "content": { "application/json": { "schema": { "$ref": "./schemas/agent-flow/resume-request.schema.json" } } }
+         },
+         "responses": {
+           "200": { "$ref": "#/components/responses/AgentFlowResumeResponse" },
+           "202": { "$ref": "#/components/responses/AgentFlowResumeResponse" },
+           "default": { "$ref": "#/components/responses/Error" }
+         }
+       }
+     },
     "/agent/assistant-model-catalogue": {
       "get": {
         "operationId": "assistantModelCatalogue",
@@ -1042,6 +1280,29 @@
         "responses": {
           "200": { "$ref": "#/components/responses/AssistantModelCatalogue" },
           "503": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/agent/flows/{flow_id}/authorization/revoke": {
+      "parameters": [
+        { "$ref": "#/components/parameters/FlowId" },
+        { "$ref": "#/components/parameters/FlowPrincipal" },
+        { "$ref": "#/components/parameters/FlowWorkspace" },
+        { "$ref": "#/components/parameters/FlowScopes" }
+      ],
+      "post": {
+        "operationId": "revokeAgentFlowAuthorization",
+        "x-client-request-type": "AgentFlowRevokeRequest",
+        "x-client-response-type": "AgentFlowRevokeResponse",
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "./schemas/agent-flow/revoke-request.schema.json" } } }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/AgentFlowRevokeResponse" },
+          "202": { "$ref": "#/components/responses/AgentFlowRevokeResponse" },
           "default": { "$ref": "#/components/responses/Error" }
         }
       }
@@ -1386,6 +1647,36 @@
         "in": "header",
         "required": false,
         "schema": { "enum": ["0", "1", "2"] }
+      },
+      "FlowId": {
+        "name": "flow_id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "pattern": "^flow-[A-Za-z0-9]+$" }
+      },
+      "FlowLastEventId": {
+        "name": "Last-Event-ID",
+        "in": "header",
+        "required": false,
+        "schema": { "type": "string", "pattern": "^[0-9]+$" }
+      },
+      "FlowPrincipal": {
+        "name": "X-TileSim-Principal",
+        "in": "header",
+        "required": false,
+        "schema": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,128}$" }
+      },
+      "FlowWorkspace": {
+        "name": "X-TileSim-Workspace",
+        "in": "header",
+        "required": false,
+        "schema": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,128}$" }
+      },
+      "FlowScopes": {
+        "name": "X-TileSim-Scopes",
+        "in": "header",
+        "required": false,
+        "schema": { "type": "string", "minLength": 1, "maxLength": 2048 }
       }
     },
     "schemas": {
@@ -1732,6 +2023,9 @@
         "properties": { "instruction": { "type": "string", "minLength": 1, "maxLength": 2000 } },
         "additionalProperties": false
       },
+      "AgentIntentPageEntry": { "$ref": "./schemas/agent-intent/page-entry.schema.json" },
+      "AgentIntentRequest": { "$ref": "./schemas/agent-intent/request.schema.json" },
+      "AgentIntentResponse": { "$ref": "./schemas/agent-intent/response.schema.json" },
       "AssistantModelPlanResponse": {
         "type": "object",
         "required": [
@@ -2135,6 +2429,27 @@
         },
         "additionalProperties": false
       },
+      "OptimizationAuthorizationGetResponse": {
+        "type": "object",
+        "required": ["authorization", "session_id", "provenance"],
+        "properties": {
+          "authorization": {
+            "anyOf": [
+              { "$ref": "./schemas/agent-harness/optimization-authorization.schema.json" },
+              { "type": "null" }
+            ]
+          },
+          "session_id": { "type": "string", "minLength": 1 },
+          "provenance": { "type": "object" }
+        },
+        "additionalProperties": false
+      },
+      "OptimizationAuthorizationRequest": {
+        "$ref": "./schemas/agent-harness/optimization-authorization-request.schema.json"
+      },
+      "OptimizationAuthorizationResponse": {
+        "$ref": "./schemas/agent-harness/optimization-authorization-response.schema.json"
+      },
       "OptimizationSessionListResponse": {
         "type": "object",
         "required": ["sessions", "provenance"],
@@ -2275,6 +2590,75 @@
           "recovery_acknowledged": { "type": "boolean" },
           "idempotency_key": { "type": "string" }
         }
+      },
+      "AgentFlowStartRequest": {
+        "$ref": "./schemas/agent-flow/start-request.schema.json"
+      },
+      "AgentFlowResumeRequest": {
+        "$ref": "./schemas/agent-flow/resume-request.schema.json"
+      },
+      "AgentFlowRevokeRequest": {
+        "$ref": "./schemas/agent-flow/revoke-request.schema.json"
+      },
+      "AgentFlowNavigationObservation": {
+        "$ref": "./schemas/agent-flow/navigation-observation.schema.json"
+      },
+      "AgentFlowStartResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["flow", "idempotent_replay"],
+        "properties": {
+          "flow": { "$ref": "./schemas/agent-flow/state.schema.json" },
+          "idempotent_replay": { "type": "boolean" }
+        }
+      },
+      "AgentFlowStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["flow"],
+        "properties": { "flow": { "$ref": "./schemas/agent-flow/state.schema.json" } }
+      },
+      "AgentFlowEventsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["flow", "events", "after_sequence", "terminal"],
+        "properties": {
+          "flow": { "$ref": "./schemas/agent-flow/state.schema.json" },
+          "events": {
+            "type": "array",
+            "items": { "$ref": "./schemas/agent-flow/event.schema.json" }
+          },
+          "after_sequence": { "type": "integer", "minimum": 0 },
+          "terminal": { "type": "boolean" }
+        }
+      },
+      "AgentFlowResumeResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["flow", "events", "idempotent_replay", "action"],
+        "properties": {
+          "flow": { "$ref": "./schemas/agent-flow/state.schema.json" },
+          "events": {
+            "type": "array",
+            "items": { "$ref": "./schemas/agent-flow/event.schema.json" }
+          },
+          "idempotent_replay": { "type": "boolean" },
+          "action": { "type": "string" }
+        }
+      },
+      "AgentFlowRevokeResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["flow", "events", "idempotent_replay", "action"],
+        "properties": {
+          "flow": { "$ref": "./schemas/agent-flow/state.schema.json" },
+          "events": {
+            "type": "array",
+            "items": { "$ref": "./schemas/agent-flow/event.schema.json" }
+          },
+          "idempotent_replay": { "type": "boolean" },
+          "action": { "const": "revoke_authorization" }
+        }
       }
     },
     "responses": {
@@ -2341,6 +2725,10 @@
         "content": {
           "application/json": { "schema": { "$ref": "#/components/schemas/AssistantModelDescriptorResponse" } }
         }
+      },
+      "AgentIntent": {
+        "description": "Model-derived intent proposal constrained to the published page catalog",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AgentIntentResponse" } } }
       },
       "AssistantModelPlan": {
         "description": "One validated scenario plan proposal; applying it stays a client-side action",
@@ -2417,6 +2805,26 @@
       "DeleteRun": {
         "description": "Deleted local run and its artifacts",
         "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteRunResponse" } } }
+      },
+      "AgentFlowStartResponse": {
+        "description": "Created or replayed read-only deterministic agent flow",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AgentFlowStartResponse" } } }
+      },
+      "AgentFlowStatusResponse": {
+        "description": "Current deterministic agent-flow state",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AgentFlowStatusResponse" } } }
+      },
+      "AgentFlowEventsResponse": {
+        "description": "Replayable deterministic agent-flow events",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AgentFlowEventsResponse" } } }
+      },
+      "AgentFlowResumeResponse": {
+        "description": "Deterministic agent flow after an explicit user action",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AgentFlowResumeResponse" } } }
+      },
+      "AgentFlowRevokeResponse": {
+        "description": "Flow stopped after its authorization was revoked",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AgentFlowRevokeResponse" } } }
       }
     }
   }

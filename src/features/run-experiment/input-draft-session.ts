@@ -1,10 +1,9 @@
 /** Tab-local, schema-bound editor recovery. No run, credential or Provider data. */
-const key = "tilesim.experiment.input-draft.v1";
+const key = "tilesim.experiment.input-draft.v2";
 const maxLength = 2_200_000;
 
 export type ExperimentInputDraft = {
   mode: "controls" | "json";
-  structuredInput: boolean;
   runtimeJson: string;
   topologyJson: string;
 };
@@ -18,14 +17,12 @@ export function readExperimentInputDraft(revision: string): ExperimentInputDraft
     if (
       stored.revision !== revision ||
       !["controls", "json"].includes(stored.mode) ||
-      typeof stored.structuredInput !== "boolean" ||
       typeof stored.runtimeJson !== "string" ||
       typeof stored.topologyJson !== "string"
     )
       return null;
     return {
       mode: stored.mode,
-      structuredInput: stored.structuredInput,
       runtimeJson: stored.runtimeJson,
       topologyJson: stored.topologyJson,
     };

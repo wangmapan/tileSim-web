@@ -10,6 +10,7 @@ import { historyGuide } from "./guides/history";
 import { metricsGuide } from "./guides/metrics";
 import { overviewGuide } from "./guides/overview";
 import { rawEvidenceGuide } from "./guides/raw-evidence";
+import { replayGuide } from "./guides/replay";
 import { unsupportedSchemaGuide } from "./guides/unsupported-schema";
 import { validationGuide } from "./guides/validation";
 
@@ -17,6 +18,7 @@ export const guideRegistry = Object.freeze({
   overview: overviewGuide,
   experiment: experimentGuide,
   execution: executionGuide,
+  replay: replayGuide,
   metrics: metricsGuide,
   fabric: fabricGuide,
   attribution: attributionGuide,
@@ -33,6 +35,7 @@ export const viewGuides = Object.freeze({
   overview: overviewGuide,
   experiment: experimentGuide,
   execution: executionGuide,
+  replay: replayGuide,
   metrics: metricsGuide,
   fabric: fabricGuide,
   attribution: attributionGuide,

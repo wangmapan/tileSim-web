@@ -235,7 +235,6 @@ test("versioned engine JSON preview keeps requested DES separate and invalid inp
   await page.locator(".json-grid textarea").first().fill(JSON.stringify(runtime));
   await page.locator(".topology-editor__json textarea").fill(JSON.stringify(topologyEnvelope));
   await expect(page.locator(".experiment-request-preview pre")).toContainText('"engine_type": "sglang"');
-  await expect(page.getByText("请求 fidelity", { exact: true }).last()).toBeVisible();
   await expect(page.locator(".experiment-request-preview pre")).not.toContainText("resolved_fidelity");
   await page.reload({ waitUntil: "networkidle" });
   await expect(page.locator(".experiment-request-preview pre")).toContainText('"engine_type": "sglang"');

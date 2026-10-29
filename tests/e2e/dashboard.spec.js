@@ -9,6 +9,26 @@ import { createF8ExperimentDescriptor, f8Capabilities, f8SchemaRevision } from "
 import { createEvidenceAgentDescriptor, f9DescriptorRevision } from "../fixtures/evidence-agent-descriptor";
 
 const runId = "run-fixture-f1";
+function contrastRatio(foreground, background) {
+  const parse = (value) => {
+    const match = value.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+    if (!match) return null;
+    return match.slice(1, 4).map((channel) => {
+      const normalized = Number(channel) / 255;
+      return normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+    });
+  };
+  const foregroundRgb = parse(foreground);
+  const backgroundRgb = parse(background);
+  if (!foregroundRgb || !backgroundRgb) return 0;
+  const luminance = (rgb) => 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+  const foregroundLuminance = luminance(foregroundRgb);
+  const backgroundLuminance = luminance(backgroundRgb);
+  return (
+    (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
+    (Math.min(foregroundLuminance, backgroundLuminance) + 0.05)
+  );
+}
 const agentOrchestrationCatalog = JSON.parse(
   readFileSync(
     new URL("../../bridge/contracts/agent_orchestration_capability/catalog-content.json", import.meta.url),
@@ -780,6 +800,12 @@ test("fabric pagination retains exact report pointers and keyboard access in Eng
   await expect(page.getByRole("navigation", { name: "Request communication contribution pagination" })).toBeVisible();
   for (const appearance of ["light", "dark"]) {
     if (appearance === "dark") await page.getByRole("button", { name: /Switch to dark/ }).click();
+    expect(
+      await page
+        .locator(".visualization-panel")
+        .first()
+        .evaluate((element) => getComputedStyle(element).transitionProperty),
+    ).not.toContain("background-color");
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1100);
   }
@@ -2026,6 +2052,22 @@ test("semantic glossary stays bilingual and traceable across the five primary re
   await expect(page.locator(".provenance-grid")).toContainText("Technical field: calibration_level = uncalibrated");
   await expect(page.locator("html")).toHaveAttribute("data-appearance", "dark");
   await expectNoUnexpectedTextOverflow(page);
+  const sourceHelp = page.locator(".provenance-grid article").first().locator(".inline-help__trigger");
+  await sourceHelp.hover();
+  await expect(sourceHelp).not.toHaveAttribute("title");
+  const sourceTooltipGeometry = await page.locator(".provenance-grid").evaluate((grid) => {
+    const bubble = grid.querySelector(".inline-help__bubble");
+    if (!bubble) return null;
+    const gridRect = grid.getBoundingClientRect();
+    const bubbleRect = bubble.getBoundingClientRect();
+    return {
+      gridOverflow: getComputedStyle(grid).overflow,
+      bubbleBottom: bubbleRect.bottom,
+      gridBottom: gridRect.bottom,
+    };
+  });
+  expect(sourceTooltipGeometry).toMatchObject({ gridOverflow: "visible" });
+  expect(sourceTooltipGeometry?.bubbleBottom).toBeGreaterThan(sourceTooltipGeometry?.gridBottom || 0);
   expect(browserFailures).toEqual([]);
 });
 
@@ -2790,22 +2832,26 @@ test("F8 experiment builder binds schema options, request preview, and exact err
   await expect(page.locator(".experiment-schema-panel")).toContainText("实验编排契约");
   await expect(page.locator(".experiment-schema-panel")).toContainText("supported");
   await expect(page.locator(".experiment-schema-panel")).toContainText("S3=not_exposed");
-  await expect(page.locator("[data-field-path]")).toHaveCount(13);
+  await expect(page.locator("[data-field-path]")).toHaveCount(9);
   await expect(page.locator(".schema-control-group .field-help code")).toHaveCount(0);
 
+  await page.locator("[role='tab'][data-module='fabric']").click();
   const latency = page.locator('[data-field-path="/overrides/fabric/scale_out_latency_us"] input');
   await latency.fill("1000");
   await expect(latency).toHaveAttribute("aria-invalid", "true");
-  await expect(page.locator(".schema-control-group .field-help code")).toHaveCount(2);
+  // Field contract pointers are no longer shown as explanatory clutter; the
+  // invalid field and the hidden request preview still expose the exact path.
+  await expect(page.locator(".schema-control-group .field-help code")).toHaveCount(0);
   await expect(page.locator("button.run-submit")).toBeDisabled();
-  await page.locator(".experiment-request-preview summary").click();
   await expect(page.locator(".request-preview-error code")).toHaveText("/overrides/fabric/scale_out_latency_us");
 
   await latency.fill("4");
+  await page.locator("[role='tab'][data-module='runtime']").click();
   await page.locator('[data-field-path="/overrides/runtime/batch_scheduler"] select').selectOption("decode_priority");
   const request = JSON.parse((await page.locator(".experiment-request-preview pre").textContent()) || "{}");
-  expect(request.overrides.fabric.scale_out_latency_us).toBe(4);
-  expect(request.overrides.runtime.batch_scheduler).toBe("decode_priority");
+  expect(request.overrides).toBeUndefined();
+  expect(request.custom_inputs.runtime_trace.policy.batch_scheduler).toBe("decode_priority");
+  expect(request.custom_inputs.topology).toBeDefined();
   expect(request.fidelity_policy).toBe("des");
   await expect(page.locator("button.run-submit")).toBeEnabled();
 
@@ -2823,34 +2869,50 @@ test("quick-control tab hosts the structured editors and swaps the submission ch
   const fixture = fixtureCase("synthetic-s1-s6-complete");
   const browserFailures = await openFixture(page, fixture, "experiment");
 
-  // Quick control is the tab that owns the structured editors; the JSON tab
-  // keeps the shape it has always had (two textareas, runtime first).
-  await expect(page.locator("[role='tab'][data-module]")).toHaveCount(5);
-  await expect(page.locator("[role='tab'][data-module='runtime']")).toHaveAttribute("aria-selected", "true");
-  await expect(page.locator(".structured-entry-button")).toHaveCount(1);
-  await expect(page.locator(".structured-stack")).toHaveCount(0);
+  await expect(page.locator(".run-submit-card")).toHaveCount(0);
+  await expect(page.locator(".run-submit-actions")).toBeVisible();
+  await expect(page.locator(".run-submit-actions button.run-submit")).toBeVisible();
+  await expect(page.locator(".experiment-request-preview")).toBeHidden();
 
-  await page.locator(".experiment-request-preview summary").click();
+  // Quick control opens on the complete structured editors; the JSON tab
+  // remains an explicit alternate representation (two textareas, runtime first).
+  await expect(page.locator("[role='tab'][data-module]")).toHaveCount(4);
+  await expect(page.locator("[role='tab'][data-module='runtime']")).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("[role='tab'][data-module='runtime']")).toContainText("工作负载与运行策略");
+  await expect(page.locator(".structured-entry-button")).toHaveCount(0);
+  await expect(page.locator(".structured-stack")).toHaveCount(1);
+
   const previewRequest = async () =>
     JSON.parse((await page.locator(".experiment-request-preview pre").textContent()) || "{}");
   const overridesRequest = await previewRequest();
   expect(overridesRequest.scenario_id).toBe("s1_des_example");
-  expect(overridesRequest.custom_inputs).toBeUndefined();
+  expect(overridesRequest.custom_inputs).toBeDefined();
 
   await page.getByRole("button", { name: "JSON 输入" }).click();
   await expect(page.locator(".json-grid textarea")).toHaveCount(2);
   await expect(page.locator(".structured-stack")).toHaveCount(0);
   await expect(page.locator(".structured-entry-button")).toHaveCount(0);
 
-  // Knobs alone keep the overrides channel; the editors are what move it.
+  // Returning to quick control keeps the complete structured editor mounted.
   await page.getByRole("button", { name: "快捷控制" }).click();
-  await page.locator(".structured-entry-button").click();
   await expect(page.locator(".structured-stack")).toHaveCount(1);
   await expect(page.locator(".json-grid")).toHaveCount(0);
+  await page.locator("[role='tab'][data-module='requests']").click();
+  const requestRow = page.locator(".request-table tbody tr").first();
+  await expect(requestRow.locator("[data-input-path$='/tp_degree'] input[type='number']")).toHaveCount(1);
+  const participantPicker = requestRow.locator(".request-participants-picker");
+  const rowBeforePicker = await requestRow.boundingBox();
+  await participantPicker.locator("summary").click();
+  await expect(participantPicker.locator(".request-participants-picker__menu")).toBeVisible();
+  expect(
+    await participantPicker.locator(".request-participants-picker__menu").evaluate((element) => {
+      return getComputedStyle(element).position;
+    }),
+  ).toBe("absolute");
+  expect((await requestRow.boundingBox()).height).toBe(rowBeforePicker.height);
   await page.locator("[role='tab'][data-module='topology']").click();
-  await page.getByRole("button", { name: "高级拓扑设置" }).click();
   await expect(page.locator(".device-inventory")).toBeVisible();
-  await expect(page.locator(".structured-area .structured-note--info")).toContainText("完整输入已启用");
+  await expect(page.locator(".domain-inventory")).toBeVisible();
 
   // The run-policy block carries only the keys the knobs cannot reach, so the
   // same parameters are never painted twice on one screen.
@@ -2899,11 +2961,10 @@ test("quick-control tab hosts the structured editors and swaps the submission ch
   expect(results.violations.filter((item) => ["serious", "critical"].includes(item.impact))).toEqual([]);
   await expectNoUnexpectedTextOverflow(page);
 
-  // Turning the editors off puts the quick-control tab back on overrides.
-  await page.getByRole("button", { name: "停用，回到只用旋钮" }).click();
-  await expect(page.locator(".structured-stack")).toHaveCount(0);
+  // The complete input surface remains the canonical quick-control channel.
+  await expect(page.locator(".structured-stack")).toHaveCount(1);
   const restoredRequest = await previewRequest();
-  expect(restoredRequest.custom_inputs).toBeUndefined();
+  expect(restoredRequest.custom_inputs).toBeDefined();
 
   expect(browserFailures).toEqual([]);
 });
@@ -2914,7 +2975,6 @@ test("quick-control tab connects, edits and deletes topology links without a JSO
 
   // The editor starts from the shipped template: all GPU cards are visible on
   // the primary canvas, while links remain explicit topology input.
-  await page.locator(".structured-entry-button").click();
   await page.locator("[role='tab'][data-module='topology']").click();
   const editor = page.locator(".structured-stack .topology-editor");
   await expect(editor).toBeVisible();
@@ -2925,7 +2985,6 @@ test("quick-control tab connects, edits and deletes topology links without a JSO
   await expect(page.locator(".structured-stack textarea")).toHaveCount(0);
   await expect(editor.locator(".topology-editor__json")).toHaveCount(0);
 
-  await page.locator(".experiment-request-preview summary").click();
   const previewRequest = async () =>
     JSON.parse((await page.locator(".experiment-request-preview pre").textContent()) || "{}");
 
@@ -2933,7 +2992,7 @@ test("quick-control tab connects, edits and deletes topology links without a JSO
   // topology document untouched.
   const beforeArrange = JSON.stringify(await previewRequest());
   await editor.getByRole("button", { name: "按域一键排布", exact: true }).click();
-  await expect(editor.locator(".topology-direct-canvas__arranged-note")).toBeVisible();
+  await expect(editor.locator(".topology-direct-canvas")).toHaveAttribute("data-arrangement-applied", "true");
   expect(JSON.stringify(await previewRequest())).toBe(beforeArrange);
   const arrangedCoordinates = await editor.locator(".topology-device").evaluateAll((nodes) =>
     nodes.map((node) => {
@@ -3035,7 +3094,6 @@ test("Trace package mode exposes inspected provenance without promoting syntheti
   await panel.locator(".trace-package-list button").filter({ hasText: "synthetic-package" }).click();
   await panel.getByRole("button", { name: "重新检查" }).click();
   await expect(page.locator("button.run-submit")).toBeEnabled();
-  await page.locator(".experiment-request-preview summary").click();
   const request = JSON.parse((await page.locator(".experiment-request-preview pre").textContent()) || "{}");
   expect(request.trace_package_id).toBe("synthetic-package");
   expect(request).not.toHaveProperty("overrides");
@@ -3075,7 +3133,7 @@ test("dark appearance preserves palette, chart readability, accessibility, and d
     .poll(() =>
       page.locator(".execution-chart svg text").evaluateAll((items) => items.map((item) => item.getAttribute("fill"))),
     )
-    .toContain("#9b9fa5");
+    .toContain("#a0a4aa");
 
   await page.getByRole("button", { name: "设置主题颜色" }).click();
   await page.getByRole("textbox", { name: "HEX 颜色" }).fill("#397f75");
@@ -3095,6 +3153,30 @@ test("dark appearance preserves palette, chart readability, accessibility, and d
     await page.evaluate(() => document.documentElement.clientWidth),
   );
   expect(browserFailures).toEqual([]);
+  const coverageContrast = await page.locator(".coverage-panel").evaluate((panel) => {
+    const panelBackground = getComputedStyle(panel).backgroundColor;
+    return [
+      panel.querySelector(".coverage-panel__count"),
+      panel.querySelector(".coverage-group__header p"),
+      panel.querySelector(".coverage-list__header p"),
+      panel.querySelector(".availability-badge"),
+    ]
+      .filter(Boolean)
+      .map((element) => {
+        const style = getComputedStyle(element);
+        return {
+          selector: element.className,
+          color: style.color,
+          background: element.classList.contains("availability-badge") ? style.backgroundColor : panelBackground,
+          opacity: Number(style.opacity),
+        };
+      });
+  });
+  expect(coverageContrast).not.toEqual([]);
+  for (const sample of coverageContrast) {
+    expect(sample.opacity, `${sample.selector} should not fade evidence text`).toBe(1);
+    expect(contrastRatio(sample.color, sample.background), `${sample.selector} contrast`).toBeGreaterThanOrEqual(4.5);
+  }
   await page.evaluate(() => window.scrollTo(0, 0));
   await expect(page).toHaveScreenshot(`dark-evidence-${testInfo.project.name}.png`, { fullPage: true });
 
@@ -3218,6 +3300,42 @@ test("structured performance report exports a readable and machine-readable S0-S
   const results = await new AxeBuilder({ page }).analyze();
   expect(results.violations.filter((item) => ["serious", "critical"].includes(item.impact))).toEqual([]);
   await expectNoUnexpectedTextOverflow(page);
+  expect(browserFailures).toEqual([]);
+});
+
+test("run interpretation report stays bounded and preserves evidence identity", async ({ page }) => {
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  const browserFailures = await openFixture(page, fixture);
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "导出结果解读报告" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("synthetic-s1-s6-complete-run-interpretation-report.html");
+  const stream = await download.createReadStream();
+  let html = "";
+  for await (const chunk of stream) html += chunk.toString();
+  expect(html).toContain("TILESIM USER RUN INTERPRETATION");
+  expect(html).toContain('id="tilesim-user-run-interpretation"');
+  expect(html).toContain("完整 artifact 正文未嵌入");
+  expect(html).toContain("sha256:");
+  expect(html).toContain("synthetic_trace");
+  await expect(page.locator(".toast--positive")).toContainText("已导出");
+  expect(browserFailures).toEqual([]);
+});
+
+test("assistant proposes the result report as a confirmation action", async ({ page }) => {
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  const browserFailures = await openFixture(page, fixture);
+  await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
+  const panel = page.locator("#tilesim-agent-copilot");
+  await panel.getByRole("textbox", { name: "描述要理解或调整的内容" }).fill("请生成结果解读报告");
+  await panel.getByRole("button", { name: "提交", exact: true }).click();
+  const action = panel.locator('[data-block-type="report_action"]');
+  await expect(action).toContainText("需要你确认后才会生成并下载文件");
+  const downloadPromise = page.waitForEvent("download");
+  await action.getByRole("button", { name: "生成结果解读报告", exact: true }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("synthetic-s1-s6-complete-run-interpretation-report.html");
+  await expect(action).toContainText("已确认");
   expect(browserFailures).toEqual([]);
 });
 

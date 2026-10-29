@@ -2,8 +2,11 @@
 
 本文档树按“当前事实优先、稳定设计其次、历史证据最后”组织。AI 不得从文件日期推断当前状态。
 
-2026-10-24 复核：当前工作树为 Web `HEAD=2e73864`（工作树含既有未提交改动），Bridge schema-set
-revision 为 `sha256:dd9fad27c1d5591a79a16211f701f5725a711163bb284d960b99cca020064b4e`。
+2026-10-29 复核：当前工作树为 Web `HEAD=28016188951338a033eedeb9f8303c08e38ee7bd`（工作树含既有未提交改动），Bridge schema-set
+revision 为 `sha256:0085e3a4e89576fff168f29d811be581c7107b9bd3f8fabf9834d651f3c606b3`。
+Agent flow HTTP 路由是 deterministic transition adapter，LangGraph runtime 仍为 optional/not active；flow
+继续限定为 `local_dev + synthetic_trace + exploratory + not_for_production`，不创建 run、不调用 Provider；详见
+[`AI_HANDOFF.md`](AI_HANDOFF.md) 最新 dated 条目与 [`bridge/README.md`](../bridge/README.md) 当前事实。
 Agent Harness 阶段 5 local-dev 批处理已通过 `LOCAL_PHASE5_PASS`，但仍不是生产 GO；2026-10-23
 启动器部署因后端 CTest 的 `route_unavailable` 失败而保持未部署。当前细节以
 [`AI_HANDOFF.md`](AI_HANDOFF.md)、模块 current baseline 和运行时 contract 为准。
@@ -68,8 +71,10 @@ Agent Harness 阶段 5 local-dev 批处理已通过 `LOCAL_PHASE5_PASS`，但仍
 
 ### 架构、部署与研究
 
+- [`architecture/AGENT_INTERVIEW_READINESS_REMEDIATION_PLAN_2026-10-29.md`](architecture/AGENT_INTERVIEW_READINESS_REMEDIATION_PLAN_2026-10-29.md)：Agent 面试准备质量审查、问题矩阵、分阶段修复路线和当前允许/禁止叙事。
 - [`architecture/FRONTEND_BACKEND_ALIGNMENT_DEVELOPMENT_PLAN_2026-10-17.md`](architecture/FRONTEND_BACKEND_ALIGNMENT_DEVELOPMENT_PLAN_2026-10-17.md)：基于后端 `main@5e44dbb0` 的 **2026-10-17 dated** 前端契约、结果诊断、输入和 Trace Package 对齐开发计划；当前差异以本页的 `AI_BACKEND_BASELINE_ALIGNMENT_2026-10-24.md` 为准。
 - [`architecture/EXECUTION_VISUALIZATION_DESIGN.md`](architecture/EXECUTION_VISUALIZATION_DESIGN.md)：执行可视化设计。
+- [`architecture/EXECUTION_REPLAY_DESIGN.md`](architecture/EXECUTION_REPLAY_DESIGN.md)：执行回放的完整设计方案、现有证据复用、集合通信下钻、动画、性能、契约和分阶段落地计划。
 - [`architecture/BACKEND_SIMULATION_FLOW_UI_COVERAGE.md`](architecture/BACKEND_SIMULATION_FLOW_UI_COVERAGE.md)：后端仿真流程与前端专业工作台的
   展示覆盖度审计、四类缺口（C0 纯前端 / C1 Bridge 采集 / C2 契约面 / C3 输入面）与 `WP-2D-01` 派发提示词。
 - [`deployment/F10_RELEASE_HARDENING.md`](deployment/F10_RELEASE_HARDENING.md)：发布加固与回滚。

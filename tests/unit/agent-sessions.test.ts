@@ -99,6 +99,124 @@ describe("agent session persistence", () => {
     expect(window.localStorage.getItem("tilesim-web.agent-sessions.v1")).toBeNull();
   });
 
+  it("drops tampered sessions with invalid dates and negative sequence counters", () => {
+    const store = useAgentSessionsStore();
+    store.persist();
+    const raw = JSON.parse(window.localStorage.getItem("tilesim-web.agent-sessions.v1") || "{}");
+    raw.sessions[0].updated_at = "not-a-date";
+    window.localStorage.setItem("tilesim-web.agent-sessions.v1", JSON.stringify(raw));
+    setActivePinia(createPinia());
+    const restored = useAgentSessionsStore();
+    expect(restored.blocks).toEqual([]);
+    expect(restored.messages).toEqual([]);
+    expect(restored.turnSequence).toBe(0);
+  });
+
+  it("drops malformed persisted flow blocks before the app can expose resume controls", () => {
+    const store = useAgentSessionsStore();
+    store.persist();
+    const raw = JSON.parse(window.localStorage.getItem("tilesim-web.agent-sessions.v1") || "{}");
+    raw.sessions[0].blocks = [
+      {
+        block_type: "agent_flow",
+        block_id: "agent-flow:tampered",
+        flow_id: "flow-tampered",
+        status: "waiting_user",
+        phase: "await_user_confirmation",
+        title: "只读助手流程",
+        detail: "等待确认",
+        pending_action: { action: "confirm_report", prompt: "确认", reason: "确认" },
+        binding: null,
+      },
+    ];
+    window.localStorage.setItem("tilesim-web.agent-sessions.v1", JSON.stringify(raw));
+    setActivePinia(createPinia());
+    const restored = useAgentSessionsStore();
+    expect(restored.blocks).toEqual([]);
+  });
+
+  it("drops persisted flow blocks with malformed actions or artifact identities", () => {
+    const store = useAgentSessionsStore();
+    store.persist();
+    const raw = JSON.parse(window.localStorage.getItem("tilesim-web.agent-sessions.v1") || "{}");
+    const binding = {
+      session_id: "session-test",
+      flow_id: "flow-tampered",
+      run_id: null,
+      run_context_revision: null,
+      backend_identity: {},
+      schema_set_revision: `sha256:${"a".repeat(64)}`,
+      input_snapshot_digest: null,
+      artifact_bindings: [
+        {
+          artifact_id: "metrics",
+          schema_identity: "tilesim.metrics.v1",
+          sha256: "not-a-digest",
+          bytes: "01",
+        },
+      ],
+    };
+    raw.sessions[0].blocks = [
+      {
+        block_type: "agent_flow",
+        block_id: "agent-flow:tampered",
+        flow_id: "flow-tampered",
+        status: "waiting_user",
+        phase: "await_user_confirmation",
+        title: "只读助手流程",
+        detail: "等待确认",
+        pending_action: { action: "cancel", prompt: "确认", reason: "确认" },
+        evidence_status: "missing",
+        report_status: "not_started",
+        terminal_reason: null,
+        binding,
+      },
+    ];
+    window.localStorage.setItem("tilesim-web.agent-sessions.v1", JSON.stringify(raw));
+    setActivePinia(createPinia());
+    const restored = useAgentSessionsStore();
+    expect(restored.blocks).toEqual([]);
+  });
+
+  it("retains the signed identity of a navigation proposal across reload", () => {
+    const store = useAgentSessionsStore();
+    store.blocks = [
+      {
+        block_type: "agent_navigation",
+        block_id: "agent-navigation:reload-safe",
+        flow_id: "flow-navigation",
+        event_sequence: 1,
+        target_pages: ["metrics"],
+        required_capabilities: ["metrics"],
+        authorization: {
+          authorization_id: "authz-turn-1",
+          authorization_digest: `sha256:${"a".repeat(64)}`,
+          max_navigation_attempts: 3,
+          max_model_calls: 1,
+          max_tool_calls_per_round: 3,
+          max_run_creations: 1,
+          max_execution_time_ms: 30_000,
+          allowed_pages: ["metrics"],
+          allowed_actions: ["navigate"],
+        },
+        status: "pending",
+        detail: "等待确认",
+      },
+    ];
+    store.persist();
+
+    setActivePinia(createPinia());
+    const restored = useAgentSessionsStore();
+    expect(restored.blocks).toHaveLength(1);
+    expect(restored.blocks[0]).toMatchObject({
+      block_type: "agent_navigation",
+      authorization: {
+        authorization_id: "authz-turn-1",
+        authorization_digest: `sha256:${"a".repeat(64)}`,
+      },
+    });
+  });
+
   it("clears all locally cached sessions while leaving an empty usable session", () => {
     const store = useAgentSessionsStore();
     store.messages = [{ role: "user", content: "不要长期保留" }];
@@ -109,6 +227,20 @@ describe("agent session persistence", () => {
     expect(store.messages).toEqual([]);
     expect(store.blocks).toEqual([]);
     expect(store.summaries()[0].message_count).toBe(0);
+  });
+
+  it("drops persisted chat messages with unknown fields or empty content", () => {
+    const store = useAgentSessionsStore();
+    store.persist();
+    const raw = JSON.parse(window.localStorage.getItem("tilesim-web.agent-sessions.v1") || "{}");
+    raw.sessions[0].messages = [
+      { role: "user", content: "valid", unexpected: "provider payload" },
+      { role: "assistant", content: "" },
+    ];
+    window.localStorage.setItem("tilesim-web.agent-sessions.v1", JSON.stringify(raw));
+    setActivePinia(createPinia());
+    const restored = useAgentSessionsStore();
+    expect(restored.messages).toEqual([]);
   });
 
   it("bounds session count and serialized cache size", () => {

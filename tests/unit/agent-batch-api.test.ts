@@ -6,6 +6,7 @@ import {
 } from "../../src/contracts/generated/agent-harness";
 import {
   BATCH_PROVENANCE,
+  getAgentBatch,
   getAgentBatchEvents,
   listAgentBatches,
   observeAgentBatchEvents,
@@ -61,7 +62,12 @@ describe("Stage 5 batch API boundaries", () => {
       schema_identity: "tilesim.agent_harness.batch_event.v1",
       contract_revision: AGENT_HARNESS_BATCH_CONTRACT_REVISION,
       batch_id: "batch-test",
+      event_id: "event-2",
       sequence: 2,
+      state: "running",
+      node: "worker",
+      payload_digest: `sha256:${"2".repeat(64)}`,
+      created_at: "2026-10-19T00:00:00Z",
       provenance: BATCH_PROVENANCE,
     };
     vi.stubGlobal(
@@ -99,6 +105,38 @@ describe("Stage 5 batch API boundaries", () => {
     await expect(getAgentBatchEvents("batch-test", "4")).rejects.toMatchObject({ code: "batch_id_mismatch" });
   });
 
+  it("rejects a replay whose returned cursor differs from the requested cursor", async () => {
+    vi.stubGlobal("window", { location: { port: "4173" } });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          batch_id: "batch-test",
+          events: [],
+          after_sequence: 5,
+          terminal: false,
+          provenance: BATCH_PROVENANCE,
+        }),
+      ),
+    );
+
+    await expect(getAgentBatchEvents("batch-test", "4")).rejects.toMatchObject({ code: "event_sequence_gap" });
+  });
+
+  it("rejects a batch detail that carries an unvalidated event", async () => {
+    vi.stubGlobal("window", { location: { port: "4173" } });
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse({ batch: batch(), candidates: [], events: [{ batch_id: "batch-test", sequence: 1 }] }),
+        ),
+    );
+
+    await expect(getAgentBatch("batch-test")).rejects.toMatchObject({ code: "schema_identity_mismatch" });
+  });
+
   it("rejects an SSE response whose contract headers are stale", async () => {
     vi.stubGlobal("window", { location: { port: "4173" } });
     const stale = `sha256:${"e".repeat(64)}`;
@@ -117,5 +155,50 @@ describe("Stage 5 batch API boundaries", () => {
     );
 
     await expect(observeAgentBatchEvents("batch-test")).rejects.toMatchObject({ code: "schema_revision_mismatch" });
+  });
+
+  it("rejects a terminal SSE frame that is not a published batch state", async () => {
+    vi.stubGlobal("window", { location: { port: "4173" } });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(`event: terminal\ndata: ${JSON.stringify({ batch_id: "batch-test", state: "running" })}\n\n`, {
+          status: 200,
+          headers: { ...headers, "content-type": "text/event-stream; charset=utf-8" },
+        }),
+      ),
+    );
+    await expect(observeAgentBatchEvents("batch-test")).rejects.toMatchObject({ code: "invalid_batch_event" });
+  });
+
+  it("rejects a batch stream that ends before a terminal frame", async () => {
+    vi.stubGlobal("window", { location: { port: "4173" } });
+    const event = {
+      schema_identity: "tilesim.agent_harness.batch_event.v1",
+      contract_revision: AGENT_HARNESS_BATCH_CONTRACT_REVISION,
+      batch_id: "batch-test",
+      event_id: "event-1",
+      sequence: 1,
+      state: "running",
+      node: "worker",
+      payload_digest: `sha256:${"1".repeat(64)}`,
+      created_at: "2026-10-19T00:00:00Z",
+      provenance: BATCH_PROVENANCE,
+    };
+    const onEvent = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(`event: workflow\nid: 1\ndata: ${JSON.stringify(event)}\n\n`, {
+          status: 200,
+          headers: { ...headers, "content-type": "text/event-stream; charset=utf-8" },
+        }),
+      ),
+    );
+
+    await expect(observeAgentBatchEvents("batch-test", { onEvent })).rejects.toMatchObject({
+      code: "incomplete_batch_stream",
+    });
+    expect(onEvent).toHaveBeenCalledTimes(1);
   });
 });

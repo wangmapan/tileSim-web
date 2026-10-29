@@ -7,6 +7,7 @@ import {
 } from "../../contracts/generated/experiment-validators.js";
 import { expectedParameterPointers } from "./parameter-contract";
 import { dynamicEngineIssue, engineModeOf } from "./runtime-engine";
+import { requestParticipantCountIssue, runtimeRequestsOf } from "./structured-input";
 import {
   ExperimentRequestError,
   type BuildExperimentRequestOptions,
@@ -192,7 +193,10 @@ export function buildExperimentRequest(options: BuildExperimentRequestOptions): 
     throw new ExperimentRequestError("The dense DES topology is for Trace packages only.", "/trace_package_id");
   }
   if (form.scenario_id === "dense_des_package" && form.fidelity_policy !== "des") {
-    throw new ExperimentRequestError("Dense DES package attribution requires requested DES fidelity.", "/fidelity_policy");
+    throw new ExperimentRequestError(
+      "Dense DES package attribution requires requested DES fidelity.",
+      "/fidelity_policy",
+    );
   }
   if (form.scenario_id === "pd_disaggregation_example" && form.fidelity_policy !== "des") {
     throw new ExperimentRequestError("PD disaggregation requires requested DES fidelity.", "/fidelity_policy");
@@ -210,17 +214,44 @@ export function buildExperimentRequest(options: BuildExperimentRequestOptions): 
     gpu_participation_mode: form.gpu_participation_mode,
   };
   if (form.run_name.trim()) request.run_name = form.run_name.trim();
-  if (mode === "controls" && options.structuredInput) {
+  const hasRuntimeDocument = options.runtimeJson.trim().length > 0;
+  const hasTopologyDocument = options.topologyJson.trim().length > 0;
+  const hasAnyStructuredDocument = hasRuntimeDocument || hasTopologyDocument;
+  if (mode === "controls" && options.structuredInput && hasAnyStructuredDocument) {
+    // Quick controls mirror scalar leaves into the structured documents. Keep
+    // their descriptor validation active even when custom_inputs is the
+    // submission channel, otherwise an out-of-range knob would look valid
+    // until the backend rejects the assembled document.
+    for (const field of surface.controlGroups.flatMap((group) => group.fields)) {
+      if (!field.applicableInputModes.includes(mode) || !field.applicableScenarios.includes(form.scenario_id)) continue;
+      controlValue(form, field);
+    }
+  }
+  if (
+    mode === "controls" &&
+    options.structuredInput &&
+    hasAnyStructuredDocument &&
+    !surface.inputModes.includes("json")
+  ) {
+    throw new ExperimentRequestError("当前契约不支持结构化 custom_inputs；已输入的 JSON 未提交。", "/input_mode");
+  }
+  if (mode === "controls" && options.structuredInput && hasAnyStructuredDocument) {
     // The structured editors sit behind the quick-control tab because that is
     // where the knobs are, but request rows and device lists only travel on
     // `custom_inputs`: `overrides` is scalar-only and the backend's overrides
     // channel never reads them. The two channels are mutually exclusive in the
-    // contract (`create-run-request.schema.json:24-30`), so the presence of the
-    // structured editors — not the selected tab — decides which one is used.
+    // contract (`create-run-request.schema.json:24-30`), so once either JSON
+    // document has user content, both documents are required and the request
+    // cannot silently fall back to scalar overrides.
     request.custom_inputs = {
       runtime_trace: parseJsonObject(options.runtimeJson, "/custom_inputs/runtime_trace", "Runtime trace"),
       topology: parseJsonObject(options.topologyJson, "/custom_inputs/topology", "Fabric topology"),
     };
+  } else if (mode === "controls" && hasAnyStructuredDocument) {
+    throw new ExperimentRequestError(
+      "结构化 JSON 尚未纳入提交；请同时启用两个结构化文档或清空它们后再提交。",
+      hasRuntimeDocument ? "/custom_inputs/topology" : "/custom_inputs/runtime_trace",
+    );
   } else if (mode === "controls") {
     for (const field of surface.controlGroups.flatMap((group) => group.fields)) {
       if (!field.applicableInputModes.includes(mode) || !field.applicableScenarios.includes(form.scenario_id)) continue;
@@ -280,6 +311,22 @@ export function buildExperimentRequest(options: BuildExperimentRequestOptions): 
     request.design_space_candidates = designSpace;
   }
   const runtimeTrace = asRecord(asRecord(request.custom_inputs).runtime_trace);
+  const runtimeRequests = runtimeRequestsOf(runtimeTrace);
+  if (runtimeRequests) {
+    const countIssue = runtimeRequests
+      .map((row, index) =>
+        row && typeof row === "object" && !Array.isArray(row)
+          ? requestParticipantCountIssue(index, row as UnknownRecord)
+          : null,
+      )
+      .find((issue) => issue !== null);
+    if (countIssue) {
+      throw new ExperimentRequestError(
+        countIssue.message,
+        `/custom_inputs/runtime_trace/requests/${countIssue.index}/${countIssue.field}`,
+      );
+    }
+  }
   if (request.custom_inputs && engineModeOf(runtimeTrace) === "dynamic") {
     const issue = dynamicEngineIssue(runtimeTrace, asRecord(asRecord(request.custom_inputs).topology));
     if (issue) throw new ExperimentRequestError(issue.message, issue.path);

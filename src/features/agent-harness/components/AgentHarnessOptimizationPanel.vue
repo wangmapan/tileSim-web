@@ -45,6 +45,14 @@ const isWaitingApproval = computed(
 );
 const isPaused = computed(() => state.value === "paused");
 const hasActive = computed(() =>
+  Boolean(
+    activeSession.value &&
+    !["completed", "failed", "cancelled", "recovery_required", "manual_intervention_required"].includes(
+      String(state.value),
+    ),
+  ),
+);
+const canCancel = computed(() =>
   Boolean(activeSession.value && !["completed", "failed", "cancelled"].includes(String(state.value))),
 );
 const sessionErrorCode = computed(() => {
@@ -178,7 +186,7 @@ const evaluationValue = computed(() => {
             显式重试
           </button>
           <button
-            v-if="hasActive"
+            v-if="canCancel"
             type="button"
             class="optimization-panel__danger"
             :disabled="pending"

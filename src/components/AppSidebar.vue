@@ -9,6 +9,7 @@ import {
   Layers3,
   Network,
   PanelLeftClose,
+  PlayCircle,
   ShieldCheck,
   ScanSearch,
   Workflow,
@@ -23,6 +24,7 @@ const { t } = useI18n();
 const icons = {
   overview: Gauge,
   execution: Workflow,
+  replay: PlayCircle,
   metrics: ChartNoAxesCombined,
   fabric: Network,
   design_space: Layers3,

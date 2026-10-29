@@ -495,8 +495,10 @@ const schema36 = {
   },
 };
 const func1 = Object.prototype.hasOwnProperty;
-import func2 from "ajv/dist/runtime/ucs2length";
-import func0 from "ajv/dist/runtime/equal";
+import * as func2Module from "ajv/dist/runtime/ucs2length.js";
+const func2 = func2Module.default?.default ?? func2Module.default ?? func2Module;
+import * as func0Module from "ajv/dist/runtime/equal.js";
+const func0 = func0Module.default?.default ?? func0Module.default ?? func0Module;
 const pattern4 = new RegExp("^sha256:[0-9a-f]{64}$", "u");
 const schema37 = {
   type: "object",

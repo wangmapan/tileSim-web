@@ -25,10 +25,15 @@ const files = [
   "study",
   "candidate",
   "error",
+  "optimization-session",
+  "optimization-authorization-request",
+  "optimization-authorization",
+  "optimization-authorization-response",
 ];
 for (const file of files) {
   const value = JSON.parse(await readFile(resolve(root, `${file}.schema.json`), "utf8"));
   ajv.addSchema(value);
+  ajv.addSchema(value, `${file}.schema.json`);
 }
 for (const file of files.slice(1, -1)) {
   const schema = JSON.parse(await readFile(resolve(root, `${file}.schema.json`), "utf8"));
@@ -86,4 +91,57 @@ if (!ajv.getSchema("tilesim.agent_harness.execution_request.v1")(executionReques
   throw new Error("valid execution request rejected");
 if (ajv.getSchema("tilesim.agent_harness.execution_request.v1")({ ...executionRequest, credential: "forbidden" }))
   throw new Error("execution unknown field accepted");
+const authBudget = {
+  max_rounds: 5,
+  max_runs: 5,
+  max_seconds: 900,
+  max_failures: 2,
+  max_model_calls: 24,
+  max_tool_calls_per_round: 4,
+  max_navigation_attempts: 4,
+  max_run_creations: 1,
+  max_execution_time_ms: 900000,
+};
+const auth = {
+  schema_identity: "tilesim.agent_harness.optimization_authorization.v1",
+  contract_revision: "2026-10-28.wpf.v1",
+  authorization_id: "authz-schema-test",
+  session_id: "opt-schema-test",
+  principal: "local-user",
+  workspace_id: "local",
+  schema_set_revision: "sha256:" + "a".repeat(64),
+  backend_identity: { source_revision: "test" },
+  input_snapshot_digest: "sha256:" + "b".repeat(64),
+  autonomy_level: "bounded_autonomous",
+  budget: authBudget,
+  parameter_grants: [],
+  objective: { metric_path: "/metrics/p95_ps", direction: "minimize", minimum_improvement: 0, plateau_rounds: 3 },
+  tool_allowlist: ["query_verified_metrics"],
+  allowed_pages: ["overview"],
+  allowed_actions: ["analyze"],
+  protected: {
+    source_mode: "synthetic_trace",
+    claim_scope: "exploratory",
+    schema_set_revision: "sha256:" + "a".repeat(64),
+    backend_identity: { source_revision: "test" },
+  },
+  status: "active",
+  issued_by: "local-user",
+  issued_at: "2026-10-28T00:00:00Z",
+  expires_at: "2026-10-28T01:00:00Z",
+  revoked_at: null,
+  provenance: {
+    deployment_mode: "local_dev",
+    source_mode: "synthetic_trace",
+    claim_scope: "exploratory",
+    production_status: "not_for_production",
+  },
+  authorization_digest: "sha256:" + "c".repeat(64),
+};
+if (!ajv.getSchema("tilesim.agent_harness.optimization_authorization.v1")(auth))
+  throw new Error("valid authorization envelope rejected: " + JSON.stringify(ajv.getSchema("tilesim.agent_harness.optimization_authorization.v1").errors));
+if (ajv.getSchema("tilesim.agent_harness.optimization_authorization.v1")({ ...auth, untrusted_raw_provider_response: true }))
+  throw new Error("authorization unknown field accepted");
+if (ajv.getSchema("tilesim.agent_harness.optimization_authorization.v1")({ ...auth, budget: { ...authBudget, max_model_calls: 0 } }))
+  throw new Error("zero model-call budget accepted");
 console.log("Agent Harness schema contract passed");

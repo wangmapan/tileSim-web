@@ -4,6 +4,7 @@ import type { AgentOrchestrationCapabilitySnapshotResponse } from "../../src/con
 import {
   buildPhase1CapabilityProjection,
   Phase1CapabilityProjectionError,
+  markAgentBlocksStale,
   redactSingleTurnInstruction,
 } from "../../src/features/agent-copilot-integration";
 import {
@@ -91,6 +92,57 @@ describe("Phase 1 capability projection", () => {
 });
 
 describe("Phase 1 public page adapter and redaction", () => {
+  it("fences a pending report action when page context changes", () => {
+    const blocks = markAgentBlocksStale(
+      [
+        {
+          block_type: "report_action",
+          block_id: "report:1",
+          action: "generate_user_run_interpretation",
+          status: "pending",
+          title: "报告",
+          detail: "确认",
+          run_id: "run:1",
+          context_revision: "context:1",
+        },
+      ],
+      "context:2",
+    );
+    expect(blocks[0]).toMatchObject({ block_type: "report_action", status: "stale" });
+  });
+
+  it("fences a pending navigation proposal when page context changes", () => {
+    const blocks = markAgentBlocksStale(
+      [
+        {
+          block_type: "agent_navigation",
+          block_id: "navigation:1",
+          flow_id: "flow-navigation-1",
+          target_pages: ["metrics"],
+          required_capabilities: ["metrics"],
+          authorization: {
+            max_navigation_attempts: 1,
+            max_model_calls: 1,
+            max_tool_calls_per_round: 1,
+            max_run_creations: 1,
+            max_execution_time_ms: 30_000,
+            allowed_pages: ["metrics"],
+            allowed_actions: ["navigate"],
+          },
+          status: "pending",
+          detail: "打开指标页",
+          observation: null,
+        },
+      ],
+      "context:2",
+    );
+    expect(blocks[0]).toMatchObject({
+      block_type: "agent_navigation",
+      status: "stale",
+      detail: "页面上下文已变化，导航已停止；请重新描述目标。",
+    });
+  });
+
   it("publishes only typed read-only references while keeping form values in the separate compiler projection", () => {
     const surface = buildExperimentSurface(
       {

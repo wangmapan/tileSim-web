@@ -705,7 +705,11 @@
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 1px;
-  overflow: hidden;
+  /* Help bubbles belong to the field they explain, but may extend below a
+     short card. Clipping this grid made the second line of the tooltip
+     disappear at the bottom edge. The grid's own border/background still
+     provide the visual grouping; cards carry the content backgrounds. */
+  overflow: visible;
   border: 1px solid var(--line);
   border-radius: 9px;
   background: var(--line);

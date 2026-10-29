@@ -1040,6 +1040,23 @@ class F8ExperimentDescriptorContractTest(unittest.TestCase):
             "/custom_inputs/topology/topology/domains/0/cycle_window",
         )
 
+    def test_topology_links_accept_schema_link_identity(self) -> None:
+        inputs = valid_custom_inputs()
+        topology = inputs["topology"]["topology"]
+        topology["devices"].append({"device_id": "gpu1", "device_type": "GPU", "group_id": "node0"})
+        topology["domains"][0]["member_devices"].append("gpu1")
+        topology["links"] = [
+            {
+                "link_id": "su-gpu0-gpu1",
+                "src_device": "gpu0",
+                "dst_device": "gpu1",
+                "domain_id": "su0",
+                "bandwidth_gbps": 450.0,
+                "latency_us": 0.8,
+            }
+        ]
+        self.assertEqual(server.validate_custom_inputs(inputs), inputs)
+
     def test_runtime_policy_boundary_and_synthetic_tuple_are_fail_closed(self) -> None:
         for field in ("kv_capacity_tokens", "max_active_requests", "max_batch_size", "kv_admission_watermark"):
             with self.subTest(field=field):
@@ -1282,6 +1299,30 @@ class BridgeApiContractTest(unittest.TestCase):
         self.assertEqual(headers["X-TileSim-API-Version"], server.API_VERSION)
         self.assertEqual(payload["run_creation"]["idempotency_header"], "Idempotency-Key")
         self.assertEqual(payload["run_events"]["resume_header"], "Last-Event-ID")
+        self.assertEqual(payload["agent_flow"], server.AGENT_FLOW_CONTRACT)
+        self.assertEqual(
+            set(payload["agent_flow"]["schema_identities"]),
+            {
+                "tilesim.agent_flow.artifact_binding.v1",
+                "tilesim.agent_flow.identity_binding.v1",
+                "tilesim.agent_flow.navigation_observation.v1",
+                "tilesim.agent_flow.start_request.v1",
+                "tilesim.agent_flow.resume_request.v1",
+                "tilesim.agent_flow.state.v1",
+                "tilesim.agent_flow.event.v1",
+                "tilesim.agent_flow.start_response.v1",
+                "tilesim.agent_flow.status_response.v1",
+                "tilesim.agent_flow.events_response.v1",
+                "tilesim.agent_flow.resume_response.v1",
+                "tilesim.agent_flow.revoke_request.v1",
+                "tilesim.agent_flow.revoke_response.v1",
+            },
+        )
+        self.assertFalse(payload["agent_flow"]["create_run"])
+        self.assertEqual(
+            payload["endpoints"]["startAgentFlow"],
+            "POST /api/agent/flows",
+        )
 
     def test_manifest_registers_the_schema_bound_experiment_descriptor(self) -> None:
         status, manifest, _ = self.request("/api/manifest")
@@ -1740,6 +1781,49 @@ class BridgeApiContractTest(unittest.TestCase):
         self.assertEqual(status, 404)
         self.assertEqual(payload["error"]["code"], "run_not_found")
 
+    def test_operation_delete_uses_cross_store_resolution_not_harness_only_purge(self) -> None:
+        """User erasure must enter the coordinator's association preflight."""
+
+        operation, _ = server.agent_harness_store.create_operation(
+            idempotency_key="operation-delete-route-regression",
+            request_payload={"purpose": "route-regression"},
+            schema_set_revision=server.SCHEMA_SET_REVISION,
+            backend_identity=server.harness_backend_identity(),
+            principal="local-user",
+            operation_kind="read_only",
+        )
+        operation_id = operation["operation_id"]
+        try:
+            with (
+                mock.patch.object(
+                    server.agent_deletion_coordinator,
+                    "delete_resource",
+                    return_value={"status": "deleted", "resource_id": operation_id, "stores": {}},
+                ) as delete_resource,
+                mock.patch.object(
+                    server.agent_deletion_coordinator,
+                    "delete",
+                    side_effect=AssertionError("operation DELETE must not bypass association resolution"),
+                ),
+            ):
+                status, payload, _ = self.request(
+                    f"/api/agent/operations/{operation_id}",
+                    headers={"Idempotency-Key": "operation-delete-route-regression"},
+                    method="DELETE",
+                )
+            self.assertEqual(status, 200)
+            self.assertTrue(payload["deleted"])
+            delete_resource.assert_called_once_with(
+                resource_id=operation_id,
+                idempotency_key="operation-delete-route-regression",
+                principal="local-user",
+                workspace_id=None,
+            )
+        finally:
+            # The coordinator was mocked in this regression; clean the fixture
+            # explicitly so the shared local harness database is not polluted.
+            server.agent_harness_store.purge_operation_graph_permanently(operation_id, principal="local-user")
+
     def test_active_run_delete_is_rejected_without_removing_directory(self) -> None:
         run_id = "run-delete-active"
         run_dir = server.RUNS_ROOT / run_id
@@ -2001,7 +2085,10 @@ class BridgeApiContractTest(unittest.TestCase):
                 command, 0, stdout=json.dumps(report, ensure_ascii=False).encode("utf-8"), stderr=b""
             )
 
-        with mock.patch.object(server.subprocess, "run", side_effect=utf8_runner):
+        with (
+            mock.patch.object(server.subprocess, "run", side_effect=utf8_runner),
+            mock.patch.object(server, "validate_execution_replay", return_value=None),
+        ):
             server.execute_run(run_id, scenario, "des")
 
         # The stdout artifact is valid UTF-8 even if the host's preferred code page is GBK.
@@ -5263,11 +5350,14 @@ class AssistantModelEndpointTest(unittest.TestCase):
         with urllib.request.urlopen(request, timeout=5) as response:
             return response.status, json.loads(response.read()), response.headers
 
-    def post(self, payload: object) -> tuple[int, dict, object]:
+    def post(self, payload: object, *, include_session: bool = True) -> tuple[int, dict, object]:
+        headers = {"Content-Type": "application/json"}
+        if include_session:
+            headers["X-TileSim-Assistant-Session"] = "assistant-model-test-session"
         request = urllib.request.Request(
             self.base_url + self.PLAN_PATH,
             data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
+            headers=headers,
             method="POST",
         )
         try:
@@ -5293,11 +5383,14 @@ class AssistantModelEndpointTest(unittest.TestCase):
             server.assistant_model, "config_from_environment", return_value=config
         )
 
-    def chat(self, payload: object) -> tuple[int, object, bytes]:
+    def chat(self, payload: object, *, include_session: bool = True) -> tuple[int, object, bytes]:
+        headers = {"Content-Type": "application/json"}
+        if include_session:
+            headers["X-TileSim-Assistant-Session"] = "assistant-model-test-session"
         request = urllib.request.Request(
             self.base_url + self.CHAT_PATH,
             data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
+            headers=headers,
             method="POST",
         )
         try:
@@ -5306,11 +5399,14 @@ class AssistantModelEndpointTest(unittest.TestCase):
         except urllib.error.HTTPError as error:
             return error.code, error.headers, error.read()
 
-    def result_analysis(self, payload: object) -> tuple[int, object, bytes]:
+    def result_analysis(self, payload: object, *, include_session: bool = True) -> tuple[int, object, bytes]:
+        headers = {"Content-Type": "application/json"}
+        if include_session:
+            headers["X-TileSim-Assistant-Session"] = "assistant-model-test-session"
         request = urllib.request.Request(
             self.base_url + self.RESULT_ANALYSIS_PATH,
             data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
+            headers=headers,
             method="POST",
         )
         try:
@@ -5340,7 +5436,7 @@ class AssistantModelEndpointTest(unittest.TestCase):
         iterating, not before it starts.
         """
 
-        def stream(conversation, panel_values):  # noqa: ANN001, ANN202
+        def stream(conversation, panel_values, **_kwargs):  # noqa: ANN001, ANN202
             self.replayed.append((conversation, panel_values))
             for item in events:
                 if isinstance(item, Exception):
@@ -5380,6 +5476,93 @@ class AssistantModelEndpointTest(unittest.TestCase):
         self.assertEqual(status, 503)
         self.assertEqual(body["error"]["code"], "assistant_model_unavailable")
         self.assertTrue(body["error"]["retryable"])
+
+    def test_model_routes_require_an_explicit_session_binding(self) -> None:
+        """HTTP model calls must never fall back to the legacy shared selection scope."""
+
+        with self.channel_configured():
+            status, body, _ = self.post({"instruction": "低延迟在线服务"}, include_session=False)
+            self.assertEqual(status, 400)
+            self.assertEqual(body["error"]["code"], "invalid_assistant_model_session")
+
+            chat_status, _, chat_body = self.chat(
+                {"messages": [{"role": "user", "content": "你好"}]},
+                include_session=False,
+            )
+            self.assertEqual(chat_status, 400)
+            self.assertEqual(json.loads(chat_body)["error"]["code"], "invalid_assistant_model_session")
+
+            result_status, _, result_body = self.result_analysis(
+                {
+                    "messages": [{"role": "user", "content": "请分析"}],
+                    "context": {
+                        "run_id": "run-result-1",
+                        "sections": [],
+                        "evidence_paths": [],
+                        "evidence": {
+                            "manifest_status": "verified",
+                            "artifact_count": 0,
+                            "full_content_count": 0,
+                            "summary_only_count": 0,
+                            "unavailable_count": 0,
+                            "rejected_count": 0,
+                            "artifacts": [],
+                            "rejected_artifacts": [],
+                        },
+                    },
+                },
+                include_session=False,
+            )
+            self.assertEqual(result_status, 400)
+            self.assertEqual(json.loads(result_body)["error"]["code"], "invalid_assistant_model_session")
+
+    def test_plan_route_binds_each_http_call_to_its_session_scope(self) -> None:
+        proposal = {
+            "schema_version": server.assistant_model.PLAN_SCHEMA_VERSION,
+            "protocol": server.assistant_model.PROTOCOL,
+            "provider_id": server.assistant_model.PROVIDER_ID,
+            "model_id": "deepseek-v4-flash",
+            "served_model": "deepseek-v4-flash",
+            "instruction": "低延迟在线服务",
+            "title": "低延迟在线服务",
+            "rationale": "以尾延迟优先。",
+            "settings": [],
+            "dropped": [],
+            "applied": False,
+            "executed": False,
+        }
+        scopes: list[str | None] = []
+
+        def plan(_instruction: str, *, scope: str | None = None):
+            scopes.append(scope)
+            return proposal
+
+        with mock.patch.object(server.assistant_model, "plan", side_effect=plan):
+            first = urllib.request.Request(
+                self.base_url + self.PLAN_PATH,
+                data=json.dumps({"instruction": "低延迟在线服务"}).encode("utf-8"),
+                headers={
+                    "Content-Type": "application/json",
+                    "X-TileSim-Assistant-Session": "session-a",
+                },
+                method="POST",
+            )
+            second = urllib.request.Request(
+                self.base_url + self.PLAN_PATH,
+                data=json.dumps({"instruction": "低延迟在线服务"}).encode("utf-8"),
+                headers={
+                    "Content-Type": "application/json",
+                    "X-TileSim-Assistant-Session": "session-b",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(first, timeout=5) as response:
+                self.assertEqual(response.status, 200)
+            with urllib.request.urlopen(second, timeout=5) as response:
+                self.assertEqual(response.status, 200)
+        self.assertEqual(len(scopes), 2)
+        self.assertTrue(all(isinstance(scope, str) for scope in scopes))
+        self.assertNotEqual(scopes[0], scopes[1])
 
     def test_the_planning_route_validates_the_instruction(self) -> None:
         with self.unconfigured():
@@ -5622,7 +5805,7 @@ class AssistantModelEndpointTest(unittest.TestCase):
         self.assertTrue(failure["retryable"])
 
     def test_a_stream_that_is_interrupted_never_pretends_the_answer_finished(self) -> None:
-        def abandon(conversation, panel_values):  # noqa: ANN001, ANN202
+        def abandon(conversation, panel_values, **_kwargs):  # noqa: ANN001, ANN202
             yield (
                 "prose",
                 {"schema_version": server.assistant_model.CHAT_SCHEMA_VERSION, "text": "先压"},
@@ -5646,7 +5829,7 @@ class AssistantModelCatalogueEndpointTest(unittest.TestCase):
     """The two routes that let a panel offer the identities the service itself publishes.
 
     The catalogue route is a read made with the credential the Bridge already holds; the selection
-    route switches the identity for the lifetime of this process.  Neither writes a document and
+    route switches the identity for the lifetime of one assistant session.  Neither writes a document and
     neither creates a run.  As above, the Provider is never contacted: the catalogue read is injected
     and the channel state is patched, so no case here opens an outbound connection.
     """
@@ -5667,19 +5850,37 @@ class AssistantModelCatalogueEndpointTest(unittest.TestCase):
         self.httpd.server_close()
         self.thread.join(timeout=2)
 
-    def get(self, path: str) -> tuple[int, dict, object]:
-        request = urllib.request.Request(self.base_url + path, headers={}, method="GET")
+    def get(
+        self,
+        path: str,
+        headers: dict[str, str] | None = None,
+        *,
+        include_session: bool = True,
+    ) -> tuple[int, dict, object]:
+        request_headers = dict(headers or {})
+        if include_session:
+            request_headers.setdefault("X-TileSim-Assistant-Session", "catalogue-test-session")
+        request = urllib.request.Request(self.base_url + path, headers=request_headers, method="GET")
         try:
             with urllib.request.urlopen(request, timeout=5) as response:
                 return response.status, json.loads(response.read()), response.headers
         except urllib.error.HTTPError as error:
             return error.code, json.loads(error.read()), error.headers
 
-    def post(self, payload: object) -> tuple[int, dict, object]:
+    def post(
+        self,
+        payload: object,
+        headers: dict[str, str] | None = None,
+        *,
+        include_session: bool = True,
+    ) -> tuple[int, dict, object]:
+        request_headers = {"Content-Type": "application/json", **(headers or {})}
+        if include_session:
+            request_headers.setdefault("X-TileSim-Assistant-Session", "catalogue-test-session")
         request = urllib.request.Request(
             self.base_url + self.SELECTION_PATH,
             data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
+            headers=request_headers,
             method="POST",
         )
         try:
@@ -5764,7 +5965,8 @@ class AssistantModelCatalogueEndpointTest(unittest.TestCase):
         self.assertFalse(body["persisted"])
         self.assertTrue(body["session_only"])
         self.assertEqual(body["schema_set_revision"], server.SCHEMA_SET_REVISION)
-        self.assertEqual(server.assistant_model.session_model(), "glm-5.1")
+        scoped = server.assistant_model.bind_selection_scope("catalogue-test-session")
+        self.assertEqual(server.assistant_model.session_model(scoped), "glm-5.1")
 
     def test_a_switch_is_visible_to_the_next_request_and_is_not_written_down(self) -> None:
         """Proves the switch is live *and* session-scoped, with the real configuration reader.
@@ -5799,6 +6001,65 @@ class AssistantModelCatalogueEndpointTest(unittest.TestCase):
         start.assert_not_called()
         self.assertEqual(set(server.runs), before)
 
+    def test_catalogue_and_selection_routes_require_a_session_scope(self) -> None:
+        """HTTP model choices must never fall back to the process-wide legacy scope."""
+
+        with self.channel_configured(), self.publishing(["deepseek-v4-flash"]):
+            status, body, _ = self.get(self.CATALOGUE_PATH, include_session=False)
+        self.assertEqual(status, 400)
+        self.assertEqual(body["error"]["code"], "invalid_assistant_model_session")
+
+        with self.channel_configured():
+            status, body, _ = self.post({"model": "glm-5.1"}, include_session=False)
+        self.assertEqual(status, 400)
+        self.assertEqual(body["error"]["code"], "invalid_assistant_model_session")
+        self.assertIsNone(server.assistant_model.session_model())
+
+    def test_selection_isolated_by_assistant_session_header(self) -> None:
+        environment = {
+            "TILESIM_ASSISTANT_BASE_URL": "https://ai-pixel.online",
+            "TILESIM_ASSISTANT_API_KEY": "unit-test-credential",
+            "TILESIM_ASSISTANT_MODEL": "deepseek-v4-flash",
+        }
+        with mock.patch.dict(os.environ, environment, clear=False):
+            status_a, _, _ = self.post({"model": "glm-5.1"}, {"X-TileSim-Assistant-Session": "session-a"})
+            status_b, _, _ = self.post({"model": "qwen3-0.6b"}, {"X-TileSim-Assistant-Session": "session-b"})
+            descriptor_a = self.get("/api/agent/assistant-model", {"X-TileSim-Assistant-Session": "session-a"})[1]
+            descriptor_b = self.get("/api/agent/assistant-model", {"X-TileSim-Assistant-Session": "session-b"})[1]
+        self.assertEqual(status_a, 200)
+        self.assertEqual(status_b, 200)
+        self.assertEqual(descriptor_a["provider"]["model_id"], "glm-5.1")
+        self.assertEqual(descriptor_b["provider"]["model_id"], "qwen3-0.6b")
+
+    def test_selection_scope_also_binds_principal_and_workspace(self) -> None:
+        environment = {
+            "TILESIM_ASSISTANT_BASE_URL": "https://ai-pixel.online",
+            "TILESIM_ASSISTANT_API_KEY": "unit-test-credential",
+            "TILESIM_ASSISTANT_MODEL": "deepseek-v4-flash",
+        }
+        with mock.patch.dict(os.environ, environment, clear=False):
+            headers_a = {
+                "X-TileSim-Assistant-Session": "same-session",
+                "X-TileSim-Principal": "principal-a",
+                "X-TileSim-Workspace": "workspace-a",
+            }
+            headers_b = {**headers_a, "X-TileSim-Principal": "principal-b"}
+            self.post({"model": "glm-5.1"}, headers_a)
+            self.post({"model": "qwen3-0.6b"}, headers_b)
+            descriptor_a = self.get("/api/agent/assistant-model", headers_a)[1]
+            descriptor_b = self.get("/api/agent/assistant-model", headers_b)[1]
+        self.assertEqual(descriptor_a["provider"]["model_id"], "glm-5.1")
+        self.assertEqual(descriptor_b["provider"]["model_id"], "qwen3-0.6b")
+
+    def test_selection_rejects_malformed_assistant_session_header(self) -> None:
+        with self.channel_configured():
+            status, body, _ = self.post(
+                {"model": "glm-5.1"},
+                {"X-TileSim-Assistant-Session": "not a valid scope"},
+            )
+        self.assertEqual(status, 400)
+        self.assertEqual(body["error"]["code"], "invalid_assistant_model_session")
+
     def test_the_selection_route_refuses_an_unusable_identity(self) -> None:
         for payload in ({}, {"model": ""}, {"model": "  "}, {"model": "a b"}, {"model": 7}, {"model": "x" * 201}):
             with self.channel_configured():
@@ -5815,7 +6076,10 @@ class AssistantModelCatalogueEndpointTest(unittest.TestCase):
 
     def test_the_selection_route_needs_a_request_body(self) -> None:
         request = urllib.request.Request(
-            self.base_url + self.SELECTION_PATH, data=b"", method="POST"
+            self.base_url + self.SELECTION_PATH,
+            data=b"",
+            headers={"X-TileSim-Assistant-Session": "catalogue-test-session"},
+            method="POST",
         )
         try:
             with urllib.request.urlopen(request, timeout=5) as response:
@@ -5941,7 +6205,10 @@ class AssistantModelStreamingChainTest(unittest.TestCase):
         request = urllib.request.Request(
             self.base_url + self.CHAT_PATH,
             data=json.dumps(self.REQUEST).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
+            headers={
+                "Content-Type": "application/json",
+                "X-TileSim-Assistant-Session": "streaming-chain-test-session",
+            },
             method="POST",
         )
         return urllib.request.urlopen(request, timeout=15)
@@ -6023,6 +6290,98 @@ class AssistantModelStreamingChainTest(unittest.TestCase):
         # The catalogue and the current panel values travel as read-only context on the system turn.
         self.assertEqual(messages[0]["role"], "system")
         self.assertIn("max_batch_size = 8", messages[0]["content"])
+
+class AgentIntentEndpointValidationTest(unittest.TestCase):
+    """The intent route rejects malformed identity before invoking a Provider."""
+
+    PATH = "/api/agent/intent"
+
+    def setUp(self) -> None:
+        self.httpd = server.ThreadingHTTPServer(("127.0.0.1", 0), server.BridgeHandler)
+        self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
+        self.thread.start()
+        self.base_url = f"http://127.0.0.1:{self.httpd.server_port}"
+
+    def tearDown(self) -> None:
+        self.httpd.shutdown()
+        self.httpd.server_close()
+        self.thread.join(timeout=2)
+
+    @staticmethod
+    def request() -> dict:
+        return {
+            "schema_identity": server.agent_intent.REQUEST_SCHEMA_IDENTITY,
+            "contract_revision": server.agent_intent.CONTRACT_REVISION,
+            "session_id": "intent-test-session",
+            "user_goal": "Explain this page",
+            "current_page": {
+                "page_id": "overview",
+                "route_name": "overview",
+                "context_revision": "ctx-1",
+                "capability_ids": ["overview"],
+            },
+            "page_catalog": [
+                {
+                    "page_id": "overview",
+                    "route_name": "overview",
+                    "capability_ids": ["overview"],
+                    "supports_run": True,
+                }
+            ],
+            "run_id": None,
+            "run_context_revision": None,
+            "backend_identity": server.harness_backend_identity(),
+            "schema_set_revision": server.SCHEMA_SET_REVISION,
+            "input_snapshot_digest": None,
+        }
+
+    def post(self, payload: dict, *, include_session: bool = True) -> int:
+        headers = {
+            "Content-Type": "application/json",
+            "X-TileSim-Assistant-Session": "intent-test-session",
+        }
+        if not include_session:
+            headers.pop("X-TileSim-Assistant-Session")
+        request = urllib.request.Request(
+            self.base_url + self.PATH,
+            data=json.dumps(payload).encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=5) as response:
+                response.read()
+                return response.status
+        except urllib.error.HTTPError as error:
+            error.read()
+            return error.code
+
+    def test_identity_malformed_requests_are_rejected_before_provider(self) -> None:
+        mutations = (
+            {"session_id": ""},
+            {"run_id": "run-1"},
+            {"run_context_revision": "ctx-1"},
+            {"backend_identity": []},
+            {"schema_set_revision": "sha256:not-a-digest"},
+            {"input_snapshot_digest": "sha256:not-a-digest"},
+            {"backend_identity": {"stale": True}},
+        )
+        with mock.patch.object(server.agent_intent, "classify", side_effect=AssertionError("Provider must not be called")):
+            for mutation in mutations:
+                with self.subTest(mutation=mutation):
+                    payload = self.request()
+                    payload.update(mutation)
+                    self.assertEqual(self.post(payload), 400)
+
+    def test_intent_route_requires_an_explicit_session_binding(self) -> None:
+        with mock.patch.object(server.agent_intent, "classify", side_effect=AssertionError("Provider must not be called")):
+            self.assertEqual(self.post(self.request(), include_session=False), 400)
+
+    def test_intent_route_rejects_a_session_mismatch_before_provider(self) -> None:
+        payload = self.request()
+        payload["session_id"] = "another-session"
+        with mock.patch.object(server.agent_intent, "classify", side_effect=AssertionError("Provider must not be called")):
+            self.assertEqual(self.post(payload), 400)
 
 
 if __name__ == "__main__":

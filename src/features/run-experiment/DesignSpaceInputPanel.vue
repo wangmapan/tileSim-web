@@ -64,19 +64,9 @@ const manifestSummary = computed(() => {
         :placeholder="t('可选：tilesim.design_space.candidates.v1 或 v2')"
       ></textarea>
       <div class="design-manifest-summary" aria-live="polite">
-        <div>
-          <strong>{{ manifestSummary.mode === "built_in" ? t("内置合成候选集") : t("自定义候选 manifest") }}</strong>
-          <small v-if="manifestSummary.mode === 'built_in'">
-            {{ t("留空使用内置候选。") }}
-          </small>
-          <small v-else-if="manifestSummary.error">{{
-            t("JSON 尚不可解析：{message}", { message: manifestSummary.error })
-          }}</small>
-          <small v-else>tilesim.design_space.candidates.v1</small>
-        </div>
-        <span :class="{ invalid: manifestSummary.candidateCount < 1 || manifestSummary.candidateCount > 256 }">
-          {{ manifestSummary.candidateCount }} / 256 {{ t("候选") }}
-        </span>
+        <span v-if="manifestSummary.error" class="invalid">{{
+          t("JSON 尚不可解析：{message}", { message: manifestSummary.error })
+        }}</span>
         <span
           v-if="manifestSummary.transferCount !== null"
           :class="{ invalid: manifestSummary.transferCount < 1 || manifestSummary.transferCount > 100000 }"

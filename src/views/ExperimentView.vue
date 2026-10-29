@@ -16,13 +16,13 @@ import {
   buildExperimentRequestPreview,
   buildExperimentSurface,
   createExperimentForm,
-  enterStructuredInput,
   reconcileExperimentForm,
   resolveExperimentErrorPointer,
   resetExperimentControls,
   readExperimentInputDraft,
   saveExperimentInputDraft,
   runExperiment,
+  templateHydrationRequestIsCurrent,
   fetchTracePackageCatalog,
   inspectTracePackage,
   tracePackageBackendIdentity,
@@ -54,33 +54,47 @@ const runStatus = ref("");
 const runtimeJson = ref("");
 const topologyJson = ref("");
 const designSpaceJson = ref("");
-/** Off by default: the quick-control tab keeps its overrides path until asked. */
-const structuredInput = ref(false);
+/** The experiment page opens with the complete structured input surface. */
+const structuredInput = ref(true);
 const pairingPending = ref(false);
 let inputDraftRestored = false;
+const inputDraftRevision = ref("");
+const inputDraftStale = ref(false);
+const inputDraftStaleRevision = ref("");
 watch(
   () => state.bridge.manifest?.schema_set_revision,
   (revision) => {
-    if (!revision || inputDraftRestored) return;
+    if (!revision) return;
+    if (inputDraftRevision.value && inputDraftRevision.value !== revision) {
+      inputDraftStale.value = true;
+      inputDraftStaleRevision.value = revision;
+      invalidateTemplateRequest();
+      return;
+    }
+    if (inputDraftRestored) return;
     inputDraftRestored = true;
+    inputDraftRevision.value = revision;
     // Never overwrite input already typed while the manifest was loading.
-    if (runtimeJson.value || topologyJson.value || mode.value !== "controls" || structuredInput.value) return;
+    if (runtimeJson.value || topologyJson.value || mode.value !== "controls") return;
     const saved = readExperimentInputDraft(revision);
     if (!saved) return;
     mode.value = saved.mode;
-    structuredInput.value = saved.structuredInput;
     runtimeJson.value = saved.runtimeJson;
     topologyJson.value = saved.topologyJson;
   },
   { immediate: true },
 );
 watch(
-  [mode, structuredInput, runtimeJson, topologyJson, () => state.bridge.manifest?.schema_set_revision],
-  ([currentMode, currentStructured, currentRuntime, currentTopology, revision]) => {
-    if (revision && (currentMode === "controls" || currentMode === "json"))
+  [mode, runtimeJson, topologyJson, () => state.bridge.manifest?.schema_set_revision],
+  ([currentMode, currentRuntime, currentTopology, revision]) => {
+    if (
+      revision &&
+      !inputDraftStale.value &&
+      inputDraftRevision.value === revision &&
+      (currentMode === "controls" || currentMode === "json")
+    )
       saveExperimentInputDraft(revision, {
         mode: currentMode,
-        structuredInput: currentStructured,
         runtimeJson: currentRuntime,
         topologyJson: currentTopology,
       });
@@ -143,7 +157,14 @@ const requestPreview = computed(() =>
     topologyJson: topologyJson.value,
     designSpaceJson: mode.value === "trace_package" ? "" : designSpaceJson.value,
     tracePackageId: selectedTracePackageId.value,
-    structuredInput: structuredInput.value,
+    // A JSON-capable surface owns the structured channel from the first
+    // render, so an empty or partial document is rejected by the request
+    // builder instead of silently falling back to scalar overrides. On a
+    // controls-only surface, stale structured text is still passed through so
+    // the builder can fail closed rather than drop it.
+    structuredInput:
+      structuredInput.value &&
+      (surface.value.inputModes.includes("json") || Boolean(runtimeJson.value.trim() || topologyJson.value.trim())),
   }),
 );
 const displayFieldPath = computed(() => {
@@ -164,6 +185,7 @@ const canRun = computed(
     state.bridge.available &&
     surface.value.canSubmit &&
     !submissionContractError.value &&
+    !inputDraftStale.value &&
     requestPreview.value.request !== null &&
     (mode.value !== "trace_package" || selectedTracePackage.value?.submission_available === true) &&
     !pairingPending.value &&
@@ -241,6 +263,133 @@ const AGENT_COMMAND_PROVIDER_ID = "experiment";
 
 let agentTemplateLoadKey = "";
 let agentTemplateLoadPromise = null;
+let templateRequestToken = 0;
+let activeTemplateController = null;
+let inputMutationToken = 0;
+let experimentMounted = true;
+let applyingTemplate = false;
+
+watch(
+  [runtimeJson, topologyJson],
+  () => {
+    if (applyingTemplate) return;
+    inputMutationToken += 1;
+    if (activeTemplateController) {
+      templateRequestToken += 1;
+      activeTemplateController.abort();
+      activeTemplateController = null;
+      agentTemplateLoadPromise = null;
+    }
+  },
+  { flush: "sync" },
+);
+
+// Scalar controls are user input too.  The automatic template request can be
+// in flight before the first control is touched; without fencing this object,
+// its response could hydrate the JSON documents afterwards and project the
+// template's value back over the user's edit.
+watch(
+  () => form.parameterValues,
+  () => {
+    if (applyingTemplate) return;
+    inputMutationToken += 1;
+    if (activeTemplateController) {
+      templateRequestToken += 1;
+      activeTemplateController.abort();
+      activeTemplateController = null;
+      agentTemplateLoadPromise = null;
+    }
+  },
+  { deep: true, flush: "sync" },
+);
+
+function currentTemplateContext() {
+  const manifest = state.bridge.manifest;
+  return {
+    scenarioId: form.scenario_id,
+    schemaRevision: manifest?.schema_set_revision || "",
+    mode: mode.value,
+    inputToken: inputMutationToken,
+  };
+}
+
+function clearTemplateRequest(controller, token) {
+  if (activeTemplateController !== controller || templateRequestToken !== token) return;
+  activeTemplateController = null;
+  agentTemplateLoadPromise = null;
+}
+
+function invalidateTemplateRequest() {
+  templateRequestToken += 1;
+  activeTemplateController?.abort();
+  activeTemplateController = null;
+  agentTemplateLoadPromise = null;
+}
+
+function fenceTemplateForUserInput() {
+  if (applyingTemplate) return;
+  inputMutationToken += 1;
+  invalidateTemplateRequest();
+}
+
+async function requestExperimentTemplate(explicit) {
+  const context = currentTemplateContext();
+  const key = `${context.scenarioId}:${context.schemaRevision}`;
+  if (!explicit && agentTemplateLoadKey === key) return { stale: false, loaded: false };
+  if (agentTemplateLoadPromise && !explicit) return agentTemplateLoadPromise;
+  if (explicit && activeTemplateController) {
+    invalidateTemplateRequest();
+  }
+  const token = ++templateRequestToken;
+  const controller = new AbortController();
+  activeTemplateController = controller;
+  const promise = (async () => {
+    let loaded = false;
+    try {
+      const template = await runExperiment.getTemplate(context.scenarioId);
+      if (
+        !templateHydrationRequestIsCurrent(
+          { token, controller, ...context },
+          {
+            mounted: experimentMounted,
+            token: templateRequestToken,
+            controller: activeTemplateController,
+            scenarioId: form.scenario_id,
+            schemaRevision: state.bridge.manifest?.schema_set_revision || "",
+            mode: mode.value,
+            inputToken: inputMutationToken,
+          },
+        )
+      )
+        return { stale: true, loaded: false };
+      if (!template || template.runtime_trace === undefined || template.topology === undefined) {
+        throw new Error(t("模板没有返回完整 runtime_trace 和 topology。"));
+      }
+      applyingTemplate = true;
+      try {
+        runtimeJson.value = JSON.stringify(template.runtime_trace, null, 2);
+        topologyJson.value = JSON.stringify(template.topology, null, 2);
+      } finally {
+        applyingTemplate = false;
+      }
+      loaded = true;
+      agentTemplateLoadKey = key;
+      inputDraftStale.value = false;
+      inputDraftStaleRevision.value = "";
+      inputDraftRevision.value = context.schemaRevision;
+      return { stale: false, loaded: true };
+    } catch (error) {
+      if (controller.signal.aborted || !experimentMounted) return { stale: true, loaded: false };
+      if (!explicit) return { stale: false, loaded: false };
+      throw error;
+    } finally {
+      if (!loaded && agentTemplateLoadKey === key) agentTemplateLoadKey = "";
+      clearTemplateRequest(controller, token);
+    }
+  })();
+  agentTemplateLoadPromise = promise;
+  return promise;
+}
 
 /**
  * Give the Agent a real structured scenario to reason about on first entry.
@@ -249,13 +398,19 @@ let agentTemplateLoadPromise = null;
  */
 async function ensureAgentStructuredContext() {
   const manifest = state.bridge.manifest;
+  const hasScalarDraft = Object.values(form.parameterValues || {}).some(
+    (value) => value !== undefined && value !== null && value !== "",
+  );
   if (
     !inputDraftRestored ||
     !state.bridge.connected ||
     !state.bridge.available ||
     state.bridge.checking ||
     !manifest ||
+    surface.value.contractStatus === "contract_error" ||
+    !surface.value.inputModes.includes("json") ||
     (mode.value !== "controls" && mode.value !== "json") ||
+    hasScalarDraft ||
     runtimeJson.value.trim() ||
     topologyJson.value.trim()
   ) {
@@ -264,38 +419,20 @@ async function ensureAgentStructuredContext() {
   const key = `${form.scenario_id}:${manifest.schema_set_revision}`;
   if (agentTemplateLoadKey === key) return;
   if (agentTemplateLoadPromise) return agentTemplateLoadPromise;
-  agentTemplateLoadKey = key;
-  const requestedScenarioId = form.scenario_id;
-  const requestedSchemaRevision = manifest.schema_set_revision;
-  agentTemplateLoadPromise = (async () => {
-    try {
-      const template = await runExperiment.getTemplate(requestedScenarioId);
-      // The user may have started typing while the request was in flight.
-      // Re-check both documents before committing the read-only context seed.
-      if (template?.runtime_trace === undefined || runtimeJson.value.trim() || topologyJson.value.trim()) {
-        return;
-      }
-      if (
-        template.topology === undefined ||
-        form.scenario_id !== requestedScenarioId ||
-        state.bridge.manifest?.schema_set_revision !== requestedSchemaRevision
-      ) {
-        return;
-      }
-      runtimeJson.value = JSON.stringify(template.runtime_trace, null, 2);
-      topologyJson.value = JSON.stringify(template.topology, null, 2);
-    } catch {
-      // Auto-hydration is best effort. The existing explicit “加载场景模板”
-      // action remains available and reports its own error to the user.
-    } finally {
-      agentTemplateLoadPromise = null;
-      if (agentTemplateLoadKey !== `${form.scenario_id}:${state.bridge.manifest?.schema_set_revision || ""}`) {
-        void ensureAgentStructuredContext();
-      }
-    }
-  })();
-  return agentTemplateLoadPromise;
+  if (runtimeJson.value.trim() || topologyJson.value.trim()) return;
+  return requestExperimentTemplate(false);
 }
+
+watch(mode, () => invalidateTemplateRequest());
+watch(
+  () => form.scenario_id,
+  (next, previous) => {
+    if (next !== previous) {
+      agentTemplateLoadKey = "";
+      invalidateTemplateRequest();
+    }
+  },
+);
 
 function publishAgentContext() {
   if (!props.agentContextPublisher) return;
@@ -438,41 +575,12 @@ function resetControls() {
 
 async function loadTemplate() {
   try {
-    const template = await runExperiment.getTemplate(form.scenario_id);
-    runtimeJson.value = JSON.stringify(template.runtime_trace, null, 2);
-    topologyJson.value = JSON.stringify(template.topology, null, 2);
+    const result = await requestExperimentTemplate(true);
+    if (result.stale || !result.loaded) return;
     notify(t("已加载当前场景模板。"), "positive");
   } catch (error) {
     notify(t("加载模板失败：{message}", { message: error.message }), "danger");
   }
-}
-
-/**
- * R2: hand the quick-control values over to the structured editors that open
- * underneath them. A failed template load aborts the hand-off, so the tab is
- * never left claiming a channel it has no document for.
- */
-async function useStructuredInput() {
-  const result = await enterStructuredInput({
-    runtimeJson: runtimeJson.value,
-    topologyJson: topologyJson.value,
-    fields: surface.value.controlGroups.flatMap((group) => group.fields),
-    parameterValues: form.parameterValues,
-    loadTemplate: () => runExperiment.getTemplate(form.scenario_id),
-  });
-  if (!result.ok) {
-    notify(t("加载模板失败：{message}", { message: result.message }), "danger");
-    return;
-  }
-  runtimeJson.value = result.runtimeJson;
-  topologyJson.value = result.topologyJson;
-  structuredInput.value = true;
-  result.notes.forEach((note) => notify(note.message, note.impedes ? "warning" : "positive"));
-}
-
-function disableStructuredInput() {
-  structuredInput.value = false;
-  notify(t("已停用结构化编辑，本次提交改回 overrides。"), "neutral");
 }
 
 function clearPendingSubmission() {
@@ -524,7 +632,11 @@ async function submit() {
         terminalStatus = run.status === "completed" || run.status === "failed" ? run.status : "";
         if (!terminalStatus) {
           const label = run.status === "preparing" ? t("准备输入") : t("运行中");
-          runStatus.value = `${label} · ${transport === "sse" ? t("实时状态") : t("轮询恢复")}`;
+          // The Agent event endpoint is a bounded replay of durable events. It
+          // closes after the available cursor is drained; the query layer then
+          // continues with durable polling. Calling this "live status" would
+          // overstate the transport semantics (and imply an open monitor).
+          runStatus.value = `${label} · ${transport === "sse" ? t("事件回放") : t("轮询恢复")}`;
         }
       },
     });
@@ -575,7 +687,14 @@ async function submit() {
   }
 }
 
-onBeforeUnmount(() => waitController?.abort());
+onBeforeUnmount(() => {
+  experimentMounted = false;
+  waitController?.abort();
+  templateRequestToken += 1;
+  activeTemplateController?.abort();
+  activeTemplateController = null;
+  agentTemplateLoadPromise = null;
+});
 
 async function loadJsonFile(event, target) {
   const file = event.target.files?.[0];
@@ -585,6 +704,11 @@ async function loadJsonFile(event, target) {
     if (target === "runtime") runtimeJson.value = JSON.stringify(value, null, 2);
     else if (target === "topology") topologyJson.value = JSON.stringify(value, null, 2);
     else designSpaceJson.value = JSON.stringify(value, null, 2);
+    if (target === "runtime" || target === "topology") {
+      inputDraftRevision.value = state.bridge.manifest?.schema_set_revision || inputDraftRevision.value;
+      inputDraftStale.value = false;
+      inputDraftStaleRevision.value = "";
+    }
   } catch (error) {
     notify(t("导入失败：{message}", { message: error.message }), "danger");
   } finally {
@@ -601,6 +725,9 @@ async function loadBundle(event) {
     runtimeJson.value = JSON.stringify(value.runtime_trace, null, 2);
     topologyJson.value = JSON.stringify(value.topology, null, 2);
     if (value.design_space_candidates) designSpaceJson.value = JSON.stringify(value.design_space_candidates, null, 2);
+    inputDraftRevision.value = state.bridge.manifest?.schema_set_revision || inputDraftRevision.value;
+    inputDraftStale.value = false;
+    inputDraftStaleRevision.value = "";
   } catch (error) {
     notify(t("导入输入包失败：{message}", { message: error.message }), "danger");
   } finally {
@@ -660,12 +787,13 @@ async function loadBundle(event) {
         :model-ids="state.catalog?.model_ids || []"
         :field-path="inputFieldPath"
         :error-message="inputErrorMessage"
+        :draft-stale="inputDraftStale"
+        :draft-stale-revision="inputDraftStaleRevision"
         @reset-controls="resetControls"
         @load-template="loadTemplate"
         @load-bundle="loadBundle"
         @load-json-file="loadJsonFile"
-        @use-structured-input="useStructuredInput"
-        @disable-structured-input="disableStructuredInput"
+        @input-mutation="fenceTemplateForUserInput"
       />
       <TracePackageInputPanel
         v-if="mode === 'trace_package'"
@@ -693,22 +821,23 @@ async function loadBundle(event) {
         :surface="surface"
         :manifest="state.bridge.manifest"
       />
+      <ExperimentSubmitCard
+        data-help-anchor="experiment-submit"
+        :can-run="canRun"
+        :submitting="submitting"
+        :run-status="runStatus"
+        @submit="submit"
+      />
+      <details class="experiment-request-preview" hidden aria-hidden="true">
+        <summary>{{ t("查看等价 JSON request") }}</summary>
+        <pre v-if="requestPreview.text" tabindex="0" role="region" :aria-label="t('等价 JSON request')">{{
+          requestPreview.text
+        }}</pre>
+        <p v-else class="request-preview-error">
+          <code>{{ requestPreview.error?.fieldPath || "contract_gap" }}</code>
+          {{ requestPreview.error?.message || t("请求不可提交。") }}
+        </p>
+      </details>
     </section>
-
-    <ExperimentSubmitCard
-      data-help-anchor="experiment-submit"
-      :mode="mode"
-      :form="form"
-      :design-space-json="designSpaceJson"
-      :can-run="canRun"
-      :submitting="submitting"
-      :run-status="runStatus"
-      :request-preview="requestPreview"
-      :surface="surface"
-      :trace-package="selectedTracePackage"
-      :bridge-available="state.bridge.available"
-      @submit="submit"
-      @back="setView('overview')"
-    />
   </div>
 </template>

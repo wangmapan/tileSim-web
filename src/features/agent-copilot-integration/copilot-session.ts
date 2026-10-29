@@ -103,6 +103,28 @@ export function markAgentBlocksStale(blocks: readonly AgentTypedBlock[], current
       return { ...block, draft: staleDraft(block.draft, currentRevision) };
     }
     if (block.block_type === "validation_result") return { ...block, overall: "stale" };
+    if (block.block_type === "report_action" && block.status === "pending") return { ...block, status: "stale" };
+    if (
+      block.block_type === "agent_flow" &&
+      !["completed", "draft_ready", "stale", "refused", "cancelled", "failed"].includes(block.status)
+    ) {
+      return {
+        ...block,
+        status: "stale",
+        pending_action: null,
+        detail: "页面上下文已变化，流程已停止；请重新发起。",
+      };
+    }
+    if (
+      block.block_type === "agent_navigation" &&
+      ["pending", "running", "waiting_user"].includes(block.status)
+    ) {
+      return {
+        ...block,
+        status: "stale",
+        detail: "页面上下文已变化，导航已停止；请重新描述目标。",
+      };
+    }
     // A parameter plan is deliberately left alone. A page republishing its
     // envelope — a health check, an equal re-projection — does not tell us that
     // the values this plan addresses moved, and the apply step checks those

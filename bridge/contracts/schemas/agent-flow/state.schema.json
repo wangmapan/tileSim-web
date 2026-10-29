@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tilesim.agent_flow.state.v1",
+  "title": "AgentFlowState",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_identity",
+    "contract_revision",
+    "flow_id",
+    "session_id",
+    "principal",
+    "workspace_id",
+    "intent",
+    "status",
+    "node",
+    "event_sequence",
+    "binding",
+    "pending_action",
+    "approval",
+    "authorization",
+    "validation",
+    "evidence",
+    "report",
+    "terminal_reason",
+    "checkpoint_id",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_flow.state.v1" },
+    "contract_revision": { "const": "2026-10-28.flow.v2" },
+    "flow_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "session_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "principal": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "workspace_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "intent": {
+      "enum": ["explain", "existing_run_analysis", "user_report", "configuration_draft", "navigation", "unsupported_execution"]
+    },
+    "status": {
+      "enum": ["created", "running", "waiting_user", "completed", "draft_ready", "stale", "refused", "cancelled", "failed"]
+    },
+    "node": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "event_sequence": { "type": "integer", "minimum": 0 },
+    "binding": { "$ref": "identity-binding.schema.json" },
+    "pending_action": { "enum": ["clarify_intent", "confirm_report", "confirm_draft", "confirm_navigation", null] },
+    "approval": { "type": ["object", "null"], "additionalProperties": true },
+    "authorization": {
+      "type": ["object", "null"], "additionalProperties": false,
+      "required": ["status", "authorization_id", "authorization_digest", "budget", "usage", "remaining"],
+      "properties": {
+        "status": { "enum": ["active", "revoked", "expired", "exhausted"] },
+        "authorization_id": { "type": "string", "pattern": "^authz-[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
+        "authorization_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "budget": { "$ref": "start-request.schema.json#/properties/authorization_budget" },
+        "usage": {
+          "type": "object", "additionalProperties": false,
+          "required": ["navigation_attempts", "model_calls", "tool_calls_per_round", "run_creations", "execution_time_ms"],
+          "properties": {
+            "navigation_attempts": { "type": "integer", "minimum": 0 },
+            "model_calls": { "type": "integer", "minimum": 0 },
+            "tool_calls_per_round": { "type": "integer", "minimum": 0 },
+            "run_creations": { "type": "integer", "minimum": 0 },
+            "execution_time_ms": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "remaining": {
+          "type": "object", "additionalProperties": false,
+          "required": ["max_navigation_attempts", "max_model_calls", "max_tool_calls_per_round", "max_run_creations", "max_execution_time_ms"],
+          "properties": {
+            "max_navigation_attempts": { "type": "integer", "minimum": 0 },
+            "max_model_calls": { "type": "integer", "minimum": 0 },
+            "max_tool_calls_per_round": { "type": "integer", "minimum": 0 },
+            "max_run_creations": { "type": "integer", "minimum": 0 },
+            "max_execution_time_ms": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "validation": { "type": ["object", "null"], "additionalProperties": true },
+    "evidence": { "type": ["object", "null"], "additionalProperties": true },
+    "report": { "type": ["object", "null"], "additionalProperties": true },
+    "terminal_reason": { "type": ["string", "null"], "maxLength": 256 },
+    "checkpoint_id": { "type": ["string", "null"], "maxLength": 256 },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "current_page": { "type": ["string", "null"], "maxLength": 128 },
+    "current_page_capabilities": {
+      "type": "array", "maxItems": 32, "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+    },
+    "current_context_revision": { "type": ["string", "null"], "maxLength": 256 },
+    "required_capabilities": {
+      "type": "array", "maxItems": 32, "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+    },
+    "allowed_pages": {
+      "type": "array", "maxItems": 32, "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+    },
+    "allowed_actions": {
+      "type": "array", "maxItems": 32, "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+    },
+    "visited_pages": {
+      "type": "array", "maxItems": 8, "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+    },
+    "navigation_attempts": { "type": "integer", "minimum": 0, "maximum": 8 },
+    "max_navigation_attempts": { "type": "integer", "minimum": 0, "maximum": 8 },
+    "navigation_failures": {
+      "type": "array", "maxItems": 8,
+      "items": { "type": "object", "additionalProperties": false,
+        "required": ["page", "type"],
+        "properties": {
+          "page": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "type": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "detail": { "type": "string", "maxLength": 160 }
+        }
+      }
+    },
+    "last_navigation_observation": {
+      "anyOf": [{ "$ref": "navigation-observation.schema.json" }, { "type": "null" }]
+    },
+    "navigation_target": { "type": ["string", "null"], "maxLength": 128 }
+  }
+}
