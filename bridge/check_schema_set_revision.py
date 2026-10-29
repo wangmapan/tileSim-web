@@ -1,6 +1,7 @@
-"""Verify the running Bridge manifest uses the current on-disk contract identity."""
+"""Verify the on-disk Bridge contract identity without opening runtime state."""
 
 from contracts.schema_set import compute_schema_set_revision
+
 import server
 
 

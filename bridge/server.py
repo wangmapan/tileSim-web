@@ -160,6 +160,16 @@ from contracts.run_request import validate_run_request
 
 
 BRIDGE_ROOT = Path(__file__).resolve().parent
+# Deployment scripts query these two values before they stop an already
+# running Bridge.  They are deliberately read-only commands and must not
+# open any durable Agent Harness SQLite store: on a mounted Windows worktree,
+# a second WAL connection can report the database as malformed while the
+# serving process still owns the lock.  Keep this fence close to argv parsing
+# so importing the module for either diagnostic cannot touch user state.
+_READ_ONLY_CLI_COMMANDS = frozenset({"--print-source-state-digest", "--print-schema-set-revision"})
+_READ_ONLY_CLI = (
+    len(sys.argv) == 2 and sys.argv[1] in _READ_ONLY_CLI_COMMANDS
+) or Path(sys.argv[0]).name == "check_schema_set_revision.py"
 _package_root_value = os.environ.get("TILESIM_PACKAGE_ROOT", "").strip()
 PACKAGE_ROOT = Path(_package_root_value).resolve() if _package_root_value else None
 _package_manifest_path = PACKAGE_ROOT / "release.json" if PACKAGE_ROOT else None
@@ -324,7 +334,11 @@ metadata_lock = threading.RLock()
 BRIDGE_INSTANCE_ID = uuid.uuid4().hex
 week7_operation_lock = threading.Lock()
 evidence_agent_operation_lock = threading.Lock()
-evidence_agent_provider = evidence_agent_provider_contract.ProviderRuntime.from_environment()
+evidence_agent_provider = (
+    None
+    if _READ_ONLY_CLI
+    else evidence_agent_provider_contract.ProviderRuntime.from_environment()
+)
 
 # Agent Harness is a Bridge-owned, single-host durable MVP.  The simulator and
 # its run entrypoint remain untouched; the queue only owns harness lifecycle
@@ -341,25 +355,35 @@ BATCH_DB = Path(
 AGENT_FLOW_DB = Path(
     os.environ.get("TILESIM_AGENT_FLOW_DB", str(STATE_ROOT / "runtime" / "agent-flow.sqlite3"))
 )
-optimization_store = OptimizationStore(OPTIMIZATION_DB)
-optimization_store.recover_inflight()
-batch_store = BatchStore(BATCH_DB)
-batch_store.recover_inflight()
-agent_flow_store = AgentFlowStore(AGENT_FLOW_DB)
-agent_flow_service = AgentFlowService(
-    agent_flow_store,
-    schema_set_revision=SCHEMA_SET_REVISION,
-    backend_identity_provider=lambda: harness_backend_identity(),
-)
-agent_deletion_coordinator = AgentDeletionCoordinator(
-    {
-        "harness": agent_harness_store if "agent_harness_store" in globals() else None,
-        "batch": batch_store,
-        "optimization": optimization_store,
-        "flow": agent_flow_store,
-    },
-    STATE_ROOT / "runtime" / "agent-deletion.sqlite3",
-)
+if _READ_ONLY_CLI:
+    # These names remain defined because the rest of this module contains the
+    # normal HTTP handlers.  None is safe here: the read-only command exits
+    # from the __main__ block without constructing a handler or queue.
+    optimization_store = None
+    batch_store = None
+    agent_flow_store = None
+    agent_flow_service = None
+    agent_deletion_coordinator = None
+else:
+    optimization_store = OptimizationStore(OPTIMIZATION_DB)
+    optimization_store.recover_inflight()
+    batch_store = BatchStore(BATCH_DB)
+    batch_store.recover_inflight()
+    agent_flow_store = AgentFlowStore(AGENT_FLOW_DB)
+    agent_flow_service = AgentFlowService(
+        agent_flow_store,
+        schema_set_revision=SCHEMA_SET_REVISION,
+        backend_identity_provider=lambda: harness_backend_identity(),
+    )
+    agent_deletion_coordinator = AgentDeletionCoordinator(
+        {
+            "harness": agent_harness_store if "agent_harness_store" in globals() else None,
+            "batch": batch_store,
+            "optimization": optimization_store,
+            "flow": agent_flow_store,
+        },
+        STATE_ROOT / "runtime" / "agent-deletion.sqlite3",
+    )
 batch_workers: dict[str, threading.Thread] = {}
 batch_workers_lock = threading.RLock()
 optimization_workers: dict[str, threading.Thread] = {}
@@ -430,14 +454,18 @@ def _process_harness_operation(operation_id: str) -> None:
         return
 
 
-agent_harness_store = DurableHarnessStore(AGENT_HARNESS_DB)
-agent_deletion_coordinator.stores["harness"] = agent_harness_store
-agent_harness_store.recover_incomplete()
-agent_harness_queue: HarnessQueue | None = HarnessQueue(
-    agent_harness_store,
-    config=QueueConfig(max_active=MAX_ACTIVE_RUNS, visibility_timeout_seconds=30.0, max_attempts=3),
-    handler=lambda operation_id: _process_harness_operation(operation_id),
-)
+if _READ_ONLY_CLI:
+    agent_harness_store = None
+    agent_harness_queue = None
+else:
+    agent_harness_store = DurableHarnessStore(AGENT_HARNESS_DB)
+    agent_deletion_coordinator.stores["harness"] = agent_harness_store
+    agent_harness_store.recover_incomplete()
+    agent_harness_queue: HarnessQueue | None = HarnessQueue(
+        agent_harness_store,
+        config=QueueConfig(max_active=MAX_ACTIVE_RUNS, visibility_timeout_seconds=30.0, max_attempts=3),
+        handler=lambda operation_id: _process_harness_operation(operation_id),
+    )
 
 
 def ensure_harness_queue() -> HarnessQueue:

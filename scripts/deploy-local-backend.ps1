@@ -23,6 +23,7 @@ $manifestPath = Join-Path $runtimeRoot "backend-current.json"
 $node = Resolve-TileSimNode
 $mutex = [System.Threading.Mutex]::new($false, "Local\TileSimBackendUpdate")
 $fastPath = $ReuseVerifiedArtifacts -and -not $ForceFullValidation
+$validationStateRootWsl = "/tmp/tilesim-web-deploy-validation-$([guid]::NewGuid().ToString('N'))"
 
 function Invoke-Checked {
     param([string]$File, [string[]]$Arguments, [string]$WorkingDirectory = "")
@@ -74,6 +75,28 @@ function Get-SchemaSetRevision {
     $revision = $output | Where-Object { $_ -match '^sha256:[0-9a-f]{64}$' } | Select-Object -Last 1
     if (-not $revision) { throw "The Bridge schema-set revision was not returned." }
     return $revision.Trim()
+}
+
+function Invoke-BridgeValidation {
+    # Never let deployment validation open the user's durable runtime state.
+    # The existing Bridge may still own its WAL while this process runs, and
+    # validation only needs an isolated temporary store.
+    Invoke-Checked "wsl.exe" @(
+        "-d", $WslDistro, "--cd", "$webRootWsl/bridge", "--exec", "env",
+        "TILESIM_WEB_STATE_ROOT=$validationStateRootWsl", "python3", "-m", "unittest", "test_server.py"
+    )
+}
+
+function Remove-BridgeValidationState {
+    if ($validationStateRootWsl -notmatch '^/tmp/tilesim-web-deploy-validation-[0-9a-f]{32}$') {
+        return
+    }
+    try {
+        & wsl.exe -d $WslDistro --exec rm -rf -- $validationStateRootWsl *> $null
+    } catch {
+        # Validation state is disposable; cleanup must not replace the real
+        # deployment error with an unrelated WSL shutdown error.
+    }
 }
 
 function Test-WslExecutable {
@@ -279,10 +302,7 @@ try {
             "-d", $WslDistro, "--cd", "$webRootWsl/bridge", "--exec",
             "python3", "check_schema_set_revision.py"
         )
-        Invoke-Checked "wsl.exe" @(
-            "-d", $WslDistro, "--cd", "$webRootWsl/bridge", "--exec",
-            "python3", "-m", "unittest", "test_server.py"
-        )
+        Invoke-BridgeValidation
         Invoke-Checked "wsl.exe" @(
             "-d", $WslDistro, "--exec", "python3", "-m", "py_compile",
             "$webRootWsl/bridge/server.py"
@@ -291,10 +311,7 @@ try {
         $webBuildDigest = Get-DirectoryDigest (Join-Path $webRoot "dist") ""
     } else {
         Write-Output "Web source changed or no verified release matched; running the existing Bridge and Web validation flow."
-        Invoke-Checked "wsl.exe" @(
-            "-d", $WslDistro, "--cd", "$webRootWsl/bridge", "--exec",
-            "python3", "-m", "unittest", "test_server.py"
-        )
+        Invoke-BridgeValidation
         Invoke-Checked "wsl.exe" @(
             "-d", $WslDistro, "--exec", "python3", "-m", "py_compile",
             "$webRootWsl/bridge/server.py"
@@ -382,6 +399,7 @@ try {
     }
     throw $deploymentError
 } finally {
+    Remove-BridgeValidationState
     $mutex.ReleaseMutex()
     $mutex.Dispose()
 }

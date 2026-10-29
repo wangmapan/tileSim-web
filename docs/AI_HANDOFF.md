@@ -1,5 +1,17 @@
 # TileSim Web AI Handoff
 
+## 2026-10-29 部署诊断 SQLite WAL 竞争修复（当前工作树）
+
+- 修复部署脚本在停止旧 Bridge 前调用 `server.py --print-source-state-digest` 和
+  `--print-schema-set-revision` 时的启动顺序缺陷：只读诊断现在在创建 Agent Harness 持久化
+  store 前短路，不会打开用户的 WAL SQLite；`bridge/check_schema_set_revision.py` 同样显式进入
+  只读诊断模式。这样旧的 5173 Bridge 仍持有 `/mnt/d` 上的 WAL 时，诊断不会把并发访问误报成
+  source-state digest 失败。
+- 新增 `bridge/test_diagnostic_startup.py`：对损坏的临时优化数据库验证两个 print 命令及 schema
+  revision check 成功、数据库字节不变。不会删除、重建或自动修复用户数据库。
+- 本轮未触碰 `D:\tileSim`、`127.0.0.1:5173`、Provider credential、真实用户 run；部署仍需在用户环境
+  重新执行，能力边界保持 `local_dev + synthetic_trace + exploratory + not_for_production`。
+
 ## 2026-10-29 Agent autonomy 复审第五轮：事件持久化 fail-closed（当前工作树，未提交、未部署）
 
 - 发现并修复优化 Agent 事件写入失败被当作普通遥测处理的真实风险：`bridge/server.py` 的
