@@ -7,6 +7,9 @@
   store 前短路，不会打开用户的 WAL SQLite；`bridge/check_schema_set_revision.py` 同样显式进入
   只读诊断模式。这样旧的 5173 Bridge 仍持有 `/mnt/d` 上的 WAL 时，诊断不会把并发访问误报成
   source-state digest 失败。
+- `scripts/deploy-local-backend.ps1` 的 Bridge 单测校验现在把所有 Agent Harness store 显式指向
+  带随机后缀的 WSL `/tmp` state root，并在 finally 中做路径校验后的清理，不再把测试状态写回
+  `runtime/`。
 - 新增 `bridge/test_diagnostic_startup.py`：对损坏的临时优化数据库验证两个 print 命令及 schema
   revision check 成功、数据库字节不变。不会删除、重建或自动修复用户数据库。
 - 本轮未触碰 `D:\tileSim`、`127.0.0.1:5173`、Provider credential、真实用户 run；部署仍需在用户环境
