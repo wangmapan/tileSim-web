@@ -1,0 +1,15 @@
+{
+  "$id": "tilesim.agent_harness.exploration_authorization_response.v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["authorization", "session", "detail", "autonomous_started", "provenance"],
+  "properties": {
+    "authorization": { "$ref": "./exploration-authorization.schema.json" },
+    "session": { "$ref": "./exploration-session.schema.json" },
+    "detail": { "type": "object" },
+    "autonomous_started": { "type": "boolean" },
+    "idempotent_replay": { "type": "boolean" },
+    "provenance": { "$ref": "./exploration-provenance.schema.json" }
+  }
+}

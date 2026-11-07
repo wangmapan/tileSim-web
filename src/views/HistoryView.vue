@@ -3,7 +3,6 @@ import { computed, ref, watch } from "vue";
 import { GitCompareArrows, Pencil, RefreshCw, Search, Trash2, X } from "@lucide/vue";
 import ComparisonPanel from "../components/ComparisonPanel.vue";
 import EmptyState from "../components/EmptyState.vue";
-import InlineHelp from "../components/InlineHelp.vue";
 import ModalDialog from "../components/ModalDialog.vue";
 import StatusPill from "../components/StatusPill.vue";
 import { formatDate, formatNumber } from "../lib/format";
@@ -226,18 +225,20 @@ async function submitDelete() {
       </nav>
     </article>
 
-    <article v-if="state.history.selected.length" class="panel compare-shell" data-help-anchor="history-results">
-      <header class="panel-header panel-header--row">
+    <details v-if="state.history.selected.length" class="panel compare-shell" data-help-anchor="history-results">
+      <summary class="panel-header panel-header--row">
         <div>
           <h2>{{ t("两次运行对比") }}</h2>
-          <InlineHelp :text="t('先选择基线 A，再选择变体 B。')" />
+          <small>{{ t("已选择 {count} 个运行 · 按需展开", { count: state.history.selected.length }) }}</small>
         </div>
+      </summary>
+      <div class="compare-shell__actions">
         <button v-if="state.history.selected.length" class="text-button" @click="clearComparisons">
           <X :size="15" />{{ t("清除选择") }}
         </button>
-      </header>
+      </div>
       <ComparisonPanel />
-    </article>
+    </details>
 
     <ModalDialog :open="Boolean(renameTarget)" :title="t('重命名实验')" @close="renameTarget = null">
       <form class="modal-form" @submit.prevent="submitRename">

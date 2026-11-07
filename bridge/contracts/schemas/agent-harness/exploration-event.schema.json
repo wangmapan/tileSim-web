@@ -1,0 +1,20 @@
+{
+  "$id": "tilesim.agent_harness.exploration_event.v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_identity", "contract_revision", "event_id", "session_id", "sequence", "event_type", "node", "state", "payload_digest", "created_at", "provenance"],
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.exploration_event.v2" },
+    "contract_revision": { "const": "2026-10-29.wpg.v2" },
+    "event_id": { "type": "string", "minLength": 1 },
+    "session_id": { "type": "string", "minLength": 1 },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "event_type": { "enum": ["created", "prepare", "authorized", "context_snapshot", "candidate_generated", "candidate_validated", "model_candidate_fallback", "run_created", "run_retry", "run_completed", "metric_verified", "best_updated", "no_improvement", "continue", "stopped", "paused", "resumed", "finished"] },
+    "node": { "enum": ["prepare_exploration", "snapshot_context", "generate_candidate", "generate_model_candidate", "validate_candidate", "create_one_run", "wait_run_terminal", "read_verified_metric", "update_best_candidate", "should_continue", "finish_report", "pause", "stop", "recover"] },
+    "state": { "type": "string", "minLength": 1 },
+    "payload_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "provenance": { "$ref": "./exploration-provenance.schema.json" }
+  }
+}

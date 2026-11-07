@@ -57,6 +57,23 @@ const artifactContracts: Record<string, ArtifactContract> = {
     requiresRunBinding: true,
   },
   "input-design-space-candidates": { fileName: "input-design-space-candidates.json", reportKind: null },
+  "input-execution": {
+    fileName: "input-execution.json",
+    reportKind: null,
+    schemaIdentities: ["tilesim.bridge.execution_input_snapshot.v1"],
+    requiresRunBinding: true,
+  },
+  "input-execution-partitions": {
+    fileName: "input-execution-partitions.json",
+    reportKind: null,
+    schemaIdentities: ["tilesim.execution_partition_program.v1"],
+  },
+  "source-semantics": {
+    fileName: "source-semantics.json",
+    reportKind: null,
+    schemaIdentities: ["tilesim.bridge.source_semantics.v1"],
+    requiresRunBinding: true,
+  },
   "run-result": {
     fileName: "run-result.json",
     reportKind: "run",

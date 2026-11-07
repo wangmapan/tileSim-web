@@ -1,0 +1,22 @@
+{
+  "$id": "tilesim.agent_harness.exploration_model_candidate.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Closed model candidate proposal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_identity", "contract_revision", "schema_set_revision", "deployment_candidate_id", "changes", "reason", "source"],
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.exploration_model_candidate.v1" },
+    "contract_revision": { "const": "2026-11-02.wpi.v1" },
+    "schema_set_revision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "deployment_candidate_id": { "type": ["string", "null"], "minLength": 1 },
+    "changes": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 64,
+      "additionalProperties": { "type": ["number", "string"] }
+    },
+    "reason": { "type": ["string", "null"], "maxLength": 1000 },
+    "source": { "const": "model" }
+  }
+}

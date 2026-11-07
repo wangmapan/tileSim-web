@@ -21,6 +21,10 @@ from contracts.experiment_descriptor import PARAMETER_FIELD_IDS
 GENERATED_DIRECTORY_EXCLUDES = ("build-*/",)
 
 
+def _is_generated_untracked_path(relative: str) -> bool:
+    return any(part.startswith("build-") for part in relative.strip("/").split("/") if part)
+
+
 def controlled_run_surface() -> dict:
     """Stable web submission capabilities; executable discovery cannot upgrade them."""
     return {
@@ -65,12 +69,13 @@ def git_command(root: Path, *args: str) -> list[str]:
 
 
 def git_value(root: Path, *args: str) -> str:
+    """Read one Git value. A drvfs worktree can take longer than a few seconds."""
     try:
         completed = subprocess.run(
             git_command(root, *args),
             text=True,
             capture_output=True,
-            timeout=5,
+            timeout=60,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired):
@@ -81,20 +86,31 @@ def git_value(root: Path, *args: str) -> str:
 def worktree_state_digest(root: Path) -> str:
     """Hash the effective tracked/untracked source state without changing Git state."""
     try:
-        revision = subprocess.run(git_command(root, "rev-parse", "HEAD"), capture_output=True, timeout=60, check=False)
+        revision = subprocess.run(git_command(root, "rev-parse", "HEAD"), capture_output=True, timeout=180, check=False)
         tracked_diff = subprocess.run(
             git_command(root, "diff", "--binary", "--no-ext-diff", "HEAD"),
             capture_output=True,
-            timeout=60,
+            timeout=180,
             check=False,
         )
         exclude_args = ["--exclude-standard"]
         for pattern in GENERATED_DIRECTORY_EXCLUDES:
             exclude_args.extend(("--exclude", pattern))
+        # --directory stops at an untracked directory. Enumerating every file
+        # inside side-by-side build-* trees on a drvfs mount can exceed the
+        # subprocess timeout and make deployment report an unknown digest.
         untracked = subprocess.run(
-            git_command(root, "ls-files", "--others", *exclude_args, "-z"),
+            git_command(
+                root,
+                "ls-files",
+                "--others",
+                *exclude_args,
+                "--directory",
+                "--no-empty-directory",
+                "-z",
+            ),
             capture_output=True,
-            timeout=60,
+            timeout=180,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired):
@@ -108,8 +124,23 @@ def worktree_state_digest(root: Path) -> str:
     digest.update(b"\0tracked-diff\0")
     digest.update(tracked_diff.stdout)
     digest.update(b"\0untracked\0")
+    untracked_files: list[Path] = []
     for raw_path in filter(None, untracked.stdout.split(b"\0")):
-        path = root / os.fsdecode(raw_path)
+        relative = os.fsdecode(raw_path).replace("\\", "/").rstrip("/")
+        if _is_generated_untracked_path(relative):
+            continue
+        path = root / relative
+        if path.is_dir() and not path.is_symlink():
+            for directory, child_directories, filenames in os.walk(path):
+                child_directories[:] = [
+                    name for name in child_directories if not _is_generated_untracked_path(name)
+                ]
+                for filename in filenames:
+                    untracked_files.append(Path(directory) / filename)
+        else:
+            untracked_files.append(path)
+    for path in sorted(untracked_files, key=lambda item: item.relative_to(root).as_posix().encode()):
+        raw_path = path.relative_to(root).as_posix().encode()
         digest.update(len(raw_path).to_bytes(8, "big"))
         digest.update(raw_path)
         if path.is_symlink():

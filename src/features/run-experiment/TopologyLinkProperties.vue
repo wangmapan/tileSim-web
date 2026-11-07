@@ -21,7 +21,7 @@ function domainType(link: TopologyLink): "inside" | "cross" {
 }
 
 function domainLabel(link: TopologyLink): string {
-  return domainType(link) === "cross" ? t("跨域通信") : t("域内通信");
+  return domainType(link) === "cross" ? t("组间通信（scale_out）") : t("组内通信（scale_up）");
 }
 
 function eventValue(event: Event): string {
@@ -43,7 +43,7 @@ function eventValue(event: Event): string {
     </small>
     <div class="topology-link-kind" :class="`topology-link-kind--${domainType(props.link)}`">
       <span>{{ domainLabel(props.link) }} · {{ props.link.domain_id }}</span>
-      <InlineHelp :text="t('根据该连接所属 domain 的类型判断：scale_up 为域内，scale_out 为跨域')" />
+      <InlineHelp :text="t('实线或虚线表示端点所在计算组的关系；此处的域类型是后端实际绑定的通信资源。')" />
     </div>
     <div class="topology-link-panel__inline-fields">
       <label title="domain_id">

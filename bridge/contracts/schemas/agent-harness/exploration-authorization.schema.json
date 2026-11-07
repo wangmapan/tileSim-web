@@ -1,0 +1,53 @@
+{
+  "$id": "tilesim.agent_harness.exploration_authorization.v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_identity", "contract_revision", "authorization_id", "session_id", "task_type", "principal", "workspace_id", "context_revision", "run_context_revision", "input_snapshot_digest", "schema_set_revision", "backend_identity", "parameter_catalog_revision", "autonomy_level", "budget", "parameter_grants", "objective", "tool_allowlist", "allowed_pages", "allowed_actions", "protected", "status", "issued_by", "issued_at", "expires_at", "revoked_at", "provenance", "authorization_digest"],
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.exploration_authorization.v2" },
+    "contract_revision": { "const": "2026-10-29.wpg.v2" },
+    "authorization_id": { "type": "string", "pattern": "^explore-authz-.+" },
+    "session_id": { "type": "string", "minLength": 1 },
+    "task_type": { "const": "explore_experiment" },
+    "principal": { "type": "string", "minLength": 1 },
+    "workspace_id": { "type": "string", "minLength": 1 },
+    "context_revision": { "type": "string", "minLength": 1 },
+    "run_context_revision": { "type": ["string", "null"] },
+    "input_snapshot_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "schema_set_revision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "backend_identity": { "type": "object", "minProperties": 1 },
+    "parameter_catalog_revision": { "type": "string", "minLength": 1 },
+    "autonomy_level": { "const": "bounded_autonomous" },
+    "budget": { "$ref": "./exploration-budget.schema.json" },
+    "parameter_grants": { "type": "array", "minItems": 1, "maxItems": 64, "items": { "$ref": "./exploration-parameter-grant.schema.json" } },
+    "objective": { "$ref": "./exploration-objective.schema.json" },
+    "tool_allowlist": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } },
+    "allowed_pages": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["experiment", "execution", "metrics"] } },
+    "allowed_actions": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["navigate", "analyze", "execute", "report"] } },
+    "protected": {
+      "type": "object", "additionalProperties": false,
+      "required": ["context_revision", "run_context_revision", "input_snapshot_digest", "schema_set_revision", "backend_identity", "parameter_catalog_revision"],
+      "properties": {
+        "context_revision": { "type": "string", "minLength": 1 },
+        "run_context_revision": { "type": ["string", "null"] },
+        "input_snapshot_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "schema_set_revision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "backend_identity": { "type": "object", "minProperties": 1 },
+        "parameter_catalog_revision": { "type": "string", "minLength": 1 }
+      }
+    },
+    "status": { "enum": ["active", "exhausted", "revoked", "expired"] },
+    "issued_by": { "type": "string", "minLength": 1 },
+    "issued_at": { "type": "string", "format": "date-time" },
+    "expires_at": { "type": "string", "format": "date-time" },
+    "revoked_at": { "type": ["string", "null"], "format": "date-time" },
+    "provenance": { "$ref": "./exploration-provenance.schema.json" },
+    "authorization_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "planning_plan_digest": { "type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$" },
+    "planning_confirmation": { "type": ["object", "null"] },
+    "run_strategy": { "type": ["object", "null"] },
+    "run_strategy_digest": { "type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$" },
+    "deployment_candidates": { "type": "array" }
+  }
+}

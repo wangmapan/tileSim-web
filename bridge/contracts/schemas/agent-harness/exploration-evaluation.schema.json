@@ -1,0 +1,77 @@
+{
+  "$id": "tilesim.agent_harness.exploration_evaluation.v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_identity",
+    "contract_revision",
+    "session_id",
+    "candidate_id",
+    "run_id",
+    "objective",
+    "evidence",
+    "provenance"
+  ],
+  "properties": {
+    "schema_identity": {
+      "const": "tilesim.agent_harness.exploration_evaluation.v2"
+    },
+    "contract_revision": {
+      "const": "2026-10-29.wpg.v2"
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "candidate_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "objective": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "metric_path",
+        "direction",
+        "value",
+        "status"
+      ],
+      "properties": {
+        "metric_path": {
+          "type": "string",
+          "pattern": "^/[^/].*"
+        },
+        "direction": {
+          "enum": [
+            "minimize",
+            "maximize"
+          ]
+        },
+        "value": {
+          "type": "number"
+        },
+        "status": {
+          "const": "verified"
+        },
+        "unit": {
+          "type": "string"
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object"
+      }
+    },
+    "provenance": {
+      "$ref": "./exploration-provenance.schema.json"
+    }
+  }
+}

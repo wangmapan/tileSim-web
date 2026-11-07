@@ -70,7 +70,9 @@ function createFixtureBridge(): LauncherBridge {
       const shouldFail =
         (request.kind === "deploy" || request.kind === "deploy_local") &&
         request.backendRepository.includes("触发失败");
-      const fullLocalDeployment = request.kind === "deploy_local" && request.reuseVerifiedArtifacts === false;
+      const skipLocalTests = request.kind === "deploy_local" && request.skipTests === true;
+      const fullLocalDeployment =
+        request.kind === "deploy_local" && request.reuseVerifiedArtifacts === false && !skipLocalTests;
       const phases =
         request.kind === "deploy"
           ? ([
@@ -94,7 +96,15 @@ function createFixtureBridge(): LauncherBridge {
                   "publishing_release",
                   "restarting",
                 ] as const)
-              : (["checking_environment", "building_web", "publishing_release", "restarting"] as const)
+              : skipLocalTests
+                ? ([
+                    "checking_environment",
+                    "building_backend",
+                    "building_web",
+                    "publishing_release",
+                    "restarting",
+                  ] as const)
+                : (["checking_environment", "building_web", "publishing_release", "restarting"] as const)
             : request.kind === "start"
               ? (["validating", "starting", "restarting"] as const)
               : request.kind === "stop"

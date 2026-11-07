@@ -104,6 +104,18 @@ test("重新部署默认显示快速复用路径，完整日志可达", async ({
   await expect(page.getByRole("main")).toContainText("[fixture] building_web");
 });
 
+test("快速部署明确跳过测试且不显示测试阶段", async ({ page }) => {
+  await page.goto("/?fixture=slow");
+  await page.getByRole("button", { name: "快速部署（跳过测试）" }).click();
+  await expect(page.getByRole("alertdialog")).toContainText("不能当作测试通过");
+  await page.getByRole("button", { name: "确认继续" }).click();
+  const progress = page.getByRole("region", { name: "操作进度" });
+  await expect(progress).toContainText("构建后端");
+  await expect(progress).toContainText("构建 Web");
+  await expect(progress).not.toContainText("验证 Web");
+  await expect(progress).toContainText("操作完成");
+});
+
 test("可显式要求本地部署完整验证", async ({ page }) => {
   await page.goto("/?fixture=slow");
   await page.getByRole("button", { name: "部署设置", exact: true }).click();

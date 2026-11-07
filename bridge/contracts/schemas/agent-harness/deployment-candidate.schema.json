@@ -1,0 +1,65 @@
+{
+  "$id": "tilesim.agent_harness.deployment_exploration_deployment_candidate.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_identity",
+    "contract_revision",
+    "schema_set_revision",
+    "candidate_id",
+    "status",
+    "published",
+    "executable"
+  ],
+  "properties": {
+    "schema_identity": {
+      "type": "string"
+    },
+    "contract_revision": {
+      "const": "2026-11-01.wph.v1"
+    },
+    "schema_set_revision": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "candidate_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "published",
+        "executable",
+        "available",
+        "ready",
+        "unpublished",
+        "unsupported"
+      ]
+    },
+    "published": {
+      "type": "boolean"
+    },
+    "executable": {
+      "type": "boolean"
+    },
+    "resource_binding": {
+      "type": "object"
+    },
+    "gpu_groups": {
+      "type": "array"
+    },
+    "parallelism": {
+      "type": "object"
+    },
+    "placement": {
+      "type": "object"
+    },
+    "topology": {
+      "type": "object"
+    },
+    "evidence_refs": {
+      "type": "array"
+    }
+  }
+}

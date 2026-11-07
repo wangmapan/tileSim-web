@@ -4,6 +4,7 @@ param(
     [string]$TracePackageRoot = (Join-Path $PSScriptRoot "..\runtime\trace-packages"),
     [string]$WslDistro = "Ubuntu-24.04",
     [switch]$WithoutEvidenceAgent,
+    [switch]$EnableExplorationModelCandidates,
     [switch]$ValidateOnly
 )
 
@@ -41,7 +42,8 @@ if (-not $WithoutEvidenceAgent -and (Test-Path -LiteralPath $EvidenceAgentConfig
             -ConfigPath $EvidenceAgentConfigPath `
             -ManifestPath $ManifestPath `
             -TracePackageRoot $TracePackageRoot `
-            -WslDistro $WslDistro
+            -WslDistro $WslDistro `
+            -EnableExplorationModelCandidates:$EnableExplorationModelCandidates
     } catch {
         $message = [string]$_.Exception.Message
         if ($message -like "*authenticated capability probe*") {

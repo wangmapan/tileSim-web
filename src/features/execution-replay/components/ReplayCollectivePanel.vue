@@ -4,7 +4,7 @@ import ArtifactEvidenceLink from "../../../components/ArtifactEvidenceLink.vue";
 import type { ReplayCollectiveModel } from "../model/types";
 import ReplayVirtualList from "./ReplayVirtualList.vue";
 
-const props = defineProps<{ collective: ReplayCollectiveModel; selectedStepId: string | null }>();
+const props = defineProps<{ collective: ReplayCollectiveModel; selectedStepId: string | null; visible?: boolean }>();
 const emit = defineEmits<{ selectStep: [stepId: string] }>();
 const ROW_HEIGHT = 78;
 const visibleStart = ref(0);
@@ -64,7 +64,14 @@ watch(
 </script>
 
 <template>
-  <details class="replay-collective" aria-label="集合通信步骤" :open="expanded" @toggle="onToggle">
+  <details
+    class="replay-collective"
+    :class="{ 'is-layer-hidden': props.visible === false }"
+    aria-label="集合通信步骤"
+    :aria-hidden="props.visible === false ? 'true' : undefined"
+    :open="expanded"
+    @toggle="onToggle"
+  >
     <summary class="replay-collective__summary">
       <header class="replay-collective__header">
         <div>
@@ -184,6 +191,9 @@ watch(
   min-width: 0;
   padding: 18px 20px 20px;
   border-top: 1px solid var(--line);
+}
+.replay-collective.is-layer-hidden {
+  display: none;
 }
 .replay-collective__summary {
   display: block;

@@ -72,13 +72,17 @@ export function intentOutputToTypedBlocks(output: IntentCompilerOutput): AgentTy
   return blocks;
 }
 
-export function formalErrorBlock(code: string, message: string): AgentTypedBlock {
+export function formalErrorBlock(
+  code: string,
+  message: string,
+  safeNextAction = "确认本地 Bridge 契约可用并刷新当前页面上下文后重试。",
+): AgentTypedBlock {
   return {
     block_type: "formal_error",
     block_id: `phase1-error:${code}`,
     code,
     message,
-    safe_next_action: "确认本地 Bridge 契约可用并刷新当前页面上下文后重试。",
+    safe_next_action: safeNextAction,
   };
 }
 
@@ -115,10 +119,7 @@ export function markAgentBlocksStale(blocks: readonly AgentTypedBlock[], current
         detail: "页面上下文已变化，流程已停止；请重新发起。",
       };
     }
-    if (
-      block.block_type === "agent_navigation" &&
-      ["pending", "running", "waiting_user"].includes(block.status)
-    ) {
+    if (block.block_type === "agent_navigation" && ["pending", "running", "waiting_user"].includes(block.status)) {
       return {
         ...block,
         status: "stale",

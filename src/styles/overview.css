@@ -58,7 +58,7 @@
   color: var(--accent-hover);
   font: 500 clamp(20px, 1.7vw, 26px)/1.25 var(--font-sans);
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.035em;
+  letter-spacing: 0;
   overflow-wrap: anywhere;
 }
 .stat-card--muted strong {
@@ -524,10 +524,9 @@ th {
   border-bottom: 1px solid var(--line-strong);
   background: var(--table-header);
   font-size: var(--text-sm);
-  font-weight: 700;
+  font-weight: 650;
   text-align: left;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0;
   white-space: nowrap;
 }
 td {

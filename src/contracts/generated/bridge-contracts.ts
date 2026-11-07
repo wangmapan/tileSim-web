@@ -1,6 +1,6 @@
 // Generated from bridge/contracts OpenAPI and JSON Schema. Do not edit by hand.
 
-export const BRIDGE_SCHEMA_SET_REVISION = "sha256:0085e3a4e89576fff168f29d811be581c7107b9bd3f8fabf9834d651f3c606b3";
+export const BRIDGE_SCHEMA_SET_REVISION = "sha256:bcdc6fe220816a68247353d8d488ad682ca3b3ee585112528e12985a71b0c2a2";
 
 export type CreateRunRequest = {
   [k: string]: unknown;
@@ -13,6 +13,7 @@ export type CreateRunRequest = {
   custom_inputs?: ControlledCustomInputsForTheHostedS1ToS6Path;
   design_space_candidates?: StrictS6OnlyDesignSpaceCandidateManifest | StrictS6OnlyDesignSpaceCandidateManifestV2;
   trace_package_id?: string;
+  execution_input?: ExecutionInput;
 };
 export type ControlledS1RuntimeTraceRequestInput = {
   [k: string]: unknown;
@@ -152,6 +153,68 @@ export type ControlledS1RuntimeTraceRequestInput = {
     }[],
   ];
 };
+export type ExecutionInput = {
+  mode: "kernel_strategy" | "tilelang_source" | "execution_partition";
+  dense_execution: Dense;
+  kernel_execution?: Kernel;
+  tilelang_model_dtype?: "float16" | "bfloat16";
+  /**
+   * @minItems 1
+   * @maxItems 128
+   */
+  tilelang_kernels?: [
+    {
+      selection_id: string;
+      phase: "prefill" | "decode";
+      operation: "norm_qkv" | "attention_output" | "norm_gate_up" | "activation_down" | "final_norm_lm_head";
+      /**
+       * @minItems 0
+       * @maxItems 1024
+       */
+      instances: string[];
+      source: Source;
+      output_policy: "operator_barrier" | "tile_ready_allreduce";
+      output_buffer_slots: number;
+      output_admission_policy: "direct_v1" | "safe_window_v1";
+      rank_programs?: {
+        [k: string]: Source;
+      };
+      rank_cost_profiles_json?: string;
+    },
+    ...{
+      selection_id: string;
+      phase: "prefill" | "decode";
+      operation: "norm_qkv" | "attention_output" | "norm_gate_up" | "activation_down" | "final_norm_lm_head";
+      /**
+       * @minItems 0
+       * @maxItems 1024
+       */
+      instances: string[];
+      source: Source;
+      output_policy: "operator_barrier" | "tile_ready_allreduce";
+      output_buffer_slots: number;
+      output_admission_policy: "direct_v1" | "safe_window_v1";
+      rank_programs?: {
+        [k: string]: Source;
+      };
+      rank_cost_profiles_json?: string;
+    }[],
+  ];
+  execution_partition_program?: Partition;
+} & (
+  | {
+      mode?: "kernel_strategy";
+      [k: string]: unknown;
+    }
+  | {
+      mode?: "tilelang_source";
+      [k: string]: unknown;
+    }
+  | {
+      mode?: "execution_partition";
+      [k: string]: unknown;
+    }
+);
 export type GpuOptions = {
   gpu_participation_mode: "gpu_free";
   available: boolean;
@@ -701,6 +764,8 @@ export interface BridgeApiContracts {
   agentIntentPageEntry?: AgentIntentPageEntry;
   agentIntentRequest?: AgentIntentRequest;
   agentIntentResponse?: AgentIntentResponse;
+  operatorExecution?: OperatorExecutionDescriptor;
+  operatorValidation?: OperatorExecutionValidation;
 }
 export interface ApiManifestResponse {
   schema_version: "tilesim.bridge.manifest.v1";
@@ -1107,6 +1172,708 @@ export interface StrictS6OnlyDesignSpaceCandidateManifestV2 {
     }[],
   ];
 }
+export interface Dense {
+  schema_version: "tilesim.dense_execution.v1";
+  model_id: string;
+  model_revision: string;
+  layers: number;
+  hidden_size: number;
+  intermediate_size: number;
+  attention_heads: number;
+  kv_heads: number;
+  vocab_size: number;
+  element_bytes: 2;
+  device_profile_id: string;
+  peak_tflops: number;
+  memory_bandwidth_GBps: number;
+  launch_overhead_ps: number;
+  device_memory_bytes: number | string;
+  kv_capacity_bytes_per_rank: number | string;
+  explicit_rank_execution?: boolean;
+  head_dim?: number;
+  prefill_kernel_layout?: "fused" | "split";
+  kernel_efficiency?: Efficiency;
+  device_placements?: {
+    [k: string]: {
+      device_profile_id: string;
+      peak_tflops: number;
+      memory_bandwidth_GBps: number;
+      launch_overhead_ps: number;
+      device_memory_bytes: number | string;
+      kv_capacity_bytes_per_rank: number | string;
+    };
+  };
+}
+export interface Efficiency {
+  schema_version: "tilesim.kernel_efficiency.v1";
+  compute_units: number;
+  scalar_tflops: number;
+  compute_efficiency: number;
+  memory_efficiency: number;
+  tile_m: number;
+  tile_n: number;
+  tile_k: number;
+  attention_tile_q: number;
+}
+export interface Kernel {
+  schema_version: "tilesim.kernel_execution.v1";
+  hardware: {
+    target_profile_id: string;
+    matrix_dtype: "fp16" | "bf16" | "fp32";
+    compute_units: number;
+    threads_per_unit: number;
+    blocks_per_unit: number;
+    shared_bytes_per_unit: number;
+    registers_per_unit: number;
+    threads_per_block: number;
+  };
+  operations: {
+    [k: string]: {
+      view: "aggregate" | "expanded";
+      strategy: {
+        implementation_id: string;
+        source: "declared" | "compiler_metadata" | "launch_observation";
+        dtype: "fp16" | "bf16" | "fp32";
+        accumulator_dtype: "fp32";
+        memory_policy: "reload_operands" | "wave_operand_reuse";
+        mapping: "output_tile_per_block";
+        tile_m: number;
+        tile_n: number;
+        tile_k: number;
+        threads: number;
+        pipeline_stages: number;
+        shared_bytes: number;
+        registers_per_thread: number;
+        source_reference?: string;
+        /**
+         * @minItems 3
+         * @maxItems 3
+         */
+        launch_grid?: [number, number, number];
+      };
+    };
+  };
+}
+export interface Source {
+  source_text: string;
+  arguments: {
+    M: number;
+    N: number;
+    K: number;
+    block_M: number;
+    block_N: number;
+    block_K: number;
+    threads: number;
+    num_stages: number;
+    sm_num: number;
+    dtype: "float16" | "bfloat16";
+    accum_dtype: "float";
+    use_persistent_primitive: boolean;
+    costs: {
+      copy_bytes_per_ps: number;
+      compute_flops_per_ps: number;
+      control_ps: number;
+      epilogue_ps: number;
+    };
+  };
+  payload_mode: "materialized" | "structure_only";
+}
+export interface Partition {
+  schema_version: "tilesim.execution_partition_program.v1";
+  program_id: string;
+  model_id: string;
+  model_revision: string;
+  /**
+   * @minItems 1
+   * @maxItems 4096
+   */
+  windows: [
+    {
+      request_id: string;
+      phase: "prefill" | "decode";
+      token_begin: number | string;
+      token_end: number | string;
+      partition: {
+        schema_version: "tilesim.execution_partition.v1";
+        partition_reference: string;
+        source_kind: "compiler_derived" | "generated" | "observed_trace";
+        evidence: {
+          source_mode: "synthetic_trace";
+          source_id: string;
+          generation_method: string;
+          calibration_level: "uncalibrated";
+          allowed_claim_scope: "exploratory" | "synthetic_consistency";
+          /**
+           * @minItems 0
+           * @maxItems 1024
+           */
+          observed_fields: string[];
+          /**
+           * @minItems 0
+           * @maxItems 1024
+           */
+          inferred_fields: string[];
+        };
+        /**
+         * @minItems 1
+         * @maxItems 10000
+         */
+        slices: [
+          {
+            local_partition_id: string;
+            operation_kind: string;
+            /**
+             * @minItems 0
+             * @maxItems 1024
+             */
+            dependency_partition_ids: string[];
+            completion_condition: "all_resources_completed" | "device_task_completed" | "collective_completed";
+            /**
+             * @minItems 2
+             * @maxItems 2
+             */
+            token_offsets: [number | string, number | string];
+            /**
+             * @minItems 1
+             * @maxItems 8
+             */
+            tensor_shape:
+              | [number | string]
+              | [number | string, number | string]
+              | [number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string, number | string, number | string]
+              | [
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                ]
+              | [
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                ];
+            /**
+             * @minItems 1
+             * @maxItems 8
+             */
+            tensor_offset:
+              | [number | string]
+              | [number | string, number | string]
+              | [number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string, number | string, number | string]
+              | [
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                ]
+              | [
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                ];
+            /**
+             * @minItems 1
+             * @maxItems 8
+             */
+            tensor_extent:
+              | [number | string]
+              | [number | string, number | string]
+              | [number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string, number | string, number | string]
+              | [
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                ]
+              | [
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                ];
+          },
+          ...{
+            local_partition_id: string;
+            operation_kind: string;
+            /**
+             * @minItems 0
+             * @maxItems 1024
+             */
+            dependency_partition_ids: string[];
+            completion_condition: "all_resources_completed" | "device_task_completed" | "collective_completed";
+            /**
+             * @minItems 2
+             * @maxItems 2
+             */
+            token_offsets: [number | string, number | string];
+            /**
+             * @minItems 1
+             * @maxItems 8
+             */
+            tensor_shape:
+              | [number | string]
+              | [number | string, number | string]
+              | [number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string, number | string, number | string]
+              | [
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                ]
+              | [
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                ];
+            /**
+             * @minItems 1
+             * @maxItems 8
+             */
+            tensor_offset:
+              | [number | string]
+              | [number | string, number | string]
+              | [number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string, number | string, number | string]
+              | [
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                ]
+              | [
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                ];
+            /**
+             * @minItems 1
+             * @maxItems 8
+             */
+            tensor_extent:
+              | [number | string]
+              | [number | string, number | string]
+              | [number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string, number | string, number | string]
+              | [
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                ]
+              | [
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                ];
+          }[],
+        ];
+      };
+      resources: {
+        [k: string]:
+          | {
+              kind: "device";
+              placement: string;
+              stream: string;
+              flops: number | string;
+              memory_bytes: number | string;
+              kernel?: {
+                family: "matmul" | "attention_prefill" | "attention_decode" | "elementwise";
+                key: string;
+                size: number | string;
+                scalar_flops: number | string;
+                m?: number | string;
+                n?: number | string;
+                k?: number | string;
+                batch?: number | string;
+                blocks?: number | string;
+              };
+            }
+          | {
+              kind: "allreduce" | "sendrecv";
+              /**
+               * @minItems 2
+               * @maxItems 1024
+               */
+              participants: [string, string, ...string[]];
+              bytes: number | string;
+              chunk_bytes: number | string;
+            };
+      };
+      /**
+       * @minItems 0
+       * @maxItems 1024
+       */
+      buffer_edges?: {
+        producer: string;
+        /**
+         * @minItems 1
+         * @maxItems 1024
+         */
+        consumers: [string, ...string[]];
+        pool: string;
+        bytes: number | string;
+      }[];
+    },
+    ...{
+      request_id: string;
+      phase: "prefill" | "decode";
+      token_begin: number | string;
+      token_end: number | string;
+      partition: {
+        schema_version: "tilesim.execution_partition.v1";
+        partition_reference: string;
+        source_kind: "compiler_derived" | "generated" | "observed_trace";
+        evidence: {
+          source_mode: "synthetic_trace";
+          source_id: string;
+          generation_method: string;
+          calibration_level: "uncalibrated";
+          allowed_claim_scope: "exploratory" | "synthetic_consistency";
+          /**
+           * @minItems 0
+           * @maxItems 1024
+           */
+          observed_fields: string[];
+          /**
+           * @minItems 0
+           * @maxItems 1024
+           */
+          inferred_fields: string[];
+        };
+        /**
+         * @minItems 1
+         * @maxItems 10000
+         */
+        slices: [
+          {
+            local_partition_id: string;
+            operation_kind: string;
+            /**
+             * @minItems 0
+             * @maxItems 1024
+             */
+            dependency_partition_ids: string[];
+            completion_condition: "all_resources_completed" | "device_task_completed" | "collective_completed";
+            /**
+             * @minItems 2
+             * @maxItems 2
+             */
+            token_offsets: [number | string, number | string];
+            /**
+             * @minItems 1
+             * @maxItems 8
+             */
+            tensor_shape:
+              | [number | string]
+              | [number | string, number | string]
+              | [number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string, number | string, number | string]
+              | [
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                ]
+              | [
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                ];
+            /**
+             * @minItems 1
+             * @maxItems 8
+             */
+            tensor_offset:
+              | [number | string]
+              | [number | string, number | string]
+              | [number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string, number | string, number | string]
+              | [
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                ]
+              | [
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                ];
+            /**
+             * @minItems 1
+             * @maxItems 8
+             */
+            tensor_extent:
+              | [number | string]
+              | [number | string, number | string]
+              | [number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string, number | string, number | string]
+              | [
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                ]
+              | [
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                ];
+          },
+          ...{
+            local_partition_id: string;
+            operation_kind: string;
+            /**
+             * @minItems 0
+             * @maxItems 1024
+             */
+            dependency_partition_ids: string[];
+            completion_condition: "all_resources_completed" | "device_task_completed" | "collective_completed";
+            /**
+             * @minItems 2
+             * @maxItems 2
+             */
+            token_offsets: [number | string, number | string];
+            /**
+             * @minItems 1
+             * @maxItems 8
+             */
+            tensor_shape:
+              | [number | string]
+              | [number | string, number | string]
+              | [number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string, number | string, number | string]
+              | [
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                ]
+              | [
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                ];
+            /**
+             * @minItems 1
+             * @maxItems 8
+             */
+            tensor_offset:
+              | [number | string]
+              | [number | string, number | string]
+              | [number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string, number | string, number | string]
+              | [
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                ]
+              | [
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                ];
+            /**
+             * @minItems 1
+             * @maxItems 8
+             */
+            tensor_extent:
+              | [number | string]
+              | [number | string, number | string]
+              | [number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string, number | string]
+              | [number | string, number | string, number | string, number | string, number | string, number | string]
+              | [
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                ]
+              | [
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                  number | string,
+                ];
+          }[],
+        ];
+      };
+      resources: {
+        [k: string]:
+          | {
+              kind: "device";
+              placement: string;
+              stream: string;
+              flops: number | string;
+              memory_bytes: number | string;
+              kernel?: {
+                family: "matmul" | "attention_prefill" | "attention_decode" | "elementwise";
+                key: string;
+                size: number | string;
+                scalar_flops: number | string;
+                m?: number | string;
+                n?: number | string;
+                k?: number | string;
+                batch?: number | string;
+                blocks?: number | string;
+              };
+            }
+          | {
+              kind: "allreduce" | "sendrecv";
+              /**
+               * @minItems 2
+               * @maxItems 1024
+               */
+              participants: [string, string, ...string[]];
+              bytes: number | string;
+              chunk_bytes: number | string;
+            };
+      };
+      /**
+       * @minItems 0
+       * @maxItems 1024
+       */
+      buffer_edges?: {
+        producer: string;
+        /**
+         * @minItems 1
+         * @maxItems 1024
+         */
+        consumers: [string, ...string[]];
+        pool: string;
+        bytes: number | string;
+      }[];
+    }[],
+  ];
+  buffers?: {
+    [k: string]: {
+      placement: string;
+      capacity_bytes: number | string;
+    };
+  };
+}
 export interface ExperimentDescriptorResponse {
   schema_version: "tilesim.bridge.experiment_descriptor.v1";
   schema_set_revision: string;
@@ -1358,7 +2125,7 @@ export interface TracePackageInspectResponse {
 export interface ApiRun {
   run_id: string;
   run_name?: string | null;
-  status?: "preparing" | "running" | "completed" | "failed" | "incomplete";
+  status?: "preparing" | "running" | "completed" | "failed" | "cancelled" | "incomplete";
   input_mode?: "controls" | "json" | "trace_package" | "legacy";
   created_at?: string;
   finished_at?: string;
@@ -4130,7 +4897,13 @@ export interface AgentIntentResponse {
     | "configuration_draft"
     | "navigation"
     | "simulation_execution"
+    | "explore_experiment"
     | "unsupported_execution";
+  exploration_objective?: {
+    metric_path: string;
+    direction: "minimize" | "maximize";
+  } | null;
+  requested_rounds?: number | null;
   current_page_id: string;
   current_context_revision: string;
   run_id: string | null;
@@ -4888,6 +5661,41 @@ export interface AgentIntentResponse {
     | [string, string, string, string, string, string, string]
     | [string, string, string, string, string, string, string, string];
 }
+export interface OperatorExecutionDescriptor {
+  schema_version: "tilesim.bridge.operator_execution.v1";
+  schema_set_revision: string;
+  backend_identity: {
+    [k: string]: unknown;
+  };
+  modes: {
+    kernel_strategy: {
+      status: "available" | "unavailable" | "not_covered" | "unsupported_schema";
+      reason: string;
+    };
+    tilelang_source: {
+      status: "available" | "unavailable" | "not_covered" | "unsupported_schema";
+      reason: string;
+    };
+    execution_partition: {
+      status: "available" | "unavailable" | "not_covered" | "unsupported_schema";
+      reason: string;
+    };
+  };
+  examples: null | {
+    [k: string]: ExecutionInput;
+  };
+  custom_inputs: null | ControlledCustomInputsForTheHostedS1ToS6Path;
+}
+export interface OperatorExecutionValidation {
+  status: "available";
+  config_sha256: string;
+  sources: {
+    [k: string]: unknown;
+  }[];
+  evidence_records: number;
+  claim_scope: string;
+  cost_scope: string;
+}
 
 export interface RequestAttributionArtifact {
   schema_version: "tilesim.request_attribution.v1";
@@ -5161,6 +5969,15 @@ export interface CapabilitiesResponse {
   schema_version: "tilesim.runtime_capabilities.v1";
   default_gpu_participation_mode: string;
   cycle_scope: string;
+  /**
+   * Topology node types explicitly published by the connected TileSim runtime. Missing means the runtime did not publish an addable node vocabulary.
+   */
+  topology_node_types?: {
+    device_type: string;
+    role: string;
+    id_prefix: string;
+    participant: boolean;
+  }[];
   dependencies: {
     [k: string]: {
       available?: boolean;
@@ -5207,6 +6024,13 @@ export interface RenameRunResponse {
 export interface DeleteRunResponse {
   run_id: string;
   deleted: true;
+}
+
+export interface CancelRunResponse {
+  run_id: string;
+  status: "confirmed_cancelled" | "already_terminal" | "cancel_unknown" | "cancel_rejected" | "request_conflict";
+  idempotent_replay?: boolean;
+  [k: string]: unknown;
 }
 
 export interface Week7EvidenceMapResponse {

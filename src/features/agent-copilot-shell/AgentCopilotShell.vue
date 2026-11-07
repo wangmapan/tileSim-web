@@ -20,6 +20,7 @@ import type {
   AgentHarnessExecutionTaskCenterItem,
   AgentHarnessToolTimelineItem,
 } from "../agent-harness";
+import { AgentExplorationPanel, type ExplorationDetail, type ExplorationPlanningState } from "../agent-exploration";
 import type { AgentHarnessOperationProjection } from "../../lib/api/agent-harness";
 import type {
   AgentCopilotPanelState,
@@ -75,6 +76,9 @@ const props = withDefaults(
     batchDetail?: AgentHarnessBatchDetail | null;
     batchPending?: boolean;
     batchCreatePending?: boolean;
+    explorationDetail?: ExplorationDetail | null;
+    explorationPlanning?: ExplorationPlanningState | null;
+    explorationPending?: boolean;
   }>(),
   {
     currentTask: "当前页面助手",
@@ -107,6 +111,9 @@ const props = withDefaults(
     batchDetail: null,
     batchPending: false,
     batchCreatePending: false,
+    explorationDetail: null,
+    explorationPlanning: null,
+    explorationPending: false,
   },
 );
 
@@ -156,6 +163,13 @@ const emit = defineEmits<{
   "batch-retry": [batchId: string];
   "batch-cancel": [batchId: string];
   "batch-create": [payload: { candidateSetText: string; objectivePath: string; direction: "minimize" | "maximize" }];
+  "exploration-authorize": [];
+  "exploration-pause": [];
+  "exploration-resume": [];
+  "exploration-cancel": [];
+  "exploration-planning-confirm": [];
+  "exploration-planning-clarify": [values: Record<string, unknown>];
+  "exploration-planning-dismiss": [];
 }>();
 
 /** The one id the model label points at; the panel is a single instance in this app. */
@@ -503,6 +517,17 @@ onBeforeUnmount(() => {
         @navigation-cancel="emit('navigation-cancel', $event)"
         @start="emit('start', $event)"
       />
+      <AgentExplorationPanel
+        :detail="explorationDetail || null"
+        :planning="explorationPlanning || null"
+        @authorize="emit('exploration-authorize')"
+        @pause="emit('exploration-pause')"
+        @resume="emit('exploration-resume')"
+        @cancel="emit('exploration-cancel')"
+        @planning-confirm="emit('exploration-planning-confirm')"
+        @planning-clarify="emit('exploration-planning-clarify', $event)"
+        @planning-dismiss="emit('exploration-planning-dismiss')"
+      />
     </div>
 
     <AgentComposer
@@ -521,7 +546,7 @@ onBeforeUnmount(() => {
         本机存储不可用，本次对话只保留到页面关闭
       </span>
       <span v-if="allowParameterEdit">描述场景或接着追问 · 仅在确认后写入，不会创建运行</span>
-       <span v-else>{{ canDraft ? "仅生成草案 · 不会开始运行" : "仅解释当前页面 · 不会修改实验或开始运行" }}</span>
+      <span v-else>{{ canDraft ? "仅生成草案 · 不会开始运行" : "仅解释当前页面 · 不会修改实验或开始运行" }}</span>
     </div>
   </aside>
 </template>

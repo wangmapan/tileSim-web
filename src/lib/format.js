@@ -99,6 +99,15 @@ export function statusLabel(value) {
     fallback: "fallback 结果",
     externally_specified: "外部指定值",
     user_supplied: "用户提供值",
+    not_promoted: "未进入精细模拟",
+    top_k: "排名靠前",
+    tail_risk: "尾延迟风险",
+    budget_complete: "预算完成",
+    no_candidate_strictly_dominates: "无方案严格支配",
+    strict_objective_dominance: "严格目标支配",
+    pareto_member: "前沿成员",
+    not_evaluated: "未评估",
+    legacy_compatibility: "旧版兼容",
     unknown: "未知",
   };
   return labels[value] ? t(labels[value]) : String(value || t("未知")).replaceAll("_", " ");

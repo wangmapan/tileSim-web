@@ -2,11 +2,13 @@
 
 本文档树按“当前事实优先、稳定设计其次、历史证据最后”组织。AI 不得从文件日期推断当前状态。
 
-2026-10-29 复核：当前工作树为 Web `HEAD=28016188951338a033eedeb9f8303c08e38ee7bd`（工作树含既有未提交改动），Bridge schema-set
-revision 为 `sha256:0085e3a4e89576fff168f29d811be581c7107b9bd3f8fabf9834d651f3c606b3`。
-Agent flow HTTP 路由是 deterministic transition adapter，LangGraph runtime 仍为 optional/not active；flow
-继续限定为 `local_dev + synthetic_trace + exploratory + not_for_production`，不创建 run、不调用 Provider；详见
-[`AI_HANDOFF.md`](AI_HANDOFF.md) 最新 dated 条目与 [`bridge/README.md`](../bridge/README.md) 当前事实。
+2026-11-03 复核：当前工作树包含阶段五助手模型候选适配器与隔离 controlled Provider acceptance，Bridge schema-set revision 为
+`sha256:09279a1e159907caae262557d70ed7ffa6d809b43c5dd55d1f176ced68d65ec3`。自动探索默认仍走确定性候选生成器；
+模型通道只有显式配置开关打开时启用，失败回退确定性扫描，外部真实 Provider acceptance 与生产验收仍未执行；
+模型候选只能通过显式配置开关或注入的结构化 Provider 启用，并在 Schema、能力目录、授权、固定资源/场景绑定、重复和预算边界
+内回退或停止。运行时继续限定为 `local_dev + synthetic_trace + exploratory + not_for_production`，真实 Provider、Profile
+和生产 verified artifact 尚未接通；详见 [`AI_HANDOFF.md`](AI_HANDOFF.md) 最新 dated 条目与
+[`bridge/README.md`](../bridge/README.md) 当前事实。
 Agent Harness 阶段 5 local-dev 批处理已通过 `LOCAL_PHASE5_PASS`，但仍不是生产 GO；2026-10-23
 启动器部署因后端 CTest 的 `route_unavailable` 失败而保持未部署。当前细节以
 [`AI_HANDOFF.md`](AI_HANDOFF.md)、模块 current baseline 和运行时 contract 为准。
@@ -63,6 +65,8 @@ Agent Harness 阶段 5 local-dev 批处理已通过 `LOCAL_PHASE5_PASS`，但仍
 
 ### 功能说明（`features/`）
 
+- [`execution/OPERATOR_KERNEL_CURRENT_BASELINE.md`](features/execution/OPERATOR_KERNEL_CURRENT_BASELINE.md)：算子 / Kernel / TileLang / execution partition 的正式 Run Intake、真实 CLI 路径、证据回放和范围限制。
+
 - [`evidence-agent/F9_EVIDENCE_AGENT_USER_GUIDE.md`](features/evidence-agent/F9_EVIDENCE_AGENT_USER_GUIDE.md)：Evidence Agent 使用指南。
 - [`execution/WEEK6_RESULTS_UI.md`](features/execution/WEEK6_RESULTS_UI.md)：运行结果界面说明。
 - [`execution/WEEK7_EVIDENCE_UI.md`](features/execution/WEEK7_EVIDENCE_UI.md)：Week 7 证据界面说明。
@@ -71,6 +75,11 @@ Agent Harness 阶段 5 local-dev 批处理已通过 `LOCAL_PHASE5_PASS`，但仍
 
 ### 架构、部署与研究
 
+- [`architecture/UI_REFACTOR_EXECUTION_REPORT_2026-11-06.md`](architecture/UI_REFACTOR_EXECUTION_REPORT_2026-11-06.md)：非回放、非助手页面的易用化改造报告、后端语义边界、拓扑重构方案、删减规则和验收矩阵。
+- [`architecture/TOPOLOGY_UI_REFERENCE_SURVEY_2026-11-06.md`](architecture/TOPOLOGY_UI_REFERENCE_SURVEY_2026-11-06.md)：GNS3、EVE-NG、FABRIC、CloudLab、OMNeT++、NetAnim、Mininet、netlab 等同类工具的拓扑/仿真网页设计调研，以及 TileSim 的分层页面建议。
+
+- [`architecture/AGENT_AUTOMATED_EXPLORATION_IMPLEMENTATION_PLAN_2026-10-31.md`](architecture/AGENT_AUTOMATED_EXPLORATION_IMPLEMENTATION_PLAN_2026-10-31.md)：Agent 助手自动探索实验的现状、成熟方案调研、目标架构、权限/上下文、LangGraph、串行 Worker、前端控制和分阶段实施方案。
+- [`architecture/AGENT_DEPLOYMENT_EXPLORATION_INCREMENTAL_PLAN_2026-11-01.md`](architecture/AGENT_DEPLOYMENT_EXPLORATION_INCREMENTAL_PLAN_2026-11-01.md)：自动探索从运行参数扫描扩展到部署方案评估的增量方案，包含信息不足时的澄清建议、多指标目标、候选/场景模型、契约和验收要求。
 - [`architecture/AGENT_INTERVIEW_READINESS_REMEDIATION_PLAN_2026-10-29.md`](architecture/AGENT_INTERVIEW_READINESS_REMEDIATION_PLAN_2026-10-29.md)：Agent 面试准备质量审查、问题矩阵、分阶段修复路线和当前允许/禁止叙事。
 - [`architecture/FRONTEND_BACKEND_ALIGNMENT_DEVELOPMENT_PLAN_2026-10-17.md`](architecture/FRONTEND_BACKEND_ALIGNMENT_DEVELOPMENT_PLAN_2026-10-17.md)：基于后端 `main@5e44dbb0` 的 **2026-10-17 dated** 前端契约、结果诊断、输入和 Trace Package 对齐开发计划；当前差异以本页的 `AI_BACKEND_BASELINE_ALIGNMENT_2026-10-24.md` 为准。
 - [`architecture/EXECUTION_VISUALIZATION_DESIGN.md`](architecture/EXECUTION_VISUALIZATION_DESIGN.md)：执行可视化设计。

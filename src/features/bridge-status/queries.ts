@@ -1,6 +1,7 @@
 import { queryClient } from "../../lib/query-client";
 import { bridgeApi } from "../../lib/api";
 import { BridgeApiError } from "../../lib/api";
+import { getAgentOrchestrationCapabilitySnapshot } from "../../lib/api/agent-orchestration-capabilities";
 
 function backendIdentity(health: Record<string, unknown>): string {
   return [
@@ -26,6 +27,8 @@ export async function fetchBridgeBootstrap({ refresh = false } = {}) {
         bridgeApi.catalog(),
         bridgeApi.capabilities(),
       ]);
+      let orchestrationCapability: Awaited<ReturnType<typeof getAgentOrchestrationCapabilitySnapshot>> | null = null;
+      let orchestrationCapabilityError = "";
       const manifestRecord = manifest as unknown as Record<string, unknown>;
       if (manifest.legacy_unversioned === true) {
         return {
@@ -33,6 +36,8 @@ export async function fetchBridgeBootstrap({ refresh = false } = {}) {
           health,
           catalog,
           capabilities,
+          orchestrationCapability,
+          orchestrationCapabilityError,
           experimentDescriptor: null,
           experimentDescriptorStatus: "legacy_compatibility" as const,
           experimentDescriptorError: "experiment_descriptor_unavailable",
@@ -78,11 +83,23 @@ export async function fetchBridgeBootstrap({ refresh = false } = {}) {
             status: "contract_error" as const,
             error: "evidence_agent_unavailable",
           };
+      if (manifestRecord.agent_orchestration_capability) {
+        try {
+          orchestrationCapability = await getAgentOrchestrationCapabilitySnapshot(manifest);
+        } catch (error) {
+          orchestrationCapabilityError =
+            error instanceof BridgeApiError ? error.code : "agent_orchestration_capability_fetch_failed";
+        }
+      } else {
+        orchestrationCapabilityError = "agent_orchestration_capability_unadvertised";
+      }
       return {
         manifest,
         health,
         catalog,
         capabilities,
+        orchestrationCapability,
+        orchestrationCapabilityError,
         experimentDescriptor: experimentDescriptorResult.descriptor,
         experimentDescriptorStatus: experimentDescriptorResult.status,
         experimentDescriptorError: experimentDescriptorResult.error,

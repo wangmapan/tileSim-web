@@ -206,6 +206,40 @@ describe("Week 5 and Week 6 frontend integration", () => {
     expect(wrapper.attributes("open")).toBeUndefined();
   });
 
+  it("renders orchestration profile availability from the nested capability catalog", () => {
+    const wrapper = mount(ExperimentCapabilityPanel, {
+      props: {
+        surface: buildExperimentSurface(
+          { scenarios: [{ scenario_id: "s1_des_example", label: "S1" }], fidelity_policies: ["des"] },
+          { default_gpu_participation_mode: "gpu_free", cycle_scope: "S6", dependencies: {} },
+        ),
+        capabilities: { dependencies: {} },
+        bridge: { identity: null },
+        orchestrationCapability: {
+          publication_status: "published",
+          snapshot_revision: "sha256:" + "a".repeat(64),
+          catalog: {
+            catalog_revision: "sha256:" + "b".repeat(64),
+            agent_exposed_field_ids: ["s1.runtime.max_batch_size"],
+            claim_scope_ceiling: ["exploration", "synthetic_consistency"],
+            profile_families: [
+              {
+                family: "device",
+                actual_profile_count: 0,
+                runtime_availability: "unavailable",
+                reason_codes: ["profile_missing"],
+              },
+            ],
+          },
+        },
+      },
+    });
+    expect(wrapper.text()).toContain("agent_exposed_fields");
+    expect(wrapper.text()).toContain("exploration · synthetic_consistency");
+    expect(wrapper.text()).toContain("device=unavailable · 0");
+    expect(wrapper.text()).toContain("profile_missing");
+  });
+
   it("renders S0, S1, and S6 controls without extra contract toggles", async () => {
     const surface = buildExperimentSurface(
       {
@@ -296,7 +330,7 @@ describe("Week 5 and Week 6 frontend integration", () => {
     const wrapper = mount(FabricView);
     expect(wrapper.text()).toContain("专业证据与契约信息");
     expect(wrapper.text()).toContain("当前主要通信瓶颈");
-    expect(wrapper.text()).toContain("请求级 Fabric contribution");
+    expect(wrapper.text()).toContain("请求级通信贡献");
     expect(wrapper.text()).toContain("req-0");
     expect(wrapper.text()).toContain("phase-0");
     expect(wrapper.text()).toContain("Topology → metrics domain：不可用");
@@ -325,7 +359,7 @@ describe("Week 5 and Week 6 frontend integration", () => {
 
     const routerLinkStub = { template: '<a class="artifact-evidence-link"><slot /></a>' };
     const designWrapper = mount(DesignSpaceView, { global: { stubs: { RouterLink: routerLinkStub } } });
-    expect(designWrapper.text()).toContain("Pareto 与 artifact-record 证据");
+    expect(designWrapper.text()).toContain("候选关系与证据记录");
     expect(designWrapper.text()).toContain("pareto-f7-ui");
     expect(designWrapper.text()).toContain("backend-candidate-a");
     expect(designWrapper.text()).toContain("不是 Bridge run");

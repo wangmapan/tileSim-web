@@ -1,17 +1,25 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { routeLocationKey, type LocationQuery } from "vue-router";
+import { OperatorEvidencePanel } from "../../execution-inspector";
 import type { ApiManifestResponse, ArtifactManifestResponse } from "../../../contracts/bridge-api";
 import type { ReportBundle, RunInputs } from "../../../contracts/report-model";
 import { useExecutionReplayQuery } from "../queries/useExecutionReplayQuery";
-import { coverageLabel, routeStateLabel } from "../model/coverage";
+import { routeStateLabel } from "../model/coverage";
 import { normalizeReplayDocument } from "../model/normalize";
-import { nextPlaybackTime, nextStageTime } from "../model/playback";
+import { publishPlaybackCursor } from "../model/playback-clock";
+import { formatReportedPicoseconds, nextPlaybackTime, nextStageTime } from "../model/playback";
 import { clampReplaySpeed, DEFAULT_REPLAY_SPEED } from "../model/speed";
 import ReplayControls from "./ReplayControls.vue";
-import ReplayDetailsPanel from "./ReplayDetailsPanel.vue";
-import ReplayTimeline from "./ReplayTimeline.vue";
-import ReplayTopologyCanvas from "./ReplayTopologyCanvas.vue";
-import ReplayCollectivePanel from "./ReplayCollectivePanel.vue";
+import ReplayWorkspace from "./ReplayWorkspace.vue";
+import ReplayCoverageState from "./ReplayCoverageState.vue";
+import ReplayLayerSelector from "./ReplayLayerSelector.vue";
+import {
+  defaultReplayLayerVisibility,
+  replayEventLayer,
+  replayStageLayer,
+  type ReplayLayerVisibility,
+} from "../model/layers";
 
 const props = defineProps<{
   runId: string | null;
@@ -22,6 +30,37 @@ const props = defineProps<{
   schemaSetRevision: string;
   bridgeManifest: ApiManifestResponse | null;
 }>();
+const route = inject(routeLocationKey, null) || { query: {} as LocationQuery };
+function applyRouteSeek() {
+  const value = route.query.cursor_ps;
+  if (
+    typeof value === "string" &&
+    /^\d+$/.test(value) &&
+    route.query.run === props.runId &&
+    route.query.backend_identity === props.backendIdentity &&
+    route.query.schema_revision === props.schemaSetRevision &&
+    props.artifactManifest?.artifacts.some(
+      (e) => e.artifact_id === "request-attribution" && e.sha256 === route.query.artifact_sha256,
+    )
+  ) {
+    stopPlayback();
+    writeCursor(value);
+    selectedEventId.value =
+      document.value.events.find((event) => event.fragmentId === route.query.fragment)?.eventId || null;
+  }
+}
+watch(
+  () => [
+    route.query.cursor_ps,
+    props.runId,
+    route.query.run,
+    props.backendIdentity,
+    props.schemaSetRevision,
+    props.artifactManifest,
+  ],
+  applyRouteSeek,
+  { flush: "post" },
+);
 
 const query = useExecutionReplayQuery({
   runId: computed(() => props.runId),
@@ -42,6 +81,23 @@ const selectedRouteId = ref<string | null>(null);
 const selectedFabricEventId = ref<string | null>(null);
 const selectedCollectiveStepId = ref<string | null>(null);
 const selectedStageId = ref<string | null>(null);
+const layersCustomized = ref(false);
+const layerVisibility = ref<ReplayLayerVisibility>({
+  operator: false,
+  kernel: true,
+  wave: false,
+  fragment: true,
+  buffer: true,
+  execution: true,
+  request: false,
+  scheduling: false,
+  kv: false,
+  device: true,
+  collective: true,
+  fabric: true,
+  topology: true,
+  output: false,
+});
 const reducedMotion = ref(false);
 let frame: number | null = null;
 let lastFrame = 0;
@@ -62,6 +118,7 @@ const document = computed(() =>
     schemaSetRevision: props.schemaSetRevision,
     artifactSha256: query.artifactSha.value,
     envelope: props.bundle.execution_envelope,
+    requestAttribution: query.result.value.requestAttribution,
     runtimeEvents: query.result.value.runtimeEvents,
     runtimeRequests: query.result.value.runtimeRequests,
     fabricRoutes: query.result.value.fabricRoutes,
@@ -85,6 +142,20 @@ const evidenceCount = computed(
     ].filter((item) => item.availability !== "unsupported_schema").length,
 );
 const activeCursor = computed(() => cursorPs.value || document.value.startPs || "0");
+let liveCursor = "0";
+
+function writeCursor(value: string | null) {
+  liveCursor = value || "0";
+  playbackRemainderMs = 0;
+  playbackRemainderNumerator = 0n;
+  cursorPs.value = liveCursor;
+  publishPlaybackCursor(liveCursor);
+}
+
+function beadCursor(base: string, span: bigint): string {
+  const micro = BigInt(Math.min(999_999, Math.max(0, Math.floor(playbackRemainderMs * 1_000_000))));
+  return String(BigInt(base) + (span * micro) / 1_000_000_000n);
+}
 const routeHeadline = computed(() => {
   if (document.value.fabricRouteState !== "no_path") return routeStateLabel(document.value.fabricRouteState);
   return document.value.routes.some((route) => route.hasInterval) ? "路径细节未报告" : "后端未提供实际路径";
@@ -107,19 +178,32 @@ const playbackTimes = computed<string[]>(() =>
   [
     ...new Set(
       [
-        ...document.value.events.flatMap((event) =>
-          event.timing.type === "interval" ? [event.timing.startPs, event.timing.endPs] : [event.timing.atPs],
-        ),
+        ...document.value.events
+          .filter((event) => {
+            const layer = replayEventLayer(event);
+            return layer ? layerVisibility.value[layer] : layerVisibility.value.scheduling || layerVisibility.value.kv;
+          })
+          .flatMap((event) =>
+            event.timing.type === "interval" ? [event.timing.startPs, event.timing.endPs] : [event.timing.atPs],
+          ),
         ...document.value.stages
+          .filter((stage) => layerVisibility.value[replayStageLayer(stage)])
           .flatMap((stage) => [stage.timing?.startPs, stage.timing?.endPs, stage.pointPs])
           .filter((value): value is string => Boolean(value)),
         ...document.value.routes
+          .filter(() => layerVisibility.value.fabric)
           .flatMap((route) => [route.timing?.startPs, route.timing?.endPs])
           .filter((value): value is string => Boolean(value)),
         ...document.value.fabricEvents.flatMap((event) =>
-          event.timing.type === "interval" ? [event.timing.startPs, event.timing.endPs] : [event.timing.atPs],
+          layerVisibility.value.fabric
+            ? event.timing.type === "interval"
+              ? [event.timing.startPs, event.timing.endPs]
+              : [event.timing.atPs]
+            : [],
         ),
-        ...document.value.collective.steps.flatMap((step) => [step.timing.startPs, step.timing.endPs]),
+        ...document.value.collective.steps.flatMap((step) =>
+          layerVisibility.value.collective ? [step.timing.startPs, step.timing.endPs] : [],
+        ),
       ].filter((value): value is string => Boolean(value)),
     ),
   ].sort((a, b) => (BigInt(a) < BigInt(b) ? -1 : BigInt(a) > BigInt(b) ? 1 : 0)),
@@ -171,7 +255,7 @@ function resetCursor() {
   // makes the cursor jump back and immediately run forward again, which is
   // especially confusing when the reset button is used while paused.
   stopPlayback();
-  cursorPs.value = document.value.startPs || playbackTimes.value[0] || null;
+  writeCursor(document.value.startPs || playbackTimes.value[0] || null);
   selectedEventId.value = null;
   selectedRouteId.value = null;
   selectedFabricEventId.value = null;
@@ -185,8 +269,19 @@ function stopFrame() {
 }
 
 function stopPlayback() {
+  const wasPlaying = isPlaying.value;
   isPlaying.value = false;
   stopFrame();
+  if (wasPlaying) {
+    const start = document.value.startPs;
+    const end = document.value.endPs;
+    if (start && end && document.value.hasValidRange) {
+      const span = BigInt(end) - BigInt(start);
+      if (span > 0n) liveCursor = beadCursor(liveCursor, span);
+    }
+    cursorPs.value = liveCursor;
+    publishPlaybackCursor(liveCursor);
+  }
   lastFrame = 0;
   playbackRemainderMs = 0;
   playbackRemainderNumerator = 0n;
@@ -216,12 +311,20 @@ function tick(now: number) {
   const numerator = span * BigInt(wholeElapsedMs) + playbackRemainderNumerator;
   const increment = numerator / 1000n;
   playbackRemainderNumerator = numerator % 1000n;
-  const next = BigInt(activeCursor.value) + increment;
+  const next = BigInt(liveCursor) + increment;
   if (next >= BigInt(end)) {
-    cursorPs.value = end;
+    writeCursor(end);
     stopPlayback();
   } else {
-    cursorPs.value = String(next);
+    const previous = liveCursor;
+    liveCursor = String(next);
+    const bead = beadCursor(liveCursor, span);
+    publishPlaybackCursor(BigInt(bead) > BigInt(end) ? end : bead);
+    // The integer cursor feeds the timeline and readout. It only changes once a
+    // whole scaled millisecond has accumulated, so writing it here does not
+    // re-render the page on every animation frame. The bead uses the published
+    // fractional cursor instead.
+    if (liveCursor !== previous) cursorPs.value = liveCursor;
     frame = requestAnimationFrame(tick);
   }
 }
@@ -242,9 +345,7 @@ function togglePlayback() {
     // must replay the trace from its beginning instead of scheduling a frame
     // that immediately stops at the already-reached end boundary.
     if (BigInt(activeCursor.value) >= BigInt(document.value.endPs)) {
-      cursorPs.value = document.value.startPs;
-      playbackRemainderMs = 0;
-      playbackRemainderNumerator = 0n;
+      writeCursor(document.value.startPs);
     }
     isPlaying.value = true;
     lastFrame = 0;
@@ -254,29 +355,33 @@ function togglePlayback() {
 
 function step(direction: 1 | -1) {
   stopPlayback();
-  cursorPs.value = nextPlaybackTime(activeCursor.value, playbackTimes.value, direction);
+  writeCursor(nextPlaybackTime(activeCursor.value, playbackTimes.value, direction));
 }
 
 function stepStage(direction: 1 | -1) {
   stopPlayback();
-  cursorPs.value = nextStageTime(activeCursor.value, document.value.stages, direction);
+  writeCursor(nextStageTime(activeCursor.value, document.value.stages, direction));
 }
 
 const collectiveTimes = computed(() =>
-  [...new Set(document.value.collective.steps.flatMap((step) => [step.timing.startPs, step.timing.endPs]))].sort(
-    (a, b) => (BigInt(a) < BigInt(b) ? -1 : BigInt(a) > BigInt(b) ? 1 : 0),
-  ),
+  [
+    ...new Set(
+      document.value.collective.steps.flatMap((step) =>
+        layerVisibility.value.collective ? [step.timing.startPs, step.timing.endPs] : [],
+      ),
+    ),
+  ].sort((a, b) => (BigInt(a) < BigInt(b) ? -1 : BigInt(a) > BigInt(b) ? 1 : 0)),
 );
 
 function stepCollective(direction: 1 | -1) {
   stopPlayback();
   if (!collectiveTimes.value.length) return;
-  cursorPs.value = nextPlaybackTime(activeCursor.value, collectiveTimes.value, direction);
+  writeCursor(nextPlaybackTime(activeCursor.value, collectiveTimes.value, direction));
 }
 
 function seekCursor(value: string) {
   stopPlayback();
-  cursorPs.value = value;
+  writeCursor(value);
 }
 
 function onKeydown(event: KeyboardEvent) {
@@ -304,7 +409,7 @@ function onKeydown(event: KeyboardEvent) {
   } else if (event.key === "End") {
     event.preventDefault();
     stopPlayback();
-    cursorPs.value = document.value.endPs || playbackTimes.value.at(-1) || null;
+    writeCursor(document.value.endPs || playbackTimes.value.at(-1) || null);
   }
 }
 
@@ -316,7 +421,7 @@ function selectEvent(id: string) {
   selectedCollectiveStepId.value = null;
   selectedStageId.value = null;
   const event = document.value.events.find((item) => item.eventId === id);
-  if (event) cursorPs.value = event.timing.type === "instant" ? event.timing.atPs : event.timing.startPs;
+  if (event) writeCursor(event.timing.type === "instant" ? event.timing.atPs : event.timing.startPs);
 }
 
 function selectRoute(id: string) {
@@ -327,10 +432,11 @@ function selectRoute(id: string) {
   selectedCollectiveStepId.value = null;
   selectedStageId.value = null;
   const route = document.value.routes.find((item) => item.routeId === id);
-  if (route?.timing) cursorPs.value = route.timing.startPs;
+  if (route?.timing) writeCursor(route.timing.startPs);
   else if (route?.events[0]) {
-    cursorPs.value =
-      route.events[0].timing.type === "instant" ? route.events[0].timing.atPs : route.events[0].timing.startPs;
+    writeCursor(
+      route.events[0].timing.type === "instant" ? route.events[0].timing.atPs : route.events[0].timing.startPs,
+    );
   }
 }
 
@@ -343,7 +449,7 @@ function selectFabricEvent(id: string) {
   selectedEventId.value = null;
   selectedStageId.value = null;
   selectedRouteId.value = event.routeId;
-  cursorPs.value = event.timing.type === "instant" ? event.timing.atPs : event.timing.startPs;
+  writeCursor(event.timing.type === "instant" ? event.timing.atPs : event.timing.startPs);
 }
 
 function selectCollectiveStep(id: string) {
@@ -355,7 +461,7 @@ function selectCollectiveStep(id: string) {
   selectedEventId.value = null;
   selectedStageId.value = null;
   selectedRouteId.value = null;
-  cursorPs.value = step.timing.startPs;
+  writeCursor(step.timing.startPs);
 }
 
 function selectStage(id: string) {
@@ -367,10 +473,46 @@ function selectStage(id: string) {
   selectedRouteId.value = null;
   selectedFabricEventId.value = null;
   selectedCollectiveStepId.value = null;
-  cursorPs.value = stage.timing?.startPs || stage.pointPs || cursorPs.value;
+  writeCursor(stage.timing?.startPs || stage.pointPs || cursorPs.value);
 }
 
-watch(documentSignature, resetCursor, { immediate: true });
+watch(
+  documentSignature,
+  () => {
+    resetCursor();
+    applyRouteSeek();
+  },
+  { immediate: true },
+);
+let appliedLayerIdentity = "";
+watch(
+  () =>
+    [
+      document.value.runId || "none",
+      document.value.artifactSha256 || "none",
+      document.value.stages.length,
+      document.value.events.length,
+      document.value.routes.length,
+      document.value.fabricEvents.length,
+      document.value.collective.steps.length,
+      document.value.topology.nodes.length,
+      document.value.topology.links.length,
+    ].join(":"),
+  () => {
+    const identity = `${document.value.runId || "none"}:${document.value.artifactSha256 || "none"}`;
+    if (identity !== appliedLayerIdentity) {
+      appliedLayerIdentity = identity;
+      layersCustomized.value = false;
+    }
+    if (!layersCustomized.value) layerVisibility.value = defaultReplayLayerVisibility(document.value);
+  },
+  { immediate: true },
+);
+
+function onLayerVisibility(next: ReplayLayerVisibility) {
+  layersCustomized.value = true;
+  layerVisibility.value = next;
+}
 onMounted(() => {
   reducedMotionQuery = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)") || null;
   reducedMotion.value = reducedMotionQuery?.matches || false;
@@ -410,14 +552,24 @@ onBeforeUnmount(() => {
     @keydown="onKeydown"
   >
     <header class="panel-header panel-header--row">
-      <div>
-        <p class="section-kicker">执行回放</p>
-        <h2>已观测事件回放 / 阶段摘要</h2>
-      </div>
       <div class="replay-coverage-status" :data-status="document.coverage.status">
-        {{ coverageLabel(document.coverage.status) }} · {{ evidenceCount }} 条已报告证据
+        <ReplayCoverageState :coverage="document.coverage" compact />
+        <span>{{ evidenceCount }} 条已报告证据</span>
       </div>
     </header>
+    <OperatorEvidencePanel
+      :fragment-id="document.events.find((e) => e.eventId === selectedEventId)?.fragmentId"
+      :run-id="runId"
+      :backend-identity="backendIdentity"
+      :schema-set-revision="schemaSetRevision"
+      :artifact-manifest="artifactManifest"
+      :bridge-manifest="bridgeManifest"
+      :cursor-ps="activeCursor"
+      @seek="
+        stopPlayback();
+        writeCursor($event);
+      "
+    />
     <p v-if="query.result.value.loading" class="panel-empty-copy">正在校验并读取运行期事件…</p>
     <p v-else-if="query.result.value.error && !hasSuccessfulEvidence" class="panel-empty-copy" role="alert">
       读取运行期证据失败：{{ query.result.value.error }}
@@ -427,17 +579,21 @@ onBeforeUnmount(() => {
     </p>
     <div class="replay-identity">
       <span
-        >时间范围：<code>{{ document.startPs || "未报告" }}</code> –
-        <code>{{ document.endPs || "未报告" }}</code> ps</span
+        >时间
+        <code :title="document.startPs ? `${document.startPs} ps` : undefined">{{
+          formatReportedPicoseconds(document.startPs)
+        }}</code>
+        –
+        <code :title="document.endPs ? `${document.endPs} ps` : undefined">{{
+          formatReportedPicoseconds(document.endPs)
+        }}</code></span
       >
-      <span>运行期事件：{{ coverageLabel(document.coverage.runtimeEvents) }}</span>
-      <span>底层路径：{{ routeHeadline }}</span>
-      <span>
-        来源模式：{{ document.traceProvenance.sourceMode || "未报告" }} · 校准：{{
-          document.traceProvenance.calibrationLevel || "未报告"
-        }}
-        · 声明范围：{{ document.traceProvenance.allowedClaimScope || "未报告" }}
-      </span>
+      <span
+        >{{ document.traceProvenance.sourceMode || "未报告" }} ·
+        {{ document.traceProvenance.calibrationLevel || "未报告" }} ·
+        {{ document.traceProvenance.allowedClaimScope || "未报告" }}</span
+      >
+      <span>{{ routeHeadline }}</span>
     </div>
     <ReplayControls
       :is-playing="isPlaying"
@@ -458,53 +614,30 @@ onBeforeUnmount(() => {
       @next-collective="stepCollective(1)"
       @update:speed="updateSpeed"
     />
-    <div class="replay-main-grid">
-      <ReplayTimeline
-        :key="`${document.runId || 'none'}:${document.artifactSha256 || 'none'}`"
-        :document="document"
-        :cursor-ps="cursorPs"
-        :selected-event-id="selectedEventId"
-        :selected-route-id="selectedRouteId"
-        :selected-fabric-event-id="selectedFabricEventId"
-        :selected-collective-step-id="selectedCollectiveStepId"
-        :selected-stage-id="selectedStageId"
-        @select-event="selectEvent"
-        @select-route="selectRoute"
-        @select-fabric-event="selectFabricEvent"
-        @select-collective-step="selectCollectiveStep"
-        @select-stage="selectStage"
-        @update:cursor="seekCursor"
-      />
-      <aside class="replay-side-column" aria-label="执行回放观察视图">
-        <ReplayTopologyCanvas
-          :key="`${document.runId || 'none'}:${document.artifactSha256 || 'none'}`"
-          :document="document"
-          :selected-route-id="selectedRouteId"
-          :selected-fabric-event-id="selectedFabricEventId"
-          :selected-collective-step-id="selectedCollectiveStepId"
-          :cursor-ps="cursorPs"
-          @select-route="selectRoute"
-        />
-        <ReplayDetailsPanel
-          :document="document"
-          :cursor-ps="cursorPs"
-          :selected-event-id="selectedEventId"
-          :selected-route-id="selectedRouteId"
-          :selected-fabric-event-id="selectedFabricEventId"
-          :selected-collective-step-id="selectedCollectiveStepId"
-          :selected-stage-id="selectedStageId"
-          :artifact-sha-by-id="artifactShaById"
-        />
-      </aside>
-    </div>
-    <div class="replay-evidence-grid">
-      <ReplayCollectivePanel
-        :key="`${document.runId || 'none'}:${document.artifactSha256 || 'none'}`"
-        :collective="document.collective"
-        :selected-step-id="selectedCollectiveStepId"
-        @select-step="selectCollectiveStep"
-      />
-    </div>
+    <details class="replay-display-options">
+      <summary>显示</summary>
+      <ReplayLayerSelector :document="document" :visibility="layerVisibility" @update:visibility="onLayerVisibility" />
+    </details>
+    <ReplayWorkspace
+      :key="`${document.runId || 'none'}:${document.artifactSha256 || 'none'}`"
+      :document="document"
+      :cursor-ps="cursorPs"
+      :selected-event-id="selectedEventId"
+      :selected-route-id="selectedRouteId"
+      :selected-fabric-event-id="selectedFabricEventId"
+      :selected-collective-step-id="selectedCollectiveStepId"
+      :selected-stage-id="selectedStageId"
+      :artifact-sha-by-id="artifactShaById"
+      :visible-layers="layerVisibility"
+      :flow-motion="isPlaying"
+      @select-event="selectEvent"
+      @select-route="selectRoute"
+      @select-fabric-event="selectFabricEvent"
+      @select-collective-step="selectCollectiveStep"
+      @select-stage="selectStage"
+      @update:cursor="seekCursor"
+    />
+    <ReplayCoverageState :coverage="document.coverage" />
     <div v-if="document.coverage.status !== 'available'" class="replay-coverage-note">
       <span>当前回放含未报告或不完整证据；未生成推断路径、步骤或动画。</span>
       <details v-if="document.coverage.reasons.length">
@@ -535,6 +668,14 @@ onBeforeUnmount(() => {
 }
 .replay-coverage-status[data-status="unsupported_schema"] {
   color: var(--danger-ink);
+}
+.replay-display-options {
+  border-bottom: 1px solid var(--line);
+}
+.replay-display-options summary {
+  padding: 10px 22px;
+  color: var(--ink-soft);
+  cursor: pointer;
 }
 .replay-identity {
   display: flex;

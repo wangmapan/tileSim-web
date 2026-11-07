@@ -1,0 +1,40 @@
+{
+  "$id": "tilesim.agent_harness.exploration_candidate.v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_identity", "contract_revision", "candidate_id", "session_id", "sequence", "parent_candidate_id", "candidate_digest", "config", "changed_fields", "status", "authorization_id", "run_id", "run_idempotency_key", "metric_value", "metric_verified", "provenance"],
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.exploration_candidate.v2" },
+    "contract_revision": { "const": "2026-10-29.wpg.v2" },
+    "candidate_id": { "type": "string", "minLength": 1 },
+    "session_id": { "type": "string", "minLength": 1 },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "parent_candidate_id": { "type": ["string", "null"] },
+    "candidate_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "config": { "type": "object" },
+    "changed_fields": { "type": "array", "maxItems": 64, "items": { "type": "string" } },
+    "origin": { "enum": ["model", "rule"] },
+    "reason": { "type": ["string", "null"], "maxLength": 1000 },
+    "status": { "enum": ["generated", "validated", "running", "best", "evaluated", "failed", "rejected", "recovery_required"] },
+    "authorization_id": { "type": "string", "minLength": 1 },
+    "run_id": { "type": ["string", "null"] },
+    "run_idempotency_key": { "type": "string", "minLength": 1 },
+    "metric_value": { "type": ["number", "null"] },
+    "metric_verified": { "type": "boolean" },
+    "provenance": { "$ref": "./exploration-provenance.schema.json" }
+    ,"deployment_candidate": { "type": ["object", "null"] }
+    ,"deployment_candidate_id": { "type": ["string", "null"] }
+    ,"deployment_candidate_summary": { "type": ["object", "null"] }
+    ,"candidate_summary": { "type": ["object", "null"] }
+    ,"resource_binding": { "type": ["object", "null"] }
+    ,"run_strategy": { "type": ["object", "null"] }
+    ,"run_strategy_digest": { "type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$" }
+    ,"combination_key": { "type": ["string", "null"] }
+    ,"candidate_idempotency_key": { "type": ["string", "null"] }
+    ,"scenario_id": { "type": ["string", "null"] }
+    ,"scenario_summary": { "type": ["object", "null"] }
+    ,"model_proposal": { "anyOf": [{ "$ref": "./exploration-model-candidate.schema.json" }, { "type": "null" }] }
+    ,"model_context_digest": { "type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}

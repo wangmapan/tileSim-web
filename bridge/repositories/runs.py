@@ -700,7 +700,22 @@ def _validate_request_attribution(value: dict, run_id: str, path: Path) -> None:
             rows = resolve_json_pointer(value, "/" + prefix)
         except KeyError:
             _contract_error("Attribution evidence collection is absent.", "/" + prefix)
-        if not isinstance(rows, list) or not rows:
+        # Explicit operator execution may be device-only (for example TP1).
+        # Empty network collections are then backend facts, not missing data.
+        operator_device_only = False
+        if prefix in {"evidence/network_demands", "evidence/fabric/timeline"}:
+            try:
+                snapshot = json.loads((path.parent / "input-execution.json").read_bytes())
+                operator_device_only = (
+                    snapshot.get("schema_version") == "tilesim.bridge.execution_input_snapshot.v1"
+                    and snapshot.get("run_id") == run_id
+                    and not evidence.get("network_demands")
+                    and evidence.get("fabric", {}).get("timeline") == []
+                    and all(row.get("network_wait_ps") == 0 for row in metric_rows)
+                )
+            except (OSError, ValueError, TypeError):
+                pass
+        if not isinstance(rows, list) or (not rows and not operator_device_only):
             _contract_error("Dense attribution requires actual resource and network evidence.", "/" + prefix)
         ids = [row.get(id_key) if isinstance(row, dict) else None for row in rows]
         if any(not isinstance(id, str) or not id for id in ids) or len(set(ids)) != len(ids):
@@ -1106,6 +1121,7 @@ def public_run(run: dict) -> dict:
             "request_payload_sha256",
             "bridge_instance_id",
             "bridge_pid",
+            "cancel_requests",
         }
     }
     if "digest" not in public and "report_paths" in run:
@@ -1164,4 +1180,4 @@ def run_snapshot(
 
 
 def is_terminal_run(run: dict) -> bool:
-    return run.get("status") in {"completed", "failed"}
+    return run.get("status") in {"completed", "failed", "cancelled"}

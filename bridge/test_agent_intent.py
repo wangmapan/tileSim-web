@@ -9,6 +9,12 @@ from providers import agent_intent  # noqa: E402
 
 
 class AgentIntentProviderTests(unittest.TestCase):
+    def test_system_prompt_publishes_closed_world_shape_without_identity_fields(self):
+        self.assertIn('"intent": "explain|existing_run_analysis|user_report|configuration_draft|navigation|simulation_execution|unsupported_execution"', agent_intent.SYSTEM_PROMPT)
+        self.assertIn('"suggested_steps"', agent_intent.SYSTEM_PROMPT)
+        self.assertIn("the Bridge binds those identity fields itself", agent_intent.SYSTEM_PROMPT)
+        self.assertIn("Return exactly one JSON object and no markdown", agent_intent.SYSTEM_PROMPT)
+
     def test_legacy_assistant_intent_is_not_published_as_an_active_contract(self):
         metadata = json.loads(
             (Path(__file__).parent / "contracts" / "openapi.json").read_text(encoding="utf-8")

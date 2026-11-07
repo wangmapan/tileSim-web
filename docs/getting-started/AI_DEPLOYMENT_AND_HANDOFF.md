@@ -133,7 +133,9 @@ pnpm preview
 “重新部署当前代码”调用仓库内 `deploy-local-backend.ps1 -SourceRoot <所选后端>`，使用后端与 Web 当前文件
 （含未提交改动），不 fetch/push、不切换分支；经确认后按源码和 release identity 复用已验证构建，或对变化部分执行验证，
 再发布、重启 5173 并打开网页。快速路径无法证明 identity 一致时自动回退完整流程；部署页可勾选“强制完整验证”重新运行
-后端构建、CTest、Bridge/Web 测试和 Web 构建。
+后端构建、CTest、Bridge/Web 测试和 Web 构建。概览页的“快速部署（跳过测试）”调用
+`deploy-local-backend.ps1 -ReuseVerifiedArtifacts -SkipTests`：仍构建并发布当前文件，但跳过 CTest、Bridge 测试和 Web 测试，
+清单记为 `skipped:not-run`，不能当作已验证部署。勾选强制完整验证时该按钮不可用。
 远端 `origin/main` 更新与停止服务仍可在“部署设置”的折叠“高级操作”中使用。
 启动器不调用个人桌面 `.cmd`、不强制结束 Vite/Playwright。打包门禁与回退见
 [`LAUNCHER_BUILD_DEPLOYMENT_ROLLBACK.md`](../deployment/LAUNCHER_BUILD_DEPLOYMENT_ROLLBACK.md)。

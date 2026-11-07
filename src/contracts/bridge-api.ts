@@ -2,6 +2,8 @@ import type {
   ApiManifestResponse as VersionedApiManifestResponse,
   ApiRun,
   AgentOrchestrationCapabilitySnapshotResponse,
+  AgentOrchestrationRunIntakePreviewRequest,
+  AgentOrchestrationRunIntakePreviewResponse,
   ArtifactManifestEntry as GeneratedArtifactManifestEntry,
   ArtifactManifestResponse as GeneratedArtifactManifestResponse,
   AssistantModelCatalogueResponse,
@@ -34,6 +36,8 @@ import type {
 export type {
   ApiRun,
   AgentOrchestrationCapabilitySnapshotResponse,
+  AgentOrchestrationRunIntakePreviewRequest,
+  AgentOrchestrationRunIntakePreviewResponse,
   AssistantModelCatalogueResponse,
   AssistantModelDescriptorResponse,
   AssistantModelPlanRequest,

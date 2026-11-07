@@ -13,6 +13,8 @@ export const useBridgeStore = defineStore("bridge", () => {
     detail: "正在读取独立运行环境",
     identity: null,
     manifest: null,
+    orchestrationCapability: null,
+    orchestrationCapabilityError: "",
   });
   const catalog = reactive<
     Record<string, unknown> & { scenarios: unknown[]; fidelity_policies: string[]; model_ids: string[] }

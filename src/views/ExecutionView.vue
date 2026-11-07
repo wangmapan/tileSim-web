@@ -11,7 +11,8 @@ import {
   Target,
   TimerReset,
 } from "@lucide/vue";
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
+import { useRoute } from "vue-router";
 import EmptyState from "../components/EmptyState.vue";
 import InlineHelp from "../components/InlineHelp.vue";
 import StatusPill from "../components/StatusPill.vue";
@@ -27,6 +28,7 @@ import {
   ExecutionVisualizationPanel,
   LayerRecordTable,
   RuntimeEvidencePanel,
+  OperatorEvidencePanel,
   semanticFieldPresentation,
   validationCheckSource,
 } from "../features/execution-inspector";
@@ -51,6 +53,18 @@ const evidenceSelection = useEvidenceSelectionStore();
 const evidenceAgent = useEvidenceAgentStore();
 const selectedEvidenceRequestId = computed(() => evidenceSelection.requestForRun(state.runId));
 const selectedId = ref<LayerId>("S1");
+const detailOpen = ref(false);
+const route = useRoute();
+watch(
+  () => route?.query.fragment,
+  (fragment) => {
+    if (typeof fragment === "string") {
+      selectedId.value = "S2";
+      detailOpen.value = true;
+    }
+  },
+  { immediate: true },
+);
 const exportingReport = ref(false);
 const exportingInterpretationReport = ref(false);
 const result = computed(() => buildExecutionResult(state.bundle, state.inputs));
@@ -219,12 +233,19 @@ async function exportInterpretationReport() {
     action-to="/experiment"
   />
   <div v-else class="view-stack execution-view">
-    <RuntimeEvidencePanel
-      :run-id="state.runId"
-      :artifact-manifest="state.artifactManifest"
-      :backend-revision="state.bridge.identity?.source_revision || state.bridge.identity?.build_revision || 'unknown'"
-      :bridge-manifest="state.bridge.manifest"
-    />
+    <details class="panel execution-runtime-disclosure">
+      <summary class="panel-header">
+        <h2>{{ t("后端运行期证据") }}</h2>
+        <span>{{ t("按需读取") }}</span>
+        <ChevronDown :size="17" />
+      </summary>
+      <RuntimeEvidencePanel
+        :run-id="state.runId"
+        :artifact-manifest="state.artifactManifest"
+        :backend-revision="state.bridge.identity?.source_revision || state.bridge.identity?.build_revision || 'unknown'"
+        :bridge-manifest="state.bridge.manifest"
+      />
+    </details>
     <section class="panel execution-map-panel">
       <header class="panel-header panel-header--row">
         <div>
@@ -247,24 +268,27 @@ async function exportInterpretationReport() {
         </div>
       </header>
 
-      <p
-        v-if="
-          state.bundle.execution_envelope?.has_runtime_event_trace &&
-          state.bundle.execution_envelope.runtime_engine_type
-        "
-        class="structured-note"
-      >
-        {{ t("运行时引擎") }}：<code>{{ state.bundle.execution_envelope.runtime_engine_type }}</code> ·
-        <code>{{ state.bundle.execution_envelope.runtime_engine_semantic_version }}</code> ·
-        {{
-          state.bundle.execution_envelope.runtime_input_mode === "observed_replay"
-            ? t("已观测阶段回放（保留原顺序，未重排调度）")
-            : state.bundle.execution_envelope.runtime_input_mode === "dynamic_request"
-              ? t("版本化动态请求画像调度")
-              : t("通用运行时")
-        }}
-        · {{ state.bundle.execution_envelope.semantic_profile_applied ? t("画像已应用") : t("画像未应用") }}
-      </p>
+      <details class="run-bound-technical-details execution-runtime-note">
+        <summary>{{ t("运行时信息") }}</summary>
+        <p
+          v-if="
+            state.bundle.execution_envelope?.has_runtime_event_trace &&
+            state.bundle.execution_envelope.runtime_engine_type
+          "
+          class="structured-note"
+        >
+          {{ t("运行时引擎") }}：<code>{{ state.bundle.execution_envelope.runtime_engine_type }}</code> ·
+          <code>{{ state.bundle.execution_envelope.runtime_engine_semantic_version }}</code> ·
+          {{
+            state.bundle.execution_envelope.runtime_input_mode === "observed_replay"
+              ? t("已观测阶段回放（保留原顺序，未重排调度）")
+              : state.bundle.execution_envelope.runtime_input_mode === "dynamic_request"
+                ? t("版本化动态请求画像调度")
+                : t("通用运行时")
+          }}
+          · {{ state.bundle.execution_envelope.semantic_profile_applied ? t("画像已应用") : t("画像未应用") }}
+        </p>
+      </details>
 
       <div class="execution-flow" :aria-label="t('TileSim 分层执行链路')" data-help-anchor="execution-flow">
         <button
@@ -312,249 +336,272 @@ async function exportInterpretationReport() {
       </div>
     </section>
 
-    <section class="execution-detail-layout">
-      <article id="execution-layer-detail" class="panel layer-detail-panel" data-help-anchor="execution-detail">
-        <header class="layer-detail-header">
-          <div>
-            <h2>{{ executionLayerName(selected.id) }}</h2>
-            <p>{{ selected.role }}</p>
-          </div>
-          <div class="layer-detail-status">
-            <StatusPill :value="selected.resolution?.actual_fidelity || 'unknown'" />
-            <StatusPill :value="selected.evidenceState" />
-          </div>
-        </header>
+    <details
+      class="panel execution-detail-disclosure"
+      :open="detailOpen"
+      @toggle="detailOpen = ($event.target as HTMLDetailsElement).open"
+    >
+      <summary class="panel-header">
+        <h2>{{ t("当前环节详情") }}</h2>
+        <span>{{ executionLayerName(selected.id) }}</span>
+        <ChevronDown :size="17" />
+      </summary>
+      <section class="execution-detail-layout">
+        <article id="execution-layer-detail" class="panel layer-detail-panel" data-help-anchor="execution-detail">
+          <header class="layer-detail-header">
+            <div>
+              <h2>{{ executionLayerName(selected.id) }}</h2>
+              <p>{{ selected.role }}</p>
+            </div>
+            <div class="layer-detail-status">
+              <StatusPill :value="selected.resolution?.actual_fidelity || 'unknown'" />
+              <StatusPill :value="selected.evidenceState" />
+            </div>
+          </header>
 
-        <div class="layer-status-summary">
-          <div>
-            <small>{{ semanticField("actual_fidelity", selected.resolution?.actual_fidelity).fieldLabel }}</small>
-            <strong>{{ semanticField("actual_fidelity", selected.resolution?.actual_fidelity).valueLabel }}</strong>
-            <p v-if="semanticField('actual_fidelity', selected.resolution?.actual_fidelity).valueDescription">
-              {{ semanticField("actual_fidelity", selected.resolution?.actual_fidelity).valueDescription }}
-            </p>
-            <code>{{ semanticField("actual_fidelity", selected.resolution?.actual_fidelity).technicalText }}</code>
+          <div class="layer-status-summary">
+            <div>
+              <small>{{ semanticField("actual_fidelity", selected.resolution?.actual_fidelity).fieldLabel }}</small>
+              <strong>{{ semanticField("actual_fidelity", selected.resolution?.actual_fidelity).valueLabel }}</strong>
+              <p v-if="semanticField('actual_fidelity', selected.resolution?.actual_fidelity).valueDescription">
+                {{ semanticField("actual_fidelity", selected.resolution?.actual_fidelity).valueDescription }}
+              </p>
+              <code>{{ semanticField("actual_fidelity", selected.resolution?.actual_fidelity).technicalText }}</code>
+            </div>
+            <div>
+              <small>{{ semanticField("evidenceState", selected.evidenceState).fieldLabel }}</small>
+              <strong>{{ semanticField("evidenceState", selected.evidenceState).valueLabel }}</strong>
+              <p v-if="semanticField('evidenceState', selected.evidenceState).valueDescription">
+                {{ semanticField("evidenceState", selected.evidenceState).valueDescription }}
+              </p>
+              <code>{{ semanticField("evidenceState", selected.evidenceState).technicalText }}</code>
+            </div>
           </div>
-          <div>
-            <small>{{ semanticField("evidenceState", selected.evidenceState).fieldLabel }}</small>
-            <strong>{{ semanticField("evidenceState", selected.evidenceState).valueLabel }}</strong>
-            <p v-if="semanticField('evidenceState', selected.evidenceState).valueDescription">
-              {{ semanticField("evidenceState", selected.evidenceState).valueDescription }}
-            </p>
-            <code>{{ semanticField("evidenceState", selected.evidenceState).technicalText }}</code>
-          </div>
-        </div>
 
-        <div class="layer-metric-grid" :aria-label="t('本层关键指标')">
-          <div
-            v-for="metric in selected.stats"
-            :key="metric.label"
-            class="layer-metric"
-            :class="`layer-metric--${metricValueTone(metric)}`"
-          >
-            <small>{{
-              selected.id === "S1" &&
-              metric.label === "调度器" &&
-              state.bundle.execution_envelope?.runtime_input_mode === "dynamic_request"
-                ? t("输入 batch_scheduler（不覆盖引擎画像）")
-                : selected.id === "S1" &&
-                    metric.label === "调度器" &&
-                    state.bundle.execution_envelope?.runtime_input_mode === "observed_replay"
-                  ? t("输入 batch_scheduler（回放未重排）")
-                  : executionMetricLabel(metric.label)
-            }}</small>
-            <strong :title="String(metric.value ?? '')">{{
-              metricSemantic(metric)?.valueLabel || displayValue(metric.value, metric.unit)
-            }}</strong>
-            <span v-if="metricSemantic(metric)?.valueDescription">{{ metricSemantic(metric)?.valueDescription }}</span>
-            <span v-else-if="metric.hint">{{ metric.hint }}</span>
-            <code v-if="metricSemantic(metric)">{{ metricSemantic(metric)?.technicalText }}</code>
-            <ArtifactEvidenceLink v-if="metric.sourcePath" :source-path="metric.sourcePath" />
+          <div class="layer-metric-grid" :aria-label="t('本层关键指标')">
+            <div
+              v-for="metric in selected.stats"
+              :key="metric.label"
+              class="layer-metric"
+              :class="`layer-metric--${metricValueTone(metric)}`"
+            >
+              <small>{{
+                selected.id === "S1" &&
+                metric.label === "调度器" &&
+                state.bundle.execution_envelope?.runtime_input_mode === "dynamic_request"
+                  ? t("输入 batch_scheduler（不覆盖引擎画像）")
+                  : selected.id === "S1" &&
+                      metric.label === "调度器" &&
+                      state.bundle.execution_envelope?.runtime_input_mode === "observed_replay"
+                    ? t("输入 batch_scheduler（回放未重排）")
+                    : executionMetricLabel(metric.label)
+              }}</small>
+              <strong :title="String(metric.value ?? '')">{{
+                metricSemantic(metric)?.valueLabel || displayValue(metric.value, metric.unit)
+              }}</strong>
+              <span v-if="metricSemantic(metric)?.valueDescription">{{
+                metricSemantic(metric)?.valueDescription
+              }}</span>
+              <span v-else-if="metric.hint">{{ metric.hint }}</span>
+              <code v-if="metricSemantic(metric)">{{ metricSemantic(metric)?.technicalText }}</code>
+              <ArtifactEvidenceLink v-if="metric.sourcePath" :source-path="metric.sourcePath" />
+            </div>
           </div>
-        </div>
 
-        <div class="layer-visualizations" :aria-label="t('本层数据可视化')">
-          <ExecutionVisualizationPanel
-            v-for="visualization in selected.visualizations"
-            :key="visualization.id"
-            :visualization="visualization"
+          <div class="layer-visualizations" :aria-label="t('本层数据可视化')">
+            <ExecutionVisualizationPanel
+              v-for="visualization in selected.visualizations"
+              :key="visualization.id"
+              :visualization="visualization"
+            />
+          </div>
+          <OperatorEvidencePanel
+            v-if="selected.id === 'S2' || selected.id === 'S4'"
+            :run-id="state.runId"
+            :backend-identity="
+              (state.bridge.identity && evidenceAgentBackendIdentity(state.bridge.identity)) || 'unknown'
+            "
+            :schema-set-revision="state.bridge.manifest?.schema_set_revision || 'unknown'"
+            :artifact-manifest="state.artifactManifest"
+            :bridge-manifest="state.bridge.manifest"
           />
-        </div>
 
-        <details class="layer-evidence-disclosure layer-context-disclosure">
-          <summary>
-            <span><ShieldCheck :size="16" />{{ t("实现证据与字段边界") }}</span>
-            <small>{{ t(evidenceLabels[selected.evidenceState] || selected.evidenceState) }}</small>
-            <ChevronDown :size="17" />
-          </summary>
-          <div class="layer-insight-grid">
-            <article>
-              <header>
-                <Braces :size="17" /><strong>{{ backendExplanation(selected.detail).label }}</strong>
-              </header>
-              <p>{{ backendExplanation(selected.detail).text }}</p>
-              <small v-if="backendExplanation(selected.detail).mapped" class="backend-raw"
-                >{{ t("后端原文") }}: {{ selected.detail }}</small
-              >
-            </article>
-            <article>
-              <header>
-                <ShieldCheck :size="17" /><strong>{{
-                  backendExplanation(selected.implementation?.evidence).label
-                }}</strong>
-              </header>
-              <p>{{ backendExplanation(selected.implementation?.evidence).text }}</p>
-              <small v-if="backendExplanation(selected.implementation?.evidence).mapped" class="backend-raw"
-                >{{ t("后端原文") }}: {{ selected.implementation?.evidence }}</small
-              >
-            </article>
-            <article class="layer-insight--gap">
-              <header>
-                <AlertTriangle :size="17" /><strong>{{
-                  backendExplanation(selected.implementation?.gap).label
-                }}</strong>
-              </header>
-              <p>{{ backendExplanation(selected.implementation?.gap).text }}</p>
-              <small v-if="backendExplanation(selected.implementation?.gap).mapped" class="backend-raw"
-                >{{ t("后端原文") }}: {{ selected.implementation?.gap }}</small
-              >
-            </article>
-          </div>
-
-          <dl class="layer-source-list">
-            <div>
-              <dt>{{ t("证据状态") }}</dt>
-              <dd>
-                <strong>{{ semanticField("evidenceState", selected.evidenceState).valueLabel }}</strong>
-                <small v-if="semanticField('evidenceState', selected.evidenceState).valueDescription">
-                  {{ semanticField("evidenceState", selected.evidenceState).valueDescription }}
-                </small>
-                <code>{{ semanticField("evidenceState", selected.evidenceState).technicalText }}</code>
-              </dd>
-            </div>
-            <div>
-              <dt>{{ t("报告字段") }}</dt>
-              <dd>
-                <code>{{ selected.source }}</code>
-                <ArtifactEvidenceLink :source-path="selected.source" />
-              </dd>
-            </div>
-            <div>
-              <dt>{{ t("独立 canonical trace") }}</dt>
-              <dd>{{ t("当前网页报告包未提供") }}</dd>
-            </div>
-          </dl>
-        </details>
-
-        <details v-if="selected.checks.length" class="layer-evidence-disclosure">
-          <summary>
-            <span><ShieldCheck :size="16" />{{ t("本层验证检查") }}</span>
-            <small>{{ t("{count} 项", { count: selected.checks.length }) }}</small>
-            <ChevronDown :size="17" />
-          </summary>
-          <ul class="layer-check-list">
-            <li v-for="check in selected.checks" :key="check.check_id">
-              <StatusPill :value="check.status" />
-              <div>
-                <strong>{{ check.check_id }}</strong>
-                <p>{{ backendExplanation(check.detail).text }}</p>
-                <small>{{ backendExplanation(check.detail).label }}</small>
-                <code v-if="backendExplanation(check.detail).mapped" class="backend-raw"
-                  >{{ t("后端原文") }}: {{ check.detail }}</code
+          <details class="layer-evidence-disclosure layer-context-disclosure">
+            <summary>
+              <span><ShieldCheck :size="16" />{{ t("实现证据与字段边界") }}</span>
+              <small>{{ t(evidenceLabels[selected.evidenceState] || selected.evidenceState) }}</small>
+              <ChevronDown :size="17" />
+            </summary>
+            <div class="layer-insight-grid">
+              <article>
+                <header>
+                  <Braces :size="17" /><strong>{{ backendExplanation(selected.detail).label }}</strong>
+                </header>
+                <p>{{ backendExplanation(selected.detail).text }}</p>
+                <small v-if="backendExplanation(selected.detail).mapped" class="backend-raw"
+                  >{{ t("后端原文") }}: {{ selected.detail }}</small
                 >
-                <ArtifactEvidenceLink
-                  :source-path="validationCheckSource(state.bundle.validation?.checks || [], check.check_id)"
+              </article>
+              <article>
+                <header>
+                  <ShieldCheck :size="17" /><strong>{{
+                    backendExplanation(selected.implementation?.evidence).label
+                  }}</strong>
+                </header>
+                <p>{{ backendExplanation(selected.implementation?.evidence).text }}</p>
+                <small v-if="backendExplanation(selected.implementation?.evidence).mapped" class="backend-raw"
+                  >{{ t("后端原文") }}: {{ selected.implementation?.evidence }}</small
+                >
+              </article>
+              <article class="layer-insight--gap">
+                <header>
+                  <AlertTriangle :size="17" /><strong>{{
+                    backendExplanation(selected.implementation?.gap).label
+                  }}</strong>
+                </header>
+                <p>{{ backendExplanation(selected.implementation?.gap).text }}</p>
+                <small v-if="backendExplanation(selected.implementation?.gap).mapped" class="backend-raw"
+                  >{{ t("后端原文") }}: {{ selected.implementation?.gap }}</small
+                >
+              </article>
+            </div>
+
+            <dl class="layer-source-list">
+              <div>
+                <dt>{{ t("证据状态") }}</dt>
+                <dd>
+                  <strong>{{ semanticField("evidenceState", selected.evidenceState).valueLabel }}</strong>
+                  <small v-if="semanticField('evidenceState', selected.evidenceState).valueDescription">
+                    {{ semanticField("evidenceState", selected.evidenceState).valueDescription }}
+                  </small>
+                  <code>{{ semanticField("evidenceState", selected.evidenceState).technicalText }}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>{{ t("报告字段") }}</dt>
+                <dd>
+                  <code>{{ selected.source }}</code>
+                  <ArtifactEvidenceLink :source-path="selected.source" />
+                </dd>
+              </div>
+              <div>
+                <dt>{{ t("独立 canonical trace") }}</dt>
+                <dd>{{ t("当前网页报告包未提供") }}</dd>
+              </div>
+            </dl>
+          </details>
+
+          <details v-if="selected.checks.length" class="layer-evidence-disclosure">
+            <summary>
+              <span><ShieldCheck :size="16" />{{ t("本层验证检查") }}</span>
+              <small>{{ t("{count} 项", { count: selected.checks.length }) }}</small>
+              <ChevronDown :size="17" />
+            </summary>
+            <ul class="layer-check-list">
+              <li v-for="check in selected.checks" :key="check.check_id">
+                <StatusPill :value="check.status" />
+                <div>
+                  <strong>{{ check.check_id }}</strong>
+                  <p>{{ backendExplanation(check.detail).text }}</p>
+                  <small>{{ backendExplanation(check.detail).label }}</small>
+                  <code v-if="backendExplanation(check.detail).mapped" class="backend-raw"
+                    >{{ t("后端原文") }}: {{ check.detail }}</code
+                  >
+                  <ArtifactEvidenceLink
+                    :source-path="validationCheckSource(state.bundle.validation?.checks || [], check.check_id)"
+                  />
+                </div>
+                <small>{{ checkLabel(check.status) }}</small>
+              </li>
+            </ul>
+          </details>
+
+          <details v-if="selected.attribution.length" class="layer-evidence-disclosure">
+            <summary>
+              <span><Target :size="16" />{{ t("本层尾延迟归因") }}</span>
+              <small>{{ t("{count} 项", { count: selected.attribution.length }) }}</small>
+              <ChevronDown :size="17" />
+            </summary>
+            <ol class="layer-attribution-list">
+              <li v-for="item in selected.attribution" :key="`${item.rank}-${item.component_code}`">
+                <span>{{ item.rank }}</span>
+                <div>
+                  <strong>{{ item.component_code }}</strong>
+                  <p>{{ backendExplanation(item.detail).text }}</p>
+                  <small>{{ backendExplanation(item.detail).label }}</small>
+                  <code v-if="backendExplanation(item.detail).mapped" class="backend-raw"
+                    >{{ t("后端原文") }}: {{ item.detail }}</code
+                  >
+                  <small>{{ item.evidence_link }}</small>
+                  <ArtifactEvidenceLink
+                    :source-path="attributionSource(state.bundle.tail?.attribution_ranking || [], item.attribution_id)"
+                  />
+                </div>
+                <b>{{ displayValue(item.share, "%ratio") }}</b>
+              </li>
+            </ol>
+          </details>
+
+          <details class="record-disclosure" :disabled="!selected.records.length">
+            <summary>
+              <span><Braces :size="16" />{{ t("查看结构化记录") }}</span>
+              <small>{{
+                selected.records.length
+                  ? t("{count} 条 · 全部字段分批显示", { count: selected.records.length })
+                  : t("本层没有可展开记录")
+              }}</small>
+              <ChevronDown :size="17" />
+            </summary>
+            <LayerRecordTable v-if="selected.records.length" :records="selected.records" />
+          </details>
+        </article>
+
+        <details class="panel stage-panel execution-secondary-disclosure" data-help-anchor="execution-host">
+          <summary class="panel-header">
+            <div>
+              <p class="section-kicker">{{ t("仿真执行与控制平面") }}</p>
+              <span class="panel-title-with-help">
+                <h2>{{ t("统一时间轴记录") }}</h2>
+                <InlineHelp
+                  :text="`${t('这里记录各环节在同一模拟时间线上的开始和结束。')} ${t(
+                    '本页只重组当前后端报告。计数去重仅用于避免同一并列资源证据随多个网络阶段重复展示，不改变模拟结果，也不把关联证据升级为独立 trace。',
+                  )}`"
+                  :interactive="false"
                 />
-              </div>
-              <small>{{ checkLabel(check.status) }}</small>
-            </li>
-          </ul>
-        </details>
-
-        <details v-if="selected.attribution.length" class="layer-evidence-disclosure">
-          <summary>
-            <span><Target :size="16" />{{ t("本层尾延迟归因") }}</span>
-            <small>{{ t("{count} 项", { count: selected.attribution.length }) }}</small>
+              </span>
+            </div>
+            <span>{{ t("{count} 个阶段", { count: result.stages.length }) }}</span>
+            <TimerReset :size="20" />
             <ChevronDown :size="17" />
           </summary>
-          <ol class="layer-attribution-list">
-            <li v-for="item in selected.attribution" :key="`${item.rank}-${item.component_code}`">
-              <span>{{ item.rank }}</span>
-              <div>
-                <strong>{{ item.component_code }}</strong>
-                <p>{{ backendExplanation(item.detail).text }}</p>
-                <small>{{ backendExplanation(item.detail).label }}</small>
-                <code v-if="backendExplanation(item.detail).mapped" class="backend-raw"
-                  >{{ t("后端原文") }}: {{ item.detail }}</code
-                >
-                <small>{{ item.evidence_link }}</small>
+          <div class="stage-panel-body">
+            <ExecutionVisualizationPanel :visualization="result.timeline" compact />
+            <ol v-if="result.stages.length" class="stage-list">
+              <li v-for="stage in result.stages" :key="stage.stage_id">
+                <span :title="stage.subsystem">{{ executionLayerName(stage.subsystem) }}</span>
+                <div>
+                  <strong>{{ semanticField("stage_kind", stageKind(stage)).valueLabel }}</strong>
+                  <small v-if="semanticField('stage_kind', stageKind(stage)).valueDescription">
+                    {{ semanticField("stage_kind", stageKind(stage)).valueDescription }}
+                  </small>
+                  <code>{{ semanticField("stage_kind", stageKind(stage)).technicalText }}</code>
+                  <p>{{ backendExplanation(stage.detail).text }}</p>
+                  <small>{{ backendExplanation(stage.detail).label }}</small>
+                  <code v-if="backendExplanation(stage.detail).mapped" class="backend-raw"
+                    >{{ t("后端原文") }}: {{ stage.detail }}</code
+                  >
+                </div>
+                <small>{{ durationUs(stage) }} µs</small>
                 <ArtifactEvidenceLink
-                  :source-path="attributionSource(state.bundle.tail?.attribution_ranking || [], item.attribution_id)"
+                  :source-path="executionStageSource(state.bundle.execution_envelope?.stages || [], stage.stage_id)"
                 />
-              </div>
-              <b>{{ displayValue(item.share, "%ratio") }}</b>
-            </li>
-          </ol>
-        </details>
-
-        <details class="record-disclosure" :disabled="!selected.records.length">
-          <summary>
-            <span><Braces :size="16" />{{ t("查看结构化记录") }}</span>
-            <small>{{
-              selected.records.length
-                ? t("{count} 条 · 全部字段分批显示", { count: selected.records.length })
-                : t("本层没有可展开记录")
-            }}</small>
-            <ChevronDown :size="17" />
-          </summary>
-          <LayerRecordTable v-if="selected.records.length" :records="selected.records" />
-        </details>
-      </article>
-
-      <details class="panel stage-panel execution-secondary-disclosure" data-help-anchor="execution-host">
-        <summary class="panel-header">
-          <div>
-            <p class="section-kicker">{{ t("仿真执行与控制平面") }}</p>
-            <span class="panel-title-with-help">
-              <h2>{{ t("统一时间轴记录") }}</h2>
-              <InlineHelp
-                :text="`${t('这里记录各环节在同一模拟时间线上的开始和结束。')} ${t(
-                  '本页只重组当前后端报告。计数去重仅用于避免同一并列资源证据随多个网络阶段重复展示，不改变模拟结果，也不把关联证据升级为独立 trace。',
-                )}`"
-                :interactive="false"
-              />
-            </span>
+              </li>
+            </ol>
+            <p v-else class="panel-empty-copy">{{ t("当前报告包没有 execution envelope 阶段记录。") }}</p>
           </div>
-          <span>{{ t("{count} 个阶段", { count: result.stages.length }) }}</span>
-          <TimerReset :size="20" />
-          <ChevronDown :size="17" />
-        </summary>
-        <div class="stage-panel-body">
-          <ExecutionVisualizationPanel :visualization="result.timeline" compact />
-          <ol v-if="result.stages.length" class="stage-list">
-            <li v-for="stage in result.stages" :key="stage.stage_id">
-              <span :title="stage.subsystem">{{ executionLayerName(stage.subsystem) }}</span>
-              <div>
-                <strong>{{ semanticField("stage_kind", stageKind(stage)).valueLabel }}</strong>
-                <small v-if="semanticField('stage_kind', stageKind(stage)).valueDescription">
-                  {{ semanticField("stage_kind", stageKind(stage)).valueDescription }}
-                </small>
-                <code>{{ semanticField("stage_kind", stageKind(stage)).technicalText }}</code>
-                <p>{{ backendExplanation(stage.detail).text }}</p>
-                <small>{{ backendExplanation(stage.detail).label }}</small>
-                <code v-if="backendExplanation(stage.detail).mapped" class="backend-raw"
-                  >{{ t("后端原文") }}: {{ stage.detail }}</code
-                >
-              </div>
-              <small>{{ durationUs(stage) }} µs</small>
-              <ArtifactEvidenceLink
-                :source-path="executionStageSource(state.bundle.execution_envelope?.stages || [], stage.stage_id)"
-              />
-            </li>
-          </ol>
-          <p v-else class="panel-empty-copy">{{ t("当前报告包没有 execution envelope 阶段记录。") }}</p>
-        </div>
-      </details>
-    </section>
+        </details>
+      </section>
+    </details>
 
     <section class="execution-support-grid">
       <details class="panel support-card execution-secondary-disclosure">

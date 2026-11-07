@@ -7,7 +7,7 @@
   "properties": {
     "run_id": { "type": "string", "pattern": "^run-[A-Za-z0-9._-]+$" },
     "run_name": { "type": ["string", "null"] },
-    "status": { "enum": ["preparing", "running", "completed", "failed", "incomplete"] },
+    "status": { "enum": ["preparing", "running", "completed", "failed", "cancelled", "incomplete"] },
     "input_mode": { "enum": ["controls", "json", "trace_package", "legacy"] },
     "created_at": { "type": "string" },
     "finished_at": { "type": "string" },

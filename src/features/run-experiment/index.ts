@@ -6,11 +6,16 @@ export { default as ExperimentCapabilityPanel } from "./ExperimentCapabilityPane
 export { default as ExperimentIdentityPanel } from "./ExperimentIdentityPanel.vue";
 export { default as ExperimentInputPanel } from "./ExperimentInputPanel.vue";
 export { default as TopologyGraphEditor } from "./TopologyGraphEditor.vue";
+export { layoutTopology } from "./topology-layout";
 export { parseTopologyDocument, topologyJson } from "./topology-graph";
 export type { TopologyDevice, TopologyDomain, TopologyDocument, TopologyLink } from "./topology-graph";
 export { default as ExperimentSubmitCard } from "./ExperimentSubmitCard.vue";
 export { default as TracePackageInputPanel } from "./TracePackageInputPanel.vue";
 export { default as DeviceInventoryForm } from "./DeviceInventoryForm.vue";
+export { topologyNodeLabel, topologyNodeType, topologyNodeTypesFromCapabilities } from "./topology-node-types";
+export type { TopologyNodeType, TopologyNodeCapability } from "./topology-node-types";
+export { decideTopologyConnection, topologySuperNodes } from "./topology-supernodes";
+export type { TopologyConnectionDecision, TopologySuperNode } from "./topology-supernodes";
 export { default as RequestTableForm } from "./RequestTableForm.vue";
 export { default as RuntimePolicyForm } from "./RuntimePolicyForm.vue";
 export {

@@ -10,6 +10,19 @@ function contentOf(values: Record<string, string>): unknown {
 }
 
 describe("page context revision keeper", () => {
+  it("bounds long deployment-bound prefixes to the published contract limit", () => {
+    const revise = createPageContextRevisionKeeper();
+    const prefix = `context:experiment:${"revision-".repeat(40)}`;
+    const first = revise(prefix, { value: 1 });
+    const same = revise(prefix, { value: 1 });
+    const moved = revise(prefix, { value: 2 });
+
+    expect(first.revision.length).toBeLessThanOrEqual(256);
+    expect(first.revision).toBe(same.revision);
+    expect(moved.revision.length).toBeLessThanOrEqual(256);
+    expect(moved.revision).not.toBe(first.revision);
+  });
+
   it("keeps the revision while the published content is unchanged", () => {
     const revise = createPageContextRevisionKeeper();
 

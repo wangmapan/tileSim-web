@@ -44,6 +44,9 @@ export const createRunRequestSchema = {
       type: "string",
       pattern: "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
     },
+    execution_input: {
+      $ref: "execution-input.schema.json",
+    },
   },
   allOf: [
     {
@@ -115,6 +118,25 @@ export const createRunRequestSchema = {
           design_space_candidates: {},
         },
         required: ["trace_package_id", "design_space_candidates"],
+      },
+    },
+    {
+      if: {
+        required: ["execution_input"],
+      },
+      then: {
+        required: ["custom_inputs"],
+        properties: {
+          scenario_id: {
+            const: "s1_des_example",
+          },
+          fidelity_policy: {
+            const: "des",
+          },
+        },
+        not: {
+          required: ["design_space_candidates"],
+        },
       },
     },
   ],

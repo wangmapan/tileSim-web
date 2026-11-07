@@ -21,9 +21,31 @@ describe("App Agent Flow lifecycle wiring", () => {
     expect(isUnsupportedExecutionRequest("配置一个 16 请求的草案")).toBe(false);
     expect(appSource).toContain('startAgentFlowForInstruction(instruction, context, "unsupported_execution")');
     expect(appSource).toContain("模型识别到仿真执行意图");
-    expect(appSource).toContain('formalErrorBlock("intent_unavailable"');
+    expect(appSource).toContain('formalErrorBlock("intent_recognition_failed"');
     expect(appSource).not.toContain("flowIntentForInstruction(instruction");
     expect(appSource).not.toContain("createRun(");
+  });
+
+  it("keeps model intent failures actionable without exposing provider details", () => {
+    expect(appSource).toContain("onFailure: (diagnostic) =>");
+    expect(appSource).toContain('case "agent_intent_provider_unavailable":');
+    expect(appSource).toContain('case "schema_revision_mismatch":');
+    expect(appSource).toContain('case "http_404":');
+    expect(appSource).toContain("尚未发布模型意图接口");
+    expect(appSource).toContain('failure?.code || "intent_recognition_failed"');
+    expect(appSource).toContain("系统不会用关键词猜测目标");
+    expect(appSource).toContain("await agentNavigationReady");
+    expect(appSource).toContain("!state.bridge.identity");
+  });
+
+  it("routes underspecified exploration through the planning card before generic intent clarification", () => {
+    const explorationBranch = appSource.indexOf('if (recognizedIntent.intent === "explore_experiment")');
+    const genericClarification = appSource.indexOf("if (intentPolicy.shouldClarify)");
+    expect(explorationBranch).toBeGreaterThan(-1);
+    expect(genericClarification).toBeGreaterThan(-1);
+    expect(explorationBranch).toBeLessThan(genericClarification);
+    expect(appSource).toContain("formatExplorationPlanningMessage(planning)");
+    expect(appSource).toContain('formalErrorBlock("exploration_clarification_required"');
   });
 
   it("owns start, typed-block projection, SSE/poll fallback and resume at the app boundary", () => {
@@ -102,7 +124,9 @@ describe("App Agent Flow lifecycle wiring", () => {
 
   it("continues verified result analysis after the read-only existing-run flow completes", () => {
     expect(appSource).toContain('recognizedIntent.intent === "existing_run_analysis"');
-    expect(appSource).toContain('startAgentFlowForInstruction(instruction, context, "existing_run_analysis", reportRequest)');
+    expect(appSource).toContain(
+      'startAgentFlowForInstruction(instruction, context, "existing_run_analysis", reportRequest)',
+    );
     expect(appSource).toContain("await presentResultAnalysis(instruction, report)");
     expect(phaseContractsSource).toContain("user_goal?: string");
     expect(appSource).toContain("persisted.user_goal || null");
@@ -258,7 +282,9 @@ describe("App Agent Flow lifecycle wiring", () => {
 
   it("reconciles a lost successful navigation observation before marking it stale", () => {
     expect(appSource).toContain("The successful browser observation is a durable mutation too");
-    expect(appSource).toContain("const reconciled = await getAgentFlow(latestNavigationFlow.flow_id, latestNavigationFlow.binding);");
+    expect(appSource).toContain(
+      "const reconciled = await getAgentFlow(latestNavigationFlow.flow_id, latestNavigationFlow.binding);",
+    );
     expect(appSource).toContain("const observed = reconciled.last_navigation_observation;");
     expect(appSource).toContain("reconciled.event_sequence > latestNavigationFlow.event_sequence");
   });
@@ -342,7 +368,9 @@ describe("App Agent Flow lifecycle wiring", () => {
 
   it("does not fence an unbound navigation to a backend-global page against a dropped run query", () => {
     expect(appSource).toContain("const navigationRunBound = navigationFlow.binding.run_id !== null;");
-    expect(appSource).toContain("expectedArtifactBindings: navigationRunBound ? navigationFlow.binding.artifact_bindings : undefined");
+    expect(appSource).toContain(
+      "expectedArtifactBindings: navigationRunBound ? navigationFlow.binding.artifact_bindings : undefined",
+    );
     expect(appSource).toContain("artifact_bindings: flowArtifactBindings(),");
   });
 

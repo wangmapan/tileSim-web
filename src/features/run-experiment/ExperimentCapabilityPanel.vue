@@ -8,6 +8,7 @@ const props = defineProps({
   surface: { type: Object, required: true },
   manifest: { type: Object, default: null },
   compact: { type: Boolean, default: false },
+  orchestrationCapability: { type: Object, default: null },
 });
 const { t } = useI18n();
 const identity = computed(() => props.bridge.identity || {});
@@ -18,6 +19,16 @@ const unavailableDependencyCount = computed(
       props.capabilities.dependencies?.verilator_cycle,
       props.capabilities.dependencies?.astra_sim,
     ].filter((dependency) => !dependency?.available).length,
+);
+const orchestrationCatalog = computed(() => props.orchestrationCapability?.catalog || null);
+const orchestrationProfiles = computed(() => orchestrationCatalog.value?.profile_families || []);
+const orchestrationProfileSummary = computed(() =>
+  orchestrationProfiles.value.map((profile) => ({
+    family: profile.family,
+    count: profile.actual_profile_count,
+    status: profile.runtime_availability,
+    reason: Array.isArray(profile.reason_codes) ? profile.reason_codes.join(" · ") : profile.reason_codes,
+  })),
 );
 
 function shortRevision(value) {
@@ -120,8 +131,8 @@ function statusClass(value) {
         </div>
         <div class="experiment-contract-gaps">
           <strong>
-            {{ t("请求 fidelity 可用性") }}
-            <InlineHelp :text="t('resolved fidelity 仅从运行后的 execution envelope 与 validation 读取。')" />
+            {{ t("请求精度可用性") }}
+            <InlineHelp :text="t('实际采用的精度仅从运行后的执行记录与验证报告读取。')" />
           </strong>
           <code v-for="option in surface.fidelityOptions" :key="option.value">
             {{ option.value }}={{ option.available ? "available" : "unavailable"
@@ -133,6 +144,43 @@ function statusClass(value) {
           <code v-for="option in surface.sourceModeOptions" :key="option.value">
             {{ option.value }}={{ option.available ? "available" : "unavailable" }} · {{ option.claimScope
             }}<template v-if="option.reason"> · {{ option.reason }}</template>
+          </code>
+        </div>
+      </section>
+
+      <section v-if="orchestrationCapability || bridge.orchestrationCapabilityError" class="experiment-schema-panel">
+        <header>
+          <strong>{{ t("Agent 编排能力") }}</strong>
+          <span :class="orchestrationCapability?.publication_status === 'published' ? 'available' : 'unavailable'">
+            {{ orchestrationCapability?.publication_status || t("不可用") }}
+          </span>
+        </header>
+        <dl v-if="orchestrationCapability" class="experiment-schema-grid">
+          <div>
+            <dt>snapshot_revision</dt>
+            <dd>{{ orchestrationCapability.snapshot_revision }}</dd>
+          </div>
+          <div>
+            <dt>catalog_revision</dt>
+            <dd>{{ orchestrationCatalog?.catalog_revision || t("缺失") }}</dd>
+          </div>
+          <div>
+            <dt>agent_exposed_fields</dt>
+            <dd>{{ orchestrationCatalog?.agent_exposed_field_ids?.length || 0 }}</dd>
+          </div>
+          <div>
+            <dt>claim_scope_ceiling</dt>
+            <dd>{{ orchestrationCatalog?.claim_scope_ceiling?.join(" · ") || t("缺失") }}</dd>
+          </div>
+        </dl>
+        <p v-if="bridge.orchestrationCapabilityError" class="service-warning" role="status">
+          {{ bridge.orchestrationCapabilityError }}
+        </p>
+        <div v-if="orchestrationCapability" class="experiment-contract-gaps">
+          <strong>{{ t("Profile 数据状态") }}</strong>
+          <code v-for="profile in orchestrationProfileSummary" :key="profile.family">
+            {{ profile.family }}={{ profile.status }} · {{ profile.count
+            }}<template v-if="profile.reason"> · {{ profile.reason }}</template>
           </code>
         </div>
       </section>

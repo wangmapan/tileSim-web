@@ -81,14 +81,17 @@ export const topologyEditorEnglishCatalog: Readonly<Record<string, string>> = {
   存储: "Storage",
   新增节点类型: "New node type",
   新增节点: "Add node",
+  "当前后端没有发布可新增的拓扑节点类型。": "The backend has not published any addable topology node types.",
+  "当前后端能力目录没有发布可新增的拓扑节点类型；为避免提交后端不支持的设备，新增节点已禁用。":
+    "The backend capability catalog has not published an addable topology node type; adding nodes is disabled to prevent unsupported devices from being submitted.",
+  "当前后端没有发布 GPU 拓扑能力，不能调整 GPU 卡数。":
+    "The backend has not published GPU topology support, so the GPU count cannot be changed.",
   自定义类型: "Custom type",
   自定义节点类型: "Custom node type",
   "自定义节点类型不能为空。": "Custom node type cannot be empty.",
   "例如：DPU": "For example: DPU",
-  "当前没有节点。可先设置 GPU 卡数，或从新增节点菜单选择交换机等拓扑节点。":
-    "No nodes yet. Set a GPU count or choose a switch or another topology node from the add menu.",
-  "GPU 卡数可参与请求；交换机、路由器等是拓扑中的中间节点，不会自动加入请求。最多 {max} 台。":
-    "GPUs can participate in requests; switches and routers are topology intermediates and are not added to requests. Up to {max} nodes.",
+  "当前没有节点。可先设置 GPU 卡数，或从新增节点菜单选择交换机。":
+    "No nodes yet. Set a GPU count or choose a switch from the add menu.",
   "已新增 GPU。": "GPU added.",
   "已新增 {type} 节点；它不会自动成为请求参与设备。":
     "{type} added; it will not become a request participant automatically.",
@@ -166,6 +169,23 @@ export const topologyEditorEnglishCatalog: Readonly<Record<string, string>> = {
   仿真域内: "Simulated · inside domain",
   仿真跨域: "Simulated · cross-domain",
   拓扑摘要: "Topology summary",
+  "超级节点 {id}": "Compute group {id}",
+  "设备 {device}，类型 {type}": "Device {device}, type {type}",
+  "设备 {device}，类型 {type}，计算组 {group}": "Device {device}, type {type}, compute group {group}",
+  超级节点分组: "Compute groups",
+  "设备组 {id}": "Compute group {id}",
+  "组内网络 {domain} · scale_up": "Intra-group network {domain} · scale_up",
+  "组内通信（scale_up）": "Intra-group communication (scale_up)",
+  "组间通信（scale_out）": "Inter-group communication (scale_out)",
+  "实线：组内通信（scale_up）": "Solid: intra-group communication (scale_up)",
+  "虚线：组间通信（scale_out）": "Dashed: inter-group communication (scale_out)",
+  "根据该连接所属 domain 的类型判断：scale_up 是组内网络，scale_out 是组间网络":
+    "The domain type determines the link scope: scale_up is intra-group and scale_out is inter-group.",
+  "纵向扩展 · scale_up": "Scale-up · scale_up",
+  "边框：计算组（来自 devices[].group_id）": "Border: compute group (from devices[].group_id)",
+  "横向扩展 · {domain} · {count} 条连接": "Scale-out · {domain} · {count} links",
+  "多条跨组 links 已在图中汇总；点击下方端点对可编辑单条连接。":
+    "Multiple cross-group links are summarized in the graph; select an endpoint pair below to edit one link.",
   设备: "Devices",
   域内链路: "Inside-domain links",
   跨域链路: "Cross-domain links",
@@ -194,7 +214,36 @@ export const topologyEditorEnglishCatalog: Readonly<Record<string, string>> = {
     "Device groups are the simulated input field group_id; they do not represent real hosts or physical machines.",
   输入已加载: "Input loaded",
   设备分组: "Device group",
+  计算组: "Compute group",
+  "计算组 {id}": "Compute group {id}",
+  "{count} 个设备 · 设备归属": "{count} devices · ownership",
+  "组内通信域 {domain} · scale_up": "Intra-group domain {domain} · scale_up",
+  "{relation} · {domain}（域类型 {domainType}）": "{relation} · {domain} (domain type {domainType})",
+  "实线或虚线表示端点所在计算组的关系；此处的域类型是后端实际绑定的通信资源。":
+    "Solid or dashed lines show the relationship between endpoint compute groups; the domain type here is the backend communication resource actually bound.",
+  "实线：同一计算组的端点": "Solid: endpoints in the same compute group",
+  "虚线：不同计算组的端点": "Dashed: endpoints in different compute groups",
+  "组间通道 · {count} 条": "Inter-group channel · {count}",
+  "组间连接在图中汇总为通信通道；点击下方端点对可编辑单条后端 link。":
+    "Inter-group links are bundled as communication channels; select an endpoint pair below to edit one backend link.",
+  通信域: "Communication domains",
+  拓扑节点: "Topology nodes",
+  选中对象详情: "Selected object details",
+  选中对象: "Selected object",
+  "设备只属于一个计算组；通信域端点在互联参数中单独管理。":
+    "Each device belongs to one compute group; communication-domain endpoints are managed separately under Interconnect.",
+  选中连接详情: "Selected connection details",
+  连接: "Connection",
+  通信关系: "Communication relationship",
+  尚未配置组内通信域: "No intra-group communication domain configured",
+  "设备卡只属于一个计算组；通信域是后端的网络资源。scale_up 表示组内连接，scale_out 表示组间连接，后者的端点集合可以与前者重叠，但不会让设备再次归属另一个计算组。":
+    "Each device card belongs to one compute group; communication domains are backend resources. scale_up is intra-group and scale_out is inter-group; endpoint overlap does not create a second ownership.",
+  "模型 {name} 仍被这些通信域使用：{domains}，不能改成 {kind}；请先在通信域中改绑匹配模型。":
+    "Model {name} is still used by communication domains {domains} and cannot change to {kind}; rebind those domains first.",
+  "先在设备清单中给每张卡指定一个计算组，再在「互联参数」中配置通信域；这里仅查看和编辑设备之间的后端 links。":
+    "Assign each card to one compute group in Device inventory, then configure communication domains under Interconnect; this view only edits backend links between devices.",
   未分组: "Ungrouped",
+  未分配: "Unassigned",
   域: "Domains",
   跨组连接: "Cross-group links",
   域内连接: "Inside-domain connections",

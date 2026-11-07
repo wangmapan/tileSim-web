@@ -7,7 +7,7 @@ describe("execution replay navigation", () => {
   it("exposes replay as a run-bound workspace view", () => {
     expect(routeViewIds).toContain("replay");
     expect(navItems.find((item) => item.id === "replay")).toMatchObject({
-      group: "分析",
+      group: "运行",
       label: "执行回放",
     });
     expect(routeForView("replay", "run-replay-1")).toEqual({

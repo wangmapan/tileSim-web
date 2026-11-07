@@ -187,7 +187,7 @@
   font-size: 27px;
   line-height: 1.35;
   font-weight: 650;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 .help-documentation-intro > a {
   margin-top: 14px;

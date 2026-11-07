@@ -13,14 +13,35 @@ PROTOCOL = "tilesim.agent_intent.v1"
 SCHEMA_IDENTITY = "tilesim.agent_intent.response.v1"
 REQUEST_SCHEMA_IDENTITY = "tilesim.agent_intent.request.v1"
 CONTRACT_REVISION = "2026-10-28.agent-intent.v1"
-INTENTS = frozenset({"explain", "existing_run_analysis", "user_report", "configuration_draft", "navigation", "simulation_execution", "unsupported_execution"})
+INTENTS = frozenset({"explain", "existing_run_analysis", "user_report", "configuration_draft", "navigation", "simulation_execution", "explore_experiment", "unsupported_execution"})
 _SCHEMA_SET_REVISION = re.compile(r"^sha256:[0-9a-f]{64}$")
 
-SYSTEM_PROMPT = """You classify a TileSim user goal. Return exactly one JSON object matching tilesim.agent_intent.response.v1.
-Use only intent enum values and page entries supplied by the request. Candidate pages must be copied from page_catalog;
-never invent routes or capabilities. Do not include analysis, markdown, user text, credentials, or hidden reasoning.
-Execution is only a proposal: never claim that a run was created, started, or executed. If uncertain, use clarification_questions
-and a low-risk explain/navigation proposal. Keep reasons and steps concise."""
+SYSTEM_PROMPT = """You classify a TileSim user goal. Return exactly one JSON object and no markdown.
+
+The legacy enum spelling remains documented for compatibility: "intent": "explain|existing_run_analysis|user_report|configuration_draft|navigation|simulation_execution|unsupported_execution".
+
+The object must contain only these keys (do not add any other key):
+{
+  "intent": "explain|existing_run_analysis|user_report|configuration_draft|navigation|simulation_execution|explore_experiment|unsupported_execution",
+  "exploration_objective": {"metric_path": "<published metric pointer>", "direction": "minimize|maximize"},
+  "requested_rounds": 10,
+  "candidate_pages": [{"page_id": "<copied from page_catalog>", "route_name": "<copied from page_catalog>", "required_capabilities": ["<copied capability>"], "reason": "short reason"}],
+  "required_capabilities": ["<copied from page_catalog>"],
+  "risk_level": "low|medium|high|critical",
+  "requires_user_confirmation": true,
+  "suggested_steps": [{"kind": "navigate|observe|clarify|authorize|execute|report", "description": "short step", "page_id": "<page id from page_catalog or null>"}],
+  "clarification_questions": ["question"]
+}
+
+Do not return schema_identity, contract_revision, schema_set_revision, protocol, session_id, user_goal,
+current_page_id, current_context_revision, run_id, run_context_revision, backend_identity, or input_snapshot_digest;
+the Bridge binds those identity fields itself. Use only intent enum values and page entries supplied by the request.
+Candidate pages and capabilities must be copied from page_catalog; never invent routes, URLs, capabilities, or function names.
+Use empty arrays when there are no candidates, capabilities, steps, or questions. If uncertain, add a concise clarification question.
+For explore_experiment, only return exploration_objective when the user supplied a metric target or direction, and
+requested_rounds only when the user explicitly supplied a positive integer. Never invent a metric path or parameter path.
+Execution is only a proposal: never claim that a run was created, started, or executed. Do not include analysis,
+user text, credentials, or hidden reasoning. Keep reasons, descriptions, and questions concise."""
 
 
 def _validate_request_catalog(request: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -165,8 +186,8 @@ def _json_output(reply: Any) -> dict[str, Any]:
 
 
 def _validate_response(value: dict[str, Any], request: dict[str, Any], schema_set_revision: str) -> dict[str, Any]:
-    allowed = {"schema_identity", "contract_revision", "schema_set_revision", "protocol", "session_id", "user_goal", "intent", "current_page_id", "current_context_revision", "run_id", "run_context_revision", "backend_identity", "input_snapshot_digest", "candidate_pages", "required_capabilities", "risk_level", "requires_user_confirmation", "suggested_steps", "clarification_questions"}
-    required = allowed - {"schema_identity", "contract_revision", "schema_set_revision", "protocol", "session_id", "user_goal", "current_page_id", "current_context_revision", "run_id", "run_context_revision", "backend_identity", "input_snapshot_digest"}
+    allowed = {"schema_identity", "contract_revision", "schema_set_revision", "protocol", "session_id", "user_goal", "intent", "current_page_id", "current_context_revision", "run_id", "run_context_revision", "backend_identity", "input_snapshot_digest", "candidate_pages", "required_capabilities", "risk_level", "requires_user_confirmation", "suggested_steps", "clarification_questions", "exploration_objective", "requested_rounds"}
+    required = {"intent", "candidate_pages", "required_capabilities", "risk_level", "requires_user_confirmation", "suggested_steps", "clarification_questions"}
     if set(value) - allowed or not required.issubset(value) or value.get("intent") not in INTENTS:
         raise ProviderStructuredOutputError("The intent Provider output was outside the contract.")
     catalog = _validate_request_catalog(request)
@@ -263,6 +284,17 @@ def _validate_response(value: dict[str, Any], request: dict[str, Any], schema_se
     questions = value.get("clarification_questions")
     if not isinstance(questions, list) or len(questions) > 8 or any(not isinstance(question, str) or not question.strip() or len(question) > 500 for question in questions):
         raise ProviderStructuredOutputError("The intent Provider returned invalid clarification questions.")
+    objective = value.get("exploration_objective")
+    if objective is not None:
+        if not isinstance(objective, dict) or set(objective) != {"metric_path", "direction"}:
+            raise ProviderStructuredOutputError("The intent Provider returned an invalid exploration objective.")
+        if not isinstance(objective.get("metric_path"), str) or not objective["metric_path"].startswith("/"):
+            raise ProviderStructuredOutputError("The exploration objective metric path is invalid.")
+        if objective.get("direction") not in {"minimize", "maximize"}:
+            raise ProviderStructuredOutputError("The exploration objective direction is invalid.")
+    requested_rounds = value.get("requested_rounds")
+    if requested_rounds is not None and (isinstance(requested_rounds, bool) or not isinstance(requested_rounds, int) or requested_rounds < 1 or requested_rounds > 50):
+        raise ProviderStructuredOutputError("The requested exploration rounds are invalid.")
     # Bind all identity fields to the request; the model cannot forge them.
     result = dict(value)
     result.update({"schema_identity": SCHEMA_IDENTITY, "contract_revision": CONTRACT_REVISION, "schema_set_revision": schema_set_revision, "protocol": PROTOCOL, "session_id": request["session_id"], "user_goal": request["user_goal"], "current_page_id": request["current_page"]["page_id"], "current_context_revision": request["current_page"]["context_revision"], "run_id": request.get("run_id"), "run_context_revision": request.get("run_context_revision"), "backend_identity": request["backend_identity"], "input_snapshot_digest": request.get("input_snapshot_digest"), "candidate_pages": checked, "required_capabilities": required_capabilities, "suggested_steps": checked_steps, "clarification_questions": questions})

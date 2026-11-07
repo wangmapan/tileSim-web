@@ -73,6 +73,7 @@ export type OperationRequest =
       backendRepository: string;
       wslDistro: string;
       reuseVerifiedArtifacts?: boolean;
+      skipTests?: boolean;
     }
   | { kind: "repair_wsl"; wslDistro: string }
   | {

@@ -7,51 +7,134 @@
   "additionalProperties": false,
   "required": ["scenario_id"],
   "properties": {
-    "scenario_id": { "enum": ["s1_des_example", "dense_des_package", "pd_disaggregation_example"] },
-    "fidelity_policy": { "enum": ["default", "des"], "default": "des" },
-    "gpu_participation_mode": { "const": "gpu_free", "default": "gpu_free" },
-    "run_name": { "type": ["string", "null"], "maxLength": 80 },
-    "overrides": { "$ref": "run-overrides.schema.json" },
-    "custom_inputs": { "$ref": "custom-run-inputs.schema.json" },
+    "scenario_id": {
+      "enum": ["s1_des_example", "dense_des_package", "pd_disaggregation_example"]
+    },
+    "fidelity_policy": {
+      "enum": ["default", "des"],
+      "default": "des"
+    },
+    "gpu_participation_mode": {
+      "const": "gpu_free",
+      "default": "gpu_free"
+    },
+    "run_name": {
+      "type": ["string", "null"],
+      "maxLength": 80
+    },
+    "overrides": {
+      "$ref": "run-overrides.schema.json"
+    },
+    "custom_inputs": {
+      "$ref": "custom-run-inputs.schema.json"
+    },
     "design_space_candidates": {
-      "oneOf": [{ "$ref": "design-space-candidates.schema.json" }, { "$ref": "design-space-candidates-v2.schema.json" }]
+      "oneOf": [
+        {
+          "$ref": "design-space-candidates.schema.json"
+        },
+        {
+          "$ref": "design-space-candidates-v2.schema.json"
+        }
+      ]
     },
     "trace_package_id": {
       "type": "string",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "execution_input": {
+      "$ref": "execution-input.schema.json"
     }
   },
   "allOf": [
     {
-      "if": { "properties": { "scenario_id": { "const": "dense_des_package" } }, "required": ["scenario_id"] },
-      "then": { "required": ["trace_package_id"], "properties": { "fidelity_policy": { "const": "des" } } }
+      "if": {
+        "properties": {
+          "scenario_id": {
+            "const": "dense_des_package"
+          }
+        },
+        "required": ["scenario_id"]
+      },
+      "then": {
+        "required": ["trace_package_id"],
+        "properties": {
+          "fidelity_policy": {
+            "const": "des"
+          }
+        }
+      }
     },
     {
-      "if": { "properties": { "scenario_id": { "const": "pd_disaggregation_example" } }, "required": ["scenario_id"] },
-      "then": { "properties": { "fidelity_policy": { "const": "des" } } }
+      "if": {
+        "properties": {
+          "scenario_id": {
+            "const": "pd_disaggregation_example"
+          }
+        },
+        "required": ["scenario_id"]
+      },
+      "then": {
+        "properties": {
+          "fidelity_policy": {
+            "const": "des"
+          }
+        }
+      }
     },
     {
       "not": {
-        "properties": { "overrides": {}, "custom_inputs": {} },
+        "properties": {
+          "overrides": {},
+          "custom_inputs": {}
+        },
         "required": ["overrides", "custom_inputs"]
       }
     },
     {
       "not": {
-        "properties": { "trace_package_id": {}, "overrides": {} },
+        "properties": {
+          "trace_package_id": {},
+          "overrides": {}
+        },
         "required": ["trace_package_id", "overrides"]
       }
     },
     {
       "not": {
-        "properties": { "trace_package_id": {}, "custom_inputs": {} },
+        "properties": {
+          "trace_package_id": {},
+          "custom_inputs": {}
+        },
         "required": ["trace_package_id", "custom_inputs"]
       }
     },
     {
       "not": {
-        "properties": { "trace_package_id": {}, "design_space_candidates": {} },
+        "properties": {
+          "trace_package_id": {},
+          "design_space_candidates": {}
+        },
         "required": ["trace_package_id", "design_space_candidates"]
+      }
+    },
+    {
+      "if": {
+        "required": ["execution_input"]
+      },
+      "then": {
+        "required": ["custom_inputs"],
+        "properties": {
+          "scenario_id": {
+            "const": "s1_des_example"
+          },
+          "fidelity_policy": {
+            "const": "des"
+          }
+        },
+        "not": {
+          "required": ["design_space_candidates"]
+        }
       }
     }
   ]

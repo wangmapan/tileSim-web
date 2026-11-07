@@ -104,84 +104,94 @@ function semanticHelp(field: string, value: unknown) {
       </ul>
     </section>
 
-    <details
-      v-if="state.bundle.validation.resolution_entries?.length"
-      class="panel validation-disclosure"
-      data-help-anchor="validation-fidelity"
-    >
+    <details class="panel validation-evidence-disclosure" data-help-anchor="validation-details">
       <summary>
         <div>
-          <h2>{{ t("各环节实际使用的模拟精度") }}</h2>
-          <p>{{ t("请求精度 → 实际精度") }}</p>
+          <h2>{{ t("详细依据") }}</h2>
+          <p>{{ t("模拟精度、逐项检查与字段覆盖") }}</p>
         </div>
-        <span>{{ t("{count} 个环节", { count: state.bundle.validation.resolution_entries.length }) }}</span>
-        <span class="validation-summary-icons"><Layers3 :size="21" /><ChevronDown :size="17" /></span>
+        <span class="panel-count">{{ t("按需查看") }}</span>
+        <ChevronDown :size="17" />
       </summary>
-      <div class="fidelity-matrix">
-        <div
-          v-for="(entry, index) in state.bundle.validation.resolution_entries"
-          :key="entry.subsystem"
-          class="fidelity-row"
-        >
-          <strong class="fidelity-module">
-            <span>{{ executionLayerName(entry.subsystem) }}</span>
-          </strong>
-          <span class="fidelity-value">
-            <b>{{ semanticField("requested_fidelity", entry.requested_fidelity).valueLabel }}</b>
-            <code>requested_fidelity = {{ entry.requested_fidelity || "—" }}</code>
-          </span>
-          <span class="fidelity-arrow">→</span>
-          <span class="fidelity-value">
-            <b>{{ semanticField("actual_fidelity", entry.actual_fidelity).valueLabel }}</b>
-            <code>actual_fidelity = {{ entry.actual_fidelity || "—" }}</code>
-          </span>
-          <p>
-            <small>{{ backendExplanation(entry.detail).label }}</small>
-            {{ backendExplanation(entry.detail).text }}
-            <code v-if="backendExplanation(entry.detail).mapped">{{ t("后端原文") }}: {{ entry.detail }}</code>
-          </p>
-          <ArtifactEvidenceLink :source-path="'validation:/resolution_entries/' + index" />
-        </div>
-      </div>
-    </details>
-
-    <details class="panel validation-disclosure">
-      <summary>
-        <div>
-          <h2>{{ t("逐项验证记录") }}</h2>
-        </div>
-        <div class="panel-count">
-          <ShieldCheck :size="16" />{{ t("{count} 项检查", { count: state.bundle.validation.checks?.length || 0 }) }}
-        </div>
-        <span class="validation-summary-icons"><ChevronDown :size="17" /></span>
-      </summary>
-      <div class="check-list">
-        <div
-          v-for="check in state.bundle.validation.checks || []"
-          :key="check.check_id"
-          class="check-row"
-          :class="`check-row--${check.status}`"
-        >
-          <div class="check-icon">
-            <Check v-if="check.status === 'pass'" :size="16" /><CircleMinus v-else :size="16" />
-          </div>
+      <details
+        v-if="state.bundle.validation.resolution_entries?.length"
+        class="panel validation-disclosure"
+        data-help-anchor="validation-fidelity"
+      >
+        <summary>
           <div>
-            <small>{{ executionLayerName(check.subsystem) }}</small
-            ><strong>{{ check.check_id }}</strong>
-            <p>
-              <small>{{ backendExplanation(check.detail).label }}</small>
-              {{ backendExplanation(check.detail).text }}
-              <code v-if="backendExplanation(check.detail).mapped">{{ t("后端原文") }}: {{ check.detail }}</code>
-            </p>
+            <h2>{{ t("各环节实际使用的模拟精度") }}</h2>
+            <p>{{ t("请求精度 → 实际精度") }}</p>
           </div>
-          <StatusPill :value="check.status" />
-          <ArtifactEvidenceLink
-            :source-path="validationCheckSource(state.bundle.validation.checks || [], check.check_id)"
-          />
+          <span>{{ t("{count} 个环节", { count: state.bundle.validation.resolution_entries.length }) }}</span>
+          <span class="validation-summary-icons"><Layers3 :size="21" /><ChevronDown :size="17" /></span>
+        </summary>
+        <div class="fidelity-matrix">
+          <div
+            v-for="(entry, index) in state.bundle.validation.resolution_entries"
+            :key="entry.subsystem"
+            class="fidelity-row"
+          >
+            <strong class="fidelity-module">
+              <span>{{ executionLayerName(entry.subsystem) }}</span>
+            </strong>
+            <span class="fidelity-value">
+              <b>{{ semanticField("requested_fidelity", entry.requested_fidelity).valueLabel }}</b>
+              <code>requested_fidelity = {{ entry.requested_fidelity || "—" }}</code>
+            </span>
+            <span class="fidelity-arrow">→</span>
+            <span class="fidelity-value">
+              <b>{{ semanticField("actual_fidelity", entry.actual_fidelity).valueLabel }}</b>
+              <code>actual_fidelity = {{ entry.actual_fidelity || "—" }}</code>
+            </span>
+            <p>
+              <small>{{ backendExplanation(entry.detail).label }}</small>
+              {{ backendExplanation(entry.detail).text }}
+              <code v-if="backendExplanation(entry.detail).mapped">{{ t("后端原文") }}: {{ entry.detail }}</code>
+            </p>
+            <ArtifactEvidenceLink :source-path="'validation:/resolution_entries/' + index" />
+          </div>
         </div>
-      </div>
-    </details>
+      </details>
 
-    <ReportCoveragePanel section="validation" :bundle="state.bundle" />
+      <details class="panel validation-disclosure">
+        <summary>
+          <div>
+            <h2>{{ t("逐项验证记录") }}</h2>
+          </div>
+          <div class="panel-count">
+            <ShieldCheck :size="16" />{{ t("{count} 项检查", { count: state.bundle.validation.checks?.length || 0 }) }}
+          </div>
+          <span class="validation-summary-icons"><ChevronDown :size="17" /></span>
+        </summary>
+        <div class="check-list">
+          <div
+            v-for="check in state.bundle.validation.checks || []"
+            :key="check.check_id"
+            class="check-row"
+            :class="`check-row--${check.status}`"
+          >
+            <div class="check-icon">
+              <Check v-if="check.status === 'pass'" :size="16" /><CircleMinus v-else :size="16" />
+            </div>
+            <div>
+              <small>{{ executionLayerName(check.subsystem) }}</small
+              ><strong>{{ check.check_id }}</strong>
+              <p>
+                <small>{{ backendExplanation(check.detail).label }}</small>
+                {{ backendExplanation(check.detail).text }}
+                <code v-if="backendExplanation(check.detail).mapped">{{ t("后端原文") }}: {{ check.detail }}</code>
+              </p>
+            </div>
+            <StatusPill :value="check.status" />
+            <ArtifactEvidenceLink
+              :source-path="validationCheckSource(state.bundle.validation.checks || [], check.check_id)"
+            />
+          </div>
+        </div>
+      </details>
+
+      <ReportCoveragePanel section="validation" :bundle="state.bundle" />
+    </details>
   </div>
 </template>

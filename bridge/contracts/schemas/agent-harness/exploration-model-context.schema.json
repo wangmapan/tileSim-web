@@ -1,0 +1,25 @@
+{
+  "$id": "tilesim.agent_harness.exploration_model_context.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Model candidate context projection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_identity", "contract_revision", "schema_set_revision", "fixed_resources", "deployment_candidates", "authorized_parameter_grants", "run_strategy", "workload_scenarios", "executed_candidates", "candidate_evaluations", "current_best", "pareto_candidates", "remaining_budget", "objective", "context_digest"],
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.exploration_model_context.v1" },
+    "contract_revision": { "const": "2026-11-02.wpi.v1" },
+    "schema_set_revision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "fixed_resources": { "type": "object" },
+    "deployment_candidates": { "type": "array", "items": { "type": "object" } },
+    "authorized_parameter_grants": { "type": "array", "items": { "type": "object" } },
+    "run_strategy": { "type": ["object", "null"] },
+    "workload_scenarios": { "type": "array", "items": { "type": "object" } },
+    "executed_candidates": { "type": "array", "items": { "type": "object" } },
+    "candidate_evaluations": { "type": "array", "items": { "type": "object" } },
+    "current_best": { "type": "object", "additionalProperties": false, "required": ["candidate_id", "value"], "properties": { "candidate_id": { "type": ["string", "null"] }, "value": { "type": ["number", "null"] } } },
+    "pareto_candidates": { "type": "array", "items": { "type": "string" } },
+    "remaining_budget": { "type": "object", "additionalProperties": false, "required": ["rounds", "runs", "model_calls", "tool_calls_this_round"], "properties": { "rounds": { "type": "integer", "minimum": 0 }, "runs": { "type": "integer", "minimum": 0 }, "model_calls": { "type": "integer", "minimum": 0 }, "tool_calls_this_round": { "type": "integer", "minimum": 0 } } },
+    "objective": { "type": "object" },
+    "context_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}

@@ -93,6 +93,7 @@ export interface ExperimentControlGroup {
 }
 
 export interface BuildExperimentRequestOptions {
+  executionInput?: CreateRunRequest["execution_input"] | null;
   form: ExperimentFormState;
   mode: ExperimentInputMode;
   surface: ExperimentSurface;

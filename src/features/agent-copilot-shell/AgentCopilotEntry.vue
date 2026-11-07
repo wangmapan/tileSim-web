@@ -21,6 +21,7 @@ import type {
   AgentSessionSummary,
   AgentTypedBlock,
 } from "../../entities/agent-orchestration";
+import type { ExplorationDetail, ExplorationPlanningState } from "../agent-exploration";
 
 type LazyAgentCopilotModule = { default: object };
 
@@ -65,6 +66,9 @@ const props = withDefaults(
     batchDetail?: AgentHarnessBatchDetail | null;
     batchPending?: boolean;
     batchCreatePending?: boolean;
+    explorationDetail?: ExplorationDetail | null;
+    explorationPlanning?: ExplorationPlanningState | null;
+    explorationPending?: boolean;
   }>(),
   {
     modelValue: "closed",
@@ -98,6 +102,9 @@ const props = withDefaults(
     batchDetail: null,
     batchPending: false,
     batchCreatePending: false,
+    explorationDetail: null,
+    explorationPlanning: null,
+    explorationPending: false,
   },
 );
 
@@ -145,6 +152,12 @@ const emit = defineEmits<{
   "batch-retry": [batchId: string];
   "batch-cancel": [batchId: string];
   "batch-create": [payload: { candidateSetText: string; objectivePath: string; direction: "minimize" | "maximize" }];
+  "exploration-authorize": [];
+  "exploration-pause": [];
+  "exploration-resume": [];
+  "exploration-cancel": [];
+  "exploration-planning-confirm": [];
+  "exploration-planning-dismiss": [];
 }>();
 
 const state = shallowRef<AgentCopilotPanelState>(props.modelValue);
@@ -306,6 +319,9 @@ onMounted(() => {
           :batch-detail="batchDetail"
           :batch-pending="batchPending"
           :batch-create-pending="batchCreatePending"
+          :exploration-detail="explorationDetail"
+          :exploration-planning="explorationPlanning"
+          :exploration-pending="explorationPending"
           @update:model-value="setState"
           @submit="emit('submit', $event)"
           @answer="emit('answer', $event)"
@@ -339,6 +355,12 @@ onMounted(() => {
           @batch-retry="emit('batch-retry', $event)"
           @batch-cancel="emit('batch-cancel', $event)"
           @batch-create="emit('batch-create', $event)"
+          @exploration-authorize="emit('exploration-authorize')"
+          @exploration-pause="emit('exploration-pause')"
+          @exploration-resume="emit('exploration-resume')"
+          @exploration-cancel="emit('exploration-cancel')"
+          @exploration-planning-confirm="emit('exploration-planning-confirm')"
+          @exploration-planning-dismiss="emit('exploration-planning-dismiss')"
         />
       </AgentCopilotErrorBoundary>
     </div>

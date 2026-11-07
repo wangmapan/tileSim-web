@@ -110,4 +110,17 @@ describe("TileSim workbench launcher", () => {
     expect(wrapper.text()).toContain("强制完整验证");
     wrapper.unmount();
   });
+
+  it("offers an explicit skip-tests deployment that cannot pose as full validation", async () => {
+    const wrapper = await mountApp();
+    await button(wrapper, "快速部署（跳过测试）").trigger("click");
+    expect(wrapper.text()).toContain("跳过测试并部署当前代码？");
+    expect(wrapper.text()).toContain("不能当作测试通过");
+    await button(wrapper, "返回").trigger("click");
+    await button(wrapper, "部署设置").trigger("click");
+    await wrapper.get('input[type="checkbox"]').setValue(true);
+    await button(wrapper, "概览").trigger("click");
+    expect(button(wrapper, "快速部署（跳过测试）").attributes("disabled")).toBeDefined();
+    wrapper.unmount();
+  });
 });

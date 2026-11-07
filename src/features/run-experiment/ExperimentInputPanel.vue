@@ -13,7 +13,6 @@ import {
 import { computed, ref, watch } from "vue";
 import { useI18n } from "../../i18n";
 import InlineHelp from "../../components/InlineHelp.vue";
-import DeviceInventoryForm from "./DeviceInventoryForm.vue";
 import DomainInventoryForm from "./DomainInventoryForm.vue";
 import RequestTableForm from "./RequestTableForm.vue";
 import RuntimeEngineForm from "./RuntimeEngineForm.vue";
@@ -29,7 +28,7 @@ import {
   writeControlPointer,
 } from "./structured-input";
 import { engineModeOf } from "./runtime-engine";
-import { topologyNodeType } from "./topology-node-types";
+import { isTopologyParticipant } from "./topology-node-types";
 
 const form = defineModel("form", { type: Object, required: true });
 const mode = defineModel("mode", { type: String, required: true });
@@ -47,6 +46,8 @@ const props = defineProps({
   modelIds: { type: Array, default: () => [] },
   draftStale: { type: Boolean, default: false },
   draftStaleRevision: { type: String, default: "" },
+  readOnly: { type: Boolean, default: false },
+  topologyNodeTypes: { type: Array, default: () => [] },
 });
 defineEmits(["reset-controls", "load-template", "load-bundle", "load-json-file", "input-mutation"]);
 const { t } = useI18n();
@@ -74,7 +75,10 @@ const moduleCopy = {
   },
   fabric: {
     label: "互联参数",
-    structured: false,
+    // Communication domains are part of the structured topology contract even
+    // when this backend exposes no scalar S6 controls. Keep the module
+    // reachable so domain editing never falls back into the topology card.
+    structured: true,
   },
 };
 const activeModule = ref("runtime");
@@ -178,7 +182,7 @@ function deviceIdsFromTopology(text) {
         device &&
         typeof device === "object" &&
         !Array.isArray(device) &&
-        topologyNodeType(device.device_type).participant,
+        isTopologyParticipant(device.device_type, props.topologyNodeTypes),
     )
     .map((device) => (device && typeof device === "object" && !Array.isArray(device) ? device.device_id : null))
     .filter((id) => typeof id === "string" && id.length > 0);
@@ -361,298 +365,332 @@ watch(mode, (next) => {
 </script>
 
 <template>
-  <article class="panel form-section" @input="$emit('input-mutation')">
-    <header class="form-section-title">
-      <span>02</span>
-      <h2>{{ t("输入方式") }}</h2>
-    </header>
-    <div class="experiment-input-toolbar">
-      <div class="segmented-control">
-        <button
-          :class="{ active: mode === 'controls' }"
-          :disabled="!surface.inputModes.includes('controls')"
-          @click="mode = 'controls'"
-        >
-          <SlidersHorizontal :size="16" />{{ t("快捷控制") }}
-        </button>
-        <button
-          :class="{ active: mode === 'json' }"
-          :disabled="!surface.inputModes.includes('json')"
-          @click="mode = 'json'"
-        >
-          <Braces :size="16" />{{ t("JSON 输入") }}
-        </button>
-        <button
-          :class="{ active: mode === 'trace_package' }"
-          :disabled="!surface.inputModes.includes('trace_package')"
-          @click="mode = 'trace_package'"
-        >
-          <PackageSearch :size="16" />{{ t("Trace package") }}
-        </button>
-      </div>
-    </div>
-    <p v-if="props.draftStale" class="structured-note structured-note--warning" role="alert">
-      {{ t("当前 schema revision 已变化，旧输入草稿未迁移；请重新加载模板或粘贴与当前 revision 匹配的 JSON。") }}
-      <code v-if="props.draftStaleRevision">{{ props.draftStaleRevision }}</code>
-    </p>
-
-    <Transition name="input-mode" mode="out-in">
-      <section
-        v-if="mode === 'controls'"
-        key="controls"
-        class="structured-area experiment-module-layout"
-        :aria-label="t('输入模块')"
-      >
-        <p
-          v-if="structuredNotice"
-          class="structured-note"
-          :class="`structured-note--${structuredNoticeTone}`"
-          role="status"
-        >
-          {{ structuredNotice }}
-        </p>
-        <div v-if="pairingPrompt" class="structured-note structured-note--warning" role="alert">
-          <p>
-            {{
-              t("设备清单现在是 {count} 张卡。只加卡而不改请求不会改变结果，请选择如何处理请求表：", {
-                count: pairingPrompt.ids.length,
-              })
-            }}
-          </p>
-          <div class="structured-actions">
-            <button type="button" class="button button--secondary" @click="applyPairing('parallelism')">
-              {{ t("① 同步 TP 与参与设备到新集合") }}
-            </button>
-            <button type="button" class="button button--secondary" @click="applyPairing('participants')">
-              {{ t("② 保留原 TP，按新集合选择参与设备") }}
-            </button>
-            <button type="button" class="button button--secondary" @click="applyPairing('clear')">
-              {{ t("③ 清空参与设备，保留并行卡数") }}
-            </button>
-            <button type="button" class="text-button" @click="setPairingPrompt([])">{{ t("稍后再说") }}</button>
-          </div>
-        </div>
-
-        <div class="experiment-module-navigation" role="tablist" :aria-label="t('输入模块')">
+  <article class="panel form-section" :aria-readonly="props.readOnly" @input="$emit('input-mutation')">
+    <fieldset :disabled="props.readOnly" class="experiment-input-panel__fieldset">
+      <header class="form-section-title">
+        <span>02</span>
+        <h2>{{ t("输入方式") }}</h2>
+      </header>
+      <div class="experiment-input-toolbar">
+        <div class="segmented-control">
           <button
-            v-for="card in moduleCards"
-            :key="card.id"
-            type="button"
-            role="tab"
-            class="experiment-module-card"
-            :class="{
-              'is-active': activeModule === card.id,
-              'has-error': card.hasError,
-              'is-disabled': !card.available,
-            }"
-            :disabled="!card.available"
-            :aria-disabled="!card.available"
-            :aria-selected="activeModule === card.id"
-            :aria-controls="`experiment-module-panel-${card.id}`"
-            :data-module="card.id"
-            @click="card.available && selectModule(card.id)"
+            :class="{ active: mode === 'controls' }"
+            :disabled="!surface.inputModes.includes('controls')"
+            @click="mode = 'controls'"
           >
-            <span class="experiment-module-card__icon" aria-hidden="true">
-              <Cpu v-if="card.id === 'runtime'" :size="18" />
-              <Table2 v-else-if="card.id === 'requests'" :size="18" />
-              <Network v-else-if="card.id === 'topology'" :size="18" />
-              <Gauge v-else :size="18" />
-            </span>
-            <span class="experiment-module-card__body">
-              <strong>{{ t(card.label) }}</strong>
-            </span>
-            <span v-if="card.hasError" class="experiment-module-card__meta is-error">{{ t("需要检查") }}</span>
+            <SlidersHorizontal :size="16" />{{ t("快捷控制") }}
+          </button>
+          <button
+            :class="{ active: mode === 'json' }"
+            :disabled="!surface.inputModes.includes('json')"
+            @click="mode = 'json'"
+          >
+            <Braces :size="16" />{{ t("JSON 输入") }}
+          </button>
+          <button
+            :class="{ active: mode === 'trace_package' }"
+            :disabled="!surface.inputModes.includes('trace_package')"
+            @click="mode = 'trace_package'"
+          >
+            <PackageSearch :size="16" />{{ t("Trace package") }}
           </button>
         </div>
+      </div>
+      <p v-if="props.draftStale" class="structured-note structured-note--warning" role="alert">
+        {{ t("当前 schema revision 已变化，旧输入草稿未迁移；请重新加载模板或粘贴与当前 revision 匹配的 JSON。") }}
+        <code v-if="props.draftStaleRevision">{{ props.draftStaleRevision }}</code>
+      </p>
 
-        <Transition name="module-panel" mode="out-in">
-          <div
-            :id="`experiment-module-panel-${activeModule}`"
-            :key="activeModule"
-            class="experiment-module-stage"
-            role="tabpanel"
-            :aria-label="t(moduleCopy[activeModule].label)"
+      <Transition name="input-mode" mode="out-in">
+        <section
+          v-if="mode === 'controls'"
+          key="controls"
+          class="structured-area experiment-module-layout"
+          :aria-label="t('输入模块')"
+        >
+          <p
+            v-if="structuredNotice"
+            class="structured-note"
+            :class="`structured-note--${structuredNoticeTone}`"
+            role="status"
           >
-            <div v-if="activeControlGroups.length" class="control-sections">
-              <section v-for="group in activeControlGroups" :key="group.subsystem" class="schema-control-group">
-                <header>
-                  <Cpu v-if="group.subsystem === 'S1'" :size="17" />
-                  <Database v-else-if="group.subsystem === 'S0'" :size="17" />
-                  <Network v-else :size="17" />
-                  <div>
-                    <strong>{{ group.title }}</strong>
-                    <InlineHelp v-if="!props.compact" :text="t(group.detail)" />
-                  </div>
-                  <button v-if="group.subsystem === 'S1'" class="text-button" @click="$emit('reset-controls')">
-                    <RotateCcw :size="14" />{{ t("清除可选参数") }}
-                  </button>
-                </header>
-                <div class="form-grid">
-                  <label
-                    v-for="field in group.fields"
-                    :key="field.fieldId"
-                    class="field"
-                    :class="{ 'field--invalid': fieldPath === field.requestJsonPointer }"
-                    :data-field-id="field.fieldId"
-                    :data-field-path="field.requestJsonPointer"
-                  >
-                    <span
-                      >{{ t(field.label) }} <small v-if="field.unit">{{ field.unit }}</small></span
-                    >
-                    <select
-                      v-if="field.kind === 'select'"
-                      v-model="form.parameterValues[field.fieldId]"
-                      :disabled="
-                        !field.available ||
-                        (structuredInput && engineMode !== 'generic' && field.fieldId === 's1.runtime.batch_scheduler')
-                      "
-                      :aria-invalid="fieldPath === field.requestJsonPointer"
-                    >
-                      <option v-if="!field.explicitDefaultAvailable" :value="undefined">
-                        {{ t("未设置（省略字段）") }}
-                      </option>
-                      <option v-for="option in field.options" :key="option" :value="option">{{ option }}</option>
-                    </select>
-                    <input
-                      v-else
-                      v-model.number="form.parameterValues[field.fieldId]"
-                      type="number"
-                      :list="numericListId(field)"
-                      :disabled="
-                        !field.available ||
-                        (structuredInput && engineMode !== 'generic' && field.fieldId === 's1.runtime.batch_scheduler')
-                      "
-                      :min="field.minimum"
-                      :max="field.maximum"
-                      :step="field.step"
-                      :placeholder="field.explicitDefaultAvailable ? undefined : t('未设置（省略字段）')"
-                      :aria-invalid="fieldPath === field.requestJsonPointer"
-                    />
-                    <datalist v-if="field.kind !== 'select' && numericListId(field)" :id="numericListId(field)">
-                      <option v-for="value in numericPresetValues(field)" :key="value" :value="value" />
-                    </datalist>
-                    <small v-if="!field.available" class="field-error">{{ field.unavailableReason }}</small>
-                    <small v-if="fieldPath === field.requestJsonPointer" class="field-error">{{
-                      field.requestJsonPointer
-                    }}</small>
-                  </label>
-                </div>
-              </section>
-            </div>
-
-            <div v-if="structuredInputVisible" class="structured-stack">
-              <template v-if="activeModule === 'runtime'">
-                <template v-if="runtimeJson.trim()">
-                  <RuntimeEngineForm v-model="runtimeJson" :field-path="fieldPath" />
-                  <RuntimePolicyForm v-model="runtimeJson" :field-path="fieldPath" />
-                </template>
-                <p v-else class="structured-note structured-note--warning" role="alert">
-                  {{ t("runtime trace 还是空的。请先加载场景模板，或到 JSON 输入页签粘贴内容。") }}
-                </p>
-              </template>
-
-              <RequestTableForm
-                v-else-if="activeModule === 'requests' && runtimeJson.trim()"
-                v-model="runtimeJson"
-                :topology-json="topologyJson"
-                :model-ids="props.modelIds"
-                :field-path="fieldPath"
-                :error-message="errorMessage"
-              />
-              <p v-else-if="activeModule === 'requests'" class="structured-note structured-note--warning" role="alert">
-                {{ t("runtime trace 还是空的。请先加载场景模板，或到 JSON 输入页签粘贴内容。") }}
-              </p>
-
-              <template v-else-if="activeModule === 'topology'">
-                <TopologyGraphEditor
-                  v-model="topologyJson"
-                  :field-path="fieldPath"
-                  :show-json="false"
-                  @device-count-change="onDeviceCountChange"
-                  @notice="onBlockNotice"
-                />
-                <DeviceInventoryForm
-                  v-model="topologyJson"
-                  :field-path="fieldPath"
-                  @notice="onBlockNotice"
-                  @device-count-change="onDeviceCountChange"
-                />
-                <DomainInventoryForm v-model="topologyJson" :field-path="fieldPath" @notice="onBlockNotice" />
-              </template>
-            </div>
-            <p v-else class="structured-note structured-note--warning" role="alert">
+            {{ structuredNotice }}
+          </p>
+          <div v-if="pairingPrompt" class="structured-note structured-note--warning" role="alert">
+            <p>
               {{
-                surface.contractStatus === "contract_error"
-                  ? t("当前实验契约不可用，结构化 custom_inputs 编辑已禁用。")
-                  : !structuredInputAvailable
-                    ? t("当前能力未发布 JSON 输入，结构化 custom_inputs 编辑已禁用。")
-                    : t("结构化输入已关闭；当前只提交快捷参数。")
+                t("设备清单现在是 {count} 张卡。只加卡而不改请求不会改变结果，请选择如何处理请求表：", {
+                  count: pairingPrompt.ids.length,
+                })
               }}
             </p>
+            <div class="structured-actions">
+              <button type="button" class="button button--secondary" @click="applyPairing('parallelism')">
+                {{ t("① 同步 TP 与参与设备到新集合") }}
+              </button>
+              <button type="button" class="button button--secondary" @click="applyPairing('participants')">
+                {{ t("② 保留原 TP，按新集合选择参与设备") }}
+              </button>
+              <button type="button" class="button button--secondary" @click="applyPairing('clear')">
+                {{ t("③ 清空参与设备，保留并行卡数") }}
+              </button>
+              <button type="button" class="text-button" @click="setPairingPrompt([])">{{ t("稍后再说") }}</button>
+            </div>
           </div>
-        </Transition>
-      </section>
 
-      <div v-else-if="mode === 'json'" key="json" class="json-editor-section">
-        <div class="json-toolbar">
-          <button class="button button--secondary" @click="$emit('load-template')">
-            <Database :size="15" />{{ t("加载场景模板") }}
-          </button>
-          <label class="button button--ghost"
-            >{{ t("导入完整输入包")
-            }}<input type="file" accept="application/json,.json" @change="$emit('load-bundle', $event)"
-          /></label>
-        </div>
-        <div class="json-grid">
-          <label
-            ><span
-              >Runtime trace JSON
-              <label class="inline-file"
-                >{{ t("导入")
-                }}<input
-                  type="file"
-                  accept="application/json,.json"
-                  @change="$emit('load-json-file', $event, 'runtime')" /></label></span
-            ><textarea
-              v-model="runtimeJson"
-              spellcheck="false"
-              :aria-invalid="
-                fieldPath === '/custom_inputs/runtime_trace' || fieldPath.startsWith('/custom_inputs/runtime_trace/')
-              "
-              :aria-describedby="
-                fieldPath.startsWith('/custom_inputs/runtime_trace') ? 'runtime-json-error' : undefined
-              "
-              :placeholder="t('加载模板或粘贴运行时 Trace')"
-            ></textarea>
-            <small
-              v-if="fieldPath.startsWith('/custom_inputs/runtime_trace')"
-              id="runtime-json-error"
-              class="field-error"
-              role="alert"
-              ><code>{{ fieldPath }}</code> · {{ errorMessage }}</small
+          <div class="experiment-module-navigation" role="tablist" :aria-label="t('输入模块')">
+            <button
+              v-for="card in moduleCards"
+              :key="card.id"
+              type="button"
+              role="tab"
+              class="experiment-module-card"
+              :class="{
+                'is-active': activeModule === card.id,
+                'has-error': card.hasError,
+                'is-disabled': !card.available,
+              }"
+              :disabled="!card.available"
+              :aria-disabled="!card.available"
+              :aria-selected="activeModule === card.id"
+              :aria-controls="`experiment-module-panel-${card.id}`"
+              :data-module="card.id"
+              @click="card.available && selectModule(card.id)"
             >
-          </label>
-          <div class="topology-input-column">
-            <!--
+              <span class="experiment-module-card__icon" aria-hidden="true">
+                <Cpu v-if="card.id === 'runtime'" :size="18" />
+                <Table2 v-else-if="card.id === 'requests'" :size="18" />
+                <Network v-else-if="card.id === 'topology'" :size="18" />
+                <Gauge v-else :size="18" />
+              </span>
+              <span class="experiment-module-card__body">
+                <strong>{{ t(card.label) }}</strong>
+              </span>
+              <span v-if="card.hasError" class="experiment-module-card__meta is-error">{{ t("需要检查") }}</span>
+            </button>
+          </div>
+
+          <Transition name="module-panel" mode="out-in">
+            <div
+              :id="`experiment-module-panel-${activeModule}`"
+              :key="activeModule"
+              class="experiment-module-stage"
+              role="tabpanel"
+              :aria-label="t(moduleCopy[activeModule].label)"
+            >
+              <div v-if="activeControlGroups.length" class="control-sections">
+                <section v-for="group in activeControlGroups" :key="group.subsystem" class="schema-control-group">
+                  <header>
+                    <Cpu v-if="group.subsystem === 'S1'" :size="17" />
+                    <Database v-else-if="group.subsystem === 'S0'" :size="17" />
+                    <Network v-else :size="17" />
+                    <div>
+                      <strong>{{ group.title }}</strong>
+                      <InlineHelp v-if="!props.compact" :text="t(group.detail)" />
+                    </div>
+                    <button v-if="group.subsystem === 'S1'" class="text-button" @click="$emit('reset-controls')">
+                      <RotateCcw :size="14" />{{ t("清除可选参数") }}
+                    </button>
+                  </header>
+                  <div class="form-grid">
+                    <label
+                      v-for="field in group.fields"
+                      :key="field.fieldId"
+                      class="field"
+                      :class="{ 'field--invalid': fieldPath === field.requestJsonPointer }"
+                      :data-field-id="field.fieldId"
+                      :data-field-path="field.requestJsonPointer"
+                    >
+                      <span
+                        >{{ t(field.label) }}<small v-if="field.unit && field.unit !== 'dimensionless'">{{ field.unit }}</small></span
+                      >
+                      <select
+                        v-if="field.kind === 'select'"
+                        v-model="form.parameterValues[field.fieldId]"
+                        :disabled="
+                          !field.available ||
+                          (structuredInput &&
+                            engineMode !== 'generic' &&
+                            field.fieldId === 's1.runtime.batch_scheduler')
+                        "
+                        :aria-invalid="fieldPath === field.requestJsonPointer"
+                      >
+                        <option v-if="!field.explicitDefaultAvailable" :value="undefined">
+                          {{ t("未设置（省略字段）") }}
+                        </option>
+                        <option v-for="option in field.options" :key="option" :value="option">{{ option }}</option>
+                      </select>
+                      <input
+                        v-else
+                        v-model.number="form.parameterValues[field.fieldId]"
+                        type="number"
+                        :list="numericListId(field)"
+                        :disabled="
+                          !field.available ||
+                          (structuredInput &&
+                            engineMode !== 'generic' &&
+                            field.fieldId === 's1.runtime.batch_scheduler')
+                        "
+                        :min="field.minimum"
+                        :max="field.maximum"
+                        :step="field.step"
+                        :placeholder="field.explicitDefaultAvailable ? undefined : t('未设置（省略字段）')"
+                        :aria-invalid="fieldPath === field.requestJsonPointer"
+                      />
+                      <datalist v-if="field.kind !== 'select' && numericListId(field)" :id="numericListId(field)">
+                        <option v-for="value in numericPresetValues(field)" :key="value" :value="value" />
+                      </datalist>
+                      <small v-if="!field.available" class="field-error">{{ field.unavailableReason }}</small>
+                      <small v-if="fieldPath === field.requestJsonPointer" class="field-error">{{
+                        field.requestJsonPointer
+                      }}</small>
+                    </label>
+                  </div>
+                </section>
+              </div>
+
+              <div v-if="structuredInputVisible" class="structured-stack">
+                <template v-if="activeModule === 'runtime'">
+                  <template v-if="runtimeJson.trim()">
+                    <RuntimeEngineForm v-model="runtimeJson" :field-path="fieldPath" />
+                    <RuntimePolicyForm v-model="runtimeJson" :field-path="fieldPath" />
+                  </template>
+                  <p v-else class="structured-note structured-note--warning" role="alert">
+                    {{ t("runtime trace 还是空的。请先加载场景模板，或到 JSON 输入页签粘贴内容。") }}
+                  </p>
+                </template>
+
+                <RequestTableForm
+                  v-else-if="activeModule === 'requests' && runtimeJson.trim()"
+                  v-model="runtimeJson"
+                  :topology-json="topologyJson"
+                  :model-ids="props.modelIds"
+                  :field-path="fieldPath"
+                  :error-message="errorMessage"
+                />
+                <p
+                  v-else-if="activeModule === 'requests'"
+                  class="structured-note structured-note--warning"
+                  role="alert"
+                >
+                  {{ t("runtime trace 还是空的。请先加载场景模板，或到 JSON 输入页签粘贴内容。") }}
+                </p>
+
+                <template v-else-if="activeModule === 'topology'">
+                  <TopologyGraphEditor
+                    v-model="topologyJson"
+                    :field-path="fieldPath"
+                    :show-json="false"
+                    :show-module-settings="false"
+                    :topology-node-types="props.topologyNodeTypes"
+                    @device-count-change="onDeviceCountChange"
+                    @notice="onBlockNotice"
+                  />
+                </template>
+                <template v-else-if="activeModule === 'fabric'">
+                  <DomainInventoryForm v-model="topologyJson" :field-path="fieldPath" @notice="onBlockNotice" />
+                  <TopologyGraphEditor
+                    v-model="topologyJson"
+                    :field-path="fieldPath"
+                    :show-graph="false"
+                    :show-module-settings="true"
+                    :topology-node-types="props.topologyNodeTypes"
+                    @notice="onBlockNotice"
+                  />
+                </template>
+              </div>
+              <p v-else class="structured-note structured-note--warning" role="alert">
+                {{
+                  surface.contractStatus === "contract_error"
+                    ? t("当前实验契约不可用，结构化 custom_inputs 编辑已禁用。")
+                    : !structuredInputAvailable
+                      ? t("当前能力未发布 JSON 输入，结构化 custom_inputs 编辑已禁用。")
+                      : t("结构化输入已关闭；当前只提交快捷参数。")
+                }}
+              </p>
+            </div>
+          </Transition>
+        </section>
+
+        <div v-else-if="mode === 'json'" key="json" class="json-editor-section">
+          <div class="json-toolbar">
+            <button class="button button--secondary" @click="$emit('load-template')">
+              <Database :size="15" />{{ t("加载场景模板") }}
+            </button>
+            <label class="button button--ghost"
+              >{{ t("导入完整输入包")
+              }}<input type="file" accept="application/json,.json" @change="$emit('load-bundle', $event)"
+            /></label>
+          </div>
+          <div class="json-grid">
+            <label
+              ><span
+                >{{ t("运行数据") }}
+                <label class="inline-file"
+                  >{{ t("导入")
+                  }}<input
+                    type="file"
+                    accept="application/json,.json"
+                    @change="$emit('load-json-file', $event, 'runtime')" /></label></span
+              ><textarea
+                v-model="runtimeJson"
+                spellcheck="false"
+                :aria-invalid="
+                  fieldPath === '/custom_inputs/runtime_trace' || fieldPath.startsWith('/custom_inputs/runtime_trace/')
+                "
+                :aria-describedby="
+                  fieldPath.startsWith('/custom_inputs/runtime_trace') ? 'runtime-json-error' : undefined
+                "
+                :placeholder="t('加载模板或粘贴运行时 Trace')"
+              ></textarea>
+              <small
+                v-if="fieldPath.startsWith('/custom_inputs/runtime_trace')"
+                id="runtime-json-error"
+                class="field-error"
+                role="alert"
+                ><code>{{ fieldPath }}</code> · {{ errorMessage }}</small
+              >
+            </label>
+            <div class="topology-input-column">
+              <!--
             The JSON tab owns typing: the graph is a read-only preview that
             follows the textarea, so topology input happens in exactly one way —
             editing this JSON. The import button stays because it is the file
             equivalent of the "导入" control the runtime textarea already has.
           -->
-            <TopologyGraphEditor v-model="topologyJson" :field-path="fieldPath" read-only />
-            <label class="inline-file topology-import"
-              >{{ t("导入拓扑 JSON")
-              }}<input
-                type="file"
-                accept="application/json,.json"
-                @change="$emit('load-json-file', $event, 'topology')"
-            /></label>
+              <TopologyGraphEditor
+                v-model="topologyJson"
+                :field-path="fieldPath"
+                :topology-node-types="props.topologyNodeTypes"
+                read-only
+              />
+              <label class="inline-file topology-import"
+                >{{ t("导入拓扑 JSON")
+                }}<input
+                  type="file"
+                  accept="application/json,.json"
+                  @change="$emit('load-json-file', $event, 'topology')"
+              /></label>
+            </div>
           </div>
         </div>
-      </div>
-      <div v-else key="trace_package" class="trace-package-state">
-        {{ t("从下方受控目录选择 package；浏览器不会发送或显示服务器文件路径。") }}
-      </div>
-    </Transition>
+        <div v-else key="trace_package" class="trace-package-state">
+          {{ t("从下方受控目录选择 package；浏览器不会发送或显示服务器文件路径。") }}
+        </div>
+      </Transition>
+    </fieldset>
   </article>
 </template>
+
+<style scoped>
+.experiment-input-panel__fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.form-section[aria-readonly="true"] {
+  opacity: 0.82;
+}
+</style>

@@ -1,3 +1,4 @@
+import { normalizeOperatorEvidence } from "../../execution-inspector";
 import { isLosslessInteger, losslessIntegerToBigInt } from "../../../contracts/lossless-json";
 import { buildReplayCoverage, payloadAvailability, payloadValue } from "./coverage";
 import type {
@@ -284,6 +285,7 @@ function normalizeTopology(input: unknown, runId: string | null): ReplayTopology
             id,
             label: stringValue(device.name) || id,
             deviceType: stringValue(device.device_type),
+            groupId: stringValue(device.group_id),
             sourcePath: `${sourceArtifact}:/topology/devices/${index}`,
           },
         ]
@@ -974,6 +976,7 @@ export function normalizeReplayDocument(input: ReplayNormalizeInput): ReplayDocu
     rawEnvelopeStart !== null && rawEnvelopeEnd !== null && BigInt(rawEnvelopeEnd) >= BigInt(rawEnvelopeStart);
   const envelopeStart = envelopeRangeValid ? rawEnvelopeStart : null;
   const envelopeEnd = envelopeRangeValid ? rawEnvelopeEnd : null;
+  const operators = operatorEvents(input);
   const bounds = rangeBounds([
     envelopeStart,
     envelopeEnd,
@@ -986,6 +989,9 @@ export function normalizeReplayDocument(input: ReplayNormalizeInput): ReplayDocu
       event.timing.type === "interval" ? [event.timing.startPs, event.timing.endPs] : [event.timing.atPs],
     ),
     ...collective.steps.flatMap((step) => [step.timing.startPs, step.timing.endPs]),
+    ...operators.flatMap((event) =>
+      event.timing.type === "interval" ? [event.timing.startPs, event.timing.endPs] : [event.timing.atPs],
+    ),
   ]);
   const hasValidRange =
     (envelopeStart !== null && envelopeEnd !== null && BigInt(envelopeEnd) > BigInt(envelopeStart)) ||
@@ -999,7 +1005,10 @@ export function normalizeReplayDocument(input: ReplayNormalizeInput): ReplayDocu
     fabric.events.some(
       (event) => event.timing.type === "interval" && BigInt(event.timing.endPs) > BigInt(event.timing.startPs),
     ) ||
-    collective.steps.some((step) => BigInt(step.timing.endPs) > BigInt(step.timing.startPs));
+    collective.steps.some((step) => BigInt(step.timing.endPs) > BigInt(step.timing.startPs)) ||
+    operators.some(
+      (event) => event.timing.type === "interval" && BigInt(event.timing.endPs) > BigInt(event.timing.startPs),
+    );
   const coverage = buildReplayCoverage({
     stages: stageAvailability,
     runtimeEvents: runtime.availability,
@@ -1039,7 +1048,7 @@ export function normalizeReplayDocument(input: ReplayNormalizeInput): ReplayDocu
     endPs: bounds.end,
     hasValidRange,
     stages: boundStages,
-    events: sortReplayEvents(runtime.events),
+    events: sortReplayEvents([...runtime.events, ...operators]),
     topology: topologyDocument,
     routes: fabric.routes,
     fabricEvents: fabric.events,
@@ -1077,4 +1086,123 @@ export function validateReplayBinding(input: {
   const payloadRun = stringValue(record(input.payload).run_id);
   if (payloadRun && payloadRun !== input.runId) return { ok: false, reason: "run_mismatch" };
   return { ok: true };
+}
+
+function operatorEvents(input: ReplayNormalizeInput): ReplayEvent[] {
+  const payload = input.requestAttribution;
+  if (
+    !payload ||
+    payload.availability !== "available" ||
+    payload.schemaIdentity !== "tilesim.request_attribution.v1" ||
+    !input.runId ||
+    record(payload.value).run_id !== input.runId
+  )
+    return [];
+  const events: ReplayEvent[] = [],
+    launches = new Set<string>();
+  const buffered = new Map<string, string>();
+  for (const [i, row] of normalizeOperatorEvidence(payload.value).entries()) {
+    if (row.startPs === null || row.endPs === null || BigInt(row.endPs) < BigInt(row.startPs)) continue;
+    const base = {
+      sequence: String(i),
+      sourceIndex: i,
+      requestId: row.requestId,
+      fragmentId: row.fragmentId,
+      state: row.state,
+      sourcePath: `request-attribution:${row.pointer}`,
+      sourceArtifact: "request-attribution",
+      sourceSchema: payload.schemaIdentity,
+      availability: "available" as const,
+      detail: JSON.stringify(row.raw),
+    };
+    if (
+      Object.keys(row.attributes).some(
+        (key) => key.startsWith("buffer_output_bytes::") || key === "execution_buffer_wait_ps",
+      )
+    )
+      buffered.set(row.fragmentId, row.requestId);
+    const layer = /acquire|release|ready|task_done/.test(String(row.attributes.source_operation_kind || ""))
+      ? "buffer"
+      : "fragment";
+    events.push({
+      ...base,
+      eventId: "operator:" + row.id,
+      kind: "operator_" + layer,
+      label: row.kind + " · " + row.fragmentId,
+      timing: { type: "interval", startPs: row.startPs, endPs: row.endPs },
+    });
+    const launch = String(row.attributes.kernel_launch_id || ""),
+      begin = integerString(row.attributes.kernel_launch_begin_ps),
+      end = integerString(row.attributes.kernel_launch_end_ps);
+    if (launch && begin !== null && end !== null && BigInt(end) >= BigInt(begin) && !launches.has(launch)) {
+      launches.add(launch);
+      events.push({
+        ...base,
+        eventId: "kernel:" + launch,
+        kind: "operator_kernel",
+        label: "Kernel launch · " + launch,
+        timing: { type: "interval", startPs: begin, endPs: end },
+      });
+    }
+  }
+  for (const [i, value] of arrayValue(record(payload.value).evidence, "des_events").entries()) {
+    const event = record(value),
+      id = stringValue(event.event_id),
+      subject = stringValue(event.subject_id),
+      kind = stringValue(event.event_kind),
+      at = integerString(event.event_time_ps);
+    if (
+      !id ||
+      !subject ||
+      !kind ||
+      at === null ||
+      !buffered.has(subject) ||
+      !["stage_ready", "buffer_grant", "stage_submit", "stage_complete"].includes(kind)
+    )
+      continue;
+    events.push({
+      eventId: "buffer:" + id,
+      fragmentId: subject,
+      sequence: String(i),
+      sourceIndex: i,
+      requestId: buffered.get(subject),
+      kind: "operator_buffer",
+      label: kind + " · " + subject,
+      timing: { type: "instant", atPs: at },
+      sourcePath: `request-attribution:/evidence/des_events/${i}`,
+      sourceArtifact: "request-attribution",
+      sourceSchema: payload.schemaIdentity,
+      availability: "available",
+      detail: JSON.stringify(event),
+    });
+  }
+  for (const [i, value] of arrayValue(record(payload.value).metrics, "request_metrics").entries()) {
+    const metric = record(value),
+      requestId = stringValue(metric.request_id),
+      startPs = integerString(metric.arrival_time_ps),
+      endPs = integerString(metric.completion_time_ps);
+    if (
+      !requestId ||
+      startPs === null ||
+      endPs === null ||
+      BigInt(endPs) < BigInt(startPs) ||
+      metric.has_end_to_end_latency_sample !== true
+    )
+      continue;
+    events.push({
+      eventId: "request-metric:" + requestId,
+      sequence: String(i),
+      sourceIndex: i,
+      requestId,
+      kind: "request_metric",
+      label: "request metric · " + requestId,
+      timing: { type: "interval", startPs, endPs },
+      sourcePath: `request-attribution:/metrics/request_metrics/${i}`,
+      sourceArtifact: "request-attribution",
+      sourceSchema: payload.schemaIdentity,
+      availability: "available",
+      detail: JSON.stringify(metric),
+    });
+  }
+  return events;
 }

@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { AlertTriangle, ArrowRight, GitCompareArrows, Layers3, Route } from "@lucide/vue";
+import { AlertTriangle, ArrowRight, ChevronDown, GitCompareArrows, Layers3, Route } from "@lucide/vue";
 import { computed } from "vue";
 import ArtifactEvidenceLink from "../components/ArtifactEvidenceLink.vue";
 import EmptyState from "../components/EmptyState.vue";
 import InlineHelp from "../components/InlineHelp.vue";
 import StatCard from "../components/StatCard.vue";
 import StatusPill from "../components/StatusPill.vue";
-import { formatNumber } from "../lib/format";
+import { formatNumber, statusLabel } from "../lib/format";
 import { useDashboard } from "../store/dashboard";
 import {
   buildDesignSpaceAnalysis,
@@ -91,7 +91,14 @@ function displayedKnobValue(value: unknown, availability: string) {
       <StatusPill :value="report.evidence_tier" />
     </section>
 
-    <ExecutionVisualizationPanel :visualization="candidateVisualization" />
+    <details class="panel design-visualization-disclosure">
+      <summary class="panel-header">
+        <h2>{{ t("候选对比图") }}</h2>
+        <span>{{ t("按需查看") }}</span>
+        <ChevronDown :size="17" />
+      </summary>
+      <ExecutionVisualizationPanel :visualization="candidateVisualization" />
+    </details>
 
     <article class="panel" data-help-anchor="design_space-ranking">
       <header class="panel-header panel-header--row">
@@ -107,11 +114,11 @@ function displayedKnobValue(value: unknown, availability: string) {
             <tr>
               <th>{{ t("排名 / 候选") }}</th>
               <th>{{ t("执行层级") }}</th>
-              <th class="numeric">P95</th>
-              <th class="numeric">P99</th>
+              <th class="numeric">{{ t("延迟 P95") }}</th>
+              <th class="numeric">{{ t("延迟 P99") }}</th>
               <th>{{ t("晋升依据") }}</th>
               <th>{{ t("排名变化") }}</th>
-              <th>Pareto</th>
+              <th>{{ t("前沿成员") }}</th>
               <th>{{ t("候选证据") }}</th>
               <th>{{ t("共同状态 / 停止原因") }}</th>
             </tr>
@@ -136,12 +143,12 @@ function displayedKnobValue(value: unknown, availability: string) {
               <td class="numeric">{{ formatNumber(candidate.projected_p95_latency_us) }} µs</td>
               <td class="numeric">{{ formatNumber(candidate.projected_p99_latency_us) }} µs</td>
               <td>
-                <strong>{{ candidate.promotion_reason || "not_promoted" }}</strong>
-                <small v-if="candidate.promotion_hint">hint: {{ candidate.promotion_hint }}</small>
+                <strong>{{ statusLabel(candidate.promotion_reason || "not_promoted") }}</strong>
+                <small v-if="candidate.promotion_hint">{{ t("有进一步筛选提示") }}</small>
               </td>
               <td>
                 <span class="rank-change"><GitCompareArrows :size="14" />{{ rankDelta(candidate) }}</span>
-                <small>Analytical #{{ candidate.analytical_rank || "—" }}</small>
+                <small>{{ t("分析排名") }} #{{ candidate.analytical_rank || "—" }}</small>
               </td>
               <td>
                 <StatusPill
@@ -149,7 +156,7 @@ function displayedKnobValue(value: unknown, availability: string) {
                     candidate.pareto_member === true ? 'pareto_member' : candidate.dominance_status || 'not_evaluated'
                   "
                 />
-                <small>{{ candidate.dominance_reason_code || t("未报告") }}</small>
+                <small>{{ statusLabel(candidate.dominance_reason_code || "unknown") }}</small>
               </td>
               <td>
                 <ArtifactEvidenceLink
@@ -164,11 +171,11 @@ function displayedKnobValue(value: unknown, availability: string) {
                   <Route :size="14" />
                   {{
                     candidate.first_state_divergence?.present
-                      ? `index ${candidate.first_state_divergence.index}`
+                      ? `${t("位置")} ${candidate.first_state_divergence.index}`
                       : t("无分歧")
                   }}
                 </span>
-                <small>{{ candidate.stop_reason || "unknown" }}</small>
+                <small>{{ statusLabel(candidate.stop_reason || "unknown") }}</small>
               </td>
             </tr>
           </tbody>
@@ -176,16 +183,15 @@ function displayedKnobValue(value: unknown, availability: string) {
       </div>
     </article>
 
-    <section v-if="formalAnalysis.navigationScope" class="panel f7-formal-summary">
-      <header>
+    <details v-if="formalAnalysis.navigationScope" class="panel f7-formal-summary">
+      <summary class="panel-header">
         <div>
-          <h2>{{ t("Pareto 与 artifact-record 证据") }}</h2>
-          <InlineHelp
-            :text="t('候选仅导航到当前 run 的 design-space artifact 记录；backend instance 不是 Bridge run。')"
-          />
+          <h2>{{ t("候选关系与证据记录") }}</h2>
+          <small>{{ t("当前运行的导航边界") }}</small>
         </div>
         <StatusPill :value="formalAnalysis.availability" />
-      </header>
+        <ChevronDown :size="17" />
+      </summary>
       <dl>
         <div>
           <dt>pareto_front_id</dt>
@@ -200,7 +206,7 @@ function displayedKnobValue(value: unknown, availability: string) {
           <dd>{{ formalAnalysis.navigationScope }}</dd>
         </div>
       </dl>
-    </section>
+    </details>
 
     <details class="panel f7-capability-panel design-contract-disclosure">
       <summary class="panel-header">
@@ -237,10 +243,12 @@ function displayedKnobValue(value: unknown, availability: string) {
           <span class="candidate-detail-rank">#{{ candidate.final_rank || "—" }}</span>
           <span>
             <strong>{{ candidate.name || candidate.candidate_id }}</strong>
-            <small>{{ candidate.candidate_id }} · Analytical #{{ candidate.analytical_rank || "—" }}</small>
+            <small>{{ candidate.candidate_id }} · {{ t("分析排名") }} #{{ candidate.analytical_rank || "—" }}</small>
           </span>
           <StatusPill :value="candidate.resolved_fidelity" />
-          <span class="candidate-detail-tail">P99 {{ metricValue(candidate.projected_p99_latency_us, "µs") }}</span>
+          <span class="candidate-detail-tail"
+            >{{ t("延迟 P99") }} {{ metricValue(candidate.projected_p99_latency_us, "µs") }}</span
+          >
         </summary>
 
         <div class="candidate-detail-body">
@@ -503,7 +511,7 @@ function displayedKnobValue(value: unknown, availability: string) {
           <Route :size="18" />
           <span>
             <strong>{{ t("候选来源与分析分歧") }}</strong>
-            <small>{{ t("查看 provenance、manifest、fidelity 解析与 Analytical/DES 排名变化") }}</small>
+            <small>{{ t("查看来源、清单、精度解析与排名变化") }}</small>
           </span>
         </span>
       </summary>

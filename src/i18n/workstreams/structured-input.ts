@@ -24,6 +24,11 @@ export const structuredInputEnglishCatalog: Readonly<Record<string, string>> = {
   以运行后的验证报告为准: "The post-run validation report is authoritative.",
   真实网络观测仅作为证据: "Real network observations are evidence only.",
   "查看 fidelity 说明": "View fidelity explanation",
+  请求精度: "Requested fidelity",
+  查看请求精度说明: "View requested fidelity explanation",
+  运行数据: "Runtime data",
+  "实际采用的精度仅从运行后的执行记录与验证报告读取。":
+    "The actual fidelity is read only from the post-run execution record and validation report.",
   "查看 GPU 参与说明": "View GPU participation explanation",
   运行操作: "Run action",
   "标准推理运行（合成示例）": "Standard inference run (synthetic example)",
@@ -77,8 +82,8 @@ export const structuredInputEnglishCatalog: Readonly<Record<string, string>> = {
   后端可用模型: "Models available from the backend",
   "后端可用模型：{models}": "Models available from the backend: {models}",
   "用于关联请求结果，不代表模型结构。": "Links request results; it does not describe model structure.",
-  "GPU 会参与请求；交换机、路由器等只作为拓扑节点。":
-    "GPUs participate in requests; switches and routers are topology nodes only.",
+  "GPU 会参与请求；交换机等拓扑节点不会自动加入请求。":
+    "GPUs participate in requests; topology nodes such as switches are not added to requests automatically.",
   "域用于分组节点并指定通信模型；最多 {max} 个。":
     "Domains group nodes and select a communication model; up to {max} are allowed.",
   "仅覆盖信用链路热点，不代表全栈 Cycle。": "Covers only credit-link hotspots; it does not represent full-stack Cycle.",
@@ -204,6 +209,9 @@ export const structuredInputEnglishCatalog: Readonly<Record<string, string>> = {
   设备编号: "Device number",
   设备类型: "Device type",
   分组编号: "Group number",
+  计算组: "Compute group",
+  "先给设备填写相同的计算组编号，画布会自动形成一个计算组。每张卡只有一个计算组；scale_up / scale_out 通信域在下面单独配置，不需要把一张卡拖进两个域。":
+    "Give devices in one compute group the same group ID; the canvas groups them automatically. Each card has one compute group; configure scale_up / scale_out domains separately below.",
   "最多 {max} 台。新增设备按 gpu0、gpu1 的顺序命名，自动跳过重名。":
     "Up to {max}. New devices are named gpu0, gpu1, … in order, skipping duplicates.",
   卡数: "Card count",
@@ -268,13 +276,50 @@ export const structuredInputEnglishCatalog: Readonly<Record<string, string>> = {
   新增设备: "Add device",
   "已新增设备 {device}，设备类型默认 GPU；记得把它勾进需要的域。":
     "Added device {device} with device type GPU; remember to tick it into the domains it belongs to.",
-  域清单: "Domain list",
+  域清单: "Communication domains",
+  通信域清单: "Communication domain list",
+  通信域: "Communication domain",
+  "通信域 ID": "Communication domain ID",
+  后端域类型: "Backend domain type",
+  后端端点: "Backend endpoints",
+  "通信域是后端网络资源，不是设备所有权。设备归属由设备清单中的计算组决定，最多 {max} 个通信域。":
+    "Communication domains are backend network resources, not device ownership. Device ownership comes from Compute group in Device inventory; up to {max} domains are allowed.",
+  新增通信域: "Add communication domain",
+  "设备清单里的计算组决定节点归属；这里仅配置后端通信域。scale_up 用于组内通信，scale_out 用于组间通信，scale_out 的端点列表可以和 scale_up 重叠。":
+    "Compute group in Device inventory determines ownership; configure backend communication domains here. scale_up is intra-group, scale_out is inter-group, and scale_out endpoints may overlap scale_up endpoints.",
+  "当前没有通信域。点「新增通信域」创建组内通信；形成多个计算组后，组间通信域会自动准备。":
+    "There are no communication domains. Add one for intra-group communication; an inter-group domain is prepared after multiple compute groups exist.",
+  "这是组间通信域：它汇总跨计算组的 endpoint。成员重叠是后端端点语义，不代表这些卡属于两个计算组。":
+    "This is an inter-group communication domain. It aggregates endpoints across compute groups; overlap is backend endpoint scope and does not assign a card to two groups.",
+  后端绑定与运行策略: "Backend binding and run policy",
+  "组间端点（自动汇总）": "Inter-group endpoints (derived)",
+  "先在设备清单中填写至少两个计算组，并配置组内通信域。":
+    "Enter at least two compute groups in Device inventory and configure their intra-group domains first.",
+  "已新增组内通信域 {domain}，绑定网络模型 {module}；请在后端端点中选择设备。":
+    "Added intra-group communication domain {domain} bound to network model {module}; select devices under Backend endpoints.",
+  "已根据计算组自动准备组间通信域，请在后端端点中核对。":
+    "An inter-group communication domain was prepared from the compute groups; verify its backend endpoints.",
+  "当前没有可用于 {type} 的网络模型。请先在「模块绑定参数」中声明匹配的 module_binding。":
+    "No network model is available for {type}. Declare a matching module_binding under Module binding parameters first.",
+  "域 {domain} 的类型已改为 {type}，并绑定匹配模型 {module}。":
+    "Domain {domain} is now {type} and uses matching model {module}.",
+  "模型 {module} 属于 {kind}，不能绑定到 {type} 域。请先切换域类型。":
+    "Model {module} is {kind} and cannot bind to a {type} domain. Change the domain type first.",
+  计算节点组: "Compute node groups",
   新增域: "Add domain",
+  新增超级节点: "Add compute group",
+  新增设备组: "Add compute group",
+  添加跨机网络: "Add inter-node network",
+  "后端域类型（高级）": "Backend domain type (advanced)",
+  "高级：后端域类型": "Advanced: backend domain type",
   域名: "Domain name",
   域类型: "Domain type",
   所用网络模型: "Network model",
   "机内高速互联（scale_up）": "Intra-node interconnect (scale_up)",
   "跨机网络（scale_out）": "Inter-node network (scale_out)",
+  "跨机网络 {domains}": "Inter-node network {domains}",
+  未入超级节点: "Not assigned to a compute group",
+  未入设备组: "Not assigned to a compute group",
   "最多 {max} 个域。域就是「一批卡共用的同一套网络」；新增域自动命名 su0、so0，并绑定一个已存在的网络模型。":
     "Up to {max} domains. A domain is one network shared by a group of cards; new domains are named su0, so0, … and bound to an existing network model.",
   "最多 {max} 个域。域就是「一组节点共用的同一套网络」；新增域自动命名 su0、so0，并绑定一个已存在的网络模型。":
@@ -285,6 +330,28 @@ export const structuredInputEnglishCatalog: Readonly<Record<string, string>> = {
     "There are no domains. Click Add domain to create the first one, then tick the cards it contains.",
   "当前没有域。点「新增域」创建第一个，再勾选它包含哪些节点。":
     "There are no domains. Click Add domain to create the first one, then tick the nodes it contains.",
+  "普通流程把 scale_up 域作为组内网络；scale_out 只用于设备组之间的跨组连接。最多 {max} 个域。":
+    "The normal workflow uses scale_up for intra-group networking; scale_out is reserved for links between compute groups. Up to {max} domains.",
+  "当前没有设备组。点「新增设备组」创建第一个；跨组网络会在两个设备组之间单独配置。":
+    "There are no compute groups. Click Add compute group to create the first; configure scale-out networking between groups separately.",
+  "当前 topology 没有声明可用于计算节点组的 scale_up 网络模型；请先在高级「模块绑定参数」中声明一个，不能把跨机模型冒充机内互联。":
+    "This topology has no scale_up network model for a compute node group. Declare one in the advanced Module binding parameters first; an inter-node model cannot stand in for an intra-node link.",
+  "已新增设备组 {domain}，绑定组内网络模型 {module}；请在成员清单中选择设备。":
+    "Added compute group {domain} bound to intra-group network model {module}; choose its devices in the member list.",
+  "${device} 已属于设备组「${owner}」，一张卡只能归属一个设备组。":
+    '${device} already belongs to compute group "${owner}"; a device can belong to only one compute group.',
+  "至少要有两个超级节点，才能建立跨机网络。":
+    "At least two super nodes are required before an inter-node network can be created.",
+  "当前 topology 没有声明可用的 scale_out 网络模型，不能伪造跨机连接能力。":
+    "This topology has not declared a scale_out network model, so inter-node networking cannot be fabricated.",
+  "已新增跨机网络 {domain}，绑定网络模型 {module}。":
+    "Added inter-node network {domain} bound to network model {module}.",
+  "先创建并分配设备组的组内网络（scale_up）。当至少两个设备组都已有成员时，跨组网络（scale_out）会自动生成；它只汇总 endpoint，不会改变设备组归属。":
+    "Create and assign intra-group networks (scale_up) first. Once at least two compute groups have members, the scale_out domain is generated automatically; it aggregates endpoints without changing group ownership.",
+  "这是横向扩展网络：它汇总各个设备组的 endpoint，用于跨组通信；成员重叠是后端 endpoint 语义，不代表这些卡属于两个设备组。":
+    "This is a scale-out network. It aggregates endpoints from the compute groups for cross-group communication; overlapping members are endpoint scope and do not put a card in two groups.",
+  "跨机 endpoint": "Scale-out endpoints",
+  "先在设备组的组内网络中选择设备。": "Select devices in the compute group's intra-group network first.",
   "域的数量不能超过 {max} 个。": "The number of domains cannot exceed {max}.",
   "topology 里还没有 module_bindings：新增域必须绑定一个网络模型，请先在「模块绑定参数」里补一个，或在原始 JSON 里补一条 module_bindings。":
     "The topology has no module_bindings yet: a new domain must bind a network model, so add one under Module binding parameters first, or add a module_bindings entry in the raw JSON.",

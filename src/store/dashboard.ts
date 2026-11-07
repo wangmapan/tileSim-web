@@ -58,6 +58,8 @@ function checkBridge({ refresh = true } = {}): Promise<boolean> {
         health,
         catalog,
         capabilities,
+        orchestrationCapability,
+        orchestrationCapabilityError,
         experimentDescriptor,
         experimentDescriptorStatus,
         experimentDescriptorError,
@@ -72,6 +74,8 @@ function checkBridge({ refresh = true } = {}): Promise<boolean> {
       Object.assign(state.bridge, buildBridgeStatusPresentation(health, legacyApi));
       Object.assign(state.catalog, catalog);
       Object.assign(state.capabilities, capabilities);
+      state.bridge.orchestrationCapability = orchestrationCapability;
+      state.bridge.orchestrationCapabilityError = orchestrationCapabilityError;
       state.experiment.descriptor = experimentDescriptor;
       state.experiment.status = experimentDescriptorStatus;
       state.experiment.error = experimentDescriptorError;
@@ -88,6 +92,8 @@ function checkBridge({ refresh = true } = {}): Promise<boolean> {
         synchronized: false,
         identity: null,
         manifest: null,
+        orchestrationCapability: null,
+        orchestrationCapabilityError: "bridge_bootstrap_failed",
         title: "未连接本地服务",
         detail: "未连接本地执行服务",
       });

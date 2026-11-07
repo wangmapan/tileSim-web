@@ -1,5 +1,37 @@
 # Local bridge contract
 
+## 算子 / Kernel / 执行划分 Run Intake
+
+`CreateRunRequest.execution_input` 正式承载互斥的 kernel_strategy、tilelang_source、execution_partition；默认执行不附加此字段。`GET /api/operator-execution` 返回当前 CLI 探测状态，`POST /api/operator-execution/validate` 对完整请求执行隔离真实 CLI 准入，创建运行时再次验证。TileLang 上传内容仅作 AST 数据，不 import/eval；partition 通过 `--execution-partitions` 进入真实 CLI。完成后检查每个 selector / source selection 的消费证据，缺失则 failed，不回退默认执行。
+
+输入快照、程序/源码/配置 SHA 和独立 CPU 结果作为正式 allowlist 工件发布；CPU 时间不与 Dense timeline 混合。完整合同、文件清单、测试、限制和声明范围见 [模块当前基线](../docs/features/execution/OPERATOR_KERNEL_CURRENT_BASELINE.md)。当前 schema-set 以 `python bridge/check_schema_set_revision.py` 输出为准；历史条目中的 revision 不覆盖当前发布集合。
+
+## 2026-11-03 阶段五助手模型通道（当前工作树，未提交、未部署）
+
+自动探索默认使用确定性候选生成器。设置 `TILESIM_EXPLORATION_MODEL_CANDIDATES=on`（或兼容别名）后，Bridge 才会构造 `AssistantModelCandidateProvider`，复用 `TILESIM_ASSISTANT_BASE_URL`、`TILESIM_ASSISTANT_API_KEY`、`TILESIM_ASSISTANT_MODEL` 和超时配置，通过现有 AssistantModel transport 请求专用候选 Schema。
+适配器只返回规范化候选；原始响应、served model、密钥和隐藏推理不会持久化。Schema、能力目录、授权范围、固定资源/场景、重复和预算检查仍在执行器边界之前，Provider 失败或非法结构回退确定性扫描，无回退则进入人工处理。
+本轮 `bridge/test_assistant_model_candidate_provider.py` 的 controlled Provider acceptance 和 LangGraph/Worker synthetic smoke 均在隔离临时数据库中执行；结果仍属于 `local_dev` / `synthetic_trace` / `exploratory` / `not_for_production`，不代表外部真实 Provider、生产 TileSim 或生产 acceptance。
+canonical schema-set revision 为 `sha256:09279a1e159907caae262557d70ed7ffa6d809b43c5dd55d1f176ced68d65ec3`。
+
+## 2026-11-02 阶段五模型辅助候选生成（当前工作树，未提交、未部署）
+
+自动探索默认继续使用确定性候选生成器；只有显式注入 `ModelCandidateProvider` 或开启阶段五配置开关才启用 `ModelCandidateGenerator`。
+模型上下文只包含固定资源、已发布可执行部署候选、授权参数、冻结运行策略、已执行候选及场景证据/约束、Pareto 与预算；
+模型提案必须通过闭世界 Schema、能力目录、授权、固定资源/场景绑定、重复和预算校验，失败时回退确定性扫描。
+当前仍是 `active_local_synthetic_langgraph`，外部真实 Profile、Provider acceptance 和生产 verified artifact 未接通；
+canonical schema-set revision 已由 2026-11-03 条目更新为 `sha256:09279a1e159907caae262557d70ed7ffa6d809b43c5dd55d1f176ced68d65ec3`。
+
+## 2026-10-30 串行自动探索 successor contract（当前工作树，未提交、未部署）
+
+当前工作树已登记 `2026-10-29.wpg.v2` 的 15 个自动探索 schema identity，并在 capability metadata 中声明
+`task_type=explore_experiment`、默认 `max_rounds=10` / `max_runs=10` / `max_concurrency=1`、一次授权后每次只运行一个实验、
+verified-only 指标和 immutable input/context binding。纯确定性状态机还校验 v2 authorization envelope、protected context、
+canonical digest，以及候选 run 的幂等键和跨轮次 run identity 去重。
+
+该 successor 目前严格为 `runtime_status=contract_only`：`endpoints=[]`、`adapter_status=not_implemented`，没有探索 HTTP route、
+Worker/LangGraph runtime、Run Intake v2 或真实 Provider。结果边界固定为 `local_dev` / `synthetic_trace` / `exploratory` /
+`not_for_production`；详见 Web [`docs/AI_HANDOFF.md`](../docs/AI_HANDOFF.md) 的最新 dated 条目。
+
 ## 2026-10-26 Agent flow 当前事实（工作树，未提交、未部署）
 
 Bridge 的 `/api/agent/flows` 当前是 `deterministic_transition_adapter`；`langgraph_runtime_status` 为
@@ -23,7 +55,7 @@ Bridge 当前同时提供 `2026-10-19.wpd.v1` 受控优化和 `2026-10-19.wpe.v1
 阶段 5 收尾判定为 `LOCAL_PHASE5_PASS`，仅表示 local-dev 语义闭合，不是生产 GO。候选、失败/时间/运行/重试预算、暂停恢复、
 lease/heartbeat、SSE contiguous replay、unknown outcome 的 `recovery_required` 与 `manual_intervention_required` 边界均保持
 fail-closed；结果固定为 `local_dev` / `synthetic_trace` / `exploratory` / `not_for_production`。当前 schema-set revision 为
-`sha256:3677e6e3c01d0970a1107d97b2d0b3452c20c0230f412f4a1567ab4933478a89`，Provider live acceptance、真实硬件、独立
+`sha256:774bcbcc0db80181e8b176e4f6860653571b20ec007faabdae9aa10305e30a8c`，Provider live acceptance、真实硬件、独立
 evidence/citation review 和生产 GO 仍为 `production_acceptance_pending`。
 
 ## 阶段 4 Local-Dev 受控优化（已由阶段 5 扩展）

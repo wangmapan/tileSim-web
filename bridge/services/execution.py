@@ -8,6 +8,7 @@ import math
 import os
 import re
 import subprocess
+import sys
 import tempfile
 import threading
 from collections.abc import Callable
@@ -15,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from services.run_intake import RUN_INTAKE_ISSUE_FIELDS
+from services.operator_execution import consumption_error, source_semantics
 
 
 ProcessRunner = Callable[..., subprocess.CompletedProcess[bytes | str]]
@@ -22,6 +24,60 @@ ProcessRunner = Callable[..., subprocess.CompletedProcess[bytes | str]]
 TOPOLOGY_SCHEMA_IDENTITY = "tilesim.s6_topology_input.v1"
 TRACE_SOURCE_MODES = {"real_trace", "synthetic_trace", "compatibility_harness_trace"}
 ATTRIBUTION_DUPLICATE_CODE = "REQUEST_ATTRIBUTION_REQUEST_ID_DUPLICATED"
+
+_process_handles: dict[str, subprocess.Popen] = {}
+_process_handles_lock = threading.RLock()
+
+LOCAL_SYNTHETIC_DELAY_ENV = "TILESIM_LOCAL_SYNTHETIC_EXECUTION_DELAY_SECONDS"
+LOCAL_DEPLOYMENT_MODE_ENV = "TILESIM_DEPLOYMENT_MODE"
+
+
+def local_synthetic_delay_seconds(scenario: dict) -> float:
+    """Return the opt-in local synthetic hold time for a formal CLI run."""
+    if scenario.get("execution_source_mode") != "synthetic_trace":
+        return 0.0
+    if os.environ.get(LOCAL_DEPLOYMENT_MODE_ENV, "").strip().lower() != "local_dev":
+        return 0.0
+    raw = os.environ.get(LOCAL_SYNTHETIC_DELAY_ENV, "").strip()
+    if not raw:
+        return 0.0
+    try:
+        value = float(raw)
+    except ValueError:
+        return 0.0
+    return max(0.0, value)
+
+
+def delayed_local_synthetic_command(command: list[str], delay_seconds: float) -> list[str]:
+    """Hold a real child process before exec'ing the allow-listed CLI."""
+    if delay_seconds <= 0:
+        return command
+    wrapper = (
+        "import os,sys,time; "
+        "time.sleep(float(sys.argv[1])); "
+        "os.execv(sys.argv[2],sys.argv[2:])"
+    )
+    return [sys.executable, "-c", wrapper, str(delay_seconds), *command]
+
+
+def cancel_run(run_id: str) -> str:
+    """Terminate a locally owned TileSim process and report a proven outcome."""
+    with _process_handles_lock:
+        process = _process_handles.get(run_id)
+    if process is None:
+        return "unknown"
+    try:
+        if process.poll() is not None:
+            return "already_terminal"
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
+        return "confirmed_cancelled" if process.poll() is not None else "unknown"
+    except (OSError, subprocess.TimeoutExpired):
+        return "unknown"
 
 
 def explicit_request_attribution_applicability(entry: object) -> bool | None:
@@ -141,7 +197,12 @@ def materialize_inputs(run_dir: Path, scenario: dict, overrides: dict) -> dict:
     topology_path = run_dir / "input-topology.json"
     trace_path.write_text(json.dumps(trace, ensure_ascii=False, indent=2), encoding="utf-8")
     topology_path.write_text(json.dumps(topology, ensure_ascii=False, indent=2), encoding="utf-8")
-    return {**scenario, "trace": trace_path, "topology": topology_path}
+    return {
+        **scenario,
+        "trace": trace_path,
+        "topology": topology_path,
+        "execution_source_mode": "synthetic_trace",
+    }
 
 
 def materialize_custom_inputs(run_dir: Path, scenario: dict, inputs: dict) -> dict:
@@ -157,7 +218,12 @@ def materialize_custom_inputs(run_dir: Path, scenario: dict, inputs: dict) -> di
         json.dumps(topology, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    return {**scenario, "trace": trace_path, "topology": topology_path}
+    return {
+        **scenario,
+        "trace": trace_path,
+        "topology": topology_path,
+        "execution_source_mode": "synthetic_trace",
+    }
 
 
 def materialize_trace_package_inputs(
@@ -203,6 +269,7 @@ def materialize_trace_package_inputs(
         "topology": topology_path,
         "trace_package": manifest_path,
         "trace_package_manifest_sha256": manifest_sha256,
+        "execution_source_mode": source_mode,
         "runtime_evidence_applicable": runtime_entry,
         "request_attribution_applicable": request_attribution_applicable,
         "request_attribution_applicability": (
@@ -251,6 +318,7 @@ def execute_run(
     runs_lock: threading.Lock,
     report_paths_for: Callable[[Path], dict[str, Path]],
     is_valid_json_file: Callable[[Path], bool],
+    read_run_metadata: Callable[[Path], dict] | None = None,
     update_run_metadata: Callable[..., None],
     now: Callable[[], str],
     validate_execution_replay: Callable[[str, Path], str | None] | None = None,
@@ -308,7 +376,10 @@ def execute_run(
     # dense request-attribution contract.
     if scenario.get("to") == "S6":
         command.extend(["--execution-replay-out", str(report_paths["execution_replay"])])
-    if fidelity_policy == "des" and (scenario.get("trace_package") is None or scenario.get("runtime_evidence_applicable")):
+    # This legacy package requires a partitioned network window. Operator-only
+    # runs can legitimately have no network window; their resource/fragment
+    # evidence is emitted through request-attribution and execution-envelope.
+    if fidelity_policy == "des" and not scenario.get("operator_execution_mode") and (scenario.get("trace_package") is None or scenario.get("runtime_evidence_applicable")):
         command.extend(
             [
                 "--run-bound-des-evidence-out",
@@ -317,6 +388,8 @@ def execute_run(
         )
     if scenario.get("design_space_candidates") is not None:
         command.extend(["--design-space-candidates", str(scenario["design_space_candidates"])])
+    if scenario.get("execution_partitions") is not None:
+        command.extend(["--execution-partitions", str(scenario["execution_partitions"])])
 
     if not trace_package_manifest_matches(scenario):
         failure = "Trace-package manifest changed after inspection; execution was rejected."
@@ -343,18 +416,41 @@ def execute_run(
     stdout = ""
     stderr = ""
     try:
-        completed = process_runner(
-            command,
-            cwd=tilesim_root,
-            # Decode in this thread: subprocess's text reader thread can fail
-            # on the Windows code page and return stdout=None without raising.
-            text=False,
-            capture_output=True,
-            # Large legitimate event streams can take more than three minutes to
-            # serialize with all report artifacts; retain a finite five-minute bound.
-            timeout=300,
-            check=False,
+        # The server wrapper intentionally passes the module-level runner so
+        # production gets a cancellable Popen handle.  Keep the historical
+        # injection seam intact: when tests or callers replace subprocess.run
+        # with a mock/callback, use that runner directly instead of attempting
+        # to start the CLI ourselves.
+        use_cancellable_process = (
+            process_runner is subprocess.run
+            and getattr(process_runner, "__module__", None) == "subprocess"
         )
+        if use_cancellable_process:
+            command = delayed_local_synthetic_command(command, local_synthetic_delay_seconds(scenario))
+            process = subprocess.Popen(
+                command,
+                cwd=tilesim_root,
+                text=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            with _process_handles_lock:
+                _process_handles[run_id] = process
+            try:
+                stdout_bytes, stderr_bytes = process.communicate(timeout=300)
+                completed = subprocess.CompletedProcess(command, process.returncode, stdout_bytes, stderr_bytes)
+            finally:
+                with _process_handles_lock:
+                    _process_handles.pop(run_id, None)
+        else:
+            completed = process_runner(
+                command,
+                cwd=tilesim_root,
+                text=False,
+                capture_output=True,
+                timeout=300,
+                check=False,
+            )
         exit_code = completed.returncode
         if completed.stderr is not None:
             stderr = completed.stderr.decode("utf-8") if isinstance(completed.stderr, bytes) else completed.stderr
@@ -374,6 +470,17 @@ def execute_run(
                 # Artifact reports remain valid if a future CLI emits non-JSON stdout.
                 pass
         trace_package_changed = not trace_package_manifest_matches(scenario)
+        operator_error = None
+        if completed.returncode == 0 and scenario.get("operator_execution_mode"):
+            try:
+                evidence = json.loads(report_paths["execution_envelope"].read_bytes())
+                evidence["attribution"] = json.loads(report_paths["request_attribution"].read_bytes())
+                expected_input=json.loads((run_dir / "input-execution.json").read_bytes())["input"]
+                operator_error = consumption_error(evidence, scenario["operator_execution_mode"], expected_input)
+                if not operator_error and scenario["operator_execution_mode"] == "tilelang_source":
+                    source_semantics(run_dir, tilesim_cli, tilesim_root)
+            except (OSError, ValueError):
+                operator_error = "Missing execution evidence for selected source; refusing fallback."
         replay_validation_error = None
         # A successful S6 process is not enough to publish a usable execution
         # result: the canonical replay artifact is the source of the actual
@@ -394,6 +501,16 @@ def execute_run(
             replay_validation_error = validate_execution_replay(run_id, report_paths["execution_replay"])
         with runs_lock:
             run = runs[run_id]
+            persisted_after_execution = read_run_metadata(run_dir) if read_run_metadata else None
+            if run.get("status") == "cancelled" or (
+                isinstance(persisted_after_execution, dict)
+                and persisted_after_execution.get("status") == "cancelled"
+            ):
+                # The cancel endpoint durably fences late process completion;
+                # do not let the worker's stale in-memory status publish a
+                # failed/completed result over confirmed cancellation.
+                run["status"] = "cancelled"
+                return
             run["finished_at"] = now()
             run["exit_code"] = exit_code
             run["stdout"] = stdout[-4000:]
@@ -404,7 +521,11 @@ def execute_run(
                 primary_report,
                 attribution_requested="--request-attribution-out" in command,
             ))
-            if trace_package_changed:
+            if operator_error:
+                run["status"] = "failed"
+                run["error"] = operator_error
+                run["failure_code"] = "execution_source_not_consumed"
+            elif trace_package_changed:
                 run["status"] = "failed"
                 run["error"] = "Trace-package manifest changed during execution."
                 run["failure_code"] = "trace_package_changed"
@@ -440,6 +561,13 @@ def execute_run(
     except Exception as error:
         with runs_lock:
             run = runs[run_id]
+            persisted_after_error = read_run_metadata(run_dir) if read_run_metadata else None
+            if run.get("status") == "cancelled" or (
+                isinstance(persisted_after_error, dict)
+                and persisted_after_error.get("status") == "cancelled"
+            ):
+                run["status"] = "cancelled"
+                return
             run["status"] = "failed"
             run["finished_at"] = now()
             run["exit_code"] = exit_code

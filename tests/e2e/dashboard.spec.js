@@ -1842,7 +1842,11 @@ async function openFixture(page, fixture, view = "execution", apiOptions = {}) {
         : view === "evidence_agent"
           ? "evidence-agent"
           : view;
-  await page.goto(`/${path}?run=${runId}`, { waitUntil: "domcontentloaded" });
+  await page.goto(`/${path}?run=${runId}`, { waitUntil: "commit" });
+  await expect(page.locator('.app-shell[data-app-ready="true"]')).toBeVisible({ timeout: 30000 });
+  if (view === "experiment") {
+    await expect(page.locator("fieldset.experiment-page-lock")).toBeVisible({ timeout: 30000 });
+  }
   return browserFailures;
 }
 
@@ -2649,7 +2653,7 @@ test("F7 formal contract exposes Pareto, artifact-record, knob, and topology evi
   const fixture = fixtureCase("synthetic-s1-s6-complete");
   addFormalF7Contracts(fixture);
   const browserFailures = await openFixture(page, fixture, "design_space");
-  await expect(page.getByRole("heading", { name: "Pareto 与 artifact-record 证据" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "候选关系与证据记录" })).toBeVisible();
   await expect(page.locator(".f7-formal-summary")).toContainText("pareto-formal-f7");
   await expect(page.locator(".candidate-detail").first()).toContainText("backend-formal-f7");
   await expect(page.locator(".candidate-detail").first()).toContainText("9,007,199,254,740,993 ps");
@@ -2697,7 +2701,7 @@ test("F7 Fabric view preserves backend order and exact metrics evidence", async 
   addWeek8Contracts(fixture, "req-0");
   const browserFailures = await openFixture(page, fixture, "fabric");
   await expect(page.getByRole("heading", { name: "当前主要通信瓶颈" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "请求级 Fabric contribution" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "请求级通信贡献" })).toBeVisible();
   await expect(page.locator(".analysis-visualization-stack .visualization-panel")).toHaveCount(2);
   await expect(page.locator(".analysis-visualization-stack .execution-chart svg")).toHaveCount(2);
   await expect(page.locator(".analysis-visualization-stack .visualization-reading-protocol")).toHaveCount(0);
@@ -2912,7 +2916,7 @@ test("quick-control tab hosts the structured editors and swaps the submission ch
   expect((await requestRow.boundingBox()).height).toBe(rowBeforePicker.height);
   await page.locator("[role='tab'][data-module='topology']").click();
   await expect(page.locator(".device-inventory")).toBeVisible();
-  await expect(page.locator(".domain-inventory")).toBeVisible();
+  await expect(page.locator(".domain-inventory")).toHaveCount(0);
 
   // The run-policy block carries only the keys the knobs cannot reach, so the
   // same parameters are never painted twice on one screen.
@@ -2930,10 +2934,11 @@ test("quick-control tab hosts the structured editors and swaps the submission ch
   expect(structuredRequest.custom_inputs.runtime_trace.requests).toHaveLength(1);
   expect(structuredRequest.custom_inputs.topology.topology.devices).toHaveLength(4);
 
-  // The domain list is the panel's only route to domains[]. A new domain lands in
-  // the submitted document with an empty member list, ticking a card writes it
-  // straight into member_devices, and deleting the domain takes its links away.
-  await page.locator("[role='tab'][data-module='topology']").click();
+  // Communication domains live in the Interconnect tab. A new domain lands in
+  // the submitted document with an empty endpoint list, and deleting it takes
+  // its links away.
+  await page.locator("[role='tab'][data-module='fabric']").click();
+  await expect(page.locator(".domain-inventory")).toBeVisible();
   await expect(page.locator(".domain-inventory-row")).toHaveCount(1);
   await page.locator(".domain-inventory .structured-block__header .button").click();
   await expect(page.locator(".domain-inventory-row")).toHaveCount(2);
@@ -3474,4 +3479,220 @@ test("raw and unsupported evidence guides remain available at fail-closed bounda
   await expect(page.locator("[data-help-active]")).toHaveCount(0);
   await expectNoUnexpectedTextOverflow(page);
   expect(browserFailures).toEqual([]);
+});
+
+function browserExplorationSession(state, authorizationId = "explore-authz-browser") {
+  return {
+    session_id: "exploration-browser",
+    state,
+    authorization_id: authorizationId,
+    context_revision: "browser-context",
+    run_id: null,
+    current_page_id: "experiment",
+    allowed_pages: ["experiment", "execution", "metrics"],
+    budget: {
+      max_rounds: 10,
+      max_runs: 10,
+      max_concurrency: 1,
+      max_no_improvement: 3,
+      max_failures: 2,
+      max_execution_time_ms: 900000,
+      max_model_calls: 24,
+      max_tool_calls_per_round: 4,
+    },
+    objective: { metric_path: "/metrics/latency_us", direction: "minimize" },
+    parameter_grants: [{ pointer: "/x", min: 1, max: 4, step: 1, kind: "number" }],
+    stop_reason: null,
+    current_round: 1,
+    run_count: 1,
+    best_candidate_id: null,
+  };
+}
+
+async function installBrowserExplorationApi(page, state, cancelState = state) {
+  await page.route("**/api/agent/explorations**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const response = (session) => ({
+      session,
+      detail: { session, candidate: null, evaluation: null, summary: null, events: [] },
+      provenance: {
+        deployment_mode: "local_dev",
+        source_mode: "synthetic_trace",
+        claim_scope: "exploratory",
+        production_status: "not_for_production",
+      },
+    });
+    if (request.method() === "GET" && url.pathname.endsWith("/events"))
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ events: [], terminal: false }),
+      });
+    if (request.method() === "GET" && url.pathname.endsWith("/explorations"))
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ sessions: [state] }),
+      });
+    if (request.method() === "GET")
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(response(state)) });
+    if (request.method() === "POST" && url.pathname.endsWith("/cancel"))
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(response(cancelState)),
+      });
+    return route.continue();
+  });
+}
+
+test("automatic exploration browser lifecycle locks, restores, and unlocks only after confirmed cancellation", async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  await openFixture(page, fixture, "experiment");
+  await installBrowserExplorationApi(page, browserExplorationSession("exploring"));
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
+  await expect(page.locator("[data-agent-exploration-progress]")).toBeVisible();
+  await expect(page.locator(".app-shell")).toHaveAttribute("data-exploration-locked", "true");
+  await expect(page.locator("fieldset.experiment-page-lock")).toHaveAttribute("disabled", "");
+  await installBrowserExplorationApi(
+    page,
+    browserExplorationSession("exploring"),
+    browserExplorationSession("cancelled"),
+  );
+  await page.getByRole("button", { name: "停止", exact: true }).click();
+  await expect(page.locator(".app-shell")).toHaveAttribute("data-exploration-locked", "false");
+  await expect(page.locator("fieldset.experiment-page-lock")).not.toHaveAttribute("disabled");
+});
+
+test("waiting authorization and terminal exploration do not restore browser page locks", async ({ page }) => {
+  test.setTimeout(90000);
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  await openFixture(page, fixture, "experiment");
+  await installBrowserExplorationApi(page, browserExplorationSession("waiting_authorization", null));
+  for (const state of [
+    "waiting_authorization",
+    "completed",
+    "cancelled",
+    "run_failed",
+    "context_expired",
+    "recovery_required",
+    "manual_intervention_required",
+  ]) {
+    await installBrowserExplorationApi(
+      page,
+      browserExplorationSession(state, state === "waiting_authorization" ? null : "explore-authz-browser"),
+    );
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(page.locator(".app-shell")).toHaveAttribute("data-exploration-locked", "false");
+    const editableFieldset = page.locator("fieldset.experiment-page-lock");
+    if (await editableFieldset.count()) await expect(editableFieldset).not.toHaveAttribute("disabled");
+  }
+});
+
+test("exploration recovery states keep the browser locked and explain the synthetic boundary", async ({ page }) => {
+  test.setTimeout(90000);
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  await openFixture(page, fixture, "experiment");
+  for (const [state, message] of [
+    ["recovery_required", "实验结果仍无法确认，需要恢复处理"],
+    ["manual_intervention_required", "自动探索需要人工处理，页面仍保持锁定"],
+    ["run_failed", "实验失败，页面仍保持锁定"],
+  ]) {
+    await installBrowserExplorationApi(page, browserExplorationSession("exploring"), browserExplorationSession(state));
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
+    await expect(page.locator(".app-shell")).toHaveAttribute("data-exploration-locked", "true");
+    await expect(page.locator("fieldset.experiment-page-lock")).toHaveAttribute("disabled", "");
+    await page.getByRole("button", { name: "停止", exact: true }).click();
+    await expect(page.locator(".app-shell")).toHaveAttribute("data-exploration-locked", "true");
+    await expect(page.locator("#tilesim-agent-copilot")).toContainText(message);
+  }
+});
+
+test("an exploration bound to an old context revision stays read-only", async ({ page }) => {
+  test.setTimeout(90000);
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  await openFixture(page, fixture, "experiment");
+  await installBrowserExplorationApi(page, {
+    ...browserExplorationSession("exploring"),
+    context_revision: "old-context",
+  });
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
+  await expect(page.locator(".app-shell")).toHaveAttribute("data-exploration-locked", "true");
+  await expect(page.locator(".app-shell")).toHaveAttribute("data-exploration-context-expired", "true");
+  await expect(page.locator("fieldset.experiment-page-lock")).toHaveAttribute("disabled", "");
+  await expect(page.locator("#tilesim-agent-copilot")).toContainText("页面上下文已过期，页面仍保持锁定");
+});
+
+test("overview exploration preflight without a bound context does not create a session", async ({ page }) => {
+  test.setTimeout(90000);
+  const fixture = fixtureCase("synthetic-s1-s6-complete");
+  let explorationCreates = 0;
+  await openFixture(page, fixture, "overview");
+  await page.evaluate(() => localStorage.removeItem("tilesim-web.dashboard-state.v2"));
+  await page.goto("/overview", { waitUntil: "domcontentloaded" });
+  await page.route("**/api/agent/intent", async (route) => {
+    const request = route.request().postDataJSON();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      headers: {
+        "X-TileSim-API-Version": "tilesim.bridge.api.v1",
+        "X-TileSim-Schema-Set-Revision": request.schema_set_revision,
+      },
+      body: JSON.stringify({
+        schema_identity: "tilesim.agent_intent.response.v1",
+        contract_revision: "2026-10-28.agent-intent.v1",
+        schema_set_revision: request.schema_set_revision,
+        protocol: "tilesim.agent_intent.v1",
+        session_id: request.session_id,
+        user_goal: request.user_goal,
+        intent: "explore_experiment",
+        exploration_objective: { metric_path: "/metrics/latency_us", direction: "minimize" },
+        requested_rounds: null,
+        current_page_id: request.current_page.page_id,
+        current_context_revision: request.current_page.context_revision,
+        run_id: request.run_id,
+        run_context_revision: request.run_context_revision,
+        backend_identity: request.backend_identity,
+        input_snapshot_digest: request.input_snapshot_digest,
+        candidate_pages: [
+          {
+            page_id: "experiment",
+            route_name: "experiment",
+            required_capabilities: ["experiment", "configuration"],
+            reason: "需要实验配置页参数目录",
+          },
+        ],
+        required_capabilities: ["experiment", "configuration"],
+        risk_level: "medium",
+        requires_user_confirmation: true,
+        suggested_steps: [{ kind: "navigate", description: "打开实验配置页", page_id: "experiment" }],
+        clarification_questions: [],
+      }),
+    });
+  });
+  await page.route("**/api/agent/explorations**", async (route) => {
+    if (route.request().method() === "POST") {
+      explorationCreates += 1;
+      return route.fulfill({ status: 500, contentType: "application/json", body: "{}" });
+    }
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ sessions: [] }) });
+  });
+  await page.getByRole("button", { name: "打开 TileSim 助手", exact: true }).click();
+  const panel = page.locator("#tilesim-agent-copilot");
+  // The fixture publishes Bridge identity asynchronously after the first
+  // overview projection; submit only after that bootstrap turn has settled.
+  await page.waitForTimeout(1500);
+  await panel.locator("textarea").fill("自动探索更低延迟");
+  await panel.getByRole("button", { name: "提交", exact: true }).click();
+  await expect(panel).toContainText("当前页面上下文尚未完成校验；没有执行任何操作。");
+  expect(explorationCreates).toBe(0);
+  await expect(page).toHaveURL(/\/overview/);
 });

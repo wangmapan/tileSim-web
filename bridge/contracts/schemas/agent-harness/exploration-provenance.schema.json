@@ -1,0 +1,13 @@
+{
+  "$id": "tilesim.agent_harness.exploration_provenance.v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["deployment_mode", "source_mode", "claim_scope", "production_status"],
+  "properties": {
+    "deployment_mode": { "const": "local_dev" },
+    "source_mode": { "const": "synthetic_trace" },
+    "claim_scope": { "const": "exploratory" },
+    "production_status": { "const": "not_for_production" }
+  }
+}

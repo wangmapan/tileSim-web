@@ -5,7 +5,11 @@
     "version": "tilesim.bridge.api.v1",
     "description": "Loopback-only controlled execution and evidence API for the desktop TileSim web client."
   },
-  "servers": [{ "url": "/api" }],
+  "servers": [
+    {
+      "url": "/api"
+    }
+  ],
   "x-tilesim-contract": {
     "api_version": "tilesim.bridge.api.v1",
     "manifest_schema": "tilesim.bridge.manifest.v1",
@@ -49,10 +53,7 @@
     "legacy_contracts": {
       "assistant_intent": {
         "status": "legacy_compatibility",
-        "schema_identities": [
-          "tilesim.assistant_intent.request.v1",
-          "tilesim.assistant_intent.response.v1"
-        ],
+        "schema_identities": ["tilesim.assistant_intent.request.v1", "tilesim.assistant_intent.response.v1"],
         "replacement": "agent_intent",
         "routable": false
       }
@@ -130,6 +131,181 @@
         "automatic_submission": false,
         "production_status": "not_for_production",
         "tool_registry_revision": "2026-10-19.tools.v2"
+      },
+      "serial_exploration": {
+        "contract_revision": "2026-10-29.wpg.v2",
+        "task_type": "explore_experiment",
+        "automatic_submission": true,
+        "approval": "one_authorization_per_session",
+        "candidate_approval": "not_required_after_authorization",
+        "execution": "serial_one_run_at_a_time",
+        "metric_source": "verified_only",
+        "context_lock": "immutable_input_snapshot_and_context_revision",
+        "endpoints": [
+          "POST /api/agent/explorations",
+          "GET /api/agent/explorations",
+          "GET /api/agent/explorations/{id}",
+          "POST /api/agent/explorations/{id}/authorization",
+          "GET /api/agent/explorations/{id}/events",
+          "GET /api/agent/explorations/{id}/events/stream",
+          "POST /api/agent/explorations/{id}/pause",
+          "POST /api/agent/explorations/{id}/resume",
+          "POST /api/agent/explorations/{id}/cancel"
+        ],
+        "active_endpoints": [
+          "POST /api/agent/explorations",
+          "GET /api/agent/explorations",
+          "GET /api/agent/explorations/{id}",
+          "POST /api/agent/explorations/{id}/authorization",
+          "GET /api/agent/explorations/{id}/events",
+          "GET /api/agent/explorations/{id}/events/stream",
+          "POST /api/agent/explorations/{id}/pause",
+          "POST /api/agent/explorations/{id}/resume",
+          "POST /api/agent/explorations/{id}/cancel"
+        ],
+        "planned_endpoints": ["POST /api/agent/explorations/plan", "POST /api/agent/explorations/plan/confirm"],
+        "adapter_status": "active_local_synthetic",
+        "runtime_status": "active_local_synthetic_langgraph",
+        "local_dev": true,
+        "source_mode": "synthetic_trace",
+        "claim_scope": "exploratory",
+        "production_status": "not_for_production",
+        "deployment_planning": {
+          "contract_revision": "2026-11-01.wph.v1",
+          "policy_revision": "tilesim.agent_harness.deployment_exploration.policy.v1",
+          "planning_only_until_confirmation": true,
+          "published_candidates_only": true,
+          "multi_metric_constraints": true,
+          "scenario_aggregation": ["all_scenarios", "mean", "max", "min", "p95"],
+          "pareto_candidates": true,
+          "deterministic_candidate_dimensions": ["deployment_candidate", "workload_scenario", "run_strategy"],
+          "run_strategy_fields": [
+            "batch_scheduler",
+            "max_batch_size",
+            "kv_cache_capacity_tokens",
+            "message_size_multiplier"
+          ],
+          "cross_candidate_evaluation": "qualified_constraint_failed_pareto_recommended",
+          "side_effects_before_confirmation": {
+            "run_created": false,
+            "slot_claimed": false,
+            "executor_called": false,
+            "page_locked": false
+          },
+          "schema_identities": [
+            "tilesim.agent_harness.deployment_exploration_fixed_resources.v1",
+            "tilesim.agent_harness.deployment_exploration_deployment_candidate.v1",
+            "tilesim.agent_harness.deployment_exploration_workload_scenario.v1",
+            "tilesim.agent_harness.deployment_exploration_run_strategy.v1",
+            "tilesim.agent_harness.deployment_exploration_constraint.v1",
+            "tilesim.agent_harness.deployment_exploration_aggregation.v1",
+            "tilesim.agent_harness.deployment_exploration_recommendation.v1",
+            "tilesim.agent_harness.deployment_exploration_plan.v1",
+            "tilesim.agent_harness.deployment_exploration_confirmation.v1",
+            "tilesim.agent_harness.deployment_exploration_evaluation.v1",
+            "tilesim.agent_harness.exploration_model_context.v1",
+            "tilesim.agent_harness.exploration_model_candidate.v1"
+          ],
+          "model_candidate_generation": {
+            "contract_revision": "2026-11-02.wpi.v1",
+            "default": "deterministic",
+            "activation": "explicit_configuration_switch",
+            "configuration_switch": "TILESIM_EXPLORATION_MODEL_CANDIDATES",
+            "configuration_switch_alias": "TILESIM_AGENT_EXPLORATION_MODEL_CANDIDATES",
+            "provider_channel": "tilesim_assistant_openai_v1",
+            "uses_assistant_model_configuration": true,
+            "raw_response_persistence": false,
+            "hidden_reasoning_persistence": false,
+            "fallback": "deterministic_candidate_generator",
+            "execution_gate": [
+              "closed_schema",
+              "published_capability",
+              "authorized_parameters",
+              "baseline_pointer",
+              "fixed_resource_binding",
+              "scenario_binding",
+              "duplicate_check",
+              "budget_check"
+            ],
+            "forbidden_generation": [
+              "model_name",
+              "device_type",
+              "gpu_count",
+              "tensor_parallel",
+              "pipeline_parallel",
+              "expert_parallel",
+              "physical_kv",
+              "collective_algorithm",
+              "profile",
+              "shell",
+              "path",
+              "url",
+              "tool_call"
+            ],
+            "schema_identities": [
+              "tilesim.agent_harness.exploration_model_context.v1",
+              "tilesim.agent_harness.exploration_model_candidate.v1"
+            ]
+          },
+          "endpoints": ["POST /api/agent/explorations/plan", "POST /api/agent/explorations/plan/confirm"]
+        },
+        "schema_identities": [
+          "tilesim.agent_harness.exploration_provenance.v2",
+          "tilesim.agent_harness.exploration_session.v2",
+          "tilesim.agent_harness.exploration_candidate.v2",
+          "tilesim.agent_harness.exploration_objective.v2",
+          "tilesim.agent_harness.exploration_parameter_grant.v2",
+          "tilesim.agent_harness.exploration_budget.v2",
+          "tilesim.agent_harness.exploration_iteration.v2",
+          "tilesim.agent_harness.exploration_evaluation.v2",
+          "tilesim.agent_harness.exploration_checkpoint.v2",
+          "tilesim.agent_harness.exploration_summary.v2",
+          "tilesim.agent_harness.exploration_event.v2",
+          "tilesim.agent_harness.exploration_stop_reason.v2",
+          "tilesim.agent_harness.exploration_authorization_request.v2",
+          "tilesim.agent_harness.exploration_authorization.v2",
+          "tilesim.agent_harness.exploration_authorization_response.v2",
+          "tilesim.agent_harness.deployment_exploration_fixed_resources.v1",
+          "tilesim.agent_harness.deployment_exploration_deployment_candidate.v1",
+          "tilesim.agent_harness.deployment_exploration_workload_scenario.v1",
+          "tilesim.agent_harness.deployment_exploration_run_strategy.v1",
+          "tilesim.agent_harness.deployment_exploration_constraint.v1",
+          "tilesim.agent_harness.deployment_exploration_aggregation.v1",
+          "tilesim.agent_harness.deployment_exploration_recommendation.v1",
+          "tilesim.agent_harness.deployment_exploration_plan.v1",
+          "tilesim.agent_harness.deployment_exploration_confirmation.v1",
+          "tilesim.agent_harness.deployment_exploration_evaluation.v1",
+          "tilesim.agent_harness.exploration_model_context.v1",
+          "tilesim.agent_harness.exploration_model_candidate.v1"
+        ],
+        "budget": {
+          "max_rounds": {
+            "default": 10,
+            "maximum": 50
+          },
+          "max_runs": {
+            "default": 10,
+            "maximum": 50
+          },
+          "max_concurrency": 1,
+          "max_no_improvement": {
+            "default": 3,
+            "maximum": 20
+          },
+          "max_failures": {
+            "default": 2,
+            "maximum": 10
+          },
+          "max_execution_time_ms": {
+            "maximum": 3600000
+          },
+          "max_model_calls": {
+            "maximum": 200
+          },
+          "max_tool_calls_per_round": {
+            "maximum": 16
+          }
+        }
       },
       "batch": {
         "contract_revision": "2026-10-19.wpe.v1",
@@ -228,7 +404,10 @@
       "request_attribution": "request-attribution.json"
     },
     "artifacts": {
-      "input-runtime-trace": { "file_name": "input-runtime-trace.json", "report_kind": null },
+      "input-runtime-trace": {
+        "file_name": "input-runtime-trace.json",
+        "report_kind": null
+      },
       "input-topology": {
         "file_name": "input-topology.json",
         "report_kind": null,
@@ -236,7 +415,10 @@
         "run_id_pointer": "/run_id",
         "forbid_self_sha256": true
       },
-      "input-design-space-candidates": { "file_name": "input-design-space-candidates.json", "report_kind": null },
+      "input-design-space-candidates": {
+        "file_name": "input-design-space-candidates.json",
+        "report_kind": null
+      },
       "run-result": {
         "file_name": "run-result.json",
         "report_kind": "run",
@@ -333,6 +515,26 @@
         "schema_identities": ["tilesim.execution_replay.v1"],
         "run_id_pointer": "/run_id",
         "forbid_self_sha256": true
+      },
+      "input-execution": {
+        "file_name": "input-execution.json",
+        "report_kind": null,
+        "schema_identities": ["tilesim.bridge.execution_input_snapshot.v1"],
+        "run_id_pointer": "/run_id"
+      },
+      "input-execution-partitions": {
+        "file_name": "input-execution-partitions.json",
+        "report_kind": null,
+        "schema_identities": ["tilesim.execution_partition_program.v1"],
+        "schema_required": true,
+        "run_id_required": false
+      },
+      "source-semantics": {
+        "file_name": "source-semantics.json",
+        "report_kind": null,
+        "schema_identities": ["tilesim.bridge.source_semantics.v1"],
+        "run_id_pointer": "/run_id",
+        "forbid_self_sha256": true
       }
     },
     "run_creation": {
@@ -344,7 +546,10 @@
       "endpoint": "GET /api/runs/{run_id}/events",
       "media_type": "text/event-stream",
       "resume_header": "Last-Event-ID",
-      "event_ids": { "active": "1", "terminal": "2" }
+      "event_ids": {
+        "active": "1",
+        "terminal": "2"
+      }
     },
     "evidence_agent": {
       "capability_endpoint": "GET /api/agent/evidence-capabilities",
@@ -401,6 +606,13 @@
         "response_schema_identity": "tilesim.bridge.agent_orchestration_run_intake_preview_response.v1",
         "runtime_status": "read_only_preview_registered"
       }
+    },
+    "operator_execution": {
+      "descriptor_endpoint": "GET /api/operator-execution",
+      "validation_endpoint": "POST /api/operator-execution/validate",
+      "request_field": "/execution_input",
+      "runtime_admission": "isolated_cli_run_and_evidence_consumption",
+      "source_lowering": "trusted_backend_ast_no_user_code_execution"
     }
   },
   "paths": {
@@ -409,8 +621,12 @@
         "operationId": "manifest",
         "x-client-response-type": "ApiManifestResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/Manifest" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/Manifest"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -418,21 +634,33 @@
       "get": {
         "operationId": "health",
         "x-client-response-type": "HealthResponse",
-        "responses": { "200": { "$ref": "#/components/responses/Health" } }
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Health"
+          }
+        }
       }
     },
     "/catalog": {
       "get": {
         "operationId": "catalog",
         "x-client-response-type": "CatalogResponse",
-        "responses": { "200": { "$ref": "#/components/responses/Catalog" } }
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Catalog"
+          }
+        }
       }
     },
     "/capabilities": {
       "get": {
         "operationId": "capabilities",
         "x-client-response-type": "CapabilitiesResponse",
-        "responses": { "200": { "$ref": "#/components/responses/Capabilities" } }
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Capabilities"
+          }
+        }
       }
     },
     "/experiment-schema": {
@@ -440,8 +668,12 @@
         "operationId": "experimentSchema",
         "x-client-response-type": "ExperimentDescriptorResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/ExperimentDescriptor" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/ExperimentDescriptor"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -450,19 +682,31 @@
         "operationId": "tracePackages",
         "x-client-response-type": "TracePackageCatalogResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/TracePackageCatalog" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/TracePackageCatalog"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/trace-packages/{package_id}/inspect": {
-      "parameters": [{ "$ref": "#/components/parameters/PackageId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/PackageId"
+        }
+      ],
       "post": {
         "operationId": "inspectTracePackage",
         "x-client-response-type": "TracePackageInspectResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/TracePackageInspect" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/TracePackageInspect"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -471,8 +715,12 @@
         "operationId": "assistantModelDescriptor",
         "x-client-response-type": "AssistantModelDescriptorResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/AssistantModelDescriptor" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AssistantModelDescriptor"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -483,13 +731,27 @@
         "x-client-response-type": "AgentIntentResponse",
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "schema": { "$ref": "./schemas/agent-intent/request.schema.json" } } }
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schemas/agent-intent/request.schema.json"
+              }
+            }
+          }
         },
         "responses": {
-          "200": { "$ref": "#/components/responses/AgentIntent" },
-          "400": { "$ref": "#/components/responses/Error" },
-          "503": { "$ref": "#/components/responses/Error" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AgentIntent"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -499,8 +761,12 @@
         "operationId": "agentHarnessCapabilities",
         "x-client-response-type": "AgentHarnessCapabilitySnapshot",
         "responses": {
-          "200": { "$ref": "#/components/responses/AgentHarnessCapabilitySnapshot" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AgentHarnessCapabilitySnapshot"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -510,8 +776,12 @@
         "operationId": "agentHarnessTools",
         "x-client-response-type": "AgentHarnessToolCatalog",
         "responses": {
-          "200": { "$ref": "#/components/responses/AgentHarnessToolCatalog" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AgentHarnessToolCatalog"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -521,8 +791,12 @@
         "operationId": "listAgentHarnessOperations",
         "x-client-response-type": "AgentHarnessOperationList",
         "responses": {
-          "200": { "$ref": "#/components/responses/AgentHarnessOperationList" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AgentHarnessOperationList"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       },
       "post": {
@@ -530,96 +804,175 @@
         "x-client-response-type": "AgentHarnessOperationResponse",
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "schema": { "type": "object", "additionalProperties": false } } }
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false
+              }
+            }
+          }
         },
         "responses": {
-          "202": { "$ref": "#/components/responses/AgentHarnessOperationResponse" },
-          "200": { "$ref": "#/components/responses/AgentHarnessOperationResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "202": {
+            "$ref": "#/components/responses/AgentHarnessOperationResponse"
+          },
+          "200": {
+            "$ref": "#/components/responses/AgentHarnessOperationResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/operations/{operation_id}": {
       "x-backend-only": true,
-      "parameters": [{ "$ref": "#/components/parameters/OperationId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/OperationId"
+        }
+      ],
       "get": {
         "operationId": "getAgentHarnessOperation",
         "x-client-response-type": "AgentHarnessOperationResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/AgentHarnessOperationResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AgentHarnessOperationResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       },
       "delete": {
         "operationId": "deleteAgentHarnessOperation",
         "responses": {
-          "200": { "$ref": "#/components/responses/AgentHarnessDeleteResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AgentHarnessDeleteResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/operations/{operation_id}/events": {
       "x-backend-only": true,
-      "parameters": [{ "$ref": "#/components/parameters/OperationId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/OperationId"
+        }
+      ],
       "get": {
         "operationId": "getAgentHarnessEvents",
         "x-client-response-type": "AgentHarnessEventsResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/AgentHarnessEventsResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AgentHarnessEventsResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/operations/{operation_id}/events/stream": {
       "x-backend-only": true,
-      "parameters": [{ "$ref": "#/components/parameters/OperationId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/OperationId"
+        }
+      ],
       "get": {
         "operationId": "streamAgentHarnessEvents",
         "responses": {
           "200": {
             "description": "Replayable workflow SSE",
-            "content": { "text/event-stream": { "schema": { "type": "string" } } }
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
-          "default": { "$ref": "#/components/responses/Error" }
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/operations/{operation_id}/{action}": {
       "x-backend-only": true,
       "parameters": [
-        { "$ref": "#/components/parameters/OperationId" },
-        { "name": "action", "in": "path", "required": true, "schema": { "enum": ["cancel", "resume", "retry"] } }
+        {
+          "$ref": "#/components/parameters/OperationId"
+        },
+        {
+          "name": "action",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "enum": ["cancel", "resume", "retry"]
+          }
+        }
       ],
       "post": {
         "operationId": "mutateAgentHarnessOperation",
         "x-client-response-type": "AgentHarnessOperationResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/AgentHarnessOperationResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AgentHarnessOperationResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/operations/{operation_id}/checkpoint": {
       "x-backend-only": true,
-      "parameters": [{ "$ref": "#/components/parameters/OperationId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/OperationId"
+        }
+      ],
       "post": {
         "operationId": "saveAgentHarnessCheckpoint",
         "x-client-response-type": "AgentHarnessCheckpointResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/AgentHarnessCheckpointResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AgentHarnessCheckpointResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/checkpoints/{checkpoint_id}": {
       "x-backend-only": true,
-      "parameters": [{ "name": "checkpoint_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+      "parameters": [
+        {
+          "name": "checkpoint_id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
       "get": {
         "operationId": "getAgentHarnessCheckpoint",
         "x-client-response-type": "AgentHarnessCheckpointResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/AgentHarnessCheckpointResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AgentHarnessCheckpointResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -629,8 +982,12 @@
         "operationId": "callAgentHarnessTool",
         "x-client-response-type": "AgentHarnessToolCallResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/AgentHarnessToolCallResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AgentHarnessToolCallResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -640,20 +997,37 @@
         "operationId": "saveAgentHarnessApproval",
         "x-client-response-type": "AgentHarnessApprovalResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/AgentHarnessApprovalResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AgentHarnessApprovalResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/approvals/{approval_digest}": {
       "x-backend-only": true,
-      "parameters": [{ "name": "approval_digest", "in": "path", "required": true, "schema": { "type": "string" } }],
+      "parameters": [
+        {
+          "name": "approval_digest",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
       "get": {
         "operationId": "getAgentHarnessApproval",
         "x-client-response-type": "AgentHarnessApprovalResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/AgentHarnessApprovalResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AgentHarnessApprovalResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -662,120 +1036,224 @@
       "post": {
         "operationId": "createAgentHarnessDraft",
         "x-client-response-type": "AgentHarnessDraftResponse",
-        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": { "$ref": "#/components/schemas/AgentHarnessDraftCreateRequest" }
+            "application/json": {
+              "$ref": "#/components/schemas/AgentHarnessDraftCreateRequest"
+            }
           }
         },
         "responses": {
-          "201": { "$ref": "#/components/responses/AgentHarnessDraftResponse" },
-          "200": { "$ref": "#/components/responses/AgentHarnessDraftResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "201": {
+            "$ref": "#/components/responses/AgentHarnessDraftResponse"
+          },
+          "200": {
+            "$ref": "#/components/responses/AgentHarnessDraftResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/drafts/{draft_id}": {
       "x-backend-only": true,
-      "parameters": [{ "$ref": "#/components/parameters/DraftId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/DraftId"
+        }
+      ],
       "get": {
         "operationId": "getAgentHarnessDraft",
         "x-client-response-type": "AgentHarnessDraftResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/AgentHarnessDraftResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AgentHarnessDraftResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       },
       "delete": {
         "operationId": "deleteAgentHarnessDraft",
-        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "responses": {
-          "200": { "$ref": "#/components/responses/AgentHarnessDraftDeleteResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AgentHarnessDraftDeleteResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/drafts/{draft_id}/validate": {
       "x-backend-only": true,
-      "parameters": [{ "$ref": "#/components/parameters/DraftId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/DraftId"
+        }
+      ],
       "post": {
         "operationId": "validateAgentHarnessDraft",
         "x-client-response-type": "AgentHarnessValidationResponse",
-        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "$ref": "#/components/schemas/AgentHarnessDraftValidationRequest" } }
+          "content": {
+            "application/json": {
+              "$ref": "#/components/schemas/AgentHarnessDraftValidationRequest"
+            }
+          }
         },
         "responses": {
-          "200": { "$ref": "#/components/responses/AgentHarnessValidationResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AgentHarnessValidationResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/drafts/{draft_id}/events": {
       "x-backend-only": true,
-      "parameters": [{ "$ref": "#/components/parameters/DraftId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/DraftId"
+        }
+      ],
       "get": {
         "operationId": "getAgentHarnessDraftEvents",
         "x-client-response-type": "AgentHarnessDraftEventsResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/AgentHarnessDraftEventsResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AgentHarnessDraftEventsResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/drafts/{draft_id}/events/stream": {
       "x-backend-only": true,
-      "parameters": [{ "$ref": "#/components/parameters/DraftId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/DraftId"
+        }
+      ],
       "get": {
         "operationId": "streamAgentHarnessDraftEvents",
         "responses": {
           "200": {
             "description": "Replayable draft workflow SSE",
-            "content": { "text/event-stream": { "schema": { "type": "string" } } }
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
-          "default": { "$ref": "#/components/responses/Error" }
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/drafts/{draft_id}/approvals": {
       "x-backend-only": true,
-      "parameters": [{ "$ref": "#/components/parameters/DraftId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/DraftId"
+        }
+      ],
       "post": {
         "operationId": "createAgentHarnessDraftApproval",
         "x-client-response-type": "AgentHarnessApprovalResponseV2",
-        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "$ref": "#/components/schemas/AgentHarnessApprovalCreateRequest" } }
+          "content": {
+            "application/json": {
+              "$ref": "#/components/schemas/AgentHarnessApprovalCreateRequest"
+            }
+          }
         },
         "responses": {
-          "201": { "$ref": "#/components/responses/AgentHarnessApprovalResponseV2" },
-          "200": { "$ref": "#/components/responses/AgentHarnessApprovalResponseV2" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "201": {
+            "$ref": "#/components/responses/AgentHarnessApprovalResponseV2"
+          },
+          "200": {
+            "$ref": "#/components/responses/AgentHarnessApprovalResponseV2"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/drafts/{draft_id}/approvals/{approval_id}": {
       "x-backend-only": true,
-      "parameters": [{ "$ref": "#/components/parameters/DraftId" }, { "$ref": "#/components/parameters/ApprovalId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/DraftId"
+        },
+        {
+          "$ref": "#/components/parameters/ApprovalId"
+        }
+      ],
       "get": {
         "operationId": "getAgentHarnessDraftApproval",
         "x-client-response-type": "AgentHarnessApprovalResponseV2",
         "responses": {
-          "200": { "$ref": "#/components/responses/AgentHarnessApprovalResponseV2" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AgentHarnessApprovalResponseV2"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/drafts/{draft_id}/approvals/{approval_id}/reject": {
       "x-backend-only": true,
-      "parameters": [{ "$ref": "#/components/parameters/DraftId" }, { "$ref": "#/components/parameters/ApprovalId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/DraftId"
+        },
+        {
+          "$ref": "#/components/parameters/ApprovalId"
+        }
+      ],
       "post": {
         "operationId": "rejectAgentHarnessDraftApproval",
         "x-client-response-type": "AgentHarnessApprovalResponseV2",
-        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -783,24 +1261,44 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "properties": { "reason": { "type": "string", "maxLength": 512 } }
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 512
+                  }
+                }
               }
             }
           }
         },
         "responses": {
-          "200": { "$ref": "#/components/responses/AgentHarnessApprovalResponseV2" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AgentHarnessApprovalResponseV2"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/drafts/{draft_id}/approvals/{approval_id}/revoke": {
       "x-backend-only": true,
-      "parameters": [{ "$ref": "#/components/parameters/DraftId" }, { "$ref": "#/components/parameters/ApprovalId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/DraftId"
+        },
+        {
+          "$ref": "#/components/parameters/ApprovalId"
+        }
+      ],
       "post": {
         "operationId": "revokeAgentHarnessDraftApproval",
         "x-client-response-type": "AgentHarnessApprovalResponseV2",
-        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -808,14 +1306,23 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "properties": { "reason": { "type": "string", "maxLength": 512 } }
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 512
+                  }
+                }
               }
             }
           }
         },
         "responses": {
-          "200": { "$ref": "#/components/responses/AgentHarnessApprovalResponseV2" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AgentHarnessApprovalResponseV2"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -824,92 +1331,161 @@
       "post": {
         "operationId": "submitAgentExecution",
         "x-client-response-type": "AgentHarnessExecutionResponse",
-        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": { "schema": { "$ref": "./schemas/agent-harness/execution-request.schema.json" } }
+            "application/json": {
+              "schema": {
+                "$ref": "./schemas/agent-harness/execution-request.schema.json"
+              }
+            }
           }
         },
         "responses": {
-          "202": { "$ref": "#/components/responses/AgentHarnessExecutionResponse" },
-          "200": { "$ref": "#/components/responses/AgentHarnessExecutionResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "202": {
+            "$ref": "#/components/responses/AgentHarnessExecutionResponse"
+          },
+          "200": {
+            "$ref": "#/components/responses/AgentHarnessExecutionResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/executions/{operation_id}": {
       "x-backend-only": true,
-      "parameters": [{ "$ref": "#/components/parameters/OperationId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/OperationId"
+        }
+      ],
       "get": {
         "operationId": "getAgentExecution",
         "x-client-response-type": "AgentHarnessExecutionResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/AgentHarnessExecutionResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AgentHarnessExecutionResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/executions/{operation_id}/events": {
       "x-backend-only": true,
-      "parameters": [{ "$ref": "#/components/parameters/OperationId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/OperationId"
+        }
+      ],
       "get": {
         "operationId": "getAgentExecutionEvents",
         "x-client-response-type": "AgentHarnessExecutionEventsResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/AgentHarnessExecutionEventsResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AgentHarnessExecutionEventsResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/executions/{operation_id}/events/stream": {
       "x-backend-only": true,
-      "parameters": [{ "$ref": "#/components/parameters/OperationId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/OperationId"
+        }
+      ],
       "get": {
         "operationId": "streamAgentExecutionEvents",
         "responses": {
           "200": {
             "description": "Replayable execution SSE",
-            "content": { "text/event-stream": { "schema": { "type": "string" } } }
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
-          "default": { "$ref": "#/components/responses/Error" }
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/executions/{operation_id}/result": {
       "x-backend-only": true,
-      "parameters": [{ "$ref": "#/components/parameters/OperationId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/OperationId"
+        }
+      ],
       "get": {
         "operationId": "getAgentExecutionResult",
         "x-client-response-type": "AgentHarnessExecutionResultResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/AgentHarnessExecutionResultResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AgentHarnessExecutionResultResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/executions/{operation_id}/{action}": {
       "x-backend-only": true,
       "parameters": [
-        { "$ref": "#/components/parameters/OperationId" },
-        { "name": "action", "in": "path", "required": true, "schema": { "enum": ["cancel", "retry", "resume"] } }
+        {
+          "$ref": "#/components/parameters/OperationId"
+        },
+        {
+          "name": "action",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "enum": ["cancel", "retry", "resume"]
+          }
+        }
       ],
       "post": {
         "operationId": "mutateAgentExecution",
         "x-client-request-type": "AgentHarnessExecutionMutationRequest",
         "x-client-response-type": "AgentHarnessExecutionResponse",
-        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "./schemas/agent-harness/execution-mutation-request.schema.json" }
+              "schema": {
+                "$ref": "./schemas/agent-harness/execution-mutation-request.schema.json"
+              }
             }
           }
         },
         "responses": {
-          "200": { "$ref": "#/components/responses/AgentHarnessExecutionResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AgentHarnessExecutionResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -918,154 +1494,270 @@
         "operationId": "createOptimizationSession",
         "x-client-request-type": "OptimizationSessionCreateRequest",
         "x-client-response-type": "OptimizationSessionResponse",
-        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": { "schema": { "$ref": "./schemas/agent-harness/optimization-session.schema.json" } }
+            "application/json": {
+              "schema": {
+                "$ref": "./schemas/agent-harness/optimization-session.schema.json"
+              }
+            }
           }
         },
         "responses": {
-          "201": { "$ref": "#/components/responses/OptimizationSessionResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "201": {
+            "$ref": "#/components/responses/OptimizationSessionResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       },
       "get": {
         "operationId": "listOptimizationSessions",
         "x-client-response-type": "OptimizationSessionListResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/OptimizationSessionListResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/OptimizationSessionListResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/optimization/sessions/{session_id}": {
-      "parameters": [{ "$ref": "#/components/parameters/SessionId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/SessionId"
+        }
+      ],
       "get": {
         "operationId": "getOptimizationSession",
         "x-client-response-type": "OptimizationSessionResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/OptimizationSessionResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/OptimizationSessionResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/optimization/sessions/{session_id}/authorization": {
-      "parameters": [{ "$ref": "#/components/parameters/SessionId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/SessionId"
+        }
+      ],
       "get": {
         "operationId": "getOptimizationAuthorization",
         "x-client-response-type": "OptimizationAuthorizationGetResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/OptimizationAuthorizationGetResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/OptimizationAuthorizationGetResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       },
       "post": {
         "operationId": "createOptimizationAuthorization",
         "x-client-request-type": "OptimizationAuthorizationRequest",
         "x-client-response-type": "OptimizationAuthorizationResponse",
-        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": { "schema": { "$ref": "./schemas/agent-harness/optimization-authorization-request.schema.json" } }
+            "application/json": {
+              "schema": {
+                "$ref": "./schemas/agent-harness/optimization-authorization-request.schema.json"
+              }
+            }
           }
         },
         "responses": {
-          "201": { "$ref": "#/components/responses/OptimizationAuthorizationResponse" },
-          "200": { "$ref": "#/components/responses/OptimizationAuthorizationResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "201": {
+            "$ref": "#/components/responses/OptimizationAuthorizationResponse"
+          },
+          "200": {
+            "$ref": "#/components/responses/OptimizationAuthorizationResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/optimization/sessions/{session_id}/authorization/revoke": {
-      "parameters": [{ "$ref": "#/components/parameters/SessionId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/SessionId"
+        }
+      ],
       "post": {
         "operationId": "revokeOptimizationAuthorization",
         "x-client-response-type": "OptimizationAuthorizationResponse",
-        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "requestBody": {
           "required": false,
           "content": {
-            "application/json": { "schema": { "type": "object", "additionalProperties": false, "maxProperties": 0 } }
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "maxProperties": 0
+              }
+            }
           }
         },
         "responses": {
-          "200": { "$ref": "#/components/responses/OptimizationAuthorizationResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/OptimizationAuthorizationResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/optimization/sessions/{session_id}/events": {
-      "parameters": [{ "$ref": "#/components/parameters/SessionId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/SessionId"
+        }
+      ],
       "get": {
         "operationId": "getOptimizationSessionEvents",
         "x-client-response-type": "OptimizationSessionEventsResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/OptimizationSessionEventsResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/OptimizationSessionEventsResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/optimization/sessions/{session_id}/events/stream": {
-      "parameters": [{ "$ref": "#/components/parameters/SessionId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/SessionId"
+        }
+      ],
       "get": {
         "operationId": "streamOptimizationSessionEvents",
         "responses": {
           "200": {
             "description": "Durable optimization event stream",
-            "content": { "text/event-stream": { "schema": { "type": "string" } } }
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
-          "default": { "$ref": "#/components/responses/Error" }
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/optimization/sessions/{session_id}/candidates/{candidate_id}/approve": {
       "parameters": [
-        { "$ref": "#/components/parameters/SessionId" },
-        { "$ref": "#/components/parameters/CandidateId" }
+        {
+          "$ref": "#/components/parameters/SessionId"
+        },
+        {
+          "$ref": "#/components/parameters/CandidateId"
+        }
       ],
       "post": {
         "operationId": "approveOptimizationCandidate",
         "x-client-request-type": "OptimizationApprovalRequest",
         "x-client-response-type": "OptimizationApprovalResponse",
-        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "requestBody": {
           "required": false,
           "content": {
-            "application/json": { "schema": { "$ref": "./schemas/agent-harness/optimization-approval.schema.json" } }
+            "application/json": {
+              "schema": {
+                "$ref": "./schemas/agent-harness/optimization-approval.schema.json"
+              }
+            }
           }
         },
         "responses": {
-          "202": { "$ref": "#/components/responses/OptimizationApprovalResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "202": {
+            "$ref": "#/components/responses/OptimizationApprovalResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/optimization/sessions/{session_id}/{action}": {
       "parameters": [
-        { "$ref": "#/components/parameters/SessionId" },
+        {
+          "$ref": "#/components/parameters/SessionId"
+        },
         {
           "name": "action",
           "in": "path",
           "required": true,
-          "schema": { "enum": ["pause", "resume", "cancel", "retry"] }
+          "schema": {
+            "enum": ["pause", "resume", "cancel", "retry"]
+          }
         }
       ],
       "post": {
         "operationId": "mutateOptimizationSession",
         "x-client-request-type": "OptimizationActionRequest",
         "x-client-response-type": "OptimizationSessionResponse",
-        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": { "schema": { "$ref": "./schemas/agent-harness/optimization-action.schema.json" } }
+            "application/json": {
+              "schema": {
+                "$ref": "./schemas/agent-harness/optimization-action.schema.json"
+              }
+            }
           }
         },
         "responses": {
-          "200": { "$ref": "#/components/responses/OptimizationSessionResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/OptimizationSessionResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -1074,236 +1766,632 @@
         "operationId": "createBatch",
         "x-client-request-type": "BatchCreateRequest",
         "x-client-response-type": "BatchResponse",
-        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": { "schema": { "$ref": "./schemas/agent-harness/batch-session.schema.json" } }
+            "application/json": {
+              "schema": {
+                "$ref": "./schemas/agent-harness/batch-session.schema.json"
+              }
+            }
           }
         },
         "responses": {
-          "201": { "$ref": "#/components/responses/BatchResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "201": {
+            "$ref": "#/components/responses/BatchResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       },
       "get": {
         "operationId": "listBatches",
         "x-client-response-type": "BatchListResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/BatchListResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/BatchListResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/batches/{batch_id}": {
-      "parameters": [{ "$ref": "#/components/parameters/BatchId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/BatchId"
+        }
+      ],
       "get": {
         "operationId": "getBatch",
         "x-client-response-type": "BatchResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/BatchResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/BatchResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/batches/{batch_id}/events": {
-      "parameters": [{ "$ref": "#/components/parameters/BatchId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/BatchId"
+        }
+      ],
       "get": {
         "operationId": "getBatchEvents",
         "x-client-response-type": "BatchEventsResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/BatchEventsResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/BatchEventsResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/batches/{batch_id}/events/stream": {
-      "parameters": [{ "$ref": "#/components/parameters/BatchId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/BatchId"
+        }
+      ],
       "get": {
         "operationId": "streamBatchEvents",
         "responses": {
           "200": {
             "description": "Durable batch event stream",
-            "content": { "text/event-stream": { "schema": { "type": "string" } } }
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
-          "default": { "$ref": "#/components/responses/Error" }
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/batches/{batch_id}/approve": {
-      "parameters": [{ "$ref": "#/components/parameters/BatchId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/BatchId"
+        }
+      ],
       "post": {
         "operationId": "approveBatch",
         "x-client-request-type": "BatchApprovalRequest",
         "x-client-response-type": "BatchResponse",
-        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": { "schema": { "$ref": "./schemas/agent-harness/batch-approval.schema.json" } }
+            "application/json": {
+              "schema": {
+                "$ref": "./schemas/agent-harness/batch-approval.schema.json"
+              }
+            }
           }
         },
         "responses": {
-          "200": { "$ref": "#/components/responses/BatchResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/BatchResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/batches/{batch_id}/{action}": {
       "parameters": [
-        { "$ref": "#/components/parameters/BatchId" },
+        {
+          "$ref": "#/components/parameters/BatchId"
+        },
         {
           "name": "action",
           "in": "path",
           "required": true,
-          "schema": { "enum": ["start", "pause", "resume", "cancel", "retry"] }
+          "schema": {
+            "enum": ["start", "pause", "resume", "cancel", "retry"]
+          }
         }
       ],
       "post": {
         "operationId": "mutateBatch",
         "x-client-request-type": "BatchActionRequest",
         "x-client-response-type": "BatchResponse",
-        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": { "schema": { "$ref": "./schemas/agent-harness/batch-action.schema.json" } }
+            "application/json": {
+              "schema": {
+                "$ref": "./schemas/agent-harness/batch-action.schema.json"
+              }
+            }
           }
         },
         "responses": {
-          "200": { "$ref": "#/components/responses/BatchResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/BatchResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
-     "/agent/flows": {
-       "post": {
-         "operationId": "startAgentFlow",
-         "x-client-request-type": "AgentFlowStartRequest",
-         "x-client-response-type": "AgentFlowStartResponse",
-         "parameters": [
-           { "$ref": "#/components/parameters/IdempotencyKey" },
-           { "$ref": "#/components/parameters/FlowPrincipal" },
-           { "$ref": "#/components/parameters/FlowWorkspace" },
-           { "$ref": "#/components/parameters/FlowScopes" }
-         ],
-         "requestBody": {
-           "required": true,
-           "content": { "application/json": { "schema": { "$ref": "./schemas/agent-flow/start-request.schema.json" } } }
-         },
-         "responses": {
-           "201": { "$ref": "#/components/responses/AgentFlowStartResponse" },
-           "200": { "$ref": "#/components/responses/AgentFlowStartResponse" },
-           "default": { "$ref": "#/components/responses/Error" }
-         }
-       }
-     },
-     "/agent/flows/{flow_id}": {
-       "parameters": [
-         { "$ref": "#/components/parameters/FlowId" },
-         { "$ref": "#/components/parameters/FlowPrincipal" },
-         { "$ref": "#/components/parameters/FlowWorkspace" },
-         { "$ref": "#/components/parameters/FlowScopes" }
-       ],
-       "get": {
-         "operationId": "getAgentFlow",
-         "x-client-response-type": "AgentFlowStatusResponse",
-         "responses": {
-           "200": { "$ref": "#/components/responses/AgentFlowStatusResponse" },
-           "default": { "$ref": "#/components/responses/Error" }
-         }
-       }
-     },
-     "/agent/flows/{flow_id}/events": {
-       "parameters": [
-         { "$ref": "#/components/parameters/FlowId" },
-         { "$ref": "#/components/parameters/FlowPrincipal" },
-         { "$ref": "#/components/parameters/FlowWorkspace" },
-         { "$ref": "#/components/parameters/FlowScopes" }
-       ],
-       "get": {
-         "operationId": "getAgentFlowEvents",
-         "x-client-response-type": "AgentFlowEventsResponse",
-         "parameters": [{ "$ref": "#/components/parameters/FlowLastEventId" }],
-         "responses": {
-           "200": { "$ref": "#/components/responses/AgentFlowEventsResponse" },
-           "default": { "$ref": "#/components/responses/Error" }
-         }
-       }
-     },
-     "/agent/flows/{flow_id}/events/stream": {
-       "parameters": [
-         { "$ref": "#/components/parameters/FlowId" },
-         { "$ref": "#/components/parameters/FlowPrincipal" },
-         { "$ref": "#/components/parameters/FlowWorkspace" },
-         { "$ref": "#/components/parameters/FlowScopes" }
-       ],
-       "get": {
-         "operationId": "streamAgentFlowEvents",
-         "parameters": [{ "$ref": "#/components/parameters/FlowLastEventId" }],
-         "responses": {
-           "200": {
-              "description": "Replayable deterministic agent-flow SSE",
-             "content": { "text/event-stream": { "schema": { "type": "string" } } }
-           },
-           "default": { "$ref": "#/components/responses/Error" }
-         }
-       }
-     },
-     "/agent/flows/{flow_id}/resume": {
-       "parameters": [
-         { "$ref": "#/components/parameters/FlowId" },
-         { "$ref": "#/components/parameters/FlowPrincipal" },
-         { "$ref": "#/components/parameters/FlowWorkspace" },
-         { "$ref": "#/components/parameters/FlowScopes" }
-       ],
-       "post": {
-         "operationId": "resumeAgentFlow",
-         "x-client-request-type": "AgentFlowResumeRequest",
-         "x-client-response-type": "AgentFlowResumeResponse",
-         "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
-         "requestBody": {
-           "required": true,
-           "content": { "application/json": { "schema": { "$ref": "./schemas/agent-flow/resume-request.schema.json" } } }
-         },
-         "responses": {
-           "200": { "$ref": "#/components/responses/AgentFlowResumeResponse" },
-           "202": { "$ref": "#/components/responses/AgentFlowResumeResponse" },
-           "default": { "$ref": "#/components/responses/Error" }
-         }
-       }
-     },
+    "/agent/explorations/plan": {
+      "post": {
+        "operationId": "agentExplorationPlan",
+        "summary": "Automatic exploration planning (read-only)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["context"],
+                "properties": {
+                  "context": {
+                    "type": "object"
+                  },
+                  "request": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Planning result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["plan", "provenance", "side_effects"],
+                  "properties": {
+                    "plan": {
+                      "$ref": "./schemas/agent-harness/exploration-plan.schema.json"
+                    },
+                    "provenance": {
+                      "type": "object"
+                    },
+                    "side_effects": {
+                      "type": "object",
+                      "additionalProperties": false
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/agent/explorations/plan/confirm": {
+      "post": {
+        "operationId": "agentExplorationPlanConfirm",
+        "summary": "Confirm an automatic exploration plan",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["plan", "confirmation"],
+                "properties": {
+                  "plan": {
+                    "$ref": "./schemas/agent-harness/exploration-plan.schema.json"
+                  },
+                  "confirmation": {
+                    "$ref": "./schemas/agent-harness/exploration-confirmation.schema.json"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Confirmed plan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["plan", "provenance", "side_effects"],
+                  "properties": {
+                    "plan": {
+                      "$ref": "./schemas/agent-harness/exploration-plan.schema.json"
+                    },
+                    "provenance": {
+                      "type": "object"
+                    },
+                    "side_effects": {
+                      "type": "object",
+                      "additionalProperties": false
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/agent/explorations": {
+      "get": {
+        "operationId": "agentExplorationGet",
+        "summary": "Automatic exploration",
+        "responses": {
+          "200": {
+            "description": "Exploration resource"
+          }
+        }
+      }
+    },
+    "/agent/explorations/{id}": {
+      "get": {
+        "operationId": "agentExplorationGetById",
+        "summary": "Automatic exploration",
+        "responses": {
+          "200": {
+            "description": "Exploration resource"
+          }
+        }
+      }
+    },
+    "/agent/explorations/{id}/authorization": {
+      "post": {
+        "operationId": "agentExplorationAuthorize",
+        "summary": "Automatic exploration",
+        "responses": {
+          "200": {
+            "description": "Exploration resource"
+          }
+        }
+      }
+    },
+    "/agent/explorations/{id}/events": {
+      "get": {
+        "operationId": "agentExplorationEvents",
+        "summary": "Automatic exploration",
+        "responses": {
+          "200": {
+            "description": "Exploration resource"
+          }
+        }
+      }
+    },
+    "/agent/explorations/{id}/events/stream": {
+      "get": {
+        "operationId": "agentExplorationEventStream",
+        "summary": "Automatic exploration",
+        "responses": {
+          "200": {
+            "description": "Exploration resource"
+          }
+        }
+      }
+    },
+    "/agent/explorations/{id}/pause": {
+      "post": {
+        "operationId": "agentExplorationPause",
+        "summary": "Automatic exploration",
+        "responses": {
+          "200": {
+            "description": "Exploration resource"
+          }
+        }
+      }
+    },
+    "/agent/explorations/{id}/resume": {
+      "post": {
+        "operationId": "agentExplorationResume",
+        "summary": "Automatic exploration",
+        "responses": {
+          "200": {
+            "description": "Exploration resource"
+          }
+        }
+      }
+    },
+    "/agent/explorations/{id}/cancel": {
+      "post": {
+        "operationId": "agentExplorationCancel",
+        "summary": "Automatic exploration",
+        "responses": {
+          "200": {
+            "description": "Exploration resource"
+          }
+        }
+      }
+    },
+    "/agent/flows": {
+      "post": {
+        "operationId": "startAgentFlow",
+        "x-client-request-type": "AgentFlowStartRequest",
+        "x-client-response-type": "AgentFlowStartResponse",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/FlowPrincipal"
+          },
+          {
+            "$ref": "#/components/parameters/FlowWorkspace"
+          },
+          {
+            "$ref": "#/components/parameters/FlowScopes"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schemas/agent-flow/start-request.schema.json"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "$ref": "#/components/responses/AgentFlowStartResponse"
+          },
+          "200": {
+            "$ref": "#/components/responses/AgentFlowStartResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/agent/flows/{flow_id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/FlowId"
+        },
+        {
+          "$ref": "#/components/parameters/FlowPrincipal"
+        },
+        {
+          "$ref": "#/components/parameters/FlowWorkspace"
+        },
+        {
+          "$ref": "#/components/parameters/FlowScopes"
+        }
+      ],
+      "get": {
+        "operationId": "getAgentFlow",
+        "x-client-response-type": "AgentFlowStatusResponse",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/AgentFlowStatusResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/agent/flows/{flow_id}/events": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/FlowId"
+        },
+        {
+          "$ref": "#/components/parameters/FlowPrincipal"
+        },
+        {
+          "$ref": "#/components/parameters/FlowWorkspace"
+        },
+        {
+          "$ref": "#/components/parameters/FlowScopes"
+        }
+      ],
+      "get": {
+        "operationId": "getAgentFlowEvents",
+        "x-client-response-type": "AgentFlowEventsResponse",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FlowLastEventId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/AgentFlowEventsResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/agent/flows/{flow_id}/events/stream": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/FlowId"
+        },
+        {
+          "$ref": "#/components/parameters/FlowPrincipal"
+        },
+        {
+          "$ref": "#/components/parameters/FlowWorkspace"
+        },
+        {
+          "$ref": "#/components/parameters/FlowScopes"
+        }
+      ],
+      "get": {
+        "operationId": "streamAgentFlowEvents",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FlowLastEventId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Replayable deterministic agent-flow SSE",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/agent/flows/{flow_id}/resume": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/FlowId"
+        },
+        {
+          "$ref": "#/components/parameters/FlowPrincipal"
+        },
+        {
+          "$ref": "#/components/parameters/FlowWorkspace"
+        },
+        {
+          "$ref": "#/components/parameters/FlowScopes"
+        }
+      ],
+      "post": {
+        "operationId": "resumeAgentFlow",
+        "x-client-request-type": "AgentFlowResumeRequest",
+        "x-client-response-type": "AgentFlowResumeResponse",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schemas/agent-flow/resume-request.schema.json"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/AgentFlowResumeResponse"
+          },
+          "202": {
+            "$ref": "#/components/responses/AgentFlowResumeResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/agent/assistant-model-catalogue": {
       "get": {
         "operationId": "assistantModelCatalogue",
         "x-client-response-type": "AssistantModelCatalogueResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/AssistantModelCatalogue" },
-          "503": { "$ref": "#/components/responses/Error" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AssistantModelCatalogue"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/agent/flows/{flow_id}/authorization/revoke": {
       "parameters": [
-        { "$ref": "#/components/parameters/FlowId" },
-        { "$ref": "#/components/parameters/FlowPrincipal" },
-        { "$ref": "#/components/parameters/FlowWorkspace" },
-        { "$ref": "#/components/parameters/FlowScopes" }
+        {
+          "$ref": "#/components/parameters/FlowId"
+        },
+        {
+          "$ref": "#/components/parameters/FlowPrincipal"
+        },
+        {
+          "$ref": "#/components/parameters/FlowWorkspace"
+        },
+        {
+          "$ref": "#/components/parameters/FlowScopes"
+        }
       ],
       "post": {
         "operationId": "revokeAgentFlowAuthorization",
         "x-client-request-type": "AgentFlowRevokeRequest",
         "x-client-response-type": "AgentFlowRevokeResponse",
-        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "schema": { "$ref": "./schemas/agent-flow/revoke-request.schema.json" } } }
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schemas/agent-flow/revoke-request.schema.json"
+              }
+            }
+          }
         },
         "responses": {
-          "200": { "$ref": "#/components/responses/AgentFlowRevokeResponse" },
-          "202": { "$ref": "#/components/responses/AgentFlowRevokeResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AgentFlowRevokeResponse"
+          },
+          "202": {
+            "$ref": "#/components/responses/AgentFlowRevokeResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -1315,14 +2403,26 @@
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": { "schema": { "$ref": "#/components/schemas/AssistantModelSelectionRequest" } }
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantModelSelectionRequest"
+              }
+            }
           }
         },
         "responses": {
-          "200": { "$ref": "#/components/responses/AssistantModelSelection" },
-          "400": { "$ref": "#/components/responses/Error" },
-          "503": { "$ref": "#/components/responses/Error" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AssistantModelSelection"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -1334,14 +2434,26 @@
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": { "schema": { "$ref": "#/components/schemas/AssistantModelPlanRequest" } }
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantModelPlanRequest"
+              }
+            }
           }
         },
         "responses": {
-          "200": { "$ref": "#/components/responses/AssistantModelPlan" },
-          "400": { "$ref": "#/components/responses/Error" },
-          "503": { "$ref": "#/components/responses/Error" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AssistantModelPlan"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -1351,17 +2463,33 @@
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": { "schema": { "$ref": "#/components/schemas/AssistantModelChatRequest" } }
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantModelChatRequest"
+              }
+            }
           }
         },
         "responses": {
           "200": {
             "description": "One streamed conversation turn: prose events while the answer is written, then one plan event",
-            "content": { "text/event-stream": { "schema": { "type": "string" } } }
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
-          "400": { "$ref": "#/components/responses/Error" },
-          "503": { "$ref": "#/components/responses/Error" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -1371,17 +2499,33 @@
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": { "schema": { "$ref": "#/components/schemas/AssistantResultAnalysisRequest" } }
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantResultAnalysisRequest"
+              }
+            }
           }
         },
         "responses": {
           "200": {
             "description": "One streamed, read-only result analysis: prose events while the answer is written, then done",
-            "content": { "text/event-stream": { "schema": { "type": "string" } } }
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
-          "400": { "$ref": "#/components/responses/Error" },
-          "503": { "$ref": "#/components/responses/Error" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -1390,8 +2534,12 @@
         "operationId": "evidenceAgentCapabilities",
         "x-client-response-type": "EvidenceAgentDescriptorResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/EvidenceAgentDescriptor" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/EvidenceAgentDescriptor"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -1400,8 +2548,12 @@
         "operationId": "agentOrchestrationCapabilities",
         "x-client-response-type": "AgentOrchestrationCapabilitySnapshotResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/AgentOrchestrationCapabilitySnapshot" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AgentOrchestrationCapabilitySnapshot"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -1414,15 +2566,25 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/AgentOrchestrationRunIntakePreviewRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/AgentOrchestrationRunIntakePreviewRequest"
+              }
             }
           }
         },
         "responses": {
-          "200": { "$ref": "#/components/responses/AgentOrchestrationRunIntakePreview" },
-          "400": { "$ref": "#/components/responses/Error" },
-          "503": { "$ref": "#/components/responses/Error" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/AgentOrchestrationRunIntakePreview"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -1431,8 +2593,12 @@
         "operationId": "week7EvidenceMap",
         "x-client-response-type": "Week7EvidenceMapResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/Week7EvidenceMap" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/Week7EvidenceMap"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -1441,8 +2607,12 @@
         "operationId": "runWeek7CalibrationExample",
         "x-client-response-type": "Week7CalibrationResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/Week7Calibration" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/Week7Calibration"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -1451,19 +2621,31 @@
         "operationId": "runWeek7OrchestrationExample",
         "x-client-response-type": "Week7OrchestrationResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/Week7Orchestration" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/Week7Orchestration"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/templates/{scenario_id}": {
-      "parameters": [{ "$ref": "#/components/parameters/ScenarioId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ScenarioId"
+        }
+      ],
       "get": {
         "operationId": "getTemplate",
         "x-client-response-type": "TemplateResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/Template" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/Template"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -1471,271 +2653,617 @@
       "get": {
         "operationId": "listRuns",
         "x-client-response-type": "RunListResponse",
-        "responses": { "200": { "$ref": "#/components/responses/RunList" } }
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/RunList"
+          }
+        }
       },
       "post": {
         "operationId": "createRun",
         "x-client-response-type": "CreateRunResponse",
         "x-client-request-type": "CreateRunRequest",
-        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "schema": { "$ref": "./schemas/create-run-request.schema.json" } } }
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schemas/create-run-request.schema.json"
+              }
+            }
+          }
         },
         "responses": {
-          "200": { "$ref": "#/components/responses/CreateRun" },
-          "202": { "$ref": "#/components/responses/CreateRun" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/CreateRun"
+          },
+          "202": {
+            "$ref": "#/components/responses/CreateRun"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/runs/{run_id}": {
-      "parameters": [{ "$ref": "#/components/parameters/RunId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RunId"
+        }
+      ],
       "get": {
         "operationId": "getRun",
         "x-client-response-type": "ApiRun",
         "responses": {
-          "200": { "$ref": "#/components/responses/Run" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/Run"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       },
       "delete": {
         "operationId": "deleteRun",
         "x-client-response-type": "DeleteRunResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/DeleteRun" },
-          "409": { "$ref": "#/components/responses/Error" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/DeleteRun"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/runs/{run_id}/cancel": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RunId"
+        },
+        {
+          "$ref": "#/components/parameters/IdempotencyKey"
+        }
+      ],
+      "post": {
+        "operationId": "cancelRun",
+        "x-client-response-type": "CancelRunResponse",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["run_id", "backend_identity", "schema_set_revision"],
+                "properties": {
+                  "run_id": {
+                    "type": "string"
+                  },
+                  "backend_identity": {
+                    "type": "object"
+                  },
+                  "schema_set_revision": {
+                    "type": "string"
+                  },
+                  "request_digest": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/CancelRun"
+          },
+          "202": {
+            "$ref": "#/components/responses/CancelRun"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/runs/{run_id}/events": {
-      "parameters": [{ "$ref": "#/components/parameters/RunId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RunId"
+        }
+      ],
       "get": {
         "operationId": "getRunEvents",
-        "parameters": [{ "$ref": "#/components/parameters/LastEventId" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/LastEventId"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Resumable run status event stream",
-            "content": { "text/event-stream": { "schema": { "type": "string" } } }
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
-          "default": { "$ref": "#/components/responses/Error" }
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/runs/{run_id}/reports": {
-      "parameters": [{ "$ref": "#/components/parameters/RunId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RunId"
+        }
+      ],
       "get": {
         "operationId": "getReports",
         "x-client-response-type": "ReportsResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/Reports" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/Reports"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/runs/{run_id}/artifacts": {
-      "parameters": [{ "$ref": "#/components/parameters/RunId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RunId"
+        }
+      ],
       "get": {
         "operationId": "getArtifactManifest",
         "x-client-response-type": "ArtifactManifestResponse",
         "responses": {
-          "200": { "$ref": "#/components/responses/ArtifactManifest" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/ArtifactManifest"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/runs/{run_id}/files/{artifact_id}": {
-      "parameters": [{ "$ref": "#/components/parameters/RunId" }, { "$ref": "#/components/parameters/ArtifactId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RunId"
+        },
+        {
+          "$ref": "#/components/parameters/ArtifactId"
+        }
+      ],
       "get": {
         "operationId": "getArtifact",
         "x-client-response-type": "unknown",
         "responses": {
-          "200": { "description": "Allow-listed JSON artifact", "content": { "application/json": { "schema": {} } } },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "description": "Allow-listed JSON artifact",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/runs/{run_id}/name": {
-      "parameters": [{ "$ref": "#/components/parameters/RunId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RunId"
+        }
+      ],
       "post": {
         "operationId": "renameRun",
         "x-client-response-type": "RenameRunResponse",
         "x-client-request-type": "RenameRunRequest",
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RenameRunRequest" } } }
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameRunRequest"
+              }
+            }
+          }
         },
         "responses": {
-          "200": { "$ref": "#/components/responses/RenameRun" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/RenameRun"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/runs/{run_id}/agent/evidence-analyses": {
-      "parameters": [{ "$ref": "#/components/parameters/RunId" }],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RunId"
+        }
+      ],
       "post": {
         "operationId": "createEvidenceAnalysis",
         "x-client-request-type": "EvidenceAgentRequest",
         "x-client-response-type": "EvidenceAgentResponse",
-        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "schema": { "$ref": "./schemas/evidence-agent-request.schema.json" } } }
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schemas/evidence-agent-request.schema.json"
+              }
+            }
+          }
         },
         "responses": {
-          "200": { "$ref": "#/components/responses/EvidenceAgentResponse" },
-          "409": { "$ref": "#/components/responses/Error" },
-          "502": { "$ref": "#/components/responses/EvidenceAgentResponse" },
-          "503": { "$ref": "#/components/responses/EvidenceAgentResponse" },
-          "504": { "$ref": "#/components/responses/EvidenceAgentResponse" },
-          "default": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "$ref": "#/components/responses/EvidenceAgentResponse"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "502": {
+            "$ref": "#/components/responses/EvidenceAgentResponse"
+          },
+          "503": {
+            "$ref": "#/components/responses/EvidenceAgentResponse"
+          },
+          "504": {
+            "$ref": "#/components/responses/EvidenceAgentResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/operator-execution": {
+      "get": {
+        "operationId": "operatorExecution",
+        "x-client-response-type": "OperatorExecutionDescriptor",
+        "responses": {
+          "200": {
+            "description": "CLI-backed operator execution capability/admission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/operator-execution.schema.json"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/operator-execution/validate": {
+      "post": {
+        "operationId": "validateOperatorExecution",
+        "x-client-response-type": "OperatorExecutionValidation",
+        "responses": {
+          "200": {
+            "description": "CLI-backed operator execution capability/admission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/operator-validation.schema.json"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-client-request-type": "CreateRunRequest",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schemas/create-run-request.schema.json"
+              }
+            }
+          }
         }
       }
     }
   },
   "components": {
     "parameters": {
-      "RunId": { "name": "run_id", "in": "path", "required": true, "schema": { "type": "string" } },
-      "ScenarioId": { "name": "scenario_id", "in": "path", "required": true, "schema": { "type": "string" } },
-      "PackageId": { "name": "package_id", "in": "path", "required": true, "schema": { "type": "string" } },
-      "ArtifactId": { "name": "artifact_id", "in": "path", "required": true, "schema": { "type": "string" } },
+      "RunId": {
+        "name": "run_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "ScenarioId": {
+        "name": "scenario_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "PackageId": {
+        "name": "package_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "ArtifactId": {
+        "name": "artifact_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
       "OperationId": {
         "name": "operation_id",
         "in": "path",
         "required": true,
-        "schema": { "type": "string", "pattern": "^op-[A-Za-z0-9]+$" }
+        "schema": {
+          "type": "string",
+          "pattern": "^op-[A-Za-z0-9]+$"
+        }
       },
       "DraftId": {
         "name": "draft_id",
         "in": "path",
         "required": true,
-        "schema": { "type": "string", "pattern": "^draft-[A-Za-z0-9]+$" }
+        "schema": {
+          "type": "string",
+          "pattern": "^draft-[A-Za-z0-9]+$"
+        }
       },
       "ApprovalId": {
         "name": "approval_id",
         "in": "path",
         "required": true,
-        "schema": { "type": "string", "pattern": "^approval-[A-Za-z0-9]+$" }
+        "schema": {
+          "type": "string",
+          "pattern": "^approval-[A-Za-z0-9]+$"
+        }
       },
       "SessionId": {
         "name": "session_id",
         "in": "path",
         "required": true,
-        "schema": { "type": "string", "pattern": "^opt-[A-Za-z0-9]+$" }
+        "schema": {
+          "type": "string",
+          "pattern": "^opt-[A-Za-z0-9]+$"
+        }
       },
       "BatchId": {
         "name": "batch_id",
         "in": "path",
         "required": true,
-        "schema": { "type": "string", "pattern": "^batch-[A-Za-z0-9]+$" }
+        "schema": {
+          "type": "string",
+          "pattern": "^batch-[A-Za-z0-9]+$"
+        }
       },
       "CandidateId": {
         "name": "candidate_id",
         "in": "path",
         "required": true,
-        "schema": { "type": "string", "pattern": "^candidate-[A-Za-z0-9]+$" }
+        "schema": {
+          "type": "string",
+          "pattern": "^candidate-[A-Za-z0-9]+$"
+        }
       },
       "IdempotencyKey": {
         "name": "Idempotency-Key",
         "in": "header",
         "required": true,
-        "schema": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{8,128}$" }
+        "schema": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{8,128}$"
+        }
       },
       "LastEventId": {
         "name": "Last-Event-ID",
         "in": "header",
         "required": false,
-        "schema": { "enum": ["0", "1", "2"] }
+        "schema": {
+          "enum": ["0", "1", "2"]
+        }
       },
       "FlowId": {
         "name": "flow_id",
         "in": "path",
         "required": true,
-        "schema": { "type": "string", "pattern": "^flow-[A-Za-z0-9]+$" }
+        "schema": {
+          "type": "string",
+          "pattern": "^flow-[A-Za-z0-9]+$"
+        }
       },
       "FlowLastEventId": {
         "name": "Last-Event-ID",
         "in": "header",
         "required": false,
-        "schema": { "type": "string", "pattern": "^[0-9]+$" }
+        "schema": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        }
       },
       "FlowPrincipal": {
         "name": "X-TileSim-Principal",
         "in": "header",
         "required": false,
-        "schema": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,128}$" }
+        "schema": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+        }
       },
       "FlowWorkspace": {
         "name": "X-TileSim-Workspace",
         "in": "header",
         "required": false,
-        "schema": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,128}$" }
+        "schema": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+        }
       },
       "FlowScopes": {
         "name": "X-TileSim-Scopes",
         "in": "header",
         "required": false,
-        "schema": { "type": "string", "minLength": 1, "maxLength": 2048 }
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        }
       }
     },
     "schemas": {
       "HealthResponse": {
         "type": "object",
         "properties": {
-          "versions_match": { "type": "boolean" },
-          "execution_ready": { "type": "boolean" },
-          "cli_available": { "type": "boolean" },
-          "source_revision": { "type": "string" },
-          "build_revision": { "type": "string" },
-          "source_state_digest": { "type": "string" },
-          "build_state_digest": { "type": "string" },
-          "state_digests_match": { "type": "boolean" },
-          "deployment_mode": { "type": "string" },
-          "deployment_ref": { "type": "string" },
-          "deployed_at": { "type": "string" },
-          "backend_branch": { "type": "string" },
-          "tilesim_root": { "type": "string" },
-          "tilesim_cli": { "type": "string" }
+          "versions_match": {
+            "type": "boolean"
+          },
+          "execution_ready": {
+            "type": "boolean"
+          },
+          "cli_available": {
+            "type": "boolean"
+          },
+          "source_revision": {
+            "type": "string"
+          },
+          "build_revision": {
+            "type": "string"
+          },
+          "source_state_digest": {
+            "type": "string"
+          },
+          "build_state_digest": {
+            "type": "string"
+          },
+          "state_digests_match": {
+            "type": "boolean"
+          },
+          "deployment_mode": {
+            "type": "string"
+          },
+          "deployment_ref": {
+            "type": "string"
+          },
+          "deployed_at": {
+            "type": "string"
+          },
+          "backend_branch": {
+            "type": "string"
+          },
+          "tilesim_root": {
+            "type": "string"
+          },
+          "tilesim_cli": {
+            "type": "string"
+          }
         },
         "additionalProperties": true
       },
       "CatalogResponse": {
         "type": "object",
-        "required": ["scenarios", "fidelity_policies", "input_modes", "design_space_modes", "gpu_participation_modes", "model_ids"],
+        "required": [
+          "scenarios",
+          "fidelity_policies",
+          "input_modes",
+          "design_space_modes",
+          "gpu_participation_modes",
+          "model_ids"
+        ],
         "properties": {
           "scenarios": {
             "type": "array",
             "items": {
               "type": "object",
               "required": ["scenario_id", "label"],
-              "properties": { "scenario_id": { "type": "string" }, "label": { "type": "string" } },
+              "properties": {
+                "scenario_id": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                }
+              },
               "additionalProperties": false
             }
           },
           "fidelity_policies": {
             "type": "array",
-            "items": { "enum": ["default", "des"] },
+            "items": {
+              "enum": ["default", "des"]
+            },
             "uniqueItems": true
           },
           "input_modes": {
             "type": "array",
-            "items": { "enum": ["controls", "json", "trace_package"] },
+            "items": {
+              "enum": ["controls", "json", "trace_package"]
+            },
             "uniqueItems": true
           },
           "design_space_modes": {
             "type": "array",
-            "items": { "enum": ["built_in_synthetic", "strict_s6_manifest"] },
+            "items": {
+              "enum": ["built_in_synthetic", "strict_s6_manifest"]
+            },
             "uniqueItems": true
           },
           "gpu_participation_modes": {
             "type": "array",
-            "items": { "const": "gpu_free" },
+            "items": {
+              "const": "gpu_free"
+            },
             "uniqueItems": true
           },
           "model_ids": {
             "type": "array",
-            "items": { "type": "string", "minLength": 1 },
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
             "uniqueItems": true
           }
         },
@@ -1745,17 +3273,56 @@
         "type": "object",
         "required": ["schema_version", "default_gpu_participation_mode", "cycle_scope", "dependencies", "run_surface"],
         "properties": {
-          "schema_version": { "const": "tilesim.runtime_capabilities.v1" },
-          "default_gpu_participation_mode": { "type": "string" },
-          "cycle_scope": { "type": "string" },
+          "schema_version": {
+            "const": "tilesim.runtime_capabilities.v1"
+          },
+          "default_gpu_participation_mode": {
+            "type": "string"
+          },
+          "cycle_scope": {
+            "type": "string"
+          },
+          "topology_node_types": {
+            "type": "array",
+            "description": "Topology node types explicitly published by the connected TileSim runtime. Missing means the runtime did not publish an addable node vocabulary.",
+            "items": {
+              "type": "object",
+              "required": ["device_type", "role", "id_prefix", "participant"],
+              "properties": {
+                "device_type": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "role": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "id_prefix": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "participant": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            },
+            "uniqueItems": true
+          },
           "dependencies": {
             "type": "object",
             "additionalProperties": {
               "type": "object",
               "properties": {
-                "available": { "type": "boolean" },
-                "version": { "type": "string" },
-                "reason": { "type": "string" }
+                "available": {
+                  "type": "boolean"
+                },
+                "version": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                }
               },
               "additionalProperties": true
             }
@@ -1779,47 +3346,77 @@
             "properties": {
               "gpu_participation_modes": {
                 "type": "array",
-                "items": { "const": "gpu_free" },
+                "items": {
+                  "const": "gpu_free"
+                },
                 "uniqueItems": true
               },
               "input_modes": {
                 "type": "array",
-                "items": { "enum": ["controls", "json", "trace_package"] },
+                "items": {
+                  "enum": ["controls", "json", "trace_package"]
+                },
                 "uniqueItems": true
               },
               "design_space_modes": {
                 "type": "array",
-                "items": { "enum": ["built_in_synthetic", "strict_s6_manifest"] },
+                "items": {
+                  "enum": ["built_in_synthetic", "strict_s6_manifest"]
+                },
                 "uniqueItems": true
               },
               "source_modes": {
                 "type": "array",
-                "items": { "const": "synthetic_trace" },
+                "items": {
+                  "const": "synthetic_trace"
+                },
                 "uniqueItems": true
               },
               "override_parameter_subsystems": {
                 "type": "array",
-                "items": { "enum": ["S0", "S1", "S6"] },
+                "items": {
+                  "enum": ["S0", "S1", "S6"]
+                },
                 "uniqueItems": true
               },
               "override_parameter_field_ids": {
                 "type": "array",
-                "items": { "type": "string", "pattern": "^s[016]\\." },
+                "items": {
+                  "type": "string",
+                  "pattern": "^s[016]\\."
+                },
                 "uniqueItems": true
               },
-              "cycle_hotspot_request_available": { "const": false },
-              "cycle_hotspot_request_reason": { "type": "string", "minLength": 1 },
-              "real_trace_submission_available": { "const": false },
-              "compatibility_harness_submission_available": { "const": false },
-              "real_network_observation_channel": { "const": "S8_evidence_only" }
+              "cycle_hotspot_request_available": {
+                "const": false
+              },
+              "cycle_hotspot_request_reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "real_trace_submission_available": {
+                "const": false
+              },
+              "compatibility_harness_submission_available": {
+                "const": false
+              },
+              "real_network_observation_channel": {
+                "const": "S8_evidence_only"
+              }
             }
           }
         },
         "additionalProperties": true
       },
-      "ExperimentDescriptorResponse": { "$ref": "./schemas/experiment-descriptor.schema.json" },
-      "TracePackageCatalogResponse": { "$ref": "./schemas/trace-package-catalog.schema.json" },
-      "TracePackageInspectResponse": { "$ref": "./schemas/trace-package-inspect.schema.json" },
+      "ExperimentDescriptorResponse": {
+        "$ref": "./schemas/experiment-descriptor.schema.json"
+      },
+      "TracePackageCatalogResponse": {
+        "$ref": "./schemas/trace-package-catalog.schema.json"
+      },
+      "TracePackageInspectResponse": {
+        "$ref": "./schemas/trace-package-inspect.schema.json"
+      },
       "AssistantModelDescriptorResponse": {
         "type": "object",
         "required": [
@@ -1834,21 +3431,45 @@
           "limits"
         ],
         "properties": {
-          "schema_version": { "type": "string" },
-          "schema_set_revision": { "type": "string" },
-          "protocol": { "type": "string" },
-          "availability": { "type": "string", "enum": ["available", "unavailable"] },
-          "configured": { "type": "boolean" },
-          "degradation_state": { "type": "string", "enum": ["available", "not_configured", "misconfigured"] },
-          "detail": { "type": "string" },
+          "schema_version": {
+            "type": "string"
+          },
+          "schema_set_revision": {
+            "type": "string"
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "availability": {
+            "type": "string",
+            "enum": ["available", "unavailable"]
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "degradation_state": {
+            "type": "string",
+            "enum": ["available", "not_configured", "misconfigured"]
+          },
+          "detail": {
+            "type": "string"
+          },
           "provider": {
             "type": "object",
             "required": ["configured", "provider_id", "model_id", "model_revision"],
             "properties": {
-              "configured": { "type": "boolean" },
-              "provider_id": { "type": "string" },
-              "model_id": { "type": "string" },
-              "model_revision": { "type": "string" }
+              "configured": {
+                "type": "boolean"
+              },
+              "provider_id": {
+                "type": "string"
+              },
+              "model_id": {
+                "type": "string"
+              },
+              "model_revision": {
+                "type": "string"
+              }
             },
             "additionalProperties": false
           },
@@ -1856,8 +3477,12 @@
             "type": "object",
             "required": ["maximum_instruction_characters", "maximum_settings"],
             "properties": {
-              "maximum_instruction_characters": { "type": "integer" },
-              "maximum_settings": { "type": "integer" }
+              "maximum_instruction_characters": {
+                "type": "integer"
+              },
+              "maximum_settings": {
+                "type": "integer"
+              }
             },
             "additionalProperties": false
           }
@@ -1877,8 +3502,15 @@
               "type": "object",
               "required": ["role", "content"],
               "properties": {
-                "role": { "type": "string", "enum": ["user", "assistant"] },
-                "content": { "type": "string", "minLength": 1, "maxLength": 2000 }
+                "role": {
+                  "type": "string",
+                  "enum": ["user", "assistant"]
+                },
+                "content": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                }
               },
               "additionalProperties": false
             }
@@ -1887,7 +3519,10 @@
             "type": "object",
             "maxProperties": 40,
             "description": "The current panel values, keyed by bare parameter name. Read-only context for the model; never executed or written.",
-            "additionalProperties": { "type": "string", "maxLength": 120 }
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 120
+            }
           }
         },
         "additionalProperties": false
@@ -1905,8 +3540,15 @@
               "type": "object",
               "required": ["role", "content"],
               "properties": {
-                "role": { "type": "string", "enum": ["user", "assistant"] },
-                "content": { "type": "string", "minLength": 1, "maxLength": 2000 }
+                "role": {
+                  "type": "string",
+                  "enum": ["user", "assistant"]
+                },
+                "content": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                }
               },
               "additionalProperties": false
             }
@@ -1915,7 +3557,11 @@
             "type": "object",
             "required": ["run_id", "sections", "evidence_paths", "evidence"],
             "properties": {
-              "run_id": { "type": "string", "minLength": 1, "maxLength": 200 },
+              "run_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
               "sections": {
                 "type": "array",
                 "minItems": 1,
@@ -1924,8 +3570,16 @@
                   "type": "object",
                   "required": ["title", "body"],
                   "properties": {
-                    "title": { "type": "string", "minLength": 1, "maxLength": 120 },
-                    "body": { "type": "string", "minLength": 1, "maxLength": 5000 }
+                    "title": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120
+                    },
+                    "body": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 5000
+                    }
                   },
                   "additionalProperties": false
                 }
@@ -1933,7 +3587,11 @@
               "evidence_paths": {
                 "type": "array",
                 "maxItems": 64,
-                "items": { "type": "string", "minLength": 1, "maxLength": 240 }
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240
+                }
               },
               "evidence": {
                 "type": "object",
@@ -1948,12 +3606,30 @@
                   "rejected_artifacts"
                 ],
                 "properties": {
-                  "manifest_status": { "type": "string", "enum": ["verified", "unavailable", "run_mismatch"] },
-                  "artifact_count": { "type": "integer", "minimum": 0 },
-                  "full_content_count": { "type": "integer", "minimum": 0 },
-                  "summary_only_count": { "type": "integer", "minimum": 0 },
-                  "unavailable_count": { "type": "integer", "minimum": 0 },
-                  "rejected_count": { "type": "integer", "minimum": 0 },
+                  "manifest_status": {
+                    "type": "string",
+                    "enum": ["verified", "unavailable", "run_mismatch"]
+                  },
+                  "artifact_count": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "full_content_count": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "summary_only_count": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "unavailable_count": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "rejected_count": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
                   "artifacts": {
                     "type": "array",
                     "maxItems": 32,
@@ -1970,12 +3646,34 @@
                         "content_status"
                       ],
                       "properties": {
-                        "artifact_id": { "type": "string", "minLength": 1, "maxLength": 200 },
-                        "file_name": { "type": "string", "minLength": 1, "maxLength": 240 },
-                        "report_kind": { "type": ["string", "null"], "maxLength": 120 },
-                        "schema_identity": { "type": "string", "minLength": 1, "maxLength": 240 },
-                        "sha256": { "type": "string", "minLength": 1, "maxLength": 80 },
-                        "bytes": { "type": "string", "maxLength": 80 },
+                        "artifact_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "file_name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "report_kind": {
+                          "type": ["string", "null"],
+                          "maxLength": 120
+                        },
+                        "schema_identity": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "sha256": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "bytes": {
+                          "type": "string",
+                          "maxLength": 80
+                        },
                         "contract_status": {
                           "type": "string",
                           "enum": ["supported", "legacy_compatibility", "not_applicable"]
@@ -2000,10 +3698,26 @@
                       "type": "object",
                       "required": ["artifact_id", "schema_identity", "reason", "json_pointer"],
                       "properties": {
-                        "artifact_id": { "type": "string", "minLength": 1, "maxLength": 300 },
-                        "schema_identity": { "type": "string", "minLength": 1, "maxLength": 300 },
-                        "reason": { "type": "string", "minLength": 1, "maxLength": 300 },
-                        "json_pointer": { "type": "string", "minLength": 1, "maxLength": 300 }
+                        "artifact_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 300
+                        },
+                        "schema_identity": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 300
+                        },
+                        "reason": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 300
+                        },
+                        "json_pointer": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 300
+                        }
                       },
                       "additionalProperties": false
                     }
@@ -2020,12 +3734,24 @@
       "AssistantModelPlanRequest": {
         "type": "object",
         "required": ["instruction"],
-        "properties": { "instruction": { "type": "string", "minLength": 1, "maxLength": 2000 } },
+        "properties": {
+          "instruction": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
         "additionalProperties": false
       },
-      "AgentIntentPageEntry": { "$ref": "./schemas/agent-intent/page-entry.schema.json" },
-      "AgentIntentRequest": { "$ref": "./schemas/agent-intent/request.schema.json" },
-      "AgentIntentResponse": { "$ref": "./schemas/agent-intent/response.schema.json" },
+      "AgentIntentPageEntry": {
+        "$ref": "./schemas/agent-intent/page-entry.schema.json"
+      },
+      "AgentIntentRequest": {
+        "$ref": "./schemas/agent-intent/request.schema.json"
+      },
+      "AgentIntentResponse": {
+        "$ref": "./schemas/agent-intent/response.schema.json"
+      },
       "AssistantModelPlanResponse": {
         "type": "object",
         "required": [
@@ -2045,29 +3771,53 @@
           "executed"
         ],
         "properties": {
-          "schema_version": { "type": "string" },
-          "schema_set_revision": { "type": "string" },
-          "protocol": { "type": "string" },
-          "provider_id": { "type": "string" },
-          "model_id": { "type": "string" },
-          "served_model": { "type": "string" },
-          "instruction": { "type": "string" },
+          "schema_version": {
+            "type": "string"
+          },
+          "schema_set_revision": {
+            "type": "string"
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "provider_id": {
+            "type": "string"
+          },
+          "model_id": {
+            "type": "string"
+          },
+          "served_model": {
+            "type": "string"
+          },
+          "instruction": {
+            "type": "string"
+          },
           "answer_state": {
             "type": "string",
             "enum": ["settings", "prose_only", "settings_unparsed"],
             "description": "settings: a settings block was read. prose_only: the model answered in prose and proposed nothing. settings_unparsed: a settings block was present but could not be read, so no value is proposed."
           },
-          "title": { "type": "string" },
-          "rationale": { "type": "string" },
+          "title": {
+            "type": "string"
+          },
+          "rationale": {
+            "type": "string"
+          },
           "settings": {
             "type": "array",
             "items": {
               "type": "object",
               "required": ["key", "value", "why"],
               "properties": {
-                "key": { "type": "string" },
-                "value": { "type": "string" },
-                "why": { "type": "string" }
+                "key": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
               },
               "additionalProperties": false
             }
@@ -2076,8 +3826,14 @@
             "type": "object",
             "required": ["runtime_trace", "topology"],
             "properties": {
-              "runtime_trace": { "type": "object", "description": "Validated synthetic runtime trace document." },
-              "topology": { "type": "object", "description": "Validated synthetic topology document." }
+              "runtime_trace": {
+                "type": "object",
+                "description": "Validated synthetic runtime trace document."
+              },
+              "topology": {
+                "type": "object",
+                "description": "Validated synthetic topology document."
+              }
             },
             "additionalProperties": false,
             "description": "Optional complete synthetic runtime_trace and topology proposal. The page validates and applies it atomically; it never creates a run."
@@ -2087,12 +3843,23 @@
             "items": {
               "type": "object",
               "required": ["key", "reason"],
-              "properties": { "key": { "type": "string" }, "reason": { "type": "string" } },
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
               "additionalProperties": false
             }
           },
-          "applied": { "type": "boolean" },
-          "executed": { "type": "boolean" }
+          "applied": {
+            "type": "boolean"
+          },
+          "executed": {
+            "type": "boolean"
+          }
         },
         "additionalProperties": false
       },
@@ -2109,17 +3876,32 @@
           "session_override"
         ],
         "properties": {
-          "schema_version": { "type": "string" },
-          "schema_set_revision": { "type": "string" },
-          "protocol": { "type": "string" },
-          "provider_id": { "type": "string" },
+          "schema_version": {
+            "type": "string"
+          },
+          "schema_set_revision": {
+            "type": "string"
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "provider_id": {
+            "type": "string"
+          },
           "models": {
             "type": "array",
             "minItems": 1,
             "description": "The model identities the configured service publishes, in the order it published them and without duplicates. Read with the credential the channel already holds; the credential is never part of this response.",
-            "items": { "type": "string", "minLength": 1, "maxLength": 200 }
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
           },
-          "count": { "type": "integer", "minimum": 1 },
+          "count": {
+            "type": "integer",
+            "minimum": 1
+          },
           "selected_model": {
             "type": "string",
             "description": "The identity the next request will use: a panel selection when one is in force for this process, otherwise the configured identity."
@@ -2134,7 +3916,13 @@
       "AssistantModelSelectionRequest": {
         "type": "object",
         "required": ["model"],
-        "properties": { "model": { "type": "string", "minLength": 1, "maxLength": 200 } },
+        "properties": {
+          "model": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
         "additionalProperties": false
       },
       "AssistantModelSelectionResponse": {
@@ -2151,12 +3939,24 @@
           "session_only"
         ],
         "properties": {
-          "schema_version": { "type": "string" },
-          "schema_set_revision": { "type": "string" },
-          "protocol": { "type": "string" },
-          "provider_id": { "type": "string" },
-          "selected_model": { "type": "string" },
-          "previous_model": { "type": "string" },
+          "schema_version": {
+            "type": "string"
+          },
+          "schema_set_revision": {
+            "type": "string"
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "provider_id": {
+            "type": "string"
+          },
+          "selected_model": {
+            "type": "string"
+          },
+          "previous_model": {
+            "type": "string"
+          },
           "in_force": {
             "type": "boolean",
             "description": "True, always: the identity is the one this Bridge process uses from the next request on."
@@ -2172,9 +3972,15 @@
         },
         "additionalProperties": false
       },
-      "EvidenceAgentDescriptorResponse": { "$ref": "./schemas/evidence-agent-descriptor.schema.json" },
-      "EvidenceAgentRequest": { "$ref": "./schemas/evidence-agent-request.schema.json" },
-      "EvidenceAgentResponse": { "$ref": "./schemas/evidence-agent-response.schema.json" },
+      "EvidenceAgentDescriptorResponse": {
+        "$ref": "./schemas/evidence-agent-descriptor.schema.json"
+      },
+      "EvidenceAgentRequest": {
+        "$ref": "./schemas/evidence-agent-request.schema.json"
+      },
+      "EvidenceAgentResponse": {
+        "$ref": "./schemas/evidence-agent-response.schema.json"
+      },
       "AgentOrchestrationCapabilitySnapshotResponse": {
         "$ref": "./agent_orchestration_capability/schemas/capability-snapshot.schema.json"
       },
@@ -2188,50 +3994,113 @@
         "type": "object",
         "required": ["scenario_id", "runtime_trace", "topology"],
         "properties": {
-          "scenario_id": { "type": "string" },
-          "runtime_trace": { "type": "object" },
-          "topology": { "type": "object" }
+          "scenario_id": {
+            "type": "string"
+          },
+          "runtime_trace": {
+            "type": "object"
+          },
+          "topology": {
+            "type": "object"
+          }
         },
         "additionalProperties": false
       },
       "RenameRunRequest": {
         "type": "object",
         "required": ["run_name"],
-        "properties": { "run_name": { "type": "string", "maxLength": 80 } },
+        "properties": {
+          "run_name": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
         "additionalProperties": false
       },
       "RenameRunResponse": {
         "type": "object",
         "required": ["run_id", "run_name"],
-        "properties": { "run_id": { "type": "string" }, "run_name": { "type": "string" } },
+        "properties": {
+          "run_id": {
+            "type": "string"
+          },
+          "run_name": {
+            "type": "string"
+          }
+        },
         "additionalProperties": false
       },
       "DeleteRunResponse": {
         "type": "object",
         "required": ["run_id", "deleted"],
-        "properties": { "run_id": { "type": "string" }, "deleted": { "const": true } },
+        "properties": {
+          "run_id": {
+            "type": "string"
+          },
+          "deleted": {
+            "const": true
+          }
+        },
         "additionalProperties": false
       },
-      "Week7EvidenceMapResponse": { "$ref": "./schemas/week7-evidence-map.schema.json" },
-      "Week7CalibrationResponse": { "$ref": "./schemas/week7-calibration.schema.json" },
-      "Week7OrchestrationResponse": { "$ref": "./schemas/week7-orchestration.schema.json" },
+      "Week7EvidenceMapResponse": {
+        "$ref": "./schemas/week7-evidence-map.schema.json"
+      },
+      "Week7CalibrationResponse": {
+        "$ref": "./schemas/week7-calibration.schema.json"
+      },
+      "Week7OrchestrationResponse": {
+        "$ref": "./schemas/week7-orchestration.schema.json"
+      },
       "CreateRunResponse": {
         "allOf": [
-          { "$ref": "./schemas/run.schema.json" },
+          {
+            "$ref": "./schemas/run.schema.json"
+          },
           {
             "type": "object",
             "required": ["idempotent_replay"],
-            "properties": { "idempotent_replay": { "type": "boolean" } }
+            "properties": {
+              "idempotent_replay": {
+                "type": "boolean"
+              }
+            }
           }
         ]
       },
-      "AgentHarnessCapabilitySnapshot": { "type": "object", "additionalProperties": true },
-      "AgentHarnessToolCatalog": { "type": "object", "additionalProperties": true },
+      "CancelRunResponse": {
+        "type": "object",
+        "required": ["run_id", "status"],
+        "properties": {
+          "run_id": {
+            "type": "string"
+          },
+          "status": {
+            "enum": ["confirmed_cancelled", "already_terminal", "cancel_unknown", "cancel_rejected", "request_conflict"]
+          },
+          "idempotent_replay": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AgentHarnessCapabilitySnapshot": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "AgentHarnessToolCatalog": {
+        "type": "object",
+        "additionalProperties": true
+      },
       "AgentHarnessOperationList": {
         "type": "object",
         "required": ["operations"],
         "properties": {
-          "operations": { "type": "array", "items": { "$ref": "./schemas/agent-harness/agent-operation.schema.json" } }
+          "operations": {
+            "type": "array",
+            "items": {
+              "$ref": "./schemas/agent-harness/agent-operation.schema.json"
+            }
+          }
         },
         "additionalProperties": false
       },
@@ -2239,10 +4108,18 @@
         "type": "object",
         "required": ["operation"],
         "properties": {
-          "operation": { "$ref": "./schemas/agent-harness/agent-operation.schema.json" },
-          "events": { "type": "array" },
-          "idempotent_replay": { "type": "boolean" },
-          "action": { "type": "string" }
+          "operation": {
+            "$ref": "./schemas/agent-harness/agent-operation.schema.json"
+          },
+          "events": {
+            "type": "array"
+          },
+          "idempotent_replay": {
+            "type": "boolean"
+          },
+          "action": {
+            "type": "string"
+          }
         },
         "additionalProperties": true
       },
@@ -2250,94 +4127,196 @@
         "type": "object",
         "required": ["events"],
         "properties": {
-          "operation": { "$ref": "./schemas/agent-harness/agent-operation.schema.json" },
-          "events": { "type": "array" },
-          "after_sequence": { "type": "integer" },
-          "terminal": { "type": "boolean" }
+          "operation": {
+            "$ref": "./schemas/agent-harness/agent-operation.schema.json"
+          },
+          "events": {
+            "type": "array"
+          },
+          "after_sequence": {
+            "type": "integer"
+          },
+          "terminal": {
+            "type": "boolean"
+          }
         },
         "additionalProperties": false
       },
       "AgentHarnessCheckpointResponse": {
         "type": "object",
         "required": ["checkpoint"],
-        "properties": { "checkpoint": { "$ref": "./schemas/agent-harness/checkpoint.schema.json" } },
+        "properties": {
+          "checkpoint": {
+            "$ref": "./schemas/agent-harness/checkpoint.schema.json"
+          }
+        },
         "additionalProperties": false
       },
       "AgentHarnessToolCallResponse": {
         "type": "object",
         "required": ["operation", "tool_result"],
         "properties": {
-          "operation": { "$ref": "./schemas/agent-harness/agent-operation.schema.json" },
-          "tool_result": { "type": "object" }
+          "operation": {
+            "$ref": "./schemas/agent-harness/agent-operation.schema.json"
+          },
+          "tool_result": {
+            "type": "object"
+          }
         },
         "additionalProperties": false
       },
       "AgentHarnessApprovalResponse": {
         "type": "object",
         "required": ["approval"],
-        "properties": { "approval": { "$ref": "./schemas/agent-harness/approval.schema.json" } },
+        "properties": {
+          "approval": {
+            "$ref": "./schemas/agent-harness/approval.schema.json"
+          }
+        },
         "additionalProperties": false
       },
       "AgentHarnessDraftCreateRequest": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "draft_id": { "type": "string" },
-          "operation_id": { "type": "string" },
-          "conversation_id": { "type": ["string", "null"] },
-          "turn_id": { "type": ["string", "null"] },
-          "principal": { "type": "string" },
-          "workspace_id": { "type": "string" },
-          "run_scope": { "type": "string" },
-          "input_snapshot_digest": { "type": "string" },
-          "schema_set_revision": { "type": "string" },
-          "backend_identity": { "type": "object", "additionalProperties": true },
-          "parameter_catalog_revision": { "type": "string" },
-          "validator_revision": { "type": "string" },
-          "policy_revision": { "type": "string" },
-          "field_diffs": { "type": "array" },
-          "assumptions": { "type": "array" },
-          "evidence_refs": { "type": "array" },
-          "budget_request": { "type": "object", "additionalProperties": true },
-          "risk_flags": { "type": "array" },
-          "expires_at": { "type": "string" },
-          "create_run_request": { "type": "object", "additionalProperties": true },
-          "request": { "type": "object", "additionalProperties": true },
-          "idempotency_key": { "type": "string" }
+          "draft_id": {
+            "type": "string"
+          },
+          "operation_id": {
+            "type": "string"
+          },
+          "conversation_id": {
+            "type": ["string", "null"]
+          },
+          "turn_id": {
+            "type": ["string", "null"]
+          },
+          "principal": {
+            "type": "string"
+          },
+          "workspace_id": {
+            "type": "string"
+          },
+          "run_scope": {
+            "type": "string"
+          },
+          "input_snapshot_digest": {
+            "type": "string"
+          },
+          "schema_set_revision": {
+            "type": "string"
+          },
+          "backend_identity": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "parameter_catalog_revision": {
+            "type": "string"
+          },
+          "validator_revision": {
+            "type": "string"
+          },
+          "policy_revision": {
+            "type": "string"
+          },
+          "field_diffs": {
+            "type": "array"
+          },
+          "assumptions": {
+            "type": "array"
+          },
+          "evidence_refs": {
+            "type": "array"
+          },
+          "budget_request": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "risk_flags": {
+            "type": "array"
+          },
+          "expires_at": {
+            "type": "string"
+          },
+          "create_run_request": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "request": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "idempotency_key": {
+            "type": "string"
+          }
         }
       },
       "AgentHarnessDraftValidationRequest": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "create_run_request": { "type": "object", "additionalProperties": true },
-          "request": { "type": "object", "additionalProperties": true },
-          "input_snapshot_digest": { "type": "string" },
-          "validated_create_run_request_digest": { "type": "string" },
-          "idempotency_key": { "type": "string" }
+          "create_run_request": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "request": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "input_snapshot_digest": {
+            "type": "string"
+          },
+          "validated_create_run_request_digest": {
+            "type": "string"
+          },
+          "idempotency_key": {
+            "type": "string"
+          }
         }
       },
       "AgentHarnessApprovalCreateRequest": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "approval_id": { "type": "string" },
-          "validation_id": { "type": "string" },
-          "expires_at": { "type": "string" },
-          "reason": { "type": ["string", "null"] },
-          "single_use": { "type": "boolean" },
-          "approval_digest": { "type": "string" },
-          "idempotency_key": { "type": "string" }
+          "approval_id": {
+            "type": "string"
+          },
+          "validation_id": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string"
+          },
+          "reason": {
+            "type": ["string", "null"]
+          },
+          "single_use": {
+            "type": "boolean"
+          },
+          "approval_digest": {
+            "type": "string"
+          },
+          "idempotency_key": {
+            "type": "string"
+          }
         }
       },
       "AgentHarnessDraftResponse": {
         "type": "object",
         "required": ["draft", "would_create_run"],
         "properties": {
-          "draft": { "$ref": "./schemas/agent-harness/experiment-draft-v2.schema.json" },
-          "validation": { "$ref": "./schemas/agent-harness/draft-validation-report.schema.json" },
-          "idempotent_replay": { "type": "boolean" },
-          "would_create_run": { "const": false }
+          "draft": {
+            "$ref": "./schemas/agent-harness/experiment-draft-v2.schema.json"
+          },
+          "validation": {
+            "$ref": "./schemas/agent-harness/draft-validation-report.schema.json"
+          },
+          "idempotent_replay": {
+            "type": "boolean"
+          },
+          "would_create_run": {
+            "const": false
+          }
         },
         "additionalProperties": false
       },
@@ -2345,9 +4324,15 @@
         "type": "object",
         "required": ["validation", "would_create_run"],
         "properties": {
-          "validation": { "$ref": "./schemas/agent-harness/draft-validation-report.schema.json" },
-          "idempotent_replay": { "type": "boolean" },
-          "would_create_run": { "const": false }
+          "validation": {
+            "$ref": "./schemas/agent-harness/draft-validation-report.schema.json"
+          },
+          "idempotent_replay": {
+            "type": "boolean"
+          },
+          "would_create_run": {
+            "const": false
+          }
         },
         "additionalProperties": false
       },
@@ -2355,10 +4340,19 @@
         "type": "object",
         "required": ["draft_id", "events", "terminal"],
         "properties": {
-          "draft_id": { "type": "string" },
-          "events": { "type": "array" },
-          "after_sequence": { "type": "integer", "minimum": 0 },
-          "terminal": { "type": "boolean" }
+          "draft_id": {
+            "type": "string"
+          },
+          "events": {
+            "type": "array"
+          },
+          "after_sequence": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "terminal": {
+            "type": "boolean"
+          }
         },
         "additionalProperties": false
       },
@@ -2366,9 +4360,15 @@
         "type": "object",
         "required": ["approval", "would_create_run"],
         "properties": {
-          "approval": { "$ref": "./schemas/agent-harness/approval-v2.schema.json" },
-          "would_create_run": { "const": false },
-          "idempotent_replay": { "type": "boolean" }
+          "approval": {
+            "$ref": "./schemas/agent-harness/approval-v2.schema.json"
+          },
+          "would_create_run": {
+            "const": false
+          },
+          "idempotent_replay": {
+            "type": "boolean"
+          }
         },
         "additionalProperties": false
       },
@@ -2376,27 +4376,50 @@
         "type": "object",
         "required": ["draft_id", "deleted", "would_create_run"],
         "properties": {
-          "draft_id": { "type": "string" },
-          "deleted": { "const": true },
-          "idempotent_replay": { "type": "boolean" },
-          "would_create_run": { "const": false }
+          "draft_id": {
+            "type": "string"
+          },
+          "deleted": {
+            "const": true
+          },
+          "idempotent_replay": {
+            "type": "boolean"
+          },
+          "would_create_run": {
+            "const": false
+          }
         },
         "additionalProperties": false
       },
       "AgentHarnessDeleteResponse": {
         "type": "object",
         "required": ["operation_id", "deleted"],
-        "properties": { "operation_id": { "type": "string" }, "deleted": { "const": true } },
+        "properties": {
+          "operation_id": {
+            "type": "string"
+          },
+          "deleted": {
+            "const": true
+          }
+        },
         "additionalProperties": false
       },
       "AgentHarnessExecutionResponse": {
         "type": "object",
         "required": ["execution", "operation"],
         "properties": {
-          "execution": { "$ref": "./schemas/agent-harness/execution-operation.schema.json" },
-          "operation": { "$ref": "./schemas/agent-harness/agent-operation.schema.json" },
-          "idempotent_replay": { "type": "boolean" },
-          "action": { "type": "string" }
+          "execution": {
+            "$ref": "./schemas/agent-harness/execution-operation.schema.json"
+          },
+          "operation": {
+            "$ref": "./schemas/agent-harness/agent-operation.schema.json"
+          },
+          "idempotent_replay": {
+            "type": "boolean"
+          },
+          "action": {
+            "type": "string"
+          }
         },
         "additionalProperties": false
       },
@@ -2404,28 +4427,54 @@
         "type": "object",
         "required": ["execution", "operation", "events", "terminal"],
         "properties": {
-          "execution": { "$ref": "./schemas/agent-harness/execution-operation.schema.json" },
-          "operation": { "$ref": "./schemas/agent-harness/agent-operation.schema.json" },
-          "events": { "type": "array", "items": { "$ref": "./schemas/agent-harness/execution-event.schema.json" } },
-          "after_sequence": { "type": "integer", "minimum": 0 },
-          "terminal": { "type": "boolean" }
+          "execution": {
+            "$ref": "./schemas/agent-harness/execution-operation.schema.json"
+          },
+          "operation": {
+            "$ref": "./schemas/agent-harness/agent-operation.schema.json"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "./schemas/agent-harness/execution-event.schema.json"
+            }
+          },
+          "after_sequence": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "terminal": {
+            "type": "boolean"
+          }
         },
         "additionalProperties": false
       },
       "AgentHarnessExecutionResultResponse": {
         "type": "object",
         "required": ["result"],
-        "properties": { "result": { "$ref": "./schemas/agent-harness/execution-result-reference.schema.json" } },
+        "properties": {
+          "result": {
+            "$ref": "./schemas/agent-harness/execution-result-reference.schema.json"
+          }
+        },
         "additionalProperties": false
       },
       "OptimizationSessionResponse": {
         "type": "object",
         "required": ["session", "provenance"],
         "properties": {
-          "session": { "$ref": "./schemas/agent-harness/optimization-session.schema.json" },
-          "detail": { "type": "object" },
-          "provenance": { "type": "object" },
-          "idempotent_replay": { "type": "boolean" }
+          "session": {
+            "$ref": "./schemas/agent-harness/optimization-session.schema.json"
+          },
+          "detail": {
+            "type": "object"
+          },
+          "provenance": {
+            "type": "object"
+          },
+          "idempotent_replay": {
+            "type": "boolean"
+          }
         },
         "additionalProperties": false
       },
@@ -2435,12 +4484,21 @@
         "properties": {
           "authorization": {
             "anyOf": [
-              { "$ref": "./schemas/agent-harness/optimization-authorization.schema.json" },
-              { "type": "null" }
+              {
+                "$ref": "./schemas/agent-harness/optimization-authorization.schema.json"
+              },
+              {
+                "type": "null"
+              }
             ]
           },
-          "session_id": { "type": "string", "minLength": 1 },
-          "provenance": { "type": "object" }
+          "session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "provenance": {
+            "type": "object"
+          }
         },
         "additionalProperties": false
       },
@@ -2456,9 +4514,13 @@
         "properties": {
           "sessions": {
             "type": "array",
-            "items": { "$ref": "./schemas/agent-harness/optimization-session.schema.json" }
+            "items": {
+              "$ref": "./schemas/agent-harness/optimization-session.schema.json"
+            }
           },
-          "provenance": { "type": "object" }
+          "provenance": {
+            "type": "object"
+          }
         },
         "additionalProperties": false
       },
@@ -2466,11 +4528,24 @@
         "type": "object",
         "required": ["session_id", "events", "terminal", "provenance"],
         "properties": {
-          "session_id": { "type": "string" },
-          "events": { "type": "array", "items": { "$ref": "./schemas/agent-harness/optimization-event.schema.json" } },
-          "after_sequence": { "type": "integer" },
-          "terminal": { "type": "boolean" },
-          "provenance": { "type": "object" }
+          "session_id": {
+            "type": "string"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "./schemas/agent-harness/optimization-event.schema.json"
+            }
+          },
+          "after_sequence": {
+            "type": "integer"
+          },
+          "terminal": {
+            "type": "boolean"
+          },
+          "provenance": {
+            "type": "object"
+          }
         },
         "additionalProperties": false
       },
@@ -2478,9 +4553,15 @@
         "type": "object",
         "required": ["approval", "session", "provenance"],
         "properties": {
-          "approval": { "$ref": "./schemas/agent-harness/optimization-approval.schema.json" },
-          "session": { "$ref": "./schemas/agent-harness/optimization-session.schema.json" },
-          "provenance": { "type": "object" }
+          "approval": {
+            "$ref": "./schemas/agent-harness/optimization-approval.schema.json"
+          },
+          "session": {
+            "$ref": "./schemas/agent-harness/optimization-session.schema.json"
+          },
+          "provenance": {
+            "type": "object"
+          }
         },
         "additionalProperties": false
       },
@@ -2503,10 +4584,18 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "candidate_id": { "type": "string" },
-          "approval_digest": { "type": "string" },
-          "expires_at": { "type": "string" },
-          "idempotency_key": { "type": "string" }
+          "candidate_id": {
+            "type": "string"
+          },
+          "approval_digest": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string"
+          },
+          "idempotency_key": {
+            "type": "string"
+          }
         }
       },
       "OptimizationActionRequest": {
@@ -2514,19 +4603,33 @@
         "additionalProperties": false,
         "required": ["session_id", "action"],
         "properties": {
-          "session_id": { "type": "string" },
-          "action": { "enum": ["pause", "resume", "cancel", "retry"] },
-          "idempotency_key": { "type": "string" }
+          "session_id": {
+            "type": "string"
+          },
+          "action": {
+            "enum": ["pause", "resume", "cancel", "retry"]
+          },
+          "idempotency_key": {
+            "type": "string"
+          }
         }
       },
       "BatchResponse": {
         "type": "object",
         "required": ["batch", "provenance"],
         "properties": {
-          "batch": { "$ref": "./schemas/agent-harness/batch-session.schema.json" },
-          "detail": { "type": "object" },
-          "provenance": { "type": "object" },
-          "idempotent_replay": { "type": "boolean" }
+          "batch": {
+            "$ref": "./schemas/agent-harness/batch-session.schema.json"
+          },
+          "detail": {
+            "type": "object"
+          },
+          "provenance": {
+            "type": "object"
+          },
+          "idempotent_replay": {
+            "type": "boolean"
+          }
         },
         "additionalProperties": false
       },
@@ -2534,8 +4637,15 @@
         "type": "object",
         "required": ["batches", "provenance"],
         "properties": {
-          "batches": { "type": "array", "items": { "$ref": "./schemas/agent-harness/batch-session.schema.json" } },
-          "provenance": { "type": "object" }
+          "batches": {
+            "type": "array",
+            "items": {
+              "$ref": "./schemas/agent-harness/batch-session.schema.json"
+            }
+          },
+          "provenance": {
+            "type": "object"
+          }
         },
         "additionalProperties": false
       },
@@ -2543,11 +4653,24 @@
         "type": "object",
         "required": ["batch_id", "events", "terminal", "provenance"],
         "properties": {
-          "batch_id": { "type": "string" },
-          "events": { "type": "array", "items": { "$ref": "./schemas/agent-harness/batch-event.schema.json" } },
-          "after_sequence": { "type": "integer" },
-          "terminal": { "type": "boolean" },
-          "provenance": { "type": "object" }
+          "batch_id": {
+            "type": "string"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "./schemas/agent-harness/batch-event.schema.json"
+            }
+          },
+          "after_sequence": {
+            "type": "integer"
+          },
+          "terminal": {
+            "type": "boolean"
+          },
+          "provenance": {
+            "type": "object"
+          }
         },
         "additionalProperties": false
       },
@@ -2567,17 +4690,27 @@
           "approval_required"
         ],
         "properties": {
-          "schema_identity": { "const": "tilesim.agent_harness.batch_session.v1" },
-          "contract_revision": { "const": "2026-10-19.wpe.v1" }
+          "schema_identity": {
+            "const": "tilesim.agent_harness.batch_session.v1"
+          },
+          "contract_revision": {
+            "const": "2026-10-19.wpe.v1"
+          }
         }
       },
       "BatchApprovalRequest": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "approval_digest": { "type": "string" },
-          "expires_at": { "type": "string" },
-          "idempotency_key": { "type": "string" }
+          "approval_digest": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string"
+          },
+          "idempotency_key": {
+            "type": "string"
+          }
         }
       },
       "BatchActionRequest": {
@@ -2585,10 +4718,18 @@
         "additionalProperties": false,
         "required": ["batch_id", "action"],
         "properties": {
-          "batch_id": { "type": "string" },
-          "action": { "enum": ["start", "pause", "resume", "cancel", "retry"] },
-          "recovery_acknowledged": { "type": "boolean" },
-          "idempotency_key": { "type": "string" }
+          "batch_id": {
+            "type": "string"
+          },
+          "action": {
+            "enum": ["start", "pause", "resume", "cancel", "retry"]
+          },
+          "recovery_acknowledged": {
+            "type": "boolean"
+          },
+          "idempotency_key": {
+            "type": "string"
+          }
         }
       },
       "AgentFlowStartRequest": {
@@ -2608,28 +4749,45 @@
         "additionalProperties": false,
         "required": ["flow", "idempotent_replay"],
         "properties": {
-          "flow": { "$ref": "./schemas/agent-flow/state.schema.json" },
-          "idempotent_replay": { "type": "boolean" }
+          "flow": {
+            "$ref": "./schemas/agent-flow/state.schema.json"
+          },
+          "idempotent_replay": {
+            "type": "boolean"
+          }
         }
       },
       "AgentFlowStatusResponse": {
         "type": "object",
         "additionalProperties": false,
         "required": ["flow"],
-        "properties": { "flow": { "$ref": "./schemas/agent-flow/state.schema.json" } }
+        "properties": {
+          "flow": {
+            "$ref": "./schemas/agent-flow/state.schema.json"
+          }
+        }
       },
       "AgentFlowEventsResponse": {
         "type": "object",
         "additionalProperties": false,
         "required": ["flow", "events", "after_sequence", "terminal"],
         "properties": {
-          "flow": { "$ref": "./schemas/agent-flow/state.schema.json" },
+          "flow": {
+            "$ref": "./schemas/agent-flow/state.schema.json"
+          },
           "events": {
             "type": "array",
-            "items": { "$ref": "./schemas/agent-flow/event.schema.json" }
+            "items": {
+              "$ref": "./schemas/agent-flow/event.schema.json"
+            }
           },
-          "after_sequence": { "type": "integer", "minimum": 0 },
-          "terminal": { "type": "boolean" }
+          "after_sequence": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "terminal": {
+            "type": "boolean"
+          }
         }
       },
       "AgentFlowResumeResponse": {
@@ -2637,13 +4795,21 @@
         "additionalProperties": false,
         "required": ["flow", "events", "idempotent_replay", "action"],
         "properties": {
-          "flow": { "$ref": "./schemas/agent-flow/state.schema.json" },
+          "flow": {
+            "$ref": "./schemas/agent-flow/state.schema.json"
+          },
           "events": {
             "type": "array",
-            "items": { "$ref": "./schemas/agent-flow/event.schema.json" }
+            "items": {
+              "$ref": "./schemas/agent-flow/event.schema.json"
+            }
           },
-          "idempotent_replay": { "type": "boolean" },
-          "action": { "type": "string" }
+          "idempotent_replay": {
+            "type": "boolean"
+          },
+          "action": {
+            "type": "string"
+          }
         }
       },
       "AgentFlowRevokeResponse": {
@@ -2651,120 +4817,242 @@
         "additionalProperties": false,
         "required": ["flow", "events", "idempotent_replay", "action"],
         "properties": {
-          "flow": { "$ref": "./schemas/agent-flow/state.schema.json" },
+          "flow": {
+            "$ref": "./schemas/agent-flow/state.schema.json"
+          },
           "events": {
             "type": "array",
-            "items": { "$ref": "./schemas/agent-flow/event.schema.json" }
+            "items": {
+              "$ref": "./schemas/agent-flow/event.schema.json"
+            }
           },
-          "idempotent_replay": { "type": "boolean" },
-          "action": { "const": "revoke_authorization" }
+          "idempotent_replay": {
+            "type": "boolean"
+          },
+          "action": {
+            "const": "revoke_authorization"
+          }
         }
       }
     },
     "responses": {
       "Manifest": {
         "description": "Contract discovery",
-        "content": { "application/json": { "schema": { "$ref": "./schemas/api-manifest.schema.json" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./schemas/api-manifest.schema.json"
+            }
+          }
+        }
       },
       "Error": {
         "description": "Structured API error",
-        "content": { "application/json": { "schema": { "$ref": "./schemas/error.schema.json" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./schemas/error.schema.json"
+            }
+          }
+        }
       },
       "ArtifactManifest": {
         "description": "Verified artifact inventory",
-        "content": { "application/json": { "schema": { "$ref": "./schemas/artifact-manifest.schema.json" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./schemas/artifact-manifest.schema.json"
+            }
+          }
+        }
       },
       "Run": {
         "description": "Run state",
-        "content": { "application/json": { "schema": { "$ref": "./schemas/run.schema.json" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./schemas/run.schema.json"
+            }
+          }
+        }
       },
       "CreateRun": {
         "description": "Created or replayed run",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateRunResponse" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CreateRunResponse"
+            }
+          }
+        }
+      },
+      "CancelRun": {
+        "description": "Formal run cancellation result",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CancelRunResponse"
+            }
+          }
+        }
       },
       "RunList": {
         "description": "Recent runs",
-        "content": { "application/json": { "schema": { "$ref": "./schemas/run-list.schema.json" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./schemas/run-list.schema.json"
+            }
+          }
+        }
       },
       "Reports": {
         "description": "Available reports",
-        "content": { "application/json": { "schema": { "$ref": "./schemas/reports.schema.json" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./schemas/reports.schema.json"
+            }
+          }
+        }
       },
       "Health": {
         "description": "Local runtime health",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/HealthResponse" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/HealthResponse"
+            }
+          }
+        }
       },
       "Catalog": {
         "description": "Allow-listed inputs",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CatalogResponse" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CatalogResponse"
+            }
+          }
+        }
       },
       "Capabilities": {
         "description": "Runtime capabilities",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CapabilitiesResponse" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CapabilitiesResponse"
+            }
+          }
+        }
       },
       "ExperimentDescriptor": {
         "description": "Schema-set-bound F8 experiment parameter descriptor",
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/ExperimentDescriptorResponse" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ExperimentDescriptorResponse"
+            }
+          }
         }
       },
       "TracePackageCatalog": {
         "description": "Controlled Trace-package catalog without local filesystem paths",
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/TracePackageCatalogResponse" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/TracePackageCatalogResponse"
+            }
+          }
         }
       },
       "TracePackageInspect": {
         "description": "Fresh TileSimCLI Trace-package inspection",
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/TracePackageInspectResponse" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/TracePackageInspectResponse"
+            }
+          }
         }
       },
       "AssistantModelDescriptor": {
         "description": "Optional assistant model channel state; the credential is never included",
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/AssistantModelDescriptorResponse" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AssistantModelDescriptorResponse"
+            }
+          }
         }
       },
       "AgentIntent": {
         "description": "Model-derived intent proposal constrained to the published page catalog",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AgentIntentResponse" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AgentIntentResponse"
+            }
+          }
+        }
       },
       "AssistantModelPlan": {
         "description": "One validated scenario plan proposal; applying it stays a client-side action",
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/AssistantModelPlanResponse" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AssistantModelPlanResponse"
+            }
+          }
         }
       },
       "AssistantModelCatalogue": {
         "description": "The model identities the configured service publishes; read with the channel credential, which never leaves the Bridge",
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/AssistantModelCatalogueResponse" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AssistantModelCatalogueResponse"
+            }
+          }
         }
       },
       "AssistantModelSelection": {
         "description": "The identity now in force for this Bridge process; nothing was persisted and no run was created",
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/AssistantModelSelectionResponse" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AssistantModelSelectionResponse"
+            }
+          }
         }
       },
       "EvidenceAgentDescriptor": {
         "description": "Read-only evidence Agent capability and degradation contract",
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/EvidenceAgentDescriptorResponse" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/EvidenceAgentDescriptorResponse"
+            }
+          }
         }
       },
       "EvidenceAgentResponse": {
         "description": "Run-bound terminal evidence analysis or structured refusal",
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/EvidenceAgentResponse" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/EvidenceAgentResponse"
+            }
+          }
         }
       },
       "AgentOrchestrationCapabilitySnapshot": {
         "description": "Immutable Agent orchestration capability and Profile availability snapshot",
         "content": {
           "application/json": {
-            "schema": { "$ref": "#/components/schemas/AgentOrchestrationCapabilitySnapshotResponse" }
+            "schema": {
+              "$ref": "#/components/schemas/AgentOrchestrationCapabilitySnapshotResponse"
+            }
           }
         }
       },
@@ -2772,59 +5060,121 @@
         "description": "Read-only Run Intake v2 preview verdict. Returned for every submission the published contract can judge, including rejections; judgement.accepted and judgement.code carry the verdict. The error envelope is used only when no judgement could be produced.",
         "content": {
           "application/json": {
-            "schema": { "$ref": "#/components/schemas/AgentOrchestrationRunIntakePreviewResponse" }
+            "schema": {
+              "$ref": "#/components/schemas/AgentOrchestrationRunIntakePreviewResponse"
+            }
           }
         }
       },
       "Week7EvidenceMap": {
         "description": "S9 report-field evidence lineage",
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/Week7EvidenceMapResponse" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Week7EvidenceMapResponse"
+            }
+          }
         }
       },
       "Week7Calibration": {
         "description": "Allow-listed S8 offline calibration workflow example",
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/Week7CalibrationResponse" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Week7CalibrationResponse"
+            }
+          }
         }
       },
       "Week7Orchestration": {
         "description": "Allow-listed deterministic Agent orchestration example",
         "content": {
-          "application/json": { "schema": { "$ref": "#/components/schemas/Week7OrchestrationResponse" } }
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Week7OrchestrationResponse"
+            }
+          }
         }
       },
       "Template": {
         "description": "Scenario inputs",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TemplateResponse" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/TemplateResponse"
+            }
+          }
+        }
       },
       "RenameRun": {
         "description": "Updated run name",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RenameRunResponse" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/RenameRunResponse"
+            }
+          }
+        }
       },
       "DeleteRun": {
         "description": "Deleted local run and its artifacts",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteRunResponse" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/DeleteRunResponse"
+            }
+          }
+        }
       },
       "AgentFlowStartResponse": {
         "description": "Created or replayed read-only deterministic agent flow",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AgentFlowStartResponse" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AgentFlowStartResponse"
+            }
+          }
+        }
       },
       "AgentFlowStatusResponse": {
         "description": "Current deterministic agent-flow state",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AgentFlowStatusResponse" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AgentFlowStatusResponse"
+            }
+          }
+        }
       },
       "AgentFlowEventsResponse": {
         "description": "Replayable deterministic agent-flow events",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AgentFlowEventsResponse" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AgentFlowEventsResponse"
+            }
+          }
+        }
       },
       "AgentFlowResumeResponse": {
         "description": "Deterministic agent flow after an explicit user action",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AgentFlowResumeResponse" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AgentFlowResumeResponse"
+            }
+          }
+        }
       },
       "AgentFlowRevokeResponse": {
         "description": "Flow stopped after its authorization was revoked",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AgentFlowRevokeResponse" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AgentFlowRevokeResponse"
+            }
+          }
+        }
       }
     }
   }

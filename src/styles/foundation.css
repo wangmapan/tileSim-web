@@ -434,21 +434,13 @@ summary:focus-visible {
 .nav-group {
   display: grid;
   gap: 4px;
-  animation: nav-group-in var(--motion-enter) var(--ease-emphasized) backwards;
-}
-.nav-group:nth-child(2) {
-  animation-delay: 55ms;
-}
-.nav-group:nth-child(3) {
-  animation-delay: 100ms;
 }
 .nav-caption {
   margin: 0 9px 4px;
   color: var(--nav-muted);
   font-size: var(--text-micro);
-  font-weight: 400;
+  font-weight: 600;
   letter-spacing: 0;
-  text-transform: uppercase;
 }
 .nav-link {
   display: grid;
@@ -595,10 +587,11 @@ summary:focus-visible {
 }
 .page-heading h1 {
   margin: 0;
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 600;
   letter-spacing: 0;
-  text-wrap: balance;
+  line-height: 1.35;
+  white-space: nowrap;
 }
 .page-heading > div {
   display: flex;

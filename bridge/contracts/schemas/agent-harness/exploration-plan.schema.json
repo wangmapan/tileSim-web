@@ -1,0 +1,86 @@
+{
+  "$id": "tilesim.agent_harness.deployment_exploration_plan.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_identity",
+    "contract_revision",
+    "schema_set_revision",
+    "policy_revision",
+    "status",
+    "would_create_run",
+    "would_claim_slot"
+  ],
+  "properties": {
+    "schema_identity": {
+      "type": "string"
+    },
+    "contract_revision": {
+      "const": "2026-11-01.wph.v1"
+    },
+    "schema_set_revision": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "policy_revision": {
+      "const": "tilesim.agent_harness.deployment_exploration.policy.v1"
+    },
+    "status": {
+      "enum": [
+        "needs_clarification",
+        "unsupported",
+        "awaiting_confirmation",
+        "draft_ready"
+      ]
+    },
+    "missing": {
+      "type": "array"
+    },
+    "questions": {
+      "type": "array"
+    },
+    "recommendations": {
+      "type": "array"
+    },
+    "unsupported_fields": {
+      "type": "array"
+    },
+    "message": {
+      "type": "string"
+    },
+    "fixed_resources": {
+      "type": "object"
+    },
+    "deployment_candidates": {
+      "type": "array"
+    },
+    "workload_scenarios": {
+      "type": "array"
+    },
+    "run_strategy": {
+      "anyOf": [
+        { "$ref": "./run-strategy.schema.json" },
+        { "type": "null" }
+      ]
+    },
+    "objective": {
+      "type": "object"
+    },
+    "confirmation": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "draft_digest": {
+      "type": "string"
+    },
+    "would_create_run": {
+      "const": false
+    },
+    "would_claim_slot": {
+      "const": false
+    }
+  }
+}

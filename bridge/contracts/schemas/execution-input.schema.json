@@ -1,0 +1,1270 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/execution-input.schema.json",
+  "x-tilesim-schema-identity": "tilesim.bridge.execution_input.v1",
+  "title": "ExecutionInput",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "mode": {
+      "enum": ["kernel_strategy", "tilelang_source", "execution_partition"]
+    },
+    "dense_execution": {
+      "$ref": "#/$defs/dense"
+    },
+    "kernel_execution": {
+      "$ref": "#/$defs/kernel"
+    },
+    "tilelang_model_dtype": {
+      "enum": ["float16", "bfloat16"]
+    },
+    "tilelang_kernels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "selection_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "phase": {
+            "enum": ["prefill", "decode"]
+          },
+          "operation": {
+            "enum": ["norm_qkv", "attention_output", "norm_gate_up", "activation_down", "final_norm_lm_head"]
+          },
+          "instances": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "minItems": 0,
+            "maxItems": 1024,
+            "uniqueItems": true
+          },
+          "source": {
+            "$ref": "#/$defs/source"
+          },
+          "output_policy": {
+            "enum": ["operator_barrier", "tile_ready_allreduce"]
+          },
+          "output_buffer_slots": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4096
+          },
+          "output_admission_policy": {
+            "enum": ["direct_v1", "safe_window_v1"]
+          },
+          "rank_programs": {
+            "type": "object",
+            "minProperties": 2,
+            "maxProperties": 2,
+            "additionalProperties": {
+              "$ref": "#/$defs/source"
+            }
+          },
+          "rank_cost_profiles_json": {
+            "type": "string",
+            "maxLength": 1000000
+          }
+        },
+        "required": [
+          "selection_id",
+          "phase",
+          "operation",
+          "instances",
+          "source",
+          "output_policy",
+          "output_buffer_slots",
+          "output_admission_policy"
+        ]
+      },
+      "minItems": 1,
+      "maxItems": 128
+    },
+    "execution_partition_program": {
+      "$ref": "#/$defs/partition"
+    }
+  },
+  "required": ["mode", "dense_execution"],
+  "$defs": {
+    "dense": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "tilesim.dense_execution.v1"
+        },
+        "model_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "model_revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "layers": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        },
+        "hidden_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65536
+        },
+        "intermediate_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 262144
+        },
+        "attention_heads": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65536
+        },
+        "kv_heads": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65536
+        },
+        "vocab_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1048576
+        },
+        "element_bytes": {
+          "const": 2
+        },
+        "device_profile_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "peak_tflops": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1000000
+        },
+        "memory_bandwidth_GBps": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 10000000
+        },
+        "launch_overhead_ps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000000000
+        },
+        "device_memory_bytes": {
+          "x-uint64": true,
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 18446744073709551615
+            },
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,19})$"
+            }
+          ]
+        },
+        "kv_capacity_bytes_per_rank": {
+          "x-uint64": true,
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 18446744073709551615
+            },
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,19})$"
+            }
+          ]
+        },
+        "explicit_rank_execution": {
+          "type": "boolean"
+        },
+        "head_dim": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "prefill_kernel_layout": {
+          "enum": ["fused", "split"]
+        },
+        "kernel_efficiency": {
+          "$ref": "#/$defs/efficiency"
+        },
+        "device_placements": {
+          "type": "object",
+          "minProperties": 2,
+          "maxProperties": 2,
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "device_profile_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "peak_tflops": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 1000000
+              },
+              "memory_bandwidth_GBps": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 10000000
+              },
+              "launch_overhead_ps": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000000000000
+              },
+              "device_memory_bytes": {
+                "x-uint64": true,
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 18446744073709551615
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]{0,19})$"
+                  }
+                ]
+              },
+              "kv_capacity_bytes_per_rank": {
+                "x-uint64": true,
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 18446744073709551615
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]{0,19})$"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "device_profile_id",
+              "peak_tflops",
+              "memory_bandwidth_GBps",
+              "launch_overhead_ps",
+              "device_memory_bytes",
+              "kv_capacity_bytes_per_rank"
+            ]
+          }
+        }
+      },
+      "required": [
+        "schema_version",
+        "model_id",
+        "model_revision",
+        "layers",
+        "hidden_size",
+        "intermediate_size",
+        "attention_heads",
+        "kv_heads",
+        "vocab_size",
+        "element_bytes",
+        "device_profile_id",
+        "peak_tflops",
+        "memory_bandwidth_GBps",
+        "launch_overhead_ps",
+        "device_memory_bytes",
+        "kv_capacity_bytes_per_rank"
+      ]
+    },
+    "efficiency": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "tilesim.kernel_efficiency.v1"
+        },
+        "compute_units": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1048576
+        },
+        "scalar_tflops": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "compute_efficiency": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "memory_efficiency": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "tile_m": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "tile_n": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65536
+        },
+        "tile_k": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65536
+        },
+        "attention_tile_q": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        }
+      },
+      "required": [
+        "schema_version",
+        "compute_units",
+        "scalar_tflops",
+        "compute_efficiency",
+        "memory_efficiency",
+        "tile_m",
+        "tile_n",
+        "tile_k",
+        "attention_tile_q"
+      ]
+    },
+    "kernel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "tilesim.kernel_execution.v1"
+        },
+        "hardware": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "target_profile_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "matrix_dtype": {
+              "enum": ["fp16", "bf16", "fp32"]
+            },
+            "compute_units": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1048576
+            },
+            "threads_per_unit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65536
+            },
+            "blocks_per_unit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 64
+            },
+            "shared_bytes_per_unit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1048576
+            },
+            "registers_per_unit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1048576
+            },
+            "threads_per_block": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1024
+            }
+          },
+          "required": [
+            "target_profile_id",
+            "matrix_dtype",
+            "compute_units",
+            "threads_per_unit",
+            "blocks_per_unit",
+            "shared_bytes_per_unit",
+            "registers_per_unit",
+            "threads_per_block"
+          ]
+        },
+        "operations": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 10,
+          "propertyNames": {
+            "pattern": "^(prefill|decode)/(norm_qkv|attention_output|norm_gate_up|activation_down|final_norm_lm_head)$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "view": {
+                "enum": ["aggregate", "expanded"]
+              },
+              "strategy": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "implementation_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  },
+                  "source": {
+                    "enum": ["declared", "compiler_metadata", "launch_observation"]
+                  },
+                  "dtype": {
+                    "enum": ["fp16", "bf16", "fp32"]
+                  },
+                  "accumulator_dtype": {
+                    "const": "fp32"
+                  },
+                  "memory_policy": {
+                    "enum": ["reload_operands", "wave_operand_reuse"]
+                  },
+                  "mapping": {
+                    "const": "output_tile_per_block"
+                  },
+                  "tile_m": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 4096
+                  },
+                  "tile_n": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65536
+                  },
+                  "tile_k": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65536
+                  },
+                  "threads": {
+                    "type": "integer",
+                    "minimum": 32,
+                    "maximum": 1024
+                  },
+                  "pipeline_stages": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 16
+                  },
+                  "shared_bytes": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1048576
+                  },
+                  "registers_per_thread": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 255
+                  },
+                  "source_reference": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "launch_grid": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1048576
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                  }
+                },
+                "required": [
+                  "implementation_id",
+                  "source",
+                  "dtype",
+                  "accumulator_dtype",
+                  "memory_policy",
+                  "mapping",
+                  "tile_m",
+                  "tile_n",
+                  "tile_k",
+                  "threads",
+                  "pipeline_stages",
+                  "shared_bytes",
+                  "registers_per_thread"
+                ]
+              }
+            },
+            "required": ["view", "strategy"]
+          }
+        }
+      },
+      "required": ["schema_version", "hardware", "operations"]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1048576
+        },
+        "arguments": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "M": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65536
+            },
+            "N": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65536
+            },
+            "K": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65536
+            },
+            "block_M": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4096
+            },
+            "block_N": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4096
+            },
+            "block_K": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4096
+            },
+            "threads": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4096
+            },
+            "num_stages": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4096
+            },
+            "sm_num": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4096
+            },
+            "dtype": {
+              "enum": ["float16", "bfloat16"]
+            },
+            "accum_dtype": {
+              "const": "float"
+            },
+            "use_persistent_primitive": {
+              "type": "boolean"
+            },
+            "costs": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "copy_bytes_per_ps": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000000
+                },
+                "compute_flops_per_ps": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000000
+                },
+                "control_ps": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000000
+                },
+                "epilogue_ps": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000000
+                }
+              },
+              "required": ["copy_bytes_per_ps", "compute_flops_per_ps", "control_ps", "epilogue_ps"]
+            }
+          },
+          "required": [
+            "M",
+            "N",
+            "K",
+            "block_M",
+            "block_N",
+            "block_K",
+            "threads",
+            "num_stages",
+            "sm_num",
+            "dtype",
+            "accum_dtype",
+            "use_persistent_primitive",
+            "costs"
+          ]
+        },
+        "payload_mode": {
+          "enum": ["materialized", "structure_only"]
+        }
+      },
+      "required": ["source_text", "arguments", "payload_mode"]
+    },
+    "partition": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "tilesim.execution_partition_program.v1"
+        },
+        "program_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "model_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "model_revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "windows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "request_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "phase": {
+                "enum": ["prefill", "decode"]
+              },
+              "token_begin": {
+                "x-uint64": true,
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 18446744073709551615
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]{0,19})$"
+                  }
+                ]
+              },
+              "token_end": {
+                "x-uint64": true,
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 18446744073709551615
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]{0,19})$"
+                  }
+                ]
+              },
+              "partition": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "schema_version": {
+                    "const": "tilesim.execution_partition.v1"
+                  },
+                  "partition_reference": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2048
+                  },
+                  "source_kind": {
+                    "enum": ["compiler_derived", "generated", "observed_trace"]
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "source_mode": {
+                        "const": "synthetic_trace"
+                      },
+                      "source_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 512
+                      },
+                      "generation_method": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 512
+                      },
+                      "calibration_level": {
+                        "const": "uncalibrated"
+                      },
+                      "allowed_claim_scope": {
+                        "enum": ["exploratory", "synthetic_consistency"]
+                      },
+                      "observed_fields": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 512
+                        },
+                        "minItems": 0,
+                        "maxItems": 1024,
+                        "uniqueItems": true
+                      },
+                      "inferred_fields": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 512
+                        },
+                        "minItems": 0,
+                        "maxItems": 1024,
+                        "uniqueItems": true
+                      }
+                    },
+                    "required": [
+                      "source_mode",
+                      "source_id",
+                      "generation_method",
+                      "calibration_level",
+                      "allowed_claim_scope",
+                      "observed_fields",
+                      "inferred_fields"
+                    ]
+                  },
+                  "slices": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "local_partition_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "operation_kind": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "dependency_partition_ids": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "minItems": 0,
+                          "maxItems": 1024,
+                          "uniqueItems": true
+                        },
+                        "completion_condition": {
+                          "enum": ["all_resources_completed", "device_task_completed", "collective_completed"]
+                        },
+                        "token_offsets": {
+                          "type": "array",
+                          "items": {
+                            "x-uint64": true,
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 18446744073709551615
+                              },
+                              {
+                                "type": "string",
+                                "pattern": "^(0|[1-9][0-9]{0,19})$"
+                              }
+                            ]
+                          },
+                          "minItems": 2,
+                          "maxItems": 2
+                        },
+                        "tensor_shape": {
+                          "type": "array",
+                          "items": {
+                            "x-uint64": true,
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 18446744073709551615
+                              },
+                              {
+                                "type": "string",
+                                "pattern": "^(0|[1-9][0-9]{0,19})$"
+                              }
+                            ]
+                          },
+                          "minItems": 1,
+                          "maxItems": 8
+                        },
+                        "tensor_offset": {
+                          "type": "array",
+                          "items": {
+                            "x-uint64": true,
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 18446744073709551615
+                              },
+                              {
+                                "type": "string",
+                                "pattern": "^(0|[1-9][0-9]{0,19})$"
+                              }
+                            ]
+                          },
+                          "minItems": 1,
+                          "maxItems": 8
+                        },
+                        "tensor_extent": {
+                          "type": "array",
+                          "items": {
+                            "x-uint64": true,
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 18446744073709551615
+                              },
+                              {
+                                "type": "string",
+                                "pattern": "^(0|[1-9][0-9]{0,19})$"
+                              }
+                            ]
+                          },
+                          "minItems": 1,
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "local_partition_id",
+                        "operation_kind",
+                        "dependency_partition_ids",
+                        "completion_condition",
+                        "token_offsets",
+                        "tensor_shape",
+                        "tensor_offset",
+                        "tensor_extent"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 10000
+                  }
+                },
+                "required": ["schema_version", "partition_reference", "source_kind", "evidence", "slices"]
+              },
+              "resources": {
+                "type": "object",
+                "minProperties": 1,
+                "maxProperties": 10000,
+                "additionalProperties": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "kind": {
+                          "const": "device"
+                        },
+                        "placement": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "stream": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "flops": {
+                          "x-uint64": true,
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 18446744073709551615
+                            },
+                            {
+                              "type": "string",
+                              "pattern": "^(0|[1-9][0-9]{0,19})$"
+                            }
+                          ]
+                        },
+                        "memory_bytes": {
+                          "x-uint64": true,
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 18446744073709551615
+                            },
+                            {
+                              "type": "string",
+                              "pattern": "^(0|[1-9][0-9]{0,19})$"
+                            }
+                          ]
+                        },
+                        "kernel": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "family": {
+                              "enum": ["matmul", "attention_prefill", "attention_decode", "elementwise"]
+                            },
+                            "key": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 512
+                            },
+                            "size": {
+                              "x-uint64": true,
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 18446744073709551615
+                                },
+                                {
+                                  "type": "string",
+                                  "pattern": "^(0|[1-9][0-9]{0,19})$"
+                                }
+                              ]
+                            },
+                            "scalar_flops": {
+                              "x-uint64": true,
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 18446744073709551615
+                                },
+                                {
+                                  "type": "string",
+                                  "pattern": "^(0|[1-9][0-9]{0,19})$"
+                                }
+                              ]
+                            },
+                            "m": {
+                              "x-uint64": true,
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 18446744073709551615
+                                },
+                                {
+                                  "type": "string",
+                                  "pattern": "^(0|[1-9][0-9]{0,19})$"
+                                }
+                              ]
+                            },
+                            "n": {
+                              "x-uint64": true,
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 18446744073709551615
+                                },
+                                {
+                                  "type": "string",
+                                  "pattern": "^(0|[1-9][0-9]{0,19})$"
+                                }
+                              ]
+                            },
+                            "k": {
+                              "x-uint64": true,
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 18446744073709551615
+                                },
+                                {
+                                  "type": "string",
+                                  "pattern": "^(0|[1-9][0-9]{0,19})$"
+                                }
+                              ]
+                            },
+                            "batch": {
+                              "x-uint64": true,
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 18446744073709551615
+                                },
+                                {
+                                  "type": "string",
+                                  "pattern": "^(0|[1-9][0-9]{0,19})$"
+                                }
+                              ]
+                            },
+                            "blocks": {
+                              "x-uint64": true,
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 18446744073709551615
+                                },
+                                {
+                                  "type": "string",
+                                  "pattern": "^(0|[1-9][0-9]{0,19})$"
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["family", "key", "size", "scalar_flops"]
+                        }
+                      },
+                      "required": ["kind", "placement", "stream", "flops", "memory_bytes"]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "kind": {
+                          "enum": ["allreduce", "sendrecv"]
+                        },
+                        "participants": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "minItems": 2,
+                          "maxItems": 1024,
+                          "uniqueItems": true
+                        },
+                        "bytes": {
+                          "x-uint64": true,
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 18446744073709551615
+                            },
+                            {
+                              "type": "string",
+                              "pattern": "^(0|[1-9][0-9]{0,19})$"
+                            }
+                          ]
+                        },
+                        "chunk_bytes": {
+                          "x-uint64": true,
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 18446744073709551615
+                            },
+                            {
+                              "type": "string",
+                              "pattern": "^(0|[1-9][0-9]{0,19})$"
+                            }
+                          ]
+                        }
+                      },
+                      "required": ["kind", "participants", "bytes", "chunk_bytes"]
+                    }
+                  ]
+                }
+              },
+              "buffer_edges": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "producer": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "consumers": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      },
+                      "minItems": 1,
+                      "maxItems": 1024,
+                      "uniqueItems": true
+                    },
+                    "pool": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "bytes": {
+                      "x-uint64": true,
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 18446744073709551615
+                        },
+                        {
+                          "type": "string",
+                          "pattern": "^(0|[1-9][0-9]{0,19})$"
+                        }
+                      ]
+                    }
+                  },
+                  "required": ["producer", "consumers", "pool", "bytes"]
+                },
+                "minItems": 0,
+                "maxItems": 1024
+              }
+            },
+            "required": ["request_id", "phase", "token_begin", "token_end", "partition", "resources"]
+          },
+          "minItems": 1,
+          "maxItems": 4096
+        },
+        "buffers": {
+          "type": "object",
+          "maxProperties": 4096,
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "placement": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "capacity_bytes": {
+                "x-uint64": true,
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 18446744073709551615
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]{0,19})$"
+                  }
+                ]
+              }
+            },
+            "required": ["placement", "capacity_bytes"]
+          }
+        }
+      },
+      "required": ["schema_version", "program_id", "model_id", "model_revision", "windows"]
+    }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "mode": {
+          "const": "kernel_strategy"
+        }
+      },
+      "required": ["kernel_execution"],
+      "not": {
+        "anyOf": [
+          {
+            "required": ["tilelang_kernels"]
+          },
+          {
+            "required": ["tilelang_model_dtype"]
+          },
+          {
+            "required": ["execution_partition_program"]
+          }
+        ]
+      }
+    },
+    {
+      "properties": {
+        "mode": {
+          "const": "tilelang_source"
+        }
+      },
+      "required": ["tilelang_kernels", "tilelang_model_dtype"],
+      "not": {
+        "anyOf": [
+          {
+            "required": ["kernel_execution"]
+          },
+          {
+            "required": ["execution_partition_program"]
+          }
+        ]
+      }
+    },
+    {
+      "properties": {
+        "mode": {
+          "const": "execution_partition"
+        }
+      },
+      "required": ["execution_partition_program"],
+      "not": {
+        "anyOf": [
+          {
+            "required": ["kernel_execution"]
+          },
+          {
+            "required": ["tilelang_kernels"]
+          },
+          {
+            "required": ["tilelang_model_dtype"]
+          }
+        ]
+      }
+    }
+  ]
+}

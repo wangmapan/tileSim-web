@@ -1,4 +1,6 @@
 export { buildExecutionResult } from "./model/build";
+export { default as OperatorEvidencePanel } from "./components/OperatorEvidencePanel.vue";
+export { normalizeOperatorEvidence, evidenceValue } from "./model/operator-evidence";
 export { buildLayerVisualizations, buildStageTimeline } from "./model/visualizations";
 export {
   buildAttributionVisualization,

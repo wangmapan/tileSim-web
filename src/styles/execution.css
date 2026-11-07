@@ -246,8 +246,8 @@
   font-size: var(--text-xs);
 }
 .layer-reading strong {
-  font: 600 27px var(--font-mono);
-  letter-spacing: -0.05em;
+  font: 600 24px var(--font-mono);
+  letter-spacing: 0;
 }
 .layer-reading span {
   color: var(--muted);

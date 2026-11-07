@@ -310,6 +310,7 @@ export function buildExperimentRequest(options: BuildExperimentRequestOptions): 
     );
     request.design_space_candidates = designSpace;
   }
+  if (options.executionInput) request.execution_input = options.executionInput;
   const runtimeTrace = asRecord(asRecord(request.custom_inputs).runtime_trace);
   const runtimeRequests = runtimeRequestsOf(runtimeTrace);
   if (runtimeRequests) {
@@ -358,7 +359,12 @@ export function resolveExperimentErrorPointer(
     "/trace_package_id",
   ]);
   if (exactPointers.has(fieldPath)) return { fieldPath, controlPointer: fieldPath, fieldId: null };
-  for (const root of ["/custom_inputs/runtime_trace", "/custom_inputs/topology", "/design_space_candidates"]) {
+  for (const root of [
+    "/custom_inputs/runtime_trace",
+    "/custom_inputs/topology",
+    "/design_space_candidates",
+    "/execution_input",
+  ]) {
     if (fieldPath === root || fieldPath.startsWith(`${root}/`)) {
       return { fieldPath, controlPointer: root, fieldId: null };
     }

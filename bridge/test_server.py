@@ -6301,6 +6301,18 @@ class AgentIntentEndpointValidationTest(unittest.TestCase):
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
         self.thread.start()
         self.base_url = f"http://127.0.0.1:{self.httpd.server_port}"
+        # The identity the request carries and the identity the route recomputes
+        # are both read through server.harness_backend_identity().  Pinning it
+        # here keeps the validation boundary the only thing under test: the real
+        # backend worktree is dirty and large (multi-GB CMake snapshots), so a
+        # genuine digest would walk the filesystem on every request and blow the
+        # 5s HTTP timeout inside the WSL validation gate.
+        self._identity = mock.patch.object(
+            server, "harness_backend_identity",
+            return_value={"backend_revision": "test-backend", "source_revision": "test-source"},
+        )
+        self._identity.start()
+        self.addCleanup(self._identity.stop)
 
     def tearDown(self) -> None:
         self.httpd.shutdown()

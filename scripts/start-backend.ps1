@@ -117,7 +117,15 @@ $modelChannelEnvironmentNames = @(
     "TILESIM_ASSISTANT_BASE_URL",
     "TILESIM_ASSISTANT_API_KEY",
     "TILESIM_ASSISTANT_MODEL",
-    "TILESIM_ASSISTANT_TIMEOUT_MS"
+    "TILESIM_ASSISTANT_TIMEOUT_MS",
+    # Automatic exploration execution is opt-in. Forward the selector and
+    # same-origin Run Intake base URL without putting either value in argv.
+    # Candidate generation switches are forwarded only when explicitly set;
+    # their absence keeps the default deterministic generator unchanged.
+    "TILESIM_EXPLORATION_MODEL_CANDIDATES",
+    "TILESIM_AGENT_EXPLORATION_MODEL_CANDIDATES",
+    "TILESIM_EXPLORATION_EXECUTOR",
+    "TILESIM_RUN_INTAKE_BASE_URL"
 )
 $forwardedModelChannelEnvironmentNames = @(
     $modelChannelEnvironmentNames | Where-Object {
@@ -142,30 +150,46 @@ try {
     }
 }
 
-for ($attempt = 0; $attempt -lt 8; $attempt += 1) {
+# A newly copied release imports thousands of files from the drvfs mount before
+# it binds the port. Connection attempts during that import fail immediately;
+# spending the whole retry budget there used to roll the manifest back while
+# the process was still starting. Wait until something is listening, then give
+# the first identity check long enough to hash the backend worktree.
+$listenDeadline = [DateTime]::UtcNow.AddMinutes(3)
+while (-not (Test-TileSimBridgeListening)) {
+    if ($launcher.HasExited) {
+        throw "TileSim Web bridge exited before it accepted connections (exit $($launcher.ExitCode))."
+    }
+    if ([DateTime]::UtcNow -gt $listenDeadline) {
+        throw "TileSim Web bridge did not accept connections on port 5173 before the startup deadline."
+    }
+    Start-Sleep -Milliseconds 500
+}
+
+$lastMismatch = "no health response"
+for ($attempt = 0; $attempt -lt 4; $attempt += 1) {
     try {
-        # A local worktree snapshot verifies its full tracked/untracked digest
-        # on first health check. On an NTFS-mounted WSL worktree this can take
-        # longer than the old eight-second request timeout even when healthy.
-        $health = Invoke-RestMethod -Uri "http://127.0.0.1:5173/api/health" -Method Get -TimeoutSec 75
-        $apiManifest = Invoke-RestMethod -Uri "http://127.0.0.1:5173/api/manifest" -Method Get -TimeoutSec 75
-        if ($health.source_revision -eq $manifest.source_revision -and
-            $health.build_revision -eq $manifest.build_revision -and
-            (-not $manifest.source_state_digest -or
-             ($health.source_state_digest -eq $manifest.source_state_digest -and
-              $health.build_state_digest -eq $manifest.build_state_digest -and
-              $health.state_digests_match)) -and
-            $health.versions_match -and $health.execution_ready -and
-            (-not $manifest.web_release_digest -or
-             ($health.web_release_digest -eq $manifest.web_release_digest -and
-              $health.web_bridge_digest -eq $manifest.web_bridge_digest -and
-              $health.web_static_digest -eq $manifest.web_static_digest -and
-              $health.web_source_revision -eq $manifest.web_source_revision -and
-              $health.web_source_state_digest -eq $manifest.web_source_state_digest -and
-              $health.web_build_digest -eq $manifest.web_build_digest)) -and
-            (-not $manifest.schema_set_revision -or
-             ($health.schema_set_revision -eq $manifest.schema_set_revision -and
-              $apiManifest.schema_set_revision -eq $manifest.schema_set_revision))) {
+        $health = Invoke-RestMethod -Uri "http://127.0.0.1:5173/api/health" -Method Get -TimeoutSec 240
+        $apiManifest = Invoke-RestMethod -Uri "http://127.0.0.1:5173/api/manifest" -Method Get -TimeoutSec 240
+        $differences = @()
+        if ($health.source_revision -ne $manifest.source_revision) { $differences += "source_revision" }
+        if ($health.build_revision -ne $manifest.build_revision) { $differences += "build_revision" }
+        if ($manifest.source_state_digest -and (
+            $health.source_state_digest -ne $manifest.source_state_digest -or
+            $health.build_state_digest -ne $manifest.build_state_digest -or
+            -not $health.state_digests_match)) { $differences += "source_state_digest" }
+        if (-not $health.versions_match -or -not $health.execution_ready) { $differences += "execution_ready" }
+        if ($manifest.web_release_digest -and (
+            $health.web_release_digest -ne $manifest.web_release_digest -or
+            $health.web_bridge_digest -ne $manifest.web_bridge_digest -or
+            $health.web_static_digest -ne $manifest.web_static_digest -or
+            $health.web_source_revision -ne $manifest.web_source_revision -or
+            $health.web_source_state_digest -ne $manifest.web_source_state_digest -or
+            $health.web_build_digest -ne $manifest.web_build_digest)) { $differences += "web_release" }
+        if ($manifest.schema_set_revision -and (
+            $health.schema_set_revision -ne $manifest.schema_set_revision -or
+            $apiManifest.schema_set_revision -ne $manifest.schema_set_revision)) { $differences += "schema_set_revision" }
+        if ($differences.Count -eq 0) {
             [pscustomobject]@{
                 launcher_pid = $launcher.Id
                 source_revision = $health.source_revision
@@ -180,10 +204,11 @@ for ($attempt = 0; $attempt -lt 8; $attempt += 1) {
             } | ConvertTo-Json
             exit 0
         }
+        $lastMismatch = "identity fields differ: $($differences -join ', ')"
     } catch {
-        # The relay may need a moment to bind after the WSL process starts.
+        $lastMismatch = $_.Exception.Message
     }
-    Start-Sleep -Milliseconds 500
+    Start-Sleep -Seconds 2
 }
 
-throw "TileSim Web bridge did not start with the deployed source/build revision."
+throw "TileSim Web bridge did not start with the deployed source/build revision. $lastMismatch"

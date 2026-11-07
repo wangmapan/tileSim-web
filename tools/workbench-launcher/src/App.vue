@@ -241,7 +241,7 @@ async function deploy(event: Event) {
   );
 }
 
-async function deployLocal(event: Event) {
+async function deployLocal(event: Event, skipTests = false) {
   if (!backendRepository.value.trim()) {
     formErrors.backendRepository = "请选择后端仓库目录。";
     selectPage("deployment");
@@ -249,18 +249,22 @@ async function deployLocal(event: Event) {
     document.querySelector<HTMLInputElement>("#backend-repository")?.focus();
     return;
   }
+  if (skipTests && forceFullValidation.value) return;
   beginConfirmed(
     {
       kind: "deploy_local",
       backendRepository: backendRepository.value.trim(),
       wslDistro: wslDistro.value.trim() || "Ubuntu-24.04",
-      reuseVerifiedArtifacts: !forceFullValidation.value,
+      reuseVerifiedArtifacts: skipTests || !forceFullValidation.value,
+      skipTests,
     },
-    "部署当前本地工作树？",
+    skipTests ? "跳过测试并部署当前代码？" : "部署当前本地工作树？",
     `后端：${backendRepository.value.trim()}；Web：${snapshot.value?.paths.webRoot ?? "当前 checkout"}。` +
-      (forceFullValidation.value
-        ? "将使用两处当前文件（包括未提交改动）完整构建和验证，不 fetch、不 push、不切换分支；发布后重启 127.0.0.1:5173。"
-        : "将使用两处当前文件（包括未提交改动）；后端和 Web 若与上一份已验证身份完全一致则复用构建结果，否则对变化部分执行快速契约/编译检查并完整重建必要产物；不 fetch、不 push、不切换分支；发布后重启 127.0.0.1:5173。") +
+      (skipTests
+        ? "将构建并发布两处当前文件（包括未提交改动），但跳过后端测试、Bridge 测试和 Web 测试。清单会记为未验证，不能当作测试通过。不 fetch、不 push、不切换分支；发布后重启 127.0.0.1:5173。"
+        : forceFullValidation.value
+          ? "将使用两处当前文件（包括未提交改动）完整构建和验证，不 fetch、不 push、不切换分支；发布后重启 127.0.0.1:5173。"
+          : "将使用两处当前文件（包括未提交改动）；后端和 Web 若与上一份已验证身份完全一致则复用构建结果，否则对变化部分执行快速契约/编译检查并完整重建必要产物；不 fetch、不 push、不切换分支；发布后重启 127.0.0.1:5173。") +
       "请先确认没有其他任务持续改写源码；启动器不会强制结束开发进程。",
     event,
   );
@@ -497,8 +501,16 @@ onBeforeUnmount(() => {
                 <button type="button" class="button button--primary" :disabled="active" @click="startService">
                   一键启动工作台
                 </button>
-                <button type="button" class="button button--secondary" :disabled="active" @click="deployLocal">
+                <button type="button" class="button button--secondary" :disabled="active" @click="deployLocal($event)">
                   重新部署当前代码
+                </button>
+                <button
+                  type="button"
+                  class="button button--secondary"
+                  :disabled="active || forceFullValidation"
+                  @click="deployLocal($event, true)"
+                >
+                  快速部署（跳过测试）
                 </button>
               </div>
             </div>
@@ -530,7 +542,7 @@ onBeforeUnmount(() => {
                 <p>
                   {{
                     snapshot.deployment.manifestPresent
-                      ? "服务已就绪时直接打开网页；未运行时验证并启动已有版本。代码修改后点击“重新部署当前代码”，会构建、测试并重启本地服务。"
+                      ? "服务已就绪时直接打开网页；未运行时验证并启动已有版本。代码修改后用“重新部署当前代码”构建、测试并重启；“快速部署（跳过测试）”只构建发布，不把结果记成测试通过。"
                       : "点击“一键启动工作台”将先确认本地部署；部署使用当前后端与 Web 文件，包括未提交改动。"
                   }}
                 </p>
@@ -617,6 +629,9 @@ onBeforeUnmount(() => {
               <input v-model="forceFullValidation" type="checkbox" :disabled="active" />
               <span>强制完整验证（重新运行后端构建、CTest、Bridge/Web 测试和 Web 构建）</span>
             </label>
+            <p class="advanced-note">
+              概览页的“快速部署（跳过测试）”会构建并发布当前文件，但跳过 CTest、Bridge 测试和 Web 测试，清单记为未验证。勾选强制完整验证时该按钮不可用。
+            </p>
             <details class="surface details-block">
               <summary>高级操作：远端更新与停止服务</summary>
               <div class="button-row">

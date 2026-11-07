@@ -73,6 +73,8 @@ pub enum OperationRequest {
         wsl_distro: String,
         #[serde(default)]
         reuse_verified_artifacts: bool,
+        #[serde(default)]
+        skip_tests: bool,
     },
     RepairWsl {
         wsl_distro: String,
@@ -289,7 +291,15 @@ fn prepare_operation(
             backend_repository,
             wsl_distro,
             reuse_verified_artifacts,
+            skip_tests,
         } => {
+            if skip_tests && !reuse_verified_artifacts {
+                return Err(PublicError::new(
+                    "快速部署选项冲突",
+                    "跳过测试时仍复用未变化的已构建产物；不要同时要求完整验证。",
+                    "skip-tests deployment rejected a full-validation request",
+                ));
+            }
             let mut arguments = vec![
                 "-SourceRoot".into(),
                 validate_backend_repository(&backend_repository)?
@@ -300,6 +310,9 @@ fn prepare_operation(
             ];
             if reuse_verified_artifacts {
                 arguments.push("-ReuseVerifiedArtifacts".into());
+            }
+            if skip_tests {
+                arguments.push("-SkipTests".into());
             }
             Ok(PreparedOperation {
                 script: scripts.join("deploy-local-backend.ps1"),
@@ -351,7 +364,7 @@ fn prepare_operation(
                 "-Action".into(),
                 "Set".into(),
                 "-ConfigPath".into(),
-                model_config_path(&web_root).to_string_lossy().into_owned(),
+                model_config_path(web_root).to_string_lossy().into_owned(),
                 "-BaseUrl".into(),
                 base_url,
                 "-Model".into(),
@@ -748,6 +761,7 @@ mod tests {
                 backend_repository: directory.to_string_lossy().into_owned(),
                 wsl_distro: "Ubuntu-24.04".into(),
                 reuse_verified_artifacts: false,
+                skip_tests: false,
             },
         )
         .expect("prepare local deployment");
@@ -767,6 +781,7 @@ mod tests {
                 backend_repository: directory.to_string_lossy().into_owned(),
                 wsl_distro: "Ubuntu-24.04".into(),
                 reuse_verified_artifacts: true,
+                skip_tests: false,
             },
         )
         .expect("prepare fast local deployment");
@@ -774,6 +789,34 @@ mod tests {
             .arguments
             .iter()
             .any(|argument| argument == "-ReuseVerifiedArtifacts"));
+        assert!(!fast
+            .arguments
+            .iter()
+            .any(|argument| argument == "-SkipTests"));
+        let skipped = prepare_operation(
+            root,
+            OperationRequest::DeployLocal {
+                backend_repository: directory.to_string_lossy().into_owned(),
+                wsl_distro: "Ubuntu-24.04".into(),
+                reuse_verified_artifacts: true,
+                skip_tests: true,
+            },
+        )
+        .expect("prepare skip-tests local deployment");
+        assert!(skipped
+            .arguments
+            .iter()
+            .any(|argument| argument == "-SkipTests"));
+        assert!(prepare_operation(
+            root,
+            OperationRequest::DeployLocal {
+                backend_repository: directory.to_string_lossy().into_owned(),
+                wsl_distro: "Ubuntu-24.04".into(),
+                reuse_verified_artifacts: false,
+                skip_tests: true,
+            },
+        )
+        .is_err());
         std::fs::remove_dir_all(directory).expect("remove test Git marker");
     }
 

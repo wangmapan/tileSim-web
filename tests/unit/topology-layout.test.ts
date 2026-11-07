@@ -1,12 +1,33 @@
 import { describe, expect, it } from "vitest";
 import { layoutTopology } from "../../src/features/run-experiment/topology-layout";
-import { topologyNodeCategory, topologyNodeLabel } from "../../src/features/run-experiment/topology-node-types";
+import {
+  topologyNodeCategory,
+  topologyNodeLabel,
+  topologyNodeTypesFromCapabilities,
+  isTopologyParticipant,
+} from "../../src/features/run-experiment/topology-node-types";
+import { decideTopologyConnection, topologySuperNodes } from "../../src/features/run-experiment/topology-supernodes";
 
 describe("topology node vocabulary", () => {
-  it("exposes common physical roles without changing the open contract", () => {
+  it("builds addable presets only from the backend capability payload", () => {
+    expect(
+      topologyNodeTypesFromCapabilities({
+        topology_node_types: [
+          { device_type: "GPU", role: "compute", id_prefix: "gpu", participant: true },
+          { device_type: "Switch", role: "network", id_prefix: "sw", participant: false },
+        ],
+      }).map((entry) => entry.value),
+    ).toEqual(["GPU", "Switch"]);
+    expect(topologyNodeTypesFromCapabilities({}).map((entry) => entry.value)).toEqual([]);
+    expect(topologyNodeTypesFromCapabilities({ topology_node_types: [{ device_type: "Router" }] })).toEqual([]);
     expect(topologyNodeCategory("Switch")).toBe("network");
     expect(topologyNodeLabel("Router")).toBe("路由器");
     expect(topologyNodeCategory("vendor-specific-accelerator")).toBe("unknown");
+  });
+
+  it("fails closed for participant classification when the backend publishes no vocabulary", () => {
+    expect(isTopologyParticipant("GPU", [])).toBe(false);
+    expect(isTopologyParticipant("GPU")).toBe(true);
   });
 });
 
@@ -64,5 +85,71 @@ describe("layoutTopology", () => {
     expect(positions.gpu0.y).toBeLessThan(positions.gpu2.y);
     expect(positions.host0.y).toBeGreaterThan(positions.gpu2.y);
     expect(positions.host0.x).toBe(380);
+  });
+});
+
+describe("topology super-node semantics", () => {
+  const devices = [
+    { device_id: "gpu0", device_type: "GPU" },
+    { device_id: "gpu1", device_type: "GPU" },
+    { device_id: "gpu2", device_type: "GPU" },
+    { device_id: "sw0", device_type: "Switch" },
+  ];
+  const domains = [
+    { domain_id: "su0", domain_type: "scale_up" as const, member_devices: ["gpu0", "gpu1"], module_binding: "sue" },
+    { domain_id: "su1", domain_type: "scale_up" as const, member_devices: ["gpu2"], module_binding: "sue" },
+    {
+      domain_id: "so0",
+      domain_type: "scale_out" as const,
+      member_devices: ["gpu0", "gpu1", "gpu2"],
+      module_binding: "ue",
+    },
+  ];
+
+  it("derives visual groups from scale_up domains only", () => {
+    expect(
+      topologySuperNodes(devices, domains).map((node) => [node.id, node.devices.map((item) => item.device_id)]),
+    ).toEqual([["__default__", ["gpu0", "gpu1", "gpu2"]]]);
+  });
+
+  it("keeps a legacy overlapping card in the first declared super node only", () => {
+    const overlap = [
+      { domain_id: "su0", domain_type: "scale_up" as const, member_devices: ["gpu0", "gpu1"], module_binding: "sue" },
+      { domain_id: "su1", domain_type: "scale_up" as const, member_devices: ["gpu1", "gpu2"], module_binding: "sue" },
+    ];
+    expect(
+      topologySuperNodes(devices, overlap).map((node) => [node.id, node.devices.map((item) => item.device_id)]),
+    ).toEqual([["__default__", ["gpu0", "gpu1", "gpu2"]]]);
+  });
+
+  it("splits one scale_up binding into physical super nodes by group_id", () => {
+    const grouped = devices.slice(0, 3).map((device, index) => ({
+      ...device,
+      group_id: index < 2 ? "node0" : "node1",
+    }));
+    const [first, second] = topologySuperNodes(grouped, [
+      {
+        domain_id: "su0",
+        domain_type: "scale_up" as const,
+        member_devices: ["gpu0", "gpu1", "gpu2"],
+        module_binding: "sue",
+      },
+    ]);
+    expect(first).toMatchObject({ id: "group::node0", label: "node0" });
+    expect(first.devices.map((device) => device.device_id)).toEqual(["gpu0", "gpu1"]);
+    expect(second).toMatchObject({ id: "group::node1", label: "node1" });
+    expect(second.devices.map((device) => device.device_id)).toEqual(["gpu2"]);
+  });
+
+  it("resolves only backend-valid group connections", () => {
+    expect(decideTopologyConnection("gpu0", "gpu1", devices, domains)).toMatchObject({
+      allowed: true,
+      kind: "scale_up",
+    });
+    expect(decideTopologyConnection("gpu0", "gpu2", devices, domains)).toMatchObject({ allowed: false });
+    expect(decideTopologyConnection("gpu0", "sw0", devices, domains)).toEqual({
+      allowed: false,
+      reason: "请先把设备加入计算节点组，再连接节点组之间的跨机网络。",
+    });
   });
 });

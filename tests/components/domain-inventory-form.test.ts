@@ -96,6 +96,52 @@ describe("domain list block", () => {
     expect(wrapper.emitted("notice")).toBeUndefined();
   });
 
+  it("allows endpoint overlap across group-local domains", async () => {
+    const twoGroups = structuredClone(topology);
+    twoGroups.topology.domains = [
+      { ...topology.topology.domains[0], member_devices: ["gpu0"] },
+      { domain_id: "su1", domain_type: "scale_up", member_devices: [], module_binding: "su-module" },
+    ];
+    const wrapper = mountForm(twoGroups);
+    const secondGroupGpu0 = wrapper.findAll(".domain-member-option input[type='checkbox']")[2];
+    (secondGroupGpu0.element as HTMLInputElement).checked = true;
+    await secondGroupGpu0.trigger("change");
+    expect(lastDocument(wrapper)?.topology.domains[1].member_devices).toEqual(["gpu0"]);
+    expect(wrapper.find(".domain-inventory .structured-note--error").exists()).toBe(false);
+  });
+
+  it("derives the scale_out endpoint layer after two super nodes have members", async () => {
+    const twoGroups = structuredClone(topology);
+    twoGroups.topology.domains = [
+      { ...topology.topology.domains[0], member_devices: ["gpu0"] },
+      { domain_id: "su1", domain_type: "scale_up", member_devices: [], module_binding: "su-module" },
+    ];
+    const wrapper = mountForm(twoGroups);
+    const secondGroupMember = wrapper.findAll(".domain-member-option input[type='checkbox']")[3];
+    (secondGroupMember.element as HTMLInputElement).checked = true;
+    await secondGroupMember.trigger("change");
+    const after = lastDocument(wrapper);
+    expect(after?.topology.domains).toEqual([
+      { ...topology.topology.domains[0], member_devices: ["gpu0"] },
+      { domain_id: "su1", domain_type: "scale_up", member_devices: ["gpu1"], module_binding: "su-module" },
+      { domain_id: "so0", domain_type: "scale_out", member_devices: ["gpu0", "gpu1"], module_binding: "so-module" },
+    ]);
+  });
+
+  it("prepares scale_out from device compute groups without requiring two scale_up domains", () => {
+    const grouped = structuredClone(topology);
+    grouped.topology.domains[0].member_devices = ["gpu0", "gpu1"];
+    grouped.topology.devices = grouped.topology.devices.map((device, index) => ({
+      ...device,
+      group_id: index === 0 ? "node0" : "node1",
+    }));
+    const wrapper = mountForm(grouped);
+    expect(lastDocument(wrapper)?.topology.domains).toEqual([
+      grouped.topology.domains[0],
+      { domain_id: "so0", domain_type: "scale_out", member_devices: ["gpu0", "gpu1"], module_binding: "so-module" },
+    ]);
+  });
+
   it("ticks a card back out of a domain", async () => {
     const wrapper = mountForm();
     const box = wrapper.findAll(".domain-member-option input[type='checkbox']")[0];
@@ -114,13 +160,14 @@ describe("domain list block", () => {
     expect(after?.topology.links[0].domain_id).toBe("su9");
   });
 
-  it("warns when the domain type and the bound module kind disagree", async () => {
+  it("switches the bound model when the domain type changes", async () => {
     const wrapper = mountForm();
     const select = wrapper.findAll(".domain-inventory-row select")[0];
     changeValue(select.element as HTMLSelectElement, "scale_out");
     await select.trigger("change");
     expect(lastDocument(wrapper)?.topology.domains[0].domain_type).toBe("scale_out");
-    expect(lastNotice(wrapper)?.tone).toBe("warning");
+    expect(lastDocument(wrapper)?.topology.domains[0].module_binding).toBe("so-module");
+    expect(lastNotice(wrapper)?.tone).toBe("info");
   });
 
   it("removes a domain together with the links it owned", async () => {

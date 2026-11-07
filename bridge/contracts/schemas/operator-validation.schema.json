@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/operator-validation.schema.json",
+  "title": "OperatorExecutionValidation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status", "config_sha256", "sources", "evidence_records", "claim_scope", "cost_scope"],
+  "properties": {
+    "status": {
+      "const": "available"
+    },
+    "config_sha256": {
+      "type": "string"
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "evidence_records": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "claim_scope": {
+      "type": "string"
+    },
+    "cost_scope": {
+      "type": "string"
+    }
+  }
+}

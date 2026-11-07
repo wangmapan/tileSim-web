@@ -26,15 +26,19 @@ import {
   fetchTracePackageCatalog,
   inspectTracePackage,
   tracePackageBackendIdentity,
+  topologyNodeTypesFromCapabilities,
 } from "../features/run-experiment";
 import { UNPUBLISHED_CONTEXT_REVISION, createPageContextRevisionKeeper } from "../entities/agent-context";
 import { useDashboard } from "../store/dashboard";
 import { useI18n } from "../i18n";
+import { OperatorAuthoringPanel } from "../features/kernel-authoring";
 
 const props = defineProps({
   agentContextPublisher: { type: Function, default: null },
   /** Downward channel for assistant parameter edits; owned by App.vue. */
   agentCommandRegistry: { type: Object, default: null },
+  /** Automatic exploration owns the input context while its run is active. */
+  explorationLocked: { type: Boolean, default: false },
 });
 
 const {
@@ -54,6 +58,21 @@ const runStatus = ref("");
 const runtimeJson = ref("");
 const topologyJson = ref("");
 const designSpaceJson = ref("");
+const executionInput = ref(null);
+const executionReady = ref(true);
+function executionChanged(input, ready) {
+  executionInput.value = input;
+  executionReady.value = ready;
+}
+function loadExecutionExample(custom) {
+  fenceTemplateForUserInput();
+  mode.value = "json";
+  form.scenario_id = "s1_des_example";
+  form.fidelity_policy = "des";
+  runtimeJson.value = JSON.stringify(custom.runtime_trace, null, 2);
+  topologyJson.value = JSON.stringify(custom.topology, null, 2);
+  designSpaceJson.value = "";
+}
 /** The experiment page opens with the complete structured input surface. */
 const structuredInput = ref(true);
 const pairingPending = ref(false);
@@ -132,6 +151,7 @@ const surface = computed(() =>
     state.experiment.error,
   ),
 );
+const topologyNodeTypes = computed(() => topologyNodeTypesFromCapabilities(state.capabilities));
 // Experiment panels use `defineModel`; an assignable binding avoids Vue's
 // const-model compiler warning while retaining one reactive canonical form.
 let form = reactive(createExperimentForm(surface.value));
@@ -157,6 +177,7 @@ const requestPreview = computed(() =>
     topologyJson: topologyJson.value,
     designSpaceJson: mode.value === "trace_package" ? "" : designSpaceJson.value,
     tracePackageId: selectedTracePackageId.value,
+    executionInput: executionInput.value,
     // A JSON-capable surface owns the structured channel from the first
     // render, so an empty or partial document is rejected by the request
     // builder instead of silently falling back to scalar overrides. On a
@@ -187,6 +208,7 @@ const canRun = computed(
     !submissionContractError.value &&
     !inputDraftStale.value &&
     requestPreview.value.request !== null &&
+    executionReady.value &&
     (mode.value !== "trace_package" || selectedTracePackage.value?.submission_available === true) &&
     !pairingPending.value &&
     !submitting.value,
@@ -452,6 +474,7 @@ function publishAgentContext() {
       ),
       runtimeJson: runtimeJson.value,
       topologyJson: topologyJson.value,
+      runRequest: requestPreview.value.request || undefined,
     });
   // The watcher below fires whenever one of its inputs is touched, which is not
   // the same as this page having changed. The keeper keeps the revision steady
@@ -462,7 +485,7 @@ function publishAgentContext() {
   // rather than leave the parameter-free projection in place.
   const { revision } = agentContextRevision(
     `context:experiment:${state.runId || "no-run"}:${state.bridge.manifest?.schema_set_revision || "schema-unavailable"}:${backendRevision.value}`,
-    build(UNPUBLISHED_CONTEXT_REVISION),
+    { publication: build(UNPUBLISHED_CONTEXT_REVISION), run_request: requestPreview.value.request || null },
   );
   props.agentContextPublisher(build(revision));
   void ensureAgentStructuredContext();
@@ -768,76 +791,102 @@ async function loadBundle(event) {
         </div>
       </div>
 
-      <ExperimentIdentityPanel
-        :form="form"
-        :surface="surface"
-        :field-path="displayFieldPath"
-        data-help-anchor="experiment-identity"
-      />
-      <ExperimentInputPanel
-        v-model:mode="mode"
-        v-model:runtime-json="runtimeJson"
-        v-model:topology-json="topologyJson"
-        v-model:structured-input="structuredInput"
-        v-model:pairing-pending="pairingPending"
-        data-help-anchor="experiment-inputs"
-        :form="form"
-        :surface="surface"
-        :control-groups="surface.controlGroups"
-        :model-ids="state.catalog?.model_ids || []"
-        :field-path="inputFieldPath"
-        :error-message="inputErrorMessage"
-        :draft-stale="inputDraftStale"
-        :draft-stale-revision="inputDraftStaleRevision"
-        @reset-controls="resetControls"
-        @load-template="loadTemplate"
-        @load-bundle="loadBundle"
-        @load-json-file="loadJsonFile"
-        @input-mutation="fenceTemplateForUserInput"
-      />
-      <TracePackageInputPanel
-        v-if="mode === 'trace_package'"
-        :catalog="tracePackageCatalog"
-        :status="tracePackageCatalogStatus"
-        :error="tracePackageError"
-        :inspect-error="tracePackageInspectError"
-        :selected-package-id="selectedTracePackageId"
-        :inspecting="inspectingTracePackage"
-        :field-path="displayFieldPath"
-        @select="selectTracePackage"
-        @inspect="inspectSelectedTracePackage"
-        @refresh="loadTracePackages(true)"
-      />
-      <DesignSpaceInputPanel
-        v-else
-        v-model="designSpaceJson"
-        :field-path="displayFieldPath"
-        @load-json-file="loadJsonFile"
-      />
-      <ExperimentCapabilityPanel
-        data-help-anchor="experiment-capabilities"
-        :capabilities="state.capabilities"
-        :bridge="state.bridge"
-        :surface="surface"
-        :manifest="state.bridge.manifest"
-      />
-      <ExperimentSubmitCard
-        data-help-anchor="experiment-submit"
-        :can-run="canRun"
-        :submitting="submitting"
-        :run-status="runStatus"
-        @submit="submit"
-      />
-      <details class="experiment-request-preview" hidden aria-hidden="true">
-        <summary>{{ t("查看等价 JSON request") }}</summary>
-        <pre v-if="requestPreview.text" tabindex="0" role="region" :aria-label="t('等价 JSON request')">{{
-          requestPreview.text
-        }}</pre>
-        <p v-else class="request-preview-error">
-          <code>{{ requestPreview.error?.fieldPath || "contract_gap" }}</code>
-          {{ requestPreview.error?.message || t("请求不可提交。") }}
-        </p>
-      </details>
+      <p v-if="props.explorationLocked" class="service-warning" role="status">
+        自动探索正在运行，实验配置已锁定；点击助手面板中的“停止”后恢复编辑。
+      </p>
+      <fieldset :disabled="props.explorationLocked" class="experiment-page-lock">
+        <ExperimentIdentityPanel
+          :form="form"
+          :surface="surface"
+          :field-path="displayFieldPath"
+          data-help-anchor="experiment-identity"
+        />
+        <ExperimentInputPanel
+          v-model:mode="mode"
+          v-model:runtime-json="runtimeJson"
+          v-model:topology-json="topologyJson"
+          v-model:structured-input="structuredInput"
+          v-model:pairing-pending="pairingPending"
+          data-help-anchor="experiment-inputs"
+          :form="form"
+          :surface="surface"
+          :control-groups="surface.controlGroups"
+          :model-ids="state.catalog?.model_ids || []"
+          :field-path="inputFieldPath"
+          :error-message="inputErrorMessage"
+          :draft-stale="inputDraftStale"
+          :draft-stale-revision="inputDraftStaleRevision"
+          :read-only="props.explorationLocked"
+          :topology-node-types="topologyNodeTypes"
+          @reset-controls="resetControls"
+          @load-template="loadTemplate"
+          @load-bundle="loadBundle"
+          @load-json-file="loadJsonFile"
+          @input-mutation="fenceTemplateForUserInput"
+        />
+        <TracePackageInputPanel
+          v-if="mode === 'trace_package'"
+          :catalog="tracePackageCatalog"
+          :status="tracePackageCatalogStatus"
+          :error="tracePackageError"
+          :inspect-error="tracePackageInspectError"
+          :selected-package-id="selectedTracePackageId"
+          :inspecting="inspectingTracePackage"
+          :field-path="displayFieldPath"
+          @select="selectTracePackage"
+          @inspect="inspectSelectedTracePackage"
+          @refresh="loadTracePackages(true)"
+        />
+        <OperatorAuthoringPanel
+          :backend-identity="backendRevision"
+          :revision="state.bridge.manifest?.schema_set_revision || ''"
+          :request="requestPreview.request"
+          :runtime-json="runtimeJson"
+          :topology-json="topologyJson"
+          @change="executionChanged"
+          @example="loadExecutionExample"
+        />
+        <DesignSpaceInputPanel
+          v-if="mode !== 'trace_package'"
+          v-model="designSpaceJson"
+          :field-path="displayFieldPath"
+          @load-json-file="loadJsonFile"
+        />
+        <ExperimentCapabilityPanel
+          data-help-anchor="experiment-capabilities"
+          :capabilities="state.capabilities"
+          :bridge="state.bridge"
+          :surface="surface"
+          :manifest="state.bridge.manifest"
+          :orchestration-capability="state.bridge.orchestrationCapability"
+        />
+        <ExperimentSubmitCard
+          data-help-anchor="experiment-submit"
+          :can-run="canRun && !props.explorationLocked"
+          :submitting="submitting"
+          :run-status="runStatus"
+          @submit="submit"
+        />
+        <details class="experiment-request-preview" hidden aria-hidden="true">
+          <summary>{{ t("查看等价 JSON request") }}</summary>
+          <pre v-if="requestPreview.text" tabindex="0" role="region" :aria-label="t('等价 JSON request')">{{
+            requestPreview.text
+          }}</pre>
+          <p v-else class="request-preview-error">
+            <code>{{ requestPreview.error?.fieldPath || "contract_gap" }}</code>
+            {{ requestPreview.error?.message || t("请求不可提交。") }}
+          </p>
+        </details>
+      </fieldset>
     </section>
   </div>
 </template>
+
+<style scoped>
+.experiment-page-lock {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+</style>

@@ -1,7 +1,11 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, onUpdated, ref, watch } from "vue";
 import ArtifactEvidenceLink from "../../../components/ArtifactEvidenceLink.vue";
-import type { ReplayDocument, ReplayRoute } from "../model/types";
+import { layoutTopology, topologyNodeLabel } from "../../run-experiment";
+import type { ReplayDocument, ReplayRoute, ReplayTopologyLink } from "../model/types";
+import type { ReplayLayerVisibility } from "../model/layers";
+import type { ReplayMode } from "../model/modes";
+import { subscribePlaybackCursor } from "../model/playback-clock";
 import { intervalProgress } from "../model/playback";
 import ReplayVirtualList from "./ReplayVirtualList.vue";
 
@@ -11,27 +15,38 @@ const props = defineProps<{
   selectedFabricEventId?: string | null;
   selectedCollectiveStepId?: string | null;
   cursorPs?: string | null;
+  visibleLayers?: ReplayLayerVisibility;
+  mode?: ReplayMode;
+  /** While playback is running, beads travel the active reported link on a display clock. */
+  flowMotion?: boolean;
 }>();
 const emit = defineEmits<{ selectRoute: [routeId: string] }>();
+const layerVisible = (key: keyof ReplayLayerVisibility) => props.visibleLayers?.[key] ?? true;
+const showCollectiveEvidence = () => props.mode === undefined || props.mode === "collective";
+const showRouteCatalog = () => props.mode !== "collective" && props.mode !== "network";
+const topologyHeading = computed(() => {
+  if (props.mode === "collective") return { kicker: "集合通信", title: "集合路径" };
+  if (props.mode === "network") return { kicker: "设备与链路", title: "实际路径" };
+  if (props.mode === "overview") return { kicker: "执行概览", title: "当前路径" };
+  return { kicker: "设备与链路", title: "拓扑" };
+});
+const displayRoutes = computed(() => props.document.routes.filter(networkRouteRenderable));
 const ROUTE_ROW_HEIGHT = 64;
 const visibleStart = ref(0);
 const visibleEnd = ref(Math.min(props.document.routes.length, 24));
 const routeListExpanded = ref(false);
-const visibleRoutes = computed(() => props.document.routes.slice(visibleStart.value, visibleEnd.value));
+const visibleRoutes = computed(() => displayRoutes.value.slice(visibleStart.value, visibleEnd.value));
 const selectedRouteIndex = computed(() =>
-  props.document.routes.findIndex((route) => route.routeId === props.selectedRouteId),
+  displayRoutes.value.findIndex((route) => route.routeId === props.selectedRouteId),
 );
 const routeById = computed(() => new Map(props.document.routes.map((route) => [route.routeId, route])));
 const fabricEventById = computed(() => new Map(props.document.fabricEvents.map((event) => [event.eventId, event])));
 const collectiveStepById = computed(() => new Map(props.document.collective.steps.map((step) => [step.stepId, step])));
-const hasReportedPath = computed(() =>
-  props.document.routes.some((route) => route.state === "available" && route.actualPath.length >= 2),
-);
-const NODE_WIDTH = 108;
-const CELL_WIDTH = 132;
-const ROW_HEIGHT = 78;
-const PADDING_X = 34;
-const PADDING_Y = 34;
+const hasReportedPath = computed(() => displayRoutes.value.some(hasPhysicalPathEvidence));
+const NODE_HALF_WIDTH = 46;
+const NODE_HALF_HEIGHT = 22;
+const MAX_VISIBLE_FLOW_TOKENS = 6;
+const FLOW_TRAVEL_MS = 1200;
 
 const stateLabel: Record<ReplayRoute["state"], string> = {
   available: "路径已报告",
@@ -42,37 +57,75 @@ const stateLabel: Record<ReplayRoute["state"], string> = {
 };
 
 function routeStateLabel(route: ReplayRoute) {
+  if (route.state === "available" && route.actualPath.length >= 2 && route.events.length === 0) {
+    return "执行事件未报告";
+  }
   return route.state === "no_path" && !route.hasInterval ? "后端未提供实际路径" : stateLabel[route.state];
 }
 
-function nodeX(index: number) {
-  return PADDING_X + (index % columns()) * CELL_WIDTH + NODE_WIDTH / 2;
-}
-
-function nodeY(index: number) {
-  return PADDING_Y + Math.floor(index / columns()) * ROW_HEIGHT + 22;
-}
-
-function columns() {
-  const count = props.document.topology.nodes.length;
-  return Math.min(5, Math.max(1, Math.ceil(Math.sqrt(count || 1))));
-}
-
-function canvasWidth() {
-  return PADDING_X * 2 + columns() * CELL_WIDTH;
-}
-
-function canvasHeight() {
-  const rows = Math.ceil(props.document.topology.nodes.length / columns());
-  return PADDING_Y * 2 + Math.max(1, rows) * ROW_HEIGHT;
-}
-
 const nodePositions = computed(() => {
-  const positions = new Map<string, { x: number; y: number }>();
-  props.document.topology.nodes.forEach((node, index) => {
-    positions.set(node.id, { x: nodeX(index), y: nodeY(index) });
+  const placed = layoutTopology(
+    props.document.topology.nodes.map((node) => ({
+      device_id: node.id,
+      device_type: node.deviceType,
+      group_id: node.groupId,
+    })),
+    props.document.topology.links.map((link) => ({
+      link_id: link.id,
+      src_device: link.source,
+      dst_device: link.destination,
+      domain_id: link.domainId || "",
+    })),
+  );
+  const points = Object.values(placed);
+  if (!points.length) return new Map<string, { x: number; y: number }>();
+  const minX = Math.min(...points.map((position) => position.x));
+  const minY = Math.min(...points.map((position) => position.y));
+  return new Map(
+    Object.entries(placed).map(([id, position]) => [id, { x: position.x - minX + 88, y: position.y - minY + 64 }]),
+  );
+});
+
+const canvasFrame = computed(() => {
+  const positions = [...nodePositions.value.values()];
+  if (!positions.length) return { minX: 0, minY: 0, width: 760, height: 280 };
+  const minX = Math.min(...positions.map((position) => position.x)) - 96;
+  const minY = Math.min(...positions.map((position) => position.y)) - 96;
+  const maxX = Math.max(...positions.map((position) => position.x)) + 96;
+  const maxY = Math.max(...positions.map((position) => position.y)) + 84;
+  return {
+    minX,
+    minY,
+    width: Math.max(360, maxX - minX),
+    height: Math.max(280, maxY - minY),
+  };
+});
+
+const nodesById = computed(() => new Map(props.document.topology.nodes.map((node) => [node.id, node])));
+
+function linkCrossesGroups(link: ReplayTopologyLink) {
+  const sourceGroup = nodesById.value.get(link.source)?.groupId;
+  const destinationGroup = nodesById.value.get(link.destination)?.groupId;
+  return Boolean(sourceGroup && destinationGroup && sourceGroup !== destinationGroup);
+}
+
+const groupFrames = computed(() => {
+  const grouped = new Map<string, Array<{ x: number; y: number }>>();
+  for (const node of props.document.topology.nodes) {
+    const groupId = node.groupId?.trim();
+    const position = groupId ? nodePositions.value.get(node.id) : undefined;
+    if (!groupId || !position) continue;
+    const points = grouped.get(groupId) || [];
+    points.push(position);
+    grouped.set(groupId, points);
+  }
+  return [...grouped.entries()].map(([id, points]) => {
+    const minX = Math.min(...points.map((point) => point.x)) - 64;
+    const maxX = Math.max(...points.map((point) => point.x)) + 64;
+    const minY = Math.min(...points.map((point) => point.y)) - 46;
+    const maxY = Math.max(...points.map((point) => point.y)) + 40;
+    return { id, x: minX, y: minY, width: maxX - minX, height: maxY - minY };
   });
-  return positions;
 });
 
 const topologyLinksById = computed(() => new Map(props.document.topology.links.map((link) => [link.id, link])));
@@ -85,10 +138,26 @@ function nodePosition(id: string) {
   return nodePositions.value.get(id) || null;
 }
 
-function isRouteActive(route: ReplayRoute) {
-  if (!props.cursorPs || !route.timing || route.state !== "available" || !route.hasInterval) return false;
-  const cursor = BigInt(props.cursorPs);
+function isRouteActive(route: ReplayRoute, cursorPs = props.cursorPs) {
+  if (
+    !networkRouteRenderable(route) ||
+    !hasPhysicalPathEvidence(route) ||
+    !cursorPs ||
+    !route.timing ||
+    route.state !== "available" ||
+    !route.hasInterval
+  )
+    return false;
+  const cursor = BigInt(cursorPs);
   return cursor >= BigInt(route.timing.startPs) && cursor < BigInt(route.timing.endPs);
+}
+
+function networkRouteRenderable(route: ReplayRoute) {
+  return props.mode !== "network" || (route.actualPath.length >= 2 && route.events.length > 0);
+}
+
+function hasPhysicalPathEvidence(route: ReplayRoute) {
+  return route.state === "available" && route.actualPath.length >= 2 && route.events.length > 0;
 }
 
 function routeIsFocused(route: ReplayRoute) {
@@ -99,17 +168,24 @@ function routeIsFocused(route: ReplayRoute) {
     selectedCollectivePhaseId.value && selectedCollectivePhaseId.value === route.phaseId,
   );
   return (
-    route.state === "available" &&
+    networkRouteRenderable(route) &&
+    hasPhysicalPathEvidence(route) &&
     (props.selectedRouteId === route.routeId || matchesCollectiveStep || isRouteActive(route))
   );
 }
 
-const selectedCollectivePhaseId = computed(
-  () => props.document.collective.steps.find((step) => step.stepId === props.selectedCollectiveStepId)?.phaseId || null,
+const selectedCollectivePhaseId = computed(() =>
+  showCollectiveEvidence() && layerVisible("collective")
+    ? props.document.collective.steps.find((step) => step.stepId === props.selectedCollectiveStepId)?.phaseId || null
+    : null,
 );
 
-const focusedRoutes = computed(() => props.document.routes.filter((route) => routeIsFocused(route)));
-const activeRoutes = computed(() => props.document.routes.filter((route) => isRouteActive(route)));
+const focusedRoutes = computed(() =>
+  layerVisible("fabric") ? props.document.routes.filter((route) => routeIsFocused(route)) : [],
+);
+const activeRoutes = computed(() =>
+  layerVisible("fabric") ? props.document.routes.filter((route) => isRouteActive(route)) : [],
+);
 const routeNodeIds = (routes: ReplayRoute[]) => new Set(routes.flatMap((route) => route.actualPath));
 const routeLinkIds = (routes: ReplayRoute[]) =>
   new Set(
@@ -145,23 +221,29 @@ function timingActive(timing: { type: "instant"; atPs: string } | FlowTiming, cu
 const selectedCollectiveStep = computed(
   () => (props.selectedCollectiveStepId && collectiveStepById.value.get(props.selectedCollectiveStepId)) || null,
 );
-const currentCollectiveStep = computed(
-  () =>
-    selectedCollectiveStep.value ||
-    props.document.collective.steps.find((step) => timingActive(step.timing, props.cursorPs || null)) ||
-    null,
+const currentCollectiveStep = computed(() =>
+  showCollectiveEvidence() && layerVisible("collective")
+    ? selectedCollectiveStep.value ||
+      props.document.collective.steps.find((step) => timingActive(step.timing, props.cursorPs || null)) ||
+      null
+    : null,
 );
 
 function routeForPhase(phaseId: string | undefined) {
   if (!phaseId) return null;
   return (
     props.document.routes.find(
-      (route) => route.state === "available" && route.phaseId === phaseId && route.actualPath.length >= 2,
+      (route) =>
+        networkRouteRenderable(route) &&
+        hasPhysicalPathEvidence(route) &&
+        route.phaseId === phaseId &&
+        route.actualPath.length >= 2,
     ) || null
   );
 }
 
 const currentFabricEvent = computed(() => {
+  if (!layerVisible("fabric")) return null;
   return (
     (props.selectedFabricEventId && fabricEventById.value.get(props.selectedFabricEventId)) ||
     props.document.fabricEvents.find((event) => timingActive(event.timing, props.cursorPs || null)) ||
@@ -187,11 +269,13 @@ const currentFlow = computed<FlowReadout | null>(() => {
   }
 
   const fabricEvent = currentFabricEvent.value;
+  if (!layerVisible("fabric")) return null;
   const route = fabricEvent
     ? routeById.value.get(fabricEvent.routeId) || null
     : (props.selectedRouteId && routeById.value.get(props.selectedRouteId)) ||
       props.document.routes.find((candidate) => isRouteActive(candidate)) ||
       null;
+  if (route && (!networkRouteRenderable(route) || !hasPhysicalPathEvidence(route))) return null;
   if (!fabricEvent && !route) return null;
   const path = route?.actualPath || [];
   return {
@@ -206,49 +290,258 @@ const currentFlow = computed<FlowReadout | null>(() => {
   };
 });
 
-function flowTimingProgress(timing: FlowTiming | null) {
-  if (!timing || !props.cursorPs) return 0;
-  return intervalProgress(props.cursorPs, timing);
+type ReplayFlowToken = {
+  key: string;
+  x: number;
+  y: number;
+  angle: number;
+  title: string;
+  kind: "collective" | "fabric";
+};
+
+type ReplayRouteSegment = {
+  key: string;
+  routeId: string;
+  source: { x: number; y: number };
+  destination: { x: number; y: number };
+};
+
+function trimRouteSegment(source: { x: number; y: number }, destination: { x: number; y: number }) {
+  const dx = destination.x - source.x;
+  const dy = destination.y - source.y;
+  const scaleX = Math.abs(dx) > 0 ? NODE_HALF_WIDTH / Math.abs(dx) : Number.POSITIVE_INFINITY;
+  const scaleY = Math.abs(dy) > 0 ? NODE_HALF_HEIGHT / Math.abs(dy) : Number.POSITIVE_INFINITY;
+  const inset = Math.min(scaleX, scaleY, 0.42);
+  return {
+    source: { x: source.x + dx * inset, y: source.y + dy * inset },
+    destination: { x: destination.x - dx * inset, y: destination.y - dy * inset },
+  };
 }
 
-const flowTokenPosition = computed(() => {
-  const flow = currentFlow.value;
-  const route = flow?.route;
-  if (!flow || !route || route.state !== "available" || route.actualPath.length < 2) return null;
-  // A token is allowed only when every actual hop is backed by a reported
-  // route link and that link is present in the verified topology artifact.
-  // The node path alone is never enough to invent a physical connection.
+function routePoints(route: ReplayRoute): Array<{ x: number; y: number }> | null {
+  if (!hasPhysicalPathEvidence(route)) return null;
   if (route.linkIds.length !== route.actualPath.length - 1) return null;
-  const routeSegments = route.linkIds.map((linkId, index) => {
+  const points: Array<{ x: number; y: number }> = [];
+  for (let index = 0; index < route.actualPath.length - 1; index += 1) {
+    const linkId = route.linkIds[index];
     const baseId = linkId.replace(/::(?:forward|reverse)$/, "");
     const link = topologyLinksById.value.get(linkId) || topologyLinksById.value.get(baseId);
     if (!link) return null;
     const sourceId = route.actualPath[index];
     const destinationId = route.actualPath[index + 1];
+    const position = linkPosition(link);
+    if (!position) return null;
     if (link.source === sourceId && link.destination === destinationId) {
-      return linkPosition(link);
-    }
-    if (link.source === destinationId && link.destination === sourceId) {
-      const position = linkPosition(link);
-      return position ? { source: position.destination, destination: position.source } : null;
-    }
-    return null;
-  });
-  if (routeSegments.some((segment) => !segment)) return null;
-  const safeSegments = routeSegments as Array<{
-    source: { x: number; y: number };
-    destination: { x: number; y: number };
-  }>;
-  const safePoints = [safeSegments[0].source, ...safeSegments.map((segment) => segment.destination)];
-  const segment = flowTimingProgress(flow.timing) * (safePoints.length - 1);
-  const index = Math.min(safePoints.length - 2, Math.floor(segment));
-  const fraction = segment - index;
-  const from = safePoints[index];
-  const to = safePoints[index + 1];
+      if (!points.length) points.push(position.source);
+      points.push(position.destination);
+    } else if (link.source === destinationId && link.destination === sourceId) {
+      if (!points.length) points.push(position.destination);
+      points.push(position.source);
+    } else return null;
+  }
+  return points.length >= 2 ? points : null;
+}
+
+function travelPoints(points: Array<{ x: number; y: number }>) {
+  if (points.length < 2) return points;
+  const first = trimRouteSegment(points[0], points[1]).source;
+  const last = trimRouteSegment(points[points.length - 2], points[points.length - 1]).destination;
+  return points.length === 2 ? [first, last] : [first, ...points.slice(1, -1), last];
+}
+
+function flowTravelProgress(key: string, now: number) {
+  let hash = 0;
+  for (let index = 0; index < key.length; index += 1) hash = (hash * 33 + key.charCodeAt(index)) >>> 0;
+  return ((now + (hash % FLOW_TRAVEL_MS)) % FLOW_TRAVEL_MS) / FLOW_TRAVEL_MS;
+}
+
+function tokenPositionForRoute(
+  route: ReplayRoute,
+  timing: FlowTiming,
+  cursorPs = props.cursorPs,
+  progressOverride?: number,
+): { x: number; y: number; angle: number } | null {
+  if (progressOverride === undefined && !cursorPs) return null;
+  const points = travelPoints(routePoints(route) || []);
+  if (points.length < 2) return null;
+  const progress = progressOverride ?? intervalProgress(cursorPs || "0", timing);
+  const segment = Math.min(points.length - 2, Math.floor(progress * (points.length - 1)));
+  const fraction = progress * (points.length - 1) - segment;
+  const from = points[segment];
+  const to = points[segment + 1];
   return {
     x: from.x + (to.x - from.x) * fraction,
     y: from.y + (to.y - from.y) * fraction,
+    angle: (Math.atan2(to.y - from.y, to.x - from.x) * 180) / Math.PI,
   };
+}
+
+const activeCollectiveSteps = computed(() =>
+  showCollectiveEvidence() && layerVisible("collective")
+    ? props.document.collective.steps.filter((step) => timingActive(step.timing, props.cursorPs || null))
+    : [],
+);
+const activeFlowRoutes = computed(() => {
+  const routes = new Map<string, { route: ReplayRoute; timing: FlowTiming }>();
+  for (const route of activeRoutes.value) {
+    if (route.timing) routes.set(route.routeId, { route, timing: route.timing });
+  }
+  // A collective phase can be the only timing evidence for a joined route.
+  // Keep the path, but use the collective interval for its directional rail.
+  for (const step of activeCollectiveSteps.value) {
+    const route = routeForPhase(step.phaseId);
+    if (route && !routes.has(route.routeId)) routes.set(route.routeId, { route, timing: step.timing });
+  }
+  return [...routes.values()];
+});
+
+const activeRouteSegments = computed<ReplayRouteSegment[]>(() => {
+  const result: ReplayRouteSegment[] = [];
+  for (const { route } of activeFlowRoutes.value) {
+    const points = routePoints(route);
+    if (!points) continue;
+    for (let index = 0; index < points.length - 1; index += 1) {
+      const segment = trimRouteSegment(points[index], points[index + 1]);
+      result.push({
+        key: `${route.routeId}-${index}`,
+        routeId: route.routeId,
+        source: segment.source,
+        destination: segment.destination,
+      });
+    }
+  }
+  return result;
+});
+
+function tokensForCursor(cursor: string | null, motionNow?: number): ReplayFlowToken[] {
+  if (!cursor) return [];
+  const result: ReplayFlowToken[] = [];
+  const seen = new Set<string>();
+  const collectiveSteps =
+    showCollectiveEvidence() && layerVisible("collective")
+      ? props.document.collective.steps.filter((step) => timingActive(step.timing, cursor))
+      : [];
+  const collectiveRouteIds = new Set(
+    collectiveSteps.map((step) => routeForPhase(step.phaseId)?.routeId).filter((routeId): routeId is string => Boolean(routeId)),
+  );
+  for (const route of layerVisible("fabric") ? props.document.routes.filter(networkRouteRenderable) : []) {
+    if (!route.timing || !isRouteActive(route, cursor) || collectiveRouteIds.has(route.routeId)) continue;
+    const position = tokenPositionForRoute(
+      route,
+      route.timing,
+      cursor,
+      motionNow === undefined ? undefined : flowTravelProgress(route.routeId, motionNow),
+    );
+    if (!position || seen.has(route.routeId)) continue;
+    seen.add(route.routeId);
+    result.push({ key: `route-${route.routeId}`, ...position, title: route.routeId, kind: "fabric" });
+  }
+  for (const step of collectiveSteps) {
+    const route = routeForPhase(step.phaseId);
+    if (!route || seen.has(`collective-${step.stepId}`)) continue;
+    const position = tokenPositionForRoute(
+      route,
+      step.timing,
+      cursor,
+      motionNow === undefined ? undefined : flowTravelProgress(step.stepId, motionNow),
+    );
+    if (!position) continue;
+    seen.add(`collective-${step.stepId}`);
+    result.push({
+      key: `collective-${step.stepId}`,
+      ...position,
+      title: step.phaseLabel || step.collectiveId,
+      kind: "collective",
+    });
+  }
+  return result;
+}
+
+function layoutTokens(tokens: ReplayFlowToken[]) {
+  const lanes = new Map<string, number>();
+  return tokens.slice(0, MAX_VISIBLE_FLOW_TOKENS).map((token) => {
+    const laneKey = `${Math.round(token.angle)}:${Math.round(token.x / 24)}:${Math.round(token.y / 24)}`;
+    const lane = lanes.get(laneKey) || 0;
+    lanes.set(laneKey, lane + 1);
+    if (!lane) return token;
+    const radians = (token.angle * Math.PI) / 180;
+    const shift = lane * 12;
+    return {
+      ...token,
+      x: token.x - Math.sin(radians) * shift,
+      y: token.y + Math.cos(radians) * shift,
+    };
+  });
+}
+
+const flowTokenPositions = computed(() => tokensForCursor(props.cursorPs || null));
+const visibleFlowTokens = computed(() => layoutTokens(flowTokenPositions.value));
+
+const topologyRoot = ref<HTMLElement | null>(null);
+let unsubscribePlayback: (() => void) | null = null;
+let clockCursor: string | null = null;
+
+function paintTokenNodes(tokens: ReplayFlowToken[]) {
+  const nodes = topologyRoot.value?.querySelectorAll<SVGGElement>(".replay-topology__flow-token");
+  if (!nodes?.length) return;
+  const placed = new Map(tokens.map((token) => [token.key, token]));
+  nodes.forEach((node) => {
+    const token = placed.get(node.getAttribute("data-token") || "");
+    if (!token) return;
+    node.setAttribute("transform", `translate(${token.x} ${token.y}) rotate(${token.angle})`);
+  });
+}
+
+function paintTokens(cursor: string) {
+  clockCursor = cursor;
+  if (props.flowMotion) {
+    paintFlowMotion(performance.now());
+    return;
+  }
+  paintTokenNodes(layoutTokens(tokensForCursor(cursor)));
+}
+
+function paintFlowMotion(now: number) {
+  const cursor = clockCursor || props.cursorPs || null;
+  if (!cursor) return;
+  const tokens = tokensForCursor(cursor, now)
+    .slice(0, MAX_VISIBLE_FLOW_TOKENS)
+    .map((token) => {
+      let hash = 0;
+      for (let index = 0; index < token.key.length; index += 1) hash = (hash * 33 + token.key.charCodeAt(index)) >>> 0;
+      const shift = (hash % 3) - 1;
+      if (!shift) return token;
+      const radians = (token.angle * Math.PI) / 180;
+      const distance = shift * 11;
+      return {
+        ...token,
+        x: token.x - Math.sin(radians) * distance,
+        y: token.y + Math.cos(radians) * distance,
+      };
+    });
+  paintTokenNodes(tokens);
+}
+
+watch(
+  () => props.flowMotion,
+  (playing) => {
+    if (playing) return;
+    if (props.cursorPs) paintTokens(props.cursorPs);
+  },
+);
+
+onMounted(() => {
+  unsubscribePlayback = subscribePlaybackCursor(paintTokens);
+});
+onUpdated(() => {
+  if (props.flowMotion) {
+    paintFlowMotion(performance.now());
+    return;
+  }
+  if (clockCursor) paintTokens(clockCursor);
+});
+onBeforeUnmount(() => {
+  unsubscribePlayback?.();
 });
 
 const flowPathText = computed(() => {
@@ -331,7 +624,7 @@ watch(
   { immediate: true },
 );
 watch(
-  () => props.document.routes.length,
+  () => displayRoutes.value.length,
   (total) => {
     if (visibleStart.value >= total) visibleStart.value = 0;
     visibleEnd.value = Math.min(total, Math.max(visibleEnd.value, visibleStart.value + 1));
@@ -340,11 +633,16 @@ watch(
 </script>
 
 <template>
-  <section class="replay-topology" aria-label="设备与链路回放" data-help-anchor="replay-evidence">
+  <section
+    ref="topologyRoot"
+    class="replay-topology"
+    aria-label="设备与链路回放"
+    data-help-anchor="replay-evidence"
+  >
     <header class="replay-topology__header">
       <div>
-        <span class="section-kicker">设备与链路</span>
-        <h3>{{ hasReportedPath ? "已报告物理路径" : "实际路径证据" }}</h3>
+        <span class="section-kicker">{{ topologyHeading.kicker }}</span>
+        <h3>{{ topologyHeading.title }}</h3>
       </div>
       <span class="replay-topology__availability" :data-status="document.topology.availability">
         {{
@@ -380,6 +678,10 @@ watch(
           <small>链路</small>
           <code>{{ currentFlow.route?.linkIds.join(" → ") || "未报告" }}</code>
         </span>
+        <span v-if="activeFlowRoutes.length">
+          <small>同时活动流</small>
+          <code>{{ activeFlowRoutes.length }} 条</code>
+        </span>
       </div>
     </div>
     <p v-else class="replay-flow-readout replay-flow-readout--empty" role="status">
@@ -388,18 +690,39 @@ watch(
     <div v-if="document.topology.nodes.length" class="replay-topology__canvas">
       <svg
         class="replay-topology__svg"
-        :style="{ '--replay-canvas-width': `${canvasWidth()}px` }"
-        :viewBox="`0 0 ${canvasWidth()} ${canvasHeight()}`"
+        :style="{ '--replay-canvas-width': `${canvasFrame.width}px` }"
+        :viewBox="`${canvasFrame.minX} ${canvasFrame.minY} ${canvasFrame.width} ${canvasFrame.height}`"
         role="img"
         aria-labelledby="replay-topology-title"
         aria-describedby="replay-topology-description"
         focusable="false"
       >
-        <title id="replay-topology-title">设备与链路拓扑示意</title>
+        <title id="replay-topology-title">设备与链路拓扑</title>
         <desc id="replay-topology-description">
-          图中只展示已报告 topology 节点和链路；实际路径请通过下方路径列表查看。
+          底图使用已验证拓扑的设备和链路。圆点只沿当前游标下已报告的路径移动。
         </desc>
-        <g class="replay-topology__links">
+        <defs>
+          <marker
+            id="replay-flow-arrow"
+            class="replay-topology__flow-arrow"
+            viewBox="0 0 8 8"
+            refX="7"
+            refY="4"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto-start-reverse"
+            markerUnits="userSpaceOnUse"
+          >
+            <path d="M 0 0 L 8 4 L 0 8 z" />
+          </marker>
+        </defs>
+        <g v-if="groupFrames.length" class="replay-topology__groups" data-layer="groups">
+          <g v-for="frame in groupFrames" :key="frame.id">
+            <rect :x="frame.x" :y="frame.y" :width="frame.width" :height="frame.height" rx="8" />
+            <text :x="frame.x + 14" :y="frame.y + 20">{{ frame.id }}</text>
+          </g>
+        </g>
+        <g v-if="layerVisible('topology')" class="replay-topology__links" data-layer="topology">
           <template v-for="link in document.topology.links" :key="link.id">
             <line
               v-if="cachedLinkPosition(link)"
@@ -407,41 +730,84 @@ watch(
               :y1="cachedLinkPosition(link)!.source.y"
               :x2="cachedLinkPosition(link)!.destination.x"
               :y2="cachedLinkPosition(link)!.destination.y"
-              :class="{ 'is-highlighted': selectedLinkIncludes(link.id), 'is-active': activeLinkIncludes(link.id) }"
+              :class="{
+                'is-cross': linkCrossesGroups(link),
+                'is-highlighted': selectedLinkIncludes(link.id),
+                'is-active': activeLinkIncludes(link.id),
+              }"
             />
           </template>
         </g>
-        <g class="replay-topology__nodes">
+        <g
+          v-if="layerVisible('fabric') || layerVisible('collective')"
+          class="replay-topology__flow-links"
+          aria-hidden="true"
+          data-layer="flow"
+        >
+          <line
+            v-for="segment in activeRouteSegments"
+            :key="segment.key"
+            :x1="segment.source.x"
+            :y1="segment.source.y"
+            :x2="segment.destination.x"
+            :y2="segment.destination.y"
+            class="replay-topology__flow-link"
+            marker-end="url(#replay-flow-arrow)"
+          />
+        </g>
+        <g
+          v-if="
+            layerVisible('topology') || layerVisible('device') || layerVisible('fabric') || layerVisible('collective')
+          "
+          class="replay-topology__nodes"
+          data-layer="nodes"
+        >
           <g
-            v-for="(node, index) in document.topology.nodes"
+            v-for="node in document.topology.nodes"
             :key="node.id"
-            :transform="`translate(${nodeX(index)}, ${nodeY(index)})`"
+            :transform="`translate(${nodePosition(node.id)?.x || 0}, ${nodePosition(node.id)?.y || 0})`"
             :class="{ 'is-highlighted': selectedPathIncludes(node.id), 'is-active': activePathIncludes(node.id) }"
           >
-            <title>{{ node.label }} · {{ node.deviceType || "设备" }}</title>
-            <rect x="-54" y="-22" width="108" height="44" rx="4" />
-            <text y="-2" text-anchor="middle">{{ compactLabel(node.label) }}</text>
-            <text y="13" text-anchor="middle" class="replay-topology__node-type">
-              {{ compactLabel(node.deviceType || "设备", 15) }}
+            <title>{{ node.label }} · {{ topologyNodeLabel(node.deviceType) }}</title>
+            <rect x="-46" y="-22" width="92" height="44" rx="8" />
+            <text class="replay-topology__node-id" y="-2" text-anchor="middle">{{ compactLabel(node.label) }}</text>
+            <text y="14" text-anchor="middle" class="replay-topology__node-type">
+              {{ compactLabel(topologyNodeLabel(node.deviceType), 14) }}
             </text>
           </g>
         </g>
-        <g v-if="flowTokenPosition" class="replay-topology__flow-token" aria-hidden="true">
-          <title>{{ flowAriaLabel }}</title>
-          <circle :cx="flowTokenPosition.x" :cy="flowTokenPosition.y" r="8" />
-          <circle :cx="flowTokenPosition.x" :cy="flowTokenPosition.y" r="3" class="replay-topology__flow-core" />
+        <g
+          v-for="token in visibleFlowTokens"
+          :key="token.key"
+          class="replay-topology__flow-token"
+          :data-token="token.key"
+          :class="[`is-${token.kind}`, { 'is-selected': token.key === `route-${selectedRouteId}` }]"
+          :transform="`translate(${token.x} ${token.y}) rotate(${token.angle})`"
+          aria-hidden="true"
+        >
+          <title>{{ token.title }}</title>
+          <circle class="replay-topology__flow-trail" cx="-18" r="2.2" />
+          <circle class="replay-topology__flow-trail replay-topology__flow-trail--mid" cx="-10" r="3.2" />
+          <circle class="replay-topology__flow-dot" r="5.5" />
         </g>
       </svg>
     </div>
+    <p v-if="document.topology.nodes.length" class="replay-topology__legend">
+      <span v-if="groupFrames.length">实线是同一计算组，虚线是不同计算组。</span>
+      <span>播放时圆点沿当前已报告的活动链路流动，暂停后停在该时刻的位置。</span>
+      <span v-if="flowTokenPositions.length > visibleFlowTokens.length">
+        同时有 {{ activeFlowRoutes.length }} 条活动流，图上画出 {{ visibleFlowTokens.length }} 条。
+      </span>
+    </p>
     <details
-      v-if="document.routes.length"
+      v-if="showRouteCatalog() && displayRoutes.length && layerVisible('fabric')"
       id="replay-topology-route-list"
       class="replay-topology__routes"
       :open="routeListExpanded"
       @toggle="onRouteListToggle"
     >
       <summary class="replay-topology__routes-summary">
-        <span class="replay-topology__route-count">后端路径证据 · {{ document.routes.length }} 条</span>
+        <span class="replay-topology__route-count">后端路径证据 · {{ displayRoutes.length }} 条</span>
         <span class="replay-topology__summary-meta">
           <span>按需查看</span>
           <span class="replay-topology__summary-caret" aria-hidden="true">⌄</span>
@@ -449,10 +815,10 @@ watch(
       </summary>
       <ReplayVirtualList
         v-slot="{ startIndex, topSpacerHeight, bottomSpacerHeight }"
-        :total="document.routes.length"
+        :total="displayRoutes.length"
         :row-height="ROUTE_ROW_HEIGHT"
         :active-index="selectedRouteIndex"
-        :aria-label="`已报告路径，共 ${document.routes.length} 条`"
+        :aria-label="`已报告路径，共 ${displayRoutes.length} 条`"
         @range-change="updateVisibleRange"
       >
         <div
@@ -466,7 +832,7 @@ watch(
           :key="route.routeId"
           role="listitem"
           :aria-posinset="startIndex + index + 1"
-          :aria-setsize="document.routes.length"
+          :aria-setsize="displayRoutes.length"
         >
           <button
             type="button"
@@ -490,7 +856,15 @@ watch(
         ></div>
       </ReplayVirtualList>
     </details>
-    <p v-else class="replay-topology__empty">后端未提供实际路径。</p>
+    <p
+      v-else-if="showRouteCatalog() && layerVisible('fabric') && document.topology.nodes.length"
+      class="replay-topology__empty"
+    >
+      后端未提供实际路径。
+    </p>
+    <p v-else-if="showRouteCatalog() && document.topology.nodes.length" class="replay-topology__empty">
+      Fabric 层已隐藏，已报告路径不会画在图上。
+    </p>
   </section>
 </template>
 
@@ -531,10 +905,12 @@ watch(
   color: var(--warning-ink, var(--warning));
 }
 .replay-flow-readout {
-  display: grid;
-  gap: 9px;
-  margin: 0 0 12px;
-  padding: 10px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 18px;
+  margin: 0 0 10px;
+  padding: 8px 12px;
   border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--line));
   border-radius: var(--radius-control);
   background: color-mix(in srgb, var(--accent-soft) 46%, var(--surface));
@@ -568,14 +944,15 @@ watch(
   white-space: nowrap;
 }
 .replay-flow-readout__facts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
 }
 .replay-flow-readout__facts span {
-  display: grid;
+  display: flex;
+  align-items: baseline;
   min-width: 0;
-  gap: 2px;
+  gap: 6px;
 }
 .replay-flow-readout__facts small {
   color: var(--muted);
@@ -589,23 +966,43 @@ watch(
   white-space: nowrap;
 }
 .replay-topology__canvas {
-  min-height: 220px;
-  max-height: min(62vh, 640px);
+  display: flex;
+  justify-content: center;
+  min-height: 240px;
+  max-height: min(70vh, 760px);
   overflow: auto;
-  background: var(--surface-subtle);
+  background:
+    linear-gradient(var(--surface-subtle), var(--surface-subtle)),
+    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 58%);
   overscroll-behavior: contain;
-  scrollbar-gutter: stable both-edges;
+}
+.replay-topology__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.replay-topology__groups rect {
+  fill: color-mix(in srgb, var(--accent) 4%, var(--surface));
+  stroke: color-mix(in srgb, var(--line-strong) 75%, transparent);
+  stroke-width: 1;
+}
+.replay-topology__groups text {
+  fill: var(--muted);
+  font-size: 11px;
 }
 .replay-topology__svg {
   display: block;
-  width: max(100%, var(--replay-canvas-width));
+  width: min(100%, var(--replay-canvas-width));
   height: auto;
-  max-width: none;
+  margin-inline: auto;
   overflow: visible;
 }
 .replay-topology__links line {
-  stroke: var(--line-strong);
-  stroke-width: 2;
+  stroke: color-mix(in srgb, var(--line-strong) 88%, var(--muted));
+  stroke-width: 1.75;
   stroke-linecap: round;
   vector-effect: non-scaling-stroke;
 }
@@ -613,40 +1010,60 @@ watch(
   stroke: var(--accent);
   stroke-width: 4;
 }
+.replay-topology__links line.is-cross:not(.is-active):not(.is-highlighted) {
+  stroke-dasharray: 6 5;
+}
 .replay-topology__links line.is-active {
   stroke: var(--accent);
   stroke-width: 3.5;
-  stroke-dasharray: 5 8;
-  animation: replay-link-flow 900ms linear infinite;
+}
+.replay-topology__flow-link {
+  stroke: var(--accent);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  opacity: 0.72;
+  vector-effect: non-scaling-stroke;
+  marker-end: url(#replay-flow-arrow);
+}
+.replay-topology__flow-arrow path {
+  fill: var(--accent);
 }
 .replay-topology__nodes g {
   color: var(--ink);
 }
 .replay-topology__nodes rect {
   fill: var(--surface);
-  stroke: var(--line-strong);
-  stroke-width: 1.5;
+  stroke: color-mix(in srgb, var(--line-strong) 70%, transparent);
+  stroke-width: 1;
 }
-.replay-topology__nodes g.is-highlighted rect {
+.replay-topology__nodes g.is-highlighted rect,
+.replay-topology__nodes g.is-active rect {
   fill: var(--accent-soft);
   stroke: var(--accent);
-  stroke-width: 3;
-}
-.replay-topology__nodes g.is-active rect {
-  animation: replay-node-pulse 1200ms var(--ease-standard) infinite;
-  transform-box: fill-box;
-  transform-origin: center;
+  stroke-width: 1.5;
 }
 .replay-topology__nodes text {
   fill: currentColor;
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 650;
 }
-.replay-topology__flow-token circle:first-child {
+.replay-topology__flow-dot {
   fill: var(--accent);
-  stroke: var(--panel-strong);
-  stroke-width: 3;
-  filter: drop-shadow(0 2px 4px color-mix(in srgb, var(--accent) 40%, transparent));
-  animation: replay-flow-token-pulse 900ms var(--ease-standard) infinite;
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+.replay-topology__flow-halo {
+  fill: color-mix(in srgb, var(--accent) 18%, transparent);
+  stroke: color-mix(in srgb, var(--accent) 55%, transparent);
+  stroke-width: 1;
+  opacity: 0.7;
+}
+.replay-topology__flow-trail {
+  fill: var(--accent);
+  opacity: 0.28;
+}
+.replay-topology__flow-trail--mid {
+  opacity: 0.5;
 }
 .replay-topology__flow-core {
   fill: var(--on-accent, #fff);
@@ -655,6 +1072,7 @@ watch(
 .replay-topology__node-type {
   fill: var(--muted) !important;
   font-size: 10px !important;
+  font-weight: 500;
 }
 .replay-topology__routes {
   display: grid;
@@ -752,39 +1170,6 @@ watch(
   text-overflow: ellipsis;
   white-space: nowrap;
   font: 11px var(--font-mono);
-}
-
-@keyframes replay-link-flow {
-  to {
-    stroke-dashoffset: -26;
-  }
-}
-
-@keyframes replay-node-pulse {
-  0%,
-  100% {
-    filter: drop-shadow(0 0 0 color-mix(in srgb, var(--accent) 0%, transparent));
-  }
-  50% {
-    filter: drop-shadow(0 0 5px color-mix(in srgb, var(--accent) 42%, transparent));
-  }
-}
-@keyframes replay-flow-token-pulse {
-  0%,
-  100% {
-    opacity: 0.86;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .replay-topology__links line.is-active,
-  .replay-topology__nodes g.is-active rect,
-  .replay-topology__flow-token circle:first-child {
-    animation: none;
-  }
 }
 
 @media (max-width: 560px) {

@@ -23,7 +23,9 @@ const envelopeKeys = new Set([
   "expires_at",
   "display_label",
   "availability",
+  "run_request",
 ]);
+const requiredEnvelopeKeys = new Set([...envelopeKeys].filter((key) => key !== "run_request"));
 const resourceKeys = new Set(["resource_type", "resource_id", "revision", "display_label", "availability"]);
 const resourceTypes = new Set(["run", "experiment_form", "field", "artifact", "chart_subject"]);
 const actions = new Set(["explain", "configure_current_subset", "check_capability"]);
@@ -69,13 +71,14 @@ function isResource(value: unknown): value is AgentContextResourceRef {
     typeof value.resource_id === "string" &&
     typeof value.revision === "string" &&
     typeof value.display_label === "string" &&
-    availabilities.has(String(value.availability))
+    availabilities.has(String(value.availability)) &&
+    (value.run_request === undefined || isRecord(value.run_request))
   );
 }
 
 /** Unknown fields and values fail closed instead of widening the frozen shape. */
 export function isPageContextEnvelope(value: unknown): value is PageContextEnvelope {
-  if (!isRecord(value) || !hasExactKeys(value, envelopeKeys)) return false;
+  if (!isRecord(value) || !(hasExactKeys(value, requiredEnvelopeKeys) || hasExactKeys(value, envelopeKeys))) return false;
   return (
     value.contract_revision === PHASE1_LOCAL_CONTRACT_REVISION &&
     typeof value.page_id === "string" &&
@@ -105,5 +108,6 @@ export function clonePageContextEnvelope(value: PageContextEnvelope): PageContex
     resources: value.resources.map((resource) => ({ ...resource })),
     supported_actions: [...value.supported_actions],
     allowed_purposes: [...value.allowed_purposes],
+    ...(value.run_request ? { run_request: { ...value.run_request } } : {}),
   };
 }

@@ -25,12 +25,14 @@ pnpm install --frozen-lockfile
 自检验证从 EXE 所在目录找到 checkout、固定脚本、内置 Node、WebView2，且不读取 credential、
 不访问 Provider、不触碰 5173。构建本身不执行部署。
 
-概览页只有两个日常入口：
+概览页的日常入口：
 
 - “一键启动工作台”：已有清单且服务就绪时只打开网页；服务未运行时验证并启动已有 release，成功后打开网页；
   首次没有部署清单时转为本地部署确认。
 - “重新部署当前代码”调用 `scripts/deploy-local-backend.ps1 -SourceRoot <所选后端 Git 工作树>`，
   使用该后端与当前 Web checkout 文件（含未提交改动），不 fetch/push、不切换分支。
+- “快速部署（跳过测试）”额外传入 `-SkipTests`。它仍构建并发布，但跳过 CTest、Bridge 测试和 Web 测试，
+  清单记为 `skipped:not-run`。勾选“强制完整验证”时该按钮不可用。
 
 重新部署须先确认，验证发布成功并通过服务健康检查后打开网页；会重启 127.0.0.1:5173。
 “部署设置”保留仓库目录和 WSL 配置；“高级操作”折叠区中的“更新并部署最新 main”

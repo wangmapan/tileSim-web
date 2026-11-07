@@ -1,0 +1,28 @@
+{
+  "$id": "tilesim.agent_harness.exploration_summary.v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_identity", "contract_revision", "session_id", "state", "round_count", "evaluated_count", "run_count", "failure_count", "best_candidate_id", "best_value", "stop_reason", "rounds", "provenance"],
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.exploration_summary.v2" },
+    "contract_revision": { "const": "2026-10-29.wpg.v2" },
+    "session_id": { "type": "string", "minLength": 1 },
+    "state": { "type": "string" },
+    "round_count": { "type": "integer", "minimum": 0 },
+    "evaluated_count": { "type": "integer", "minimum": 0 },
+    "run_count": { "type": "integer", "minimum": 0 },
+    "failure_count": { "type": "integer", "minimum": 0 },
+    "best_candidate_id": { "type": ["string", "null"] },
+    "best_value": { "type": ["number", "null"] },
+    "stop_reason": { "$ref": "./exploration-stop-reason.schema.json" },
+    "rounds": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["candidate_id", "sequence", "status", "changed_fields", "metric"], "properties": { "candidate_id": { "type": "string" }, "sequence": { "type": "integer", "minimum": 1 }, "status": { "type": "string" }, "changed_fields": { "type": "array", "items": { "type": "string" } }, "metric": { "type": ["object", "null"] }, "deployment_candidate_id": { "type": ["string", "null"] }, "candidate_summary": { "type": ["object", "null"] }, "run_strategy": { "type": ["object", "null"] }, "scenarios": { "type": "array" } } } },
+    "qualified_candidates": { "type": "array", "items": { "type": "string" } },
+    "constraint_failed_candidates": { "type": "array", "items": { "type": "string" } },
+    "pareto_candidates": { "type": "array", "items": { "type": "string" } },
+    "recommended_candidate_id": { "type": ["string", "null"] },
+    "candidate_evaluations": { "type": "array" },
+    "stop_reason_code": { "type": ["string", "null"] },
+    "provenance": { "$ref": "./exploration-provenance.schema.json" }
+  }
+}

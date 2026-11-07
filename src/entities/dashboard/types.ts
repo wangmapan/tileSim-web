@@ -1,4 +1,10 @@
-import type { ApiManifestResponse, ApiRun, ArtifactManifestResponse, HealthResponse } from "../../contracts/bridge-api";
+import type {
+  AgentOrchestrationCapabilitySnapshotResponse,
+  ApiManifestResponse,
+  ApiRun,
+  ArtifactManifestResponse,
+  HealthResponse,
+} from "../../contracts/bridge-api";
 import type { ReportBundle, RuntimeTraceInput } from "../../contracts/report-model";
 
 export type RunListItem = ApiRun;
@@ -18,6 +24,8 @@ export interface BridgeState {
   detail: string;
   identity: HealthResponse | null;
   manifest: ApiManifestResponse | null;
+  orchestrationCapability: AgentOrchestrationCapabilitySnapshotResponse | null;
+  orchestrationCapabilityError: string;
 }
 
 export interface HistoryState {

@@ -66,6 +66,7 @@ export function buildExperimentAgentContextPublication(input: {
    */
   runtimeJson?: string;
   topologyJson?: string;
+  runRequest?: Readonly<Record<string, unknown>>;
 }): ExperimentAgentContextPublication {
   const runtimeJson = input.runtimeJson || "";
   const topologyJson = input.topologyJson || "";
@@ -142,7 +143,8 @@ export function buildExperimentAgentContextPublication(input: {
         : input.displayLabel
           ? `${input.displayLabel} · 当前能力不支持参数草案`
           : "当前能力不支持参数草案",
-      availability: pageReady ? "available" : "unavailable",
+    availability: pageReady ? "available" : "unavailable",
+    ...(input.runRequest ? { run_request: input.runRequest } : {}),
     },
     current_values: currentValues,
     parameter_catalog: parameterCatalog,

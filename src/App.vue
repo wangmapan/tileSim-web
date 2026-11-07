@@ -47,6 +47,22 @@ import {
   useAgentBatchActionMutation,
 } from "./features/agent-harness";
 import {
+  useAgentExplorationQuery,
+  useAgentExplorationsQuery,
+  useCreateAgentExplorationMutation,
+  useAuthorizeAgentExplorationMutation,
+  useAgentExplorationActionMutation,
+  observeExplorationEvents,
+  planExploration,
+  confirmExplorationPlan,
+  type ExplorationCreateRequest,
+  type ExplorationPlanningState,
+  useExplorationLock,
+  cancelExplorationLifecycle,
+  planExplorationPreflight,
+  formatExplorationPlanningMessage,
+} from "./features/agent-exploration";
+import {
   AGENT_HARNESS_OPTIMIZATION_CONTRACT_REVISION,
   AGENT_HARNESS_SUCCESSOR_SCHEMA_SET_REVISION,
   AGENT_HARNESS_BATCH_CONTRACT_REVISION,
@@ -57,6 +73,7 @@ import { canonicalJson, sha256Prefixed, evidenceAgentBackendIdentity } from "./f
 import type { AgentHarnessExecutionSnapshot, AgentHarnessOperationSnapshot } from "./lib/api/agent-harness";
 import {
   assessParameterPlan,
+  buildPhase1CapabilityProjection,
   describePlanValue,
   formalErrorBlock,
   intentOutputToTypedBlocks,
@@ -112,6 +129,7 @@ import {
   AGENT_INTENT_CONTRACT_REVISION,
   AGENT_INTENT_REQUEST_SCHEMA,
   requestAgentIntent,
+  type AgentIntentFailureDiagnostic,
 } from "./lib/api/agent-intent";
 import { recoverAgentNavigation, type AgentNavigationObservation } from "./features/agent-flow";
 import { BridgeApiError } from "./lib/api/errors";
@@ -272,6 +290,91 @@ const batchPending = computed(() =>
     batchRetryMutation,
     batchCancelMutation,
   ].some((mutation) => mutation.isPending.value),
+);
+const explorationCreateMutation = useCreateAgentExplorationMutation();
+const explorationAuthorizeMutation = useAuthorizeAgentExplorationMutation();
+const explorationSessionId = ref<string | null>(null);
+const explorationPlanning = ref<ExplorationPlanningState | null>(null);
+const explorationPlanningPending = ref(false);
+const pendingExplorationCreate = ref<{ request: ExplorationCreateRequest; instruction: string } | null>(null);
+const explorationListQuery = useAgentExplorationsQuery();
+const explorationDetailQuery = useAgentExplorationQuery(explorationSessionId);
+const explorationPauseMutation = useAgentExplorationActionMutation("pause");
+const explorationResumeMutation = useAgentExplorationActionMutation("resume");
+const explorationCancelMutation = useAgentExplorationActionMutation("cancel");
+const explorationLock = useExplorationLock();
+watch(
+  () => explorationDetailQuery.data.value?.session,
+  (session) => {
+    // Reconcile the page lock from the durable session as well as the
+    // authorization click. This closes the window where the mutation response
+    // and the first detail poll arrive in either order.
+    if (
+      session &&
+      Boolean(session.authorization_id) &&
+      ["exploring", "waiting_run", "comparing", "paused"].includes(session.state)
+    ) {
+      explorationLock.lock(session.session_id, session);
+    }
+  },
+  { immediate: true },
+);
+watch(
+  () => explorationListQuery.data.value?.sessions || [],
+  (sessions) => {
+    if (explorationSessionId.value) return;
+    const waiting = [...sessions]
+      .filter((session) => session.state === "waiting_authorization")
+      .sort((left, right) => right.updated_at.localeCompare(left.updated_at))[0];
+    if (waiting) explorationSessionId.value = waiting.session_id;
+  },
+  { immediate: true },
+);
+let explorationEventsAbort: AbortController | null = null;
+watch(
+  explorationSessionId,
+  (id) => {
+    explorationEventsAbort?.abort();
+    const controller = id ? new AbortController() : null;
+    explorationEventsAbort = controller;
+    if (!id || !controller) return;
+    const signal = controller.signal;
+    observeBackground(
+      observeExplorationEvents(
+        id,
+        (_events, terminal) => {
+          if (explorationSessionId.value !== id || explorationEventsAbort !== controller) return;
+          void explorationDetailQuery.refetch();
+          if (terminal) controller.abort();
+        },
+        signal,
+      ),
+      "自动探索事件观察已断开，已回退到持久化轮询",
+    );
+  },
+  { immediate: true },
+);
+router.beforeEach((to) => {
+  if (!explorationLock.locked.value) return true;
+  const target = agentPageDirectory.find((page) => page.route_name === to.name);
+  const session = explorationDetailQuery.data.value?.session;
+  const allowedPages: readonly string[] = session?.allowed_pages || [];
+  if (!target || !allowedPages.includes(String(target.page_id))) return false;
+  const boundRun = session?.run_id || null;
+  const requestedRun = Array.isArray(to.query.run) ? to.query.run[0] : to.query.run;
+  const currentRun = Array.isArray(activeRoute.query.run) ? activeRoute.query.run[0] : activeRoute.query.run;
+  if (boundRun && requestedRun && requestedRun !== boundRun) return false;
+  if (!boundRun && requestedRun !== currentRun) return false;
+  return true;
+});
+const explorationPending = computed(() =>
+  [
+    explorationCreateMutation,
+    explorationAuthorizeMutation,
+    explorationPauseMutation,
+    explorationResumeMutation,
+    explorationCancelMutation,
+  ].some((mutation) => mutation.isPending.value) || explorationPlanningPending.value,
 );
 const agentHarnessAvailable = computed(() => agentHarnessCapabilitiesQuery.isSuccess.value);
 const agentHarnessTaskCenter = computed<readonly AgentHarnessTaskCenterItem[]>(() => {
@@ -706,6 +809,372 @@ function publishExperimentAgentContext(publication: ExperimentAgentContextPublic
   agentContextRegistry.update("app-shell", publication.context);
 }
 
+async function startAgentExploration(
+  instruction: string,
+  intent: AgentIntentResponse,
+  context: PageContextEnvelope,
+): Promise<void> {
+  if (context.availability !== "available") {
+    appendAgentAnswerBlocks(openAgentTurn(instruction), [
+      formalErrorBlock(
+        "exploration_context_unavailable",
+        "当前页面上下文不足，请打开一次实验运行或跳转到运行结果页面后重试。",
+      ),
+    ]);
+    agentStatus.value = "自动探索需要实验配置页上下文";
+    return;
+  }
+  if (activeRoute.name !== "experiment") {
+    const previousContextRevision = context.context_revision;
+    const canNavigate =
+      context.allowed_purposes.includes("draft") || context.supported_actions.includes("configure_current_subset");
+    if (!canNavigate) {
+      appendAgentAnswerBlocks(openAgentTurn(instruction), [
+        formalErrorBlock("exploration_navigation_denied", "当前页面不能执行自动探索，请先打开实验配置页。"),
+      ]);
+      return;
+    }
+    const target = agentPageDirectory.find((page) => page.page_id === "experiment");
+    if (!target) {
+      appendAgentAnswerBlocks(openAgentTurn(instruction), [
+        formalErrorBlock("exploration_navigation_denied", "当前页面不能执行自动探索，请先打开实验配置页。"),
+      ]);
+      return;
+    }
+    await router.push({
+      name: target.route_name,
+      query: context.run_ref ? { run: context.run_ref.run_id } : undefined,
+    });
+    // Route completion and the experiment form's context publication are
+    // separate lifecycle steps.  Do not create a session against the generic
+    // overview/result context that can briefly remain after router.push().
+    for (
+      let attempt = 0;
+      attempt < 40 &&
+      (activeRoute.name !== "experiment" ||
+        agentContext.value?.route_name !== "experiment" ||
+        agentContext.value?.context_revision === previousContextRevision);
+      attempt += 1
+    ) {
+      await new Promise((resolve) => window.setTimeout(resolve, 50));
+    }
+    await nextTick();
+    const refreshed = agentContext.value;
+    if (!refreshed || refreshed.route_name !== "experiment" || refreshed.availability !== "available") {
+      appendAgentAnswerBlocks(openAgentTurn(instruction), [
+        formalErrorBlock(
+          "exploration_context_unavailable",
+          "当前页面上下文不足，请打开一次实验运行或跳转到运行结果页面后重试。",
+        ),
+      ]);
+      return;
+    }
+    context = refreshed;
+  }
+  if (!context.allowed_purposes.includes("draft")) {
+    appendAgentAnswerBlocks(openAgentTurn(instruction), [
+      formalErrorBlock(
+        "exploration_context_unavailable",
+        "当前页面上下文不足，请打开一次实验运行或跳转到运行结果页面后重试。",
+      ),
+    ]);
+    return;
+  }
+  if (!state.bridge.manifest?.schema_set_revision || !state.bridge.identity) {
+    appendAgentAnswerBlocks(openAgentTurn(instruction), [
+      formalErrorBlock("exploration_permission_denied", "当前页面没有执行自动探索所需的权限。"),
+    ]);
+    return;
+  }
+  // Exploration has a planning checkpoint before the existing session/create
+  // path.  This is deliberately evaluated before selecting a parameter or
+  // calling the Bridge create endpoint, so an underspecified request cannot
+  // reserve the single exploration slot or lock the page.
+  const planning = planExplorationPreflight(context, intent);
+  if (planning.status === "unsupported") {
+    explorationPlanning.value = {
+      plan: {
+        status: planning.status,
+        message: formatExplorationPlanningMessage(planning),
+        questions: planning.questions,
+        recommendations: planning.recommendations,
+        unsupported_fields: planning.unsupported,
+        would_create_run: false,
+        would_claim_slot: false,
+      },
+      request: null,
+      instruction,
+    };
+    appendAgentAnswerBlocks(openAgentTurn(instruction), [
+      formalErrorBlock("exploration_capability_unavailable", formatExplorationPlanningMessage(planning), "请改为固定资源下比较已发布部署候选，并在固定部署后探索批处理、最大 batch 和 KV Cache。"),
+    ]);
+    agentStatus.value = "当前能力不支持该部署探索";
+    return;
+  }
+  const numeric = agentParameterCatalog.value.find(
+    (entry) => entry.minimum !== null && entry.maximum !== null && entry.integerOnly === false,
+  );
+  if (!numeric) {
+    if (planning.status === "needs_clarification") {
+      explorationPlanning.value = {
+        plan: {
+          status: planning.status,
+          message: formatExplorationPlanningMessage(planning),
+          questions: planning.questions,
+          recommendations: planning.recommendations,
+          unsupported_fields: planning.unsupported,
+          would_create_run: false,
+          would_claim_slot: false,
+        },
+        request: null,
+        instruction,
+      };
+      appendAgentAnswerBlocks(openAgentTurn(instruction), [
+        formalErrorBlock("exploration_clarification_required", formatExplorationPlanningMessage(planning), "请先补充固定资源、工作负载和目标；确认后才会生成草案。"),
+      ]);
+      agentStatus.value = "等待补充自动探索信息";
+      return;
+    }
+    const unsupportedPlan = {
+      status: "unsupported" as const,
+      message: "当前能力目录没有可执行的运行参数探索闭环。当前可运行范围是固定资源下选择后端已发布部署候选，再探索批处理调度、最大批处理规模和 KV Cache；确认前不会创建运行或占用实验槽位。",
+      questions: [],
+      recommendations: [],
+      unsupported_fields: ["运行参数探索"],
+      would_create_run: false,
+      would_claim_slot: false,
+    };
+    explorationPlanning.value = { plan: unsupportedPlan, request: null, instruction };
+    appendAgentAnswerBlocks(openAgentTurn(instruction), [
+      formalErrorBlock("exploration_capability_unavailable", unsupportedPlan.message),
+    ]);
+    agentStatus.value = "当前能力不支持运行参数探索";
+    return;
+  }
+  const pointer = `/${numeric.path.replaceAll(".", "/")}`;
+  const current = Number(numeric.current ?? numeric.minimum ?? 0);
+  const baseConfig: Record<string, unknown> = {};
+  let cursor: Record<string, unknown> = baseConfig;
+  const tokens = pointer.slice(1).split("/");
+  tokens.forEach((token, index) => {
+    if (index === tokens.length - 1) cursor[token] = current;
+    else {
+      cursor[token] = {};
+      cursor = cursor[token] as Record<string, unknown>;
+    }
+  });
+  const backendIdentity = Object.fromEntries(
+    Object.entries(state.bridge.identity).filter(([key]) =>
+      [
+        "backend_revision",
+        "backend_branch",
+        "source_revision",
+        "build_revision",
+        "source_state_digest",
+        "build_state_digest",
+        "state_digests_match",
+        "versions_match",
+        "deployment_mode",
+        "deployment_ref",
+        "deployed_at",
+      ].includes(key),
+    ),
+  );
+  const inputDigest = await sha256Prefixed(
+    canonicalJson({ context_revision: context.context_revision, run_ref: context.run_ref, base_config: baseConfig, run_request: context.run_request || null }),
+  );
+  const request: ExplorationCreateRequest = {
+    context: {
+      context_revision: context.context_revision,
+      input_snapshot_digest: inputDigest,
+      schema_set_revision: state.bridge.manifest.schema_set_revision,
+      backend_identity: backendIdentity,
+      parameter_catalog_revision: context.context_revision,
+      current_page: "experiment",
+      run_id: context.run_ref?.run_id || null,
+      run_context_revision: context.run_ref?.revision || null,
+      available_parameters: [pointer],
+    },
+    objective: intent.exploration_objective
+      ? { ...intent.exploration_objective }
+      : { metric_path: "/metrics/latency_us", direction: "minimize" },
+    parameter_grants: [
+      {
+        pointer,
+        min: numeric.minimum ?? current,
+        max: numeric.maximum ?? current + 1,
+        step: numeric.integerOnly
+          ? 1
+          : Math.max(0.01, Math.abs((numeric.maximum ?? current + 1) - (numeric.minimum ?? current)) / 10),
+        kind: numeric.integerOnly ? "int" : "number",
+      },
+    ],
+    base_config: baseConfig,
+    ...(context.run_request ? { run_request: context.run_request } : {}),
+    ...(intent.requested_rounds
+      ? { budget: { max_rounds: intent.requested_rounds, max_runs: intent.requested_rounds } }
+      : {}),
+  };
+  // Ask the Bridge planning boundary to verify published candidates and freeze
+  // the deployment-aware draft before a session is created. This call is
+  // read-only and therefore cannot claim the sole exploration slot.
+  explorationPlanningPending.value = true;
+  try {
+    const planned = await planExploration({
+      context: {
+        ...(context as unknown as Record<string, unknown>),
+        run_request: context.run_request || null,
+      },
+      request: {
+        ...(intent.exploration_objective ? { objective: request.objective } : {}),
+        ...(context as unknown as Record<string, unknown>).fixed_resources
+          ? { fixed_resources: (context as unknown as Record<string, unknown>).fixed_resources }
+          : {},
+        ...(context as unknown as Record<string, unknown>).workload_scenarios
+          ? { workload_scenarios: (context as unknown as Record<string, unknown>).workload_scenarios }
+          : {},
+      },
+    });
+    const plan = planned.plan;
+    if (plan.status !== "awaiting_confirmation" && plan.status !== "draft_ready") {
+      explorationPlanning.value = { plan, request, instruction };
+      pendingExplorationCreate.value = { request, instruction };
+      appendAgentAnswerBlocks(openAgentTurn(instruction), [
+        formalErrorBlock(
+          plan.status === "unsupported" ? "exploration_capability_unavailable" : "exploration_clarification_required",
+          String(plan.message || "请先补充自动探索规划信息。"),
+          "请确认规划卡片中的信息；确认前不会创建运行或占用实验槽位。",
+        ),
+      ]);
+      agentStatus.value = plan.status === "unsupported" ? "当前能力不支持该部署探索" : "等待补充自动探索信息";
+      return;
+    }
+    explorationPlanning.value = { plan, request, instruction };
+    pendingExplorationCreate.value = { request, instruction };
+    appendAgentAnswerBlocks(openAgentTurn(instruction), [
+      {
+        block_type: "explanation",
+        block_id: `exploration-plan-${String(plan.draft_digest || context.context_revision)}`,
+        title: "自动探索草案待确认",
+        body: "请检查部署候选、工作负载场景和目标；确认后才会生成探索会话。",
+      },
+    ]);
+    agentStatus.value = "等待确认自动探索草案";
+  } catch (error) {
+    appendAgentAnswerBlocks(openAgentTurn(instruction), [
+      formalErrorBlock("exploration_planning_failed", error instanceof Error ? error.message : "自动探索规划暂不可用；未创建探索会话。"),
+    ]);
+  } finally {
+    explorationPlanningPending.value = false;
+  }
+}
+
+async function confirmAgentExplorationPlan(): Promise<void> {
+  const pending = pendingExplorationCreate.value;
+  const planning = explorationPlanning.value;
+  if (!pending || !planning || planning.plan.status !== "awaiting_confirmation") return;
+  explorationPlanningPending.value = true;
+  try {
+    const confirmed = await confirmExplorationPlan(planning.plan, {
+      confirmed: true,
+      confirmed_at: new Date().toISOString(),
+      source: "user",
+    });
+    if (confirmed.plan.status !== "draft_ready") throw new Error("自动探索草案确认未完成");
+    const request: ExplorationCreateRequest = { ...pending.request, planning_plan: confirmed.plan };
+    const created = await explorationCreateMutation.mutateAsync(request);
+    explorationSessionId.value = created.session.session_id;
+    explorationPlanning.value = null;
+    pendingExplorationCreate.value = null;
+    agentStatus.value = "等待自动探索授权";
+    appendAgentAnswerBlocks(openAgentTurn(pending.instruction), [
+      {
+        block_type: "explanation",
+        block_id: `exploration-${created.session.session_id}`,
+        title: "自动探索授权",
+        body: "草案已确认。请检查授权摘要后点击“允许助手自动探索”。",
+      },
+    ]);
+  } catch (error) {
+    appendAgentAnswerBlocks(openAgentTurn(pending.instruction), [
+      formalErrorBlock("exploration_plan_confirmation_failed", error instanceof Error ? error.message : "自动探索草案确认失败；未创建探索会话。"),
+    ]);
+  } finally {
+    explorationPlanningPending.value = false;
+  }
+}
+
+async function clarifyAgentExplorationPlan(values: Record<string, unknown>): Promise<void> {
+  const pending = pendingExplorationCreate.value;
+  const current = explorationPlanning.value;
+  if (!pending || !current) return;
+  explorationPlanningPending.value = true;
+  try {
+    const plan = current.plan;
+    const previousObjective = plan.objective && typeof plan.objective === "object" ? plan.objective : undefined;
+    const request: Record<string, unknown> = {
+      ...(previousObjective ? { objective: previousObjective } : {}),
+      ...(values["fixed-resources"] !== undefined ? { fixed_resources: values["fixed-resources"] } : {}),
+      ...(values["workload-scenarios"] !== undefined ? { workload_scenarios: values["workload-scenarios"] } : {}),
+      ...(values["primary-objective"] !== undefined ? { objective: values["primary-objective"] } : {}),
+    };
+    const planned = await planExploration({ context: pending.request.context, request });
+    explorationPlanning.value = { plan: planned.plan, request: pending.request, instruction: pending.instruction };
+    pendingExplorationCreate.value = { request: pending.request, instruction: pending.instruction };
+    appendAgentAnswerBlocks(openAgentTurn(pending.instruction), [
+      {
+        block_type: "explanation",
+        block_id: `exploration-plan-refresh-${String(planned.plan.draft_digest || Date.now())}`,
+        title: planned.plan.status === "awaiting_confirmation" ? "自动探索草案待确认" : "自动探索规划已更新",
+        body: String(planned.plan.message || "请检查更新后的规划信息。"),
+      },
+    ]);
+    agentStatus.value = planned.plan.status === "awaiting_confirmation" ? "等待确认自动探索草案" : "等待补充自动探索信息";
+  } catch (error) {
+    appendAgentAnswerBlocks(openAgentTurn(pending.instruction), [
+      formalErrorBlock("exploration_planning_failed", error instanceof Error ? error.message : "自动探索规划更新失败；未创建探索会话。"),
+    ]);
+  } finally {
+    explorationPlanningPending.value = false;
+  }
+}
+
+function dismissAgentExplorationPlan(): void {
+  explorationPlanning.value = null;
+  pendingExplorationCreate.value = null;
+  agentStatus.value = "等待补充自动探索信息";
+}
+
+async function authorizeAgentExploration(): Promise<void> {
+  if (explorationSessionId.value) {
+    try {
+      const result = await explorationAuthorizeMutation.mutateAsync({ id: explorationSessionId.value });
+      explorationLock.lock(explorationSessionId.value, result.session);
+    } catch {
+      // Keep the authorization card visible and leave the page unlocked when
+      // the backend rejected authorization.
+    }
+  }
+}
+function pauseAgentExploration(): void {
+  if (explorationSessionId.value) void explorationPauseMutation.mutateAsync(explorationSessionId.value);
+}
+function resumeAgentExploration(): void {
+  if (explorationSessionId.value) void explorationResumeMutation.mutateAsync(explorationSessionId.value);
+}
+async function cancelAgentExploration(): Promise<void> {
+  if (explorationSessionId.value) {
+    await cancelExplorationLifecycle({
+      sessionId: explorationSessionId.value,
+      cancel: () => explorationCancelMutation.mutateAsync(explorationSessionId.value!),
+      unlock: explorationLock.unlock,
+      setStatus: (message) => {
+        agentStatus.value = message;
+      },
+    });
+  }
+}
+
 /** How many turns the panel replays to the assistant model, and how many it keeps in memory. */
 const MAXIMUM_AGENT_TURNS = 12;
 
@@ -820,9 +1289,7 @@ function currentAgentFlowBinding(flow: AgentFlowState): AgentFlowBinding {
 
 function clearAgentFlowObserver(forceCancelNavigation = false): void {
   const preserveNavigation =
-    agentNavigationTransitionActive &&
-    !forceCancelNavigation &&
-    agentNavigationTransitionPath === activeRoute.fullPath;
+    agentNavigationTransitionActive && !forceCancelNavigation && agentNavigationTransitionPath === activeRoute.fullPath;
   agentFlowToken.value += 1;
   agentFlowAbort?.abort();
   agentFlowAbort = null;
@@ -918,10 +1385,9 @@ function updateAgentNavigationBlock(flow: AgentFlowState, notice?: string): void
   if (flow.intent !== "navigation") return;
   const observation = flow.last_navigation_observation || null;
   const authorizationExhausted = flow.authorization?.status === "exhausted";
-  const status =
-    authorizationExhausted
-      ? "failed"
-      : flow.status === "completed"
+  const status = authorizationExhausted
+    ? "failed"
+    : flow.status === "completed"
       ? "succeeded"
       : flow.status === "stale"
         ? "stale"
@@ -942,11 +1408,11 @@ function updateAgentNavigationBlock(flow: AgentFlowState, notice?: string): void
       ...(observation ? { observation } : {}),
       ...(notice ? { detail: notice } : {}),
       ...(!notice && status === "succeeded"
-        ? { detail: `已打开 ${observation?.actual_page || observation?.target_page || block.target_pages[0]}，并重新读取了页面上下文。` }
+        ? {
+            detail: `已打开 ${observation?.actual_page || observation?.target_page || block.target_pages[0]}，并重新读取了页面上下文。`,
+          }
         : {}),
-      ...(!notice && status === "stale"
-        ? { detail: "页面、运行或 Bridge 身份发生变化，已停止导航。" }
-        : {}),
+      ...(!notice && status === "stale" ? { detail: "页面、运行或 Bridge 身份发生变化，已停止导航。" } : {}),
       ...(!notice && status === "failed"
         ? {
             detail: authorizationExhausted
@@ -1112,7 +1578,7 @@ function restoreAgentFlowFromSession(): void {
                       ? "页面、运行或 Bridge 身份发生变化，已停止导航。"
                       : flow.status === "failed" || flow.status === "refused" || flow.status === "cancelled"
                         ? "导航流程未能安全完成；未继续尝试，请重新描述目标。"
-                      : "导航流程已恢复；点击上方按钮继续打开页面。",
+                        : "导航流程已恢复；点击上方按钮继续打开页面。",
               }
             : block,
         );
@@ -1320,13 +1786,18 @@ function observeAgentFlow(flow: AgentFlowState, projectBlock = true): void {
       if (token !== agentFlowToken.value || controller.signal.aborted) return;
       agentFlowAbort = null;
       const current = agentFlowState.value;
-      if (current && !flowIsTerminal(current)) scheduleAgentFlowPoll(current.flow_id, current.binding, token, projectBlock);
+      if (current && !flowIsTerminal(current))
+        scheduleAgentFlowPoll(current.flow_id, current.binding, token, projectBlock);
     });
 }
 
 function publishedAgentIntentRequest(instruction: string, context: PageContextEnvelope): AgentIntentRequest | null {
   const schemaRevision = state.bridge.manifest?.schema_set_revision;
-  if (!schemaRevision || !agentActiveSessionId.value) return null;
+  // Intent classification is bound to the verified Bridge identity as well as
+  // the schema revision. Never send an empty backend identity while bootstrap
+  // is still settling: the Bridge would correctly reject that request, but the
+  // user would only see a misleading generic intent failure.
+  if (!schemaRevision || !state.bridge.identity || !agentActiveSessionId.value) return null;
   // The page envelope is model input and therefore must be closed-world
   // validated.  Never reinterpret an unpublished/unknown route as overview:
   // that would bind intent classification to the wrong page capabilities.
@@ -1367,10 +1838,96 @@ function publishedAgentIntentRequest(instruction: string, context: PageContextEn
 async function recognizeAgentIntent(
   instruction: string,
   context: PageContextEnvelope,
-): Promise<AgentIntentResponse | null> {
+): Promise<{ response: AgentIntentResponse | null; failure: AgentIntentFailureDiagnostic | null }> {
   const request = publishedAgentIntentRequest(instruction, context);
-  if (!request) return null;
-  return requestAgentIntent(request, { sessionId: agentActiveSessionId.value });
+  if (!request) {
+    return {
+      response: null,
+      failure: {
+        kind: "preflight_request_invalid",
+        code: "intent_context_unavailable",
+        status: null,
+        retryable: false,
+      },
+    };
+  }
+  let failure: AgentIntentFailureDiagnostic | null = null;
+  const response = await requestAgentIntent(request, {
+    sessionId: agentActiveSessionId.value,
+    onFailure: (diagnostic) => {
+      failure = diagnostic;
+    },
+  });
+  // `requestAgentIntent` is fail-closed and should report every null result,
+  // but keep this boundary defensive as well. A future adapter must not make
+  // the UI fall back to an old, opaque generic code merely by
+  // returning null without a diagnostic.
+  return {
+    response,
+    failure:
+      failure ||
+      (response
+        ? null
+        : {
+            kind: "bridge_error",
+            code: "intent_recognition_failed",
+            status: null,
+            retryable: false,
+          }),
+  };
+}
+
+function intentFailureMessage(failure: AgentIntentFailureDiagnostic | null): string {
+  switch (failure?.code) {
+    case "agent_intent_provider_timeout":
+      return "意图模型响应超时；没有执行导航、修改配置或创建运行。";
+    case "agent_intent_provider_unavailable":
+    case "assistant_model_unavailable":
+    case "assistant_model_timeout":
+    case "transport_failure":
+      return "意图模型通道暂时不可用；没有执行导航、修改配置或创建运行。";
+    case "schema_revision_mismatch":
+      return "当前页面与本地 Bridge 的契约版本不一致；没有执行任何操作。";
+    case "http_404":
+      return "当前本地 Bridge 尚未发布模型意图接口；没有执行任何操作。";
+    case "invalid_agent_intent_request":
+      return "当前页面上下文不符合模型意图接口契约；没有执行任何操作。";
+    case "invalid_assistant_model_session":
+      return "当前助手会话尚未被本地 Bridge 接受；没有执行任何操作。";
+    case "intent_context_unavailable":
+    case "preflight_request_invalid":
+      return "当前页面上下文尚未完成校验；没有执行任何操作。";
+    case "invalid_response":
+      return "意图模型返回的内容不符合已发布契约；没有执行任何操作。";
+    default:
+      return "意图识别暂时不可用；没有执行导航、修改配置或创建运行。";
+  }
+}
+
+function intentFailureNextAction(failure: AgentIntentFailureDiagnostic | null): string {
+  switch (failure?.code) {
+    case "agent_intent_provider_timeout":
+    case "agent_intent_provider_unavailable":
+    case "assistant_model_unavailable":
+    case "assistant_model_timeout":
+    case "transport_failure":
+      return "检查本地助手模型通道后重试；系统不会用关键词猜测目标。";
+    case "schema_revision_mismatch":
+      return "刷新当前页面并重新读取 Bridge 契约后重试。";
+    case "http_404":
+      return "请启动或升级到与当前前端契约一致的本地 Bridge，再刷新页面。";
+    case "invalid_agent_intent_request":
+      return "刷新当前页面上下文后重试；系统不会用关键词猜测目标。";
+    case "invalid_assistant_model_session":
+      return "关闭并重新打开助手侧栏后重试。";
+    case "intent_context_unavailable":
+    case "preflight_request_invalid":
+      return "等待当前页面完成加载后重试。";
+    case "invalid_response":
+      return "重新提交请求；如果仍失败，请检查助手模型是否支持结构化 JSON 输出。";
+    default:
+      return "确认本地 Bridge 契约可用并刷新当前页面上下文后重试。";
+  }
 }
 
 async function appendNavigationProposal(
@@ -1418,15 +1975,17 @@ async function appendNavigationProposal(
   );
   const authorization = { ...authorizationBudget, authorization_digest };
   if (!context || !targetPages.length) {
-    appendAgentAnswerBlocks(turn, [formalErrorBlock("navigation_unavailable", "模型没有返回可验证的目标页面，因此不会猜测路由。")] );
+    appendAgentAnswerBlocks(turn, [
+      formalErrorBlock("navigation_unavailable", "模型没有返回可验证的目标页面，因此不会猜测路由。"),
+    ]);
     agentStatus.value = "没有可验证的目标页面";
     return;
   }
   const requiresRunBinding = targetPages.some(
     (pageId) =>
-      (agentPageDirectory.find((page) => page.page_id === pageId)?.capability_ids as readonly string[] | undefined)?.includes(
-        "run_bound",
-      ) === true,
+      (
+        agentPageDirectory.find((page) => page.page_id === pageId)?.capability_ids as readonly string[] | undefined
+      )?.includes("run_bound") === true,
   );
   const flow = await startAgentFlowForInstruction(instruction, context, "navigation", null, {
     targetPages,
@@ -1436,7 +1995,9 @@ async function appendNavigationProposal(
   });
   if (!proposalStillCurrent()) return;
   if (!flow) {
-    appendAgentAnswerBlocks(turn, [formalErrorBlock("navigation_unavailable", "当前页面或 Bridge 身份无法建立可审计导航流程；未执行跳转。")] );
+    appendAgentAnswerBlocks(turn, [
+      formalErrorBlock("navigation_unavailable", "当前页面或 Bridge 身份无法建立可审计导航流程；未执行跳转。"),
+    ]);
     return;
   }
   appendAgentAnswerBlocks(turn, [
@@ -1482,9 +2043,7 @@ async function confirmAgentNavigation(blockId: string): Promise<void> {
     !navigationController.signal.aborted &&
     agentBlocks.value.some(
       (candidate) =>
-        candidate.block_type === "agent_navigation" &&
-        candidate.block_id === blockId &&
-        candidate.status === "running",
+        candidate.block_type === "agent_navigation" && candidate.block_id === blockId && candidate.status === "running",
     );
   if (!isAgentNavigationAuthorization(block.authorization)) {
     agentBlocks.value = agentBlocks.value.map((candidate) =>
@@ -1506,9 +2065,9 @@ async function confirmAgentNavigation(blockId: string): Promise<void> {
   }
   const requiresRunBinding = block.target_pages.some(
     (pageId) =>
-      (agentPageDirectory.find((page) => page.page_id === pageId)?.capability_ids as readonly string[] | undefined)?.includes(
-        "run_bound",
-      ) === true,
+      (
+        agentPageDirectory.find((page) => page.page_id === pageId)?.capability_ids as readonly string[] | undefined
+      )?.includes("run_bound") === true,
   );
   if (requiresRunBinding && !context.run_ref) {
     // Run-bound pages must never be opened with a dashboard-cache run id (or
@@ -1528,9 +2087,12 @@ async function confirmAgentNavigation(blockId: string): Promise<void> {
       ? { ...candidate, status: "running", detail: "正在打开页面并重新核对页面上下文。" }
       : candidate,
   );
-  const navigationFlow =
-    block.flow_id && agentFlowState.value?.flow_id === block.flow_id ? agentFlowState.value : null;
-  if (!navigationFlow || navigationFlow.intent !== "navigation" || navigationFlow.pending_action !== "confirm_navigation") {
+  const navigationFlow = block.flow_id && agentFlowState.value?.flow_id === block.flow_id ? agentFlowState.value : null;
+  if (
+    !navigationFlow ||
+    navigationFlow.intent !== "navigation" ||
+    navigationFlow.pending_action !== "confirm_navigation"
+  ) {
     agentBlocks.value = agentBlocks.value.map((candidate) =>
       candidate.block_id === blockId && candidate.block_type === "agent_navigation"
         ? { ...candidate, status: "stale", detail: "导航流程身份或等待状态已变化，未执行页面跳转。" }
@@ -1635,71 +2197,75 @@ async function confirmAgentNavigation(blockId: string): Promise<void> {
     // as routeForView() removes the query.
     const navigationRunBound = navigationFlow.binding.run_id !== null;
     result = await recoverAgentNavigation(block.target_pages, {
-    allowedPages: block.authorization.allowed_pages,
-    allowedActions: block.authorization.allowed_actions,
-    requiredCapabilities: block.required_capabilities,
-    visitedPages: navigationFlow.visited_pages,
-    navigationAttempts: navigationFlow.navigation_attempts,
-    maxAttempts: block.authorization.max_navigation_attempts,
-    maxExecutionTimeMs: block.authorization.max_execution_time_ms,
-    // The page envelope is the authoritative run identity. `state.runId` is a
-    // dashboard cache and can lag during deep-link/bootstrap transitions;
-    // using it here could navigate with an old run and make the observation
-    // look valid against the wrong result.
-    expectedRunId: navigationRunBound ? context.run_ref?.run_id || null : null,
-    expectedBackendIdentity: flowBackendIdentity(),
-    expectedSchemaSetRevision: schemaRevision,
-    expectedInputSnapshotDigest: navigationRunBound ? navigationFlow.binding.input_snapshot_digest : undefined,
-    expectedArtifactBindings: navigationRunBound ? navigationFlow.binding.artifact_bindings : undefined,
-    signal: navigationController.signal,
-    navigate: async (pageId) => {
-      const location = routeForView(pageId, context.run_ref?.run_id || null);
-      // The route watcher normally fences every navigation loop. This
-      // transition is the one explicitly approved action, so mark its exact
-      // destination before pushing and let the watcher preserve the local
-      // controller until the new page publishes its context.
-      agentNavigationTransitionActive = true;
-      agentNavigationTransitionPath = router.resolve(location).fullPath;
-      await router.push(location);
-      await nextTick();
-      // The router transition resolves before the dashboard/page registry has
-      // necessarily published its new envelope. Wait for that durable
-      // synchronization before reading context; otherwise the old page can
-      // be recorded as a navigation failure and trigger an unnecessary retry.
-      await agentNavigationReady;
-      await nextTick();
+      allowedPages: block.authorization.allowed_pages,
+      allowedActions: block.authorization.allowed_actions,
+      requiredCapabilities: block.required_capabilities,
+      visitedPages: navigationFlow.visited_pages,
+      navigationAttempts: navigationFlow.navigation_attempts,
+      maxAttempts: block.authorization.max_navigation_attempts,
+      maxExecutionTimeMs: block.authorization.max_execution_time_ms,
+      // The page envelope is the authoritative run identity. `state.runId` is a
+      // dashboard cache and can lag during deep-link/bootstrap transitions;
+      // using it here could navigate with an old run and make the observation
+      // look valid against the wrong result.
+      expectedRunId: navigationRunBound ? context.run_ref?.run_id || null : null,
+      expectedBackendIdentity: flowBackendIdentity(),
+      expectedSchemaSetRevision: schemaRevision,
+      expectedInputSnapshotDigest: navigationRunBound ? navigationFlow.binding.input_snapshot_digest : undefined,
+      expectedArtifactBindings: navigationRunBound ? navigationFlow.binding.artifact_bindings : undefined,
+      signal: navigationController.signal,
+      navigate: async (pageId) => {
+        const location = routeForView(pageId, context.run_ref?.run_id || null);
+        // The route watcher normally fences every navigation loop. This
+        // transition is the one explicitly approved action, so mark its exact
+        // destination before pushing and let the watcher preserve the local
+        // controller until the new page publishes its context.
+        agentNavigationTransitionActive = true;
+        agentNavigationTransitionPath = router.resolve(location).fullPath;
+        await router.push(location);
+        await nextTick();
+        // The router transition resolves before the dashboard/page registry has
+        // necessarily published its new envelope. Wait for that durable
+        // synchronization before reading context; otherwise the old page can
+        // be recorded as a navigation failure and trigger an unnecessary retry.
+        await agentNavigationReady;
+        await nextTick();
+        agentNavigationTransitionActive = false;
+        agentNavigationTransitionPath = null;
+        /*
+await nextTick();
       agentNavigationTransitionActive = false;
-      agentNavigationTransitionPath = null;
-    },
-    readContext: () => {
-      const current = agentContext.value;
-      if (!current) return null;
-      return {
-        ...current,
-        backend_identity: flowBackendIdentity(),
-        // Read the live manifest so a revision change during the route
-        // transition is observed as stale instead of being masked by the
-        // revision captured before the click.
-        schema_set_revision: state.bridge.manifest?.schema_set_revision || null,
-        ...(navigationRunBound
-          ? {
-              input_snapshot_digest: navigationFlow.binding.input_snapshot_digest,
-              artifact_bindings: flowArtifactBindings(),
-            }
-          : {}),
-      };
-    },
-    onObservation: async (observation) => {
-      // A successful observation is persisted by the final branch below so
-      // that the loop does not attempt to resume a terminal flow twice.
-      if (observation.page_correct) return "continue";
-      if (!ownsNavigationBlock()) return "stale";
-      const response = await persistNavigationObservation(observation);
-      if (!ownsNavigationBlock() || !response) return "stale";
-      if (response.flow.status === "stale") return "stale";
-      if (["failed", "refused", "cancelled"].includes(response.flow.status)) return "stale";
-      return "continue";
-    },
+        */
+      },
+      readContext: () => {
+        const current = agentContext.value;
+        if (!current) return null;
+        return {
+          ...current,
+          backend_identity: flowBackendIdentity(),
+          // Read the live manifest so a revision change during the route
+          // transition is observed as stale instead of being masked by the
+          // revision captured before the click.
+          schema_set_revision: state.bridge.manifest?.schema_set_revision || null,
+          ...(navigationRunBound
+            ? {
+                input_snapshot_digest: navigationFlow.binding.input_snapshot_digest,
+                artifact_bindings: flowArtifactBindings(),
+              }
+            : {}),
+        };
+      },
+      onObservation: async (observation) => {
+        // A successful observation is persisted by the final branch below so
+        // that the loop does not attempt to resume a terminal flow twice.
+        if (observation.page_correct) return "continue";
+        if (!ownsNavigationBlock()) return "stale";
+        const response = await persistNavigationObservation(observation);
+        if (!ownsNavigationBlock() || !response) return "stale";
+        if (response.flow.status === "stale") return "stale";
+        if (["failed", "refused", "cancelled"].includes(response.flow.status)) return "stale";
+        return "continue";
+      },
     });
   } catch (error) {
     agentNavigationTransitionActive = false;
@@ -1751,7 +2317,9 @@ async function confirmAgentNavigation(blockId: string): Promise<void> {
         ? "succeeded"
         : response.flow.status === "stale"
           ? "stale"
-          : response.flow.status === "failed" || response.flow.status === "refused" || response.flow.status === "cancelled"
+          : response.flow.status === "failed" ||
+              response.flow.status === "refused" ||
+              response.flow.status === "cancelled"
             ? "failed"
             : response.flow.status === "waiting_user" && response.flow.pending_action === "confirm_navigation"
               ? "pending"
@@ -1840,7 +2408,9 @@ async function confirmAgentNavigation(blockId: string): Promise<void> {
         ? "succeeded"
         : response.flow.status === "stale"
           ? "stale"
-          : response.flow.status === "failed" || response.flow.status === "refused" || response.flow.status === "cancelled"
+          : response.flow.status === "failed" ||
+              response.flow.status === "refused" ||
+              response.flow.status === "cancelled"
             ? "failed"
             : response.flow.status === "waiting_user" && response.flow.pending_action === "confirm_navigation"
               ? "pending"
@@ -1900,9 +2470,10 @@ async function cancelAgentNavigation(blockId: string): Promise<void> {
       candidate.block_id === blockId &&
       (candidate.status === "pending" || candidate.status === "running"),
   );
-  const flow = block?.block_type === "agent_navigation" && block.flow_id === agentFlowState.value?.flow_id
-    ? agentFlowState.value
-    : null;
+  const flow =
+    block?.block_type === "agent_navigation" && block.flow_id === agentFlowState.value?.flow_id
+      ? agentFlowState.value
+      : null;
   if (!block || block.block_type !== "agent_navigation" || !flow || !flow.authorization) return;
   const cancelSessionId = agentActiveSessionId.value;
   agentNavigationAbort?.abort();
@@ -1987,11 +2558,7 @@ async function cancelAgentNavigation(blockId: string): Promise<void> {
       } catch (replayError) {
         if (!shouldRetryAgentFlowObserver(replayError)) throw replayError;
         const reconciled = await getAgentFlow(revokeFlow.flow_id, revokeFlow.binding);
-        if (
-          reconciled.status !== "cancelled" ||
-          reconciled.authorization?.status !== "revoked"
-        )
-          throw replayError;
+        if (reconciled.status !== "cancelled" || reconciled.authorization?.status !== "revoked") throw replayError;
         response = {
           flow: reconciled,
           events: [],
@@ -2070,7 +2637,9 @@ async function startAgentFlowForInstruction(
     flowContextRevision === agentContext.value?.context_revision &&
     flowToken === agentFlowToken.value;
   const runBound =
-    intent === "user_report" || intent === "existing_run_analysis" || (intent === "navigation" && navigationPlan?.requiresRunBinding === true);
+    intent === "user_report" ||
+    intent === "existing_run_analysis" ||
+    (intent === "navigation" && navigationPlan?.requiresRunBinding === true);
   let evidenceStatus: AgentFlowStartRequest["evidence_status"] | undefined;
   if (runBound && reportContext) {
     const { userRunInterpretationEvidenceStatus } = await import("./features/user-run-interpretation");
@@ -3149,6 +3718,17 @@ async function handleAgentStart(task: "capabilities" | "configure" | "analyze"):
 }
 
 async function submitAgentInstruction(payload: AgentCopilotSubmitPayload): Promise<void> {
+  // The shell can be opened before the shared bootstrap finishes. Wait for the
+  // existing initialization fence once, then read the context again so intent
+  // classification never binds to the transient `schema-unavailable` envelope.
+  if (state.bridge.checking || !state.bridge.manifest?.schema_set_revision || !state.bridge.identity) {
+    try {
+      await agentNavigationReady;
+    } catch {
+      // The preflight below reports the bounded context failure without
+      // guessing an intent or falling back to keywords.
+    }
+  }
   const context = agentContext.value;
   if (!context || payload.context_revision !== context.context_revision) {
     appendAgentAnswerBlocks(openAgentTurn(payload.instruction), [
@@ -3176,19 +3756,31 @@ async function submitAgentInstruction(payload: AgentCopilotSubmitPayload): Promi
   // that would turn a failed classification into an unreviewed action.  The
   // deterministic flow and parameter validators still own every subsequent
   // side effect.
-  const recognizedIntent = await recognizeAgentIntent(instruction, context);
+  const intentRecognition = await recognizeAgentIntent(instruction, context);
+  const recognizedIntent = intentRecognition.response;
   if (!submitStillCurrent()) return;
   if (!recognizedIntent || agentContext.value?.context_revision !== context.context_revision) {
+    const failure = intentRecognition.failure;
     appendAgentAnswerBlocks(openAgentTurn(instruction), [
       formalErrorBlock(
-        "intent_unavailable",
-        "当前无法可靠确认你的目标；没有执行导航、修改配置或创建运行。请补充目标后重试。",
+        failure?.code || "intent_recognition_failed",
+        failure ? intentFailureMessage(failure) : "意图识别没有返回可验证结果；没有执行导航、修改配置或创建运行。",
+        intentFailureNextAction(failure),
       ),
     ]);
-    agentStatus.value = "等待补充目标";
+    agentStatus.value = failure?.retryable ? "意图模型暂时不可用" : "意图识别未完成";
     return;
   }
   const intentPolicy = deriveAgentIntentPolicy(recognizedIntent);
+  // Exploration has its own read-only planning checkpoint.  Route an
+  // underspecified exploration intent through that checkpoint before the
+  // generic intent clarification response; otherwise the model's questions
+  // are rendered as a terminal error and the user never sees the published
+  // resource/scenario/metric recommendations or the confirmation card.
+  if (recognizedIntent.intent === "explore_experiment") {
+    await startAgentExploration(instruction, recognizedIntent, context);
+    return;
+  }
   if (intentPolicy.shouldClarify) {
     appendAgentAnswerBlocks(openAgentTurn(instruction), [
       formalErrorBlock(
@@ -3230,10 +3822,7 @@ async function submitAgentInstruction(payload: AgentCopilotSubmitPayload): Promi
       return;
     }
     const flow = await startAgentFlowForInstruction(instruction, context, "user_report", reportRequest);
-    if (
-      submitStillCurrent() &&
-      (!flow || flow.status === "refused" || flow.status === "failed")
-    )
+    if (submitStillCurrent() && (!flow || flow.status === "refused" || flow.status === "failed"))
       appendReportAction(instruction, reportRequest);
     return;
   }
@@ -3295,7 +3884,7 @@ async function submitAgentInstruction(payload: AgentCopilotSubmitPayload): Promi
   // explicit branch above. Reaching this point means the model response was
   // malformed or a future enum was not wired; do not guess from keywords.
   appendAgentAnswerBlocks(openAgentTurn(instruction), [
-    formalErrorBlock("intent_unavailable", "无法确认该请求的结构化意图；未执行任何操作，请重新描述目标。"),
+    formalErrorBlock("intent_recognition_failed", "意图识别没有返回可验证结果；未执行任何操作，请重新描述目标。"),
   ]);
   agentStatus.value = "等待补充目标";
 }
@@ -3459,8 +4048,7 @@ watch(
   () => {
     const routePath = activeRoute.fullPath;
     const routeRestoreToken = ++agentRouteRestoreToken;
-    const preservingApprovedNavigation =
-      agentNavigationTransitionActive && agentNavigationTransitionPath === routePath;
+    const preservingApprovedNavigation = agentNavigationTransitionActive && agentNavigationTransitionPath === routePath;
     // A route change does not destroy the local conversation. The active session
     // remains available for explicit follow-up, while the context watcher below
     // marks plans and drafts stale when they no longer match this page.
@@ -3511,6 +4099,23 @@ watch(bridgeContextSignature, () => {
   refreshAgentContextAfterBridgeChange();
 });
 watch(
+  () => state.bridge.orchestrationCapability,
+  (snapshot) => {
+    if (!snapshot) {
+      agentCapability.value = null;
+      return;
+    }
+    try {
+      agentCapability.value = buildPhase1CapabilityProjection(snapshot);
+    } catch {
+      // Capability projections are fail-closed: an unsupported or stale
+      // snapshot must not leave the assistant with inferred edit authority.
+      agentCapability.value = null;
+    }
+  },
+  { immediate: true },
+);
+watch(
   () => [state.runId, state.runName] as const,
   () => {
     // Experiment pages publish the richer typed form envelope themselves.
@@ -3548,11 +4153,26 @@ watch(
   },
 );
 watch(
+  () => [agentContext.value?.context_revision || null, agentContext.value?.run_ref?.run_id || null] as const,
+  ([revision, runId]) => {
+    if (explorationLock.locked.value && !explorationLock.checkContext(revision, runId)) {
+      agentStatus.value = "页面上下文已过期，页面仍保持锁定";
+    }
+  },
+  { immediate: true },
+);
+watch(
   () => [state.runId, activeRoute.query.evidence_request] as const,
   ([runId, requestId]) => evidenceSelection.synchronizeRoute(runId, requestId),
   { immediate: true },
 );
 onMounted(() => {
+  observeBackground(
+    explorationLock.restore().then((session) => {
+      if (session) explorationSessionId.value = session.session_id;
+    }),
+    "自动探索状态恢复失败，请重试",
+  );
   const routeRestoreToken = ++agentRouteRestoreToken;
   const routePath = activeRoute.fullPath;
   dashboardInitialized.value = true;
@@ -3583,7 +4203,14 @@ onBeforeUnmount(() => {
 
 <template>
   <RouterView v-slot="{ Component, route }">
-    <div class="app-shell" :style="agentDockStyle" :data-agent-copilot-state="agentPanelState">
+    <div
+      class="app-shell"
+      :style="agentDockStyle"
+      :data-agent-copilot-state="agentPanelState"
+      :data-app-ready="dashboardInitialized && !!agentContext"
+      :data-exploration-locked="explorationLock.locked.value"
+      :data-exploration-context-expired="explorationLock.expired.value"
+    >
       <AppSidebar />
       <main class="app-main">
         <AppHeader>
@@ -3606,7 +4233,11 @@ onBeforeUnmount(() => {
                 :key="String(route.name)"
                 v-bind="
                   route.name === 'experiment'
-                    ? { agentContextPublisher: publishExperimentAgentContext, agentCommandRegistry }
+                    ? {
+                        agentContextPublisher: publishExperimentAgentContext,
+                        agentCommandRegistry,
+                        explorationLocked: explorationLock.locked.value,
+                      }
                     : {}
                 "
               />
@@ -3627,7 +4258,7 @@ onBeforeUnmount(() => {
     :current-task="agentContext?.display_label || '当前页面助手'"
     :status-label="agentStatus"
     :initial-width="agentPanelWidth"
-    :allow-parameter-edit="agentCanEditParameters"
+    :allow-parameter-edit="agentCanEditParameters && !explorationLock.locked.value"
     :busy="agentStreaming"
     :model-channel="agentModelChannel"
     :model-catalogue="agentModelCatalogue"
@@ -3648,6 +4279,9 @@ onBeforeUnmount(() => {
     :batch-detail="batchDetailQuery.data.value || null"
     :batch-pending="batchPending"
     :batch-create-pending="batchCreateMutation.isPending.value"
+    :exploration-detail="explorationDetailQuery.data.value?.detail || null"
+    :exploration-planning="explorationPlanning"
+    :exploration-pending="explorationPending"
     @resize="agentPanelWidth = $event"
     @submit="submitAgentInstruction"
     @answer="answerAgentClarification"
@@ -3680,5 +4314,12 @@ onBeforeUnmount(() => {
     @batch-retry="retryAgentBatch"
     @batch-cancel="cancelAgentBatch"
     @batch-create="createAgentBatch"
+    @exploration-authorize="authorizeAgentExploration"
+    @exploration-pause="pauseAgentExploration"
+    @exploration-resume="resumeAgentExploration"
+    @exploration-cancel="cancelAgentExploration"
+    @exploration-planning-confirm="confirmAgentExplorationPlan"
+    @exploration-planning-clarify="clarifyAgentExplorationPlan"
+    @exploration-planning-dismiss="dismissAgentExplorationPlan"
   />
 </template>

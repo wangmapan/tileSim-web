@@ -35,6 +35,7 @@ export interface ExecutionReplayQueryOptions {
 }
 
 export interface ExecutionReplayQueryResult {
+  requestAttribution: ReplayArtifactPayload | null;
   runtimeEvents: ReplayArtifactPayload | null;
   runtimeRequests: ReplayArtifactPayload | null;
   fabricRoutes: ReplayArtifactPayload | null;
@@ -162,6 +163,7 @@ async function readArtifact(
 
 export function useExecutionReplayQuery(options: ExecutionReplayQueryOptions) {
   const result = ref<ExecutionReplayQueryResult>({
+    requestAttribution: null,
     runtimeEvents: null,
     runtimeRequests: null,
     fabricRoutes: null,
@@ -196,6 +198,7 @@ export function useExecutionReplayQuery(options: ExecutionReplayQueryOptions) {
     // or topology under the new run identity. The settled results below still
     // preserve every artifact that succeeds in this refresh.
     result.value = {
+      requestAttribution: null,
       runtimeEvents: null,
       runtimeRequests: null,
       fabricRoutes: null,
@@ -308,6 +311,7 @@ export function useExecutionReplayQuery(options: ExecutionReplayQueryOptions) {
         .filter((item): item is PromiseRejectedResult => item.status === "rejected")
         .map((item) => (item.reason instanceof Error ? item.reason.message : String(item.reason)));
       result.value = {
+        requestAttribution,
         runtimeEvents: events,
         runtimeRequests: requests,
         fabricRoutes,
@@ -320,6 +324,7 @@ export function useExecutionReplayQuery(options: ExecutionReplayQueryOptions) {
       if (currentRevision !== revision) return;
       const entry = manifestEntry(manifest, "runtime-events");
       result.value = {
+        requestAttribution: null,
         runtimeEvents: entry
           ? {
               value: null,

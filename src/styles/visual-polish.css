@@ -102,13 +102,9 @@
 body {
   background-color: var(--canvas);
   background-image:
-    linear-gradient(color-mix(in srgb, var(--line) 23%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--line) 23%, transparent) 1px, transparent 1px),
-    radial-gradient(circle at 16% -10%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 31rem);
-  background-size:
-    32px 32px,
-    32px 32px,
-    auto;
+    linear-gradient(color-mix(in srgb, var(--line) 16%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--line) 16%, transparent) 1px, transparent 1px);
+  background-size: 28px 28px, 28px 28px;
   background-attachment: fixed;
 }
 
@@ -120,23 +116,6 @@ body {
   box-shadow:
     0 1px 0 var(--line),
     0 12px 28px -28px color-mix(in srgb, var(--ink) 55%, transparent);
-}
-
-.page-heading > div {
-  position: relative;
-  padding-left: 12px;
-}
-
-.page-heading > div::before {
-  position: absolute;
-  top: 50%;
-  left: 0;
-  width: 3px;
-  height: 18px;
-  border-radius: 999px;
-  background: var(--accent);
-  content: "";
-  transform: translateY(-50%);
 }
 
 .nav-link {
@@ -168,7 +147,6 @@ body {
 .nav-link:hover svg,
 .nav-link.active svg {
   color: var(--nav-active-mark);
-  transform: translateX(2px);
 }
 
 .panel {
@@ -180,21 +158,9 @@ body {
   position: relative;
 }
 
-.panel > .panel-header::before,
-.panel > summary.panel-header::before {
-  position: absolute;
-  top: -1px;
-  left: var(--space-panel);
-  width: 26px;
-  height: 3px;
-  border-radius: 0 0 999px 999px;
-  background: var(--accent);
-  content: "";
-  opacity: 0.82;
-}
 
 .panel-header .section-kicker {
-  color: var(--accent-ink);
+  color: var(--muted);
 }
 
 .stat-card {
@@ -206,19 +172,9 @@ body {
     transform var(--motion-interaction) var(--ease-emphasized);
 }
 
-.stat-card::before {
-  position: absolute;
-  inset: 0 0 auto;
-  height: 3px;
-  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 22%, transparent));
-  content: "";
-  opacity: 0.72;
-}
-
 .stat-card:hover {
   border-color: color-mix(in srgb, var(--accent) 36%, var(--line));
   box-shadow: var(--shadow);
-  transform: translateY(-2px);
 }
 
 .visualization-panel {
@@ -232,7 +188,6 @@ body {
 .visualization-panel:hover {
   border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
   box-shadow: var(--shadow);
-  transform: translateY(-1px);
 }
 
 .visualization-title-icon {
@@ -761,7 +716,7 @@ details > summary {
 .execution-replay-panel .replay-details__heading h3,
 .execution-replay-panel .replay-topology h3,
 .execution-replay-panel .replay-collective h3 {
-  letter-spacing: -0.015em;
+  letter-spacing: 0;
 }
 
 .execution-replay-panel .replay-route-row__select,
@@ -800,79 +755,23 @@ details > summary {
 }
 
 .execution-replay-panel .replay-marker--active {
-  animation: ts-replay-active-pulse 1200ms var(--ease-standard) infinite;
+  box-shadow: 0 0 0 2px var(--ink), 0 0 0 5px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 .execution-replay-panel .replay-marker--event.replay-marker--active {
-  animation: ts-replay-event-pulse 900ms var(--ease-standard) infinite;
+  box-shadow: 0 0 0 2px var(--ink), 0 0 0 5px color-mix(in srgb, var(--warning) 24%, transparent);
 }
 
 .execution-replay-panel .replay-topology__links line.is-highlighted {
-  animation: ts-replay-link-flow 1000ms var(--ease-standard) infinite alternate;
+  stroke-dasharray: 6 4;
 }
 
 .execution-replay-panel .replay-topology__links line.is-active {
   stroke-dasharray: 8 5;
-  animation:
-    ts-replay-link-flow 1000ms var(--ease-standard) infinite alternate,
-    ts-replay-link-dash 900ms linear infinite;
 }
 
 .execution-replay-panel .replay-topology__nodes g.is-active rect {
-  animation: ts-replay-node-active 1200ms var(--ease-standard) infinite;
-}
-
-@keyframes ts-replay-active-pulse {
-  0%,
-  100% {
-    filter: none;
-    transform: scale(1);
-  }
-  50% {
-    filter: brightness(1.08);
-    transform: scale(1.035);
-  }
-}
-
-@keyframes ts-replay-event-pulse {
-  0%,
-  100% {
-    box-shadow:
-      0 0 0 2px color-mix(in srgb, var(--warning) 18%, transparent),
-      0 0 0 0 color-mix(in srgb, var(--warning) 0%, transparent);
-  }
-  50% {
-    box-shadow:
-      0 0 0 3px color-mix(in srgb, var(--warning) 28%, transparent),
-      0 0 0 7px color-mix(in srgb, var(--warning) 10%, transparent);
-  }
-}
-
-@keyframes ts-replay-link-flow {
-  from {
-    stroke-width: 4;
-    opacity: 0.72;
-  }
-  to {
-    stroke-width: 5;
-    opacity: 1;
-  }
-}
-
-@keyframes ts-replay-link-dash {
-  to {
-    stroke-dashoffset: -26;
-  }
-}
-
-@keyframes ts-replay-node-active {
-  0%,
-  100% {
-    filter: none;
-  }
-  50% {
-    filter: brightness(1.06);
-  }
+  stroke-width: 3;
 }
 
 @keyframes ts-replay-panel-in {

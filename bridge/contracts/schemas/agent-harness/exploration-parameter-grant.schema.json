@@ -1,0 +1,14 @@
+{
+  "$id": "tilesim.agent_harness.exploration_parameter_grant.v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["pointer", "min", "max", "step", "kind"],
+  "properties": {
+    "pointer": { "type": "string", "pattern": "^/[^/].*" },
+    "min": { "type": "number" },
+    "max": { "type": "number" },
+    "step": { "type": "number", "exclusiveMinimum": 0 },
+    "kind": { "enum": ["int", "integer", "number", "float"] }
+  }
+}

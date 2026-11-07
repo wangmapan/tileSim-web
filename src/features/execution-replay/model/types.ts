@@ -11,6 +11,7 @@ export type ReplayRouteState = "available" | "partial" | "route_unavailable" | "
 
 export interface ReplayEvent {
   eventId: string;
+  fragmentId?: string;
   sequence: string;
   sourceIndex: number;
   kind: string;
@@ -42,6 +43,8 @@ export interface ReplayTopologyNode {
   id: string;
   label: string;
   deviceType?: string;
+  /** Reported compute-group owner. Absent when the topology artifact omits group_id. */
+  groupId?: string;
   sourcePath: string;
 }
 
@@ -166,6 +169,7 @@ export interface ReplayNormalizeInput {
   schemaSetRevision?: string;
   artifactSha256?: string | null;
   envelope?: unknown;
+  requestAttribution?: ReplayArtifactPayload | null;
   runtimeEvents?: ReplayArtifactPayload | unknown | null;
   runtimeRequests?: ReplayArtifactPayload | unknown | null;
   fabricRoutes?: ReplayArtifactPayload | unknown | null;

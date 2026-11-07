@@ -100,11 +100,13 @@ function mountPanel(
     runtime?: string;
     topology?: string;
     withKnobs?: boolean;
+    withFabric?: boolean;
     withScheduler?: boolean;
     fieldPath?: string;
     errorMessage?: string;
     inputModes?: string[];
     contractStatus?: string;
+    topologyNodeTypes?: Array<{ value: string; label: string; prefix: string; category: string; participant: boolean }>;
   } = {},
 ) {
   const form = reactive({ parameterValues: {} as Record<string, unknown> });
@@ -136,24 +138,37 @@ function mountPanel(
           },
           fieldPath: options.fieldPath,
           errorMessage: options.errorMessage,
-          controlGroups: options.withScheduler
+          controlGroups: options.withFabric
             ? [
                 {
-                  subsystem: "S1",
-                  title: "Runtime",
-                  detail: "",
-                  fields: [
-                    {
-                      ...controlField("s1.runtime.batch_scheduler", "/overrides/runtime/batch_scheduler"),
-                      kind: "select",
-                      options: ["fifo", "decode_priority"],
-                    },
-                  ],
+                  subsystem: "S6",
+                  title: "Fabric",
+                  detail: "fabric knobs",
+                  fields: [controlField("scale_up_bandwidth_gbps", "/overrides/fabric/scale_up_bandwidth_gbps")],
                 },
               ]
-            : options.withKnobs
-              ? knobGroups
-              : [],
+            : options.withScheduler
+              ? [
+                  {
+                    subsystem: "S1",
+                    title: "Runtime",
+                    detail: "",
+                    fields: [
+                      {
+                        ...controlField("s1.runtime.batch_scheduler", "/overrides/runtime/batch_scheduler"),
+                        kind: "select",
+                        options: ["fifo", "decode_priority"],
+                      },
+                    ],
+                  },
+                ]
+              : options.withKnobs
+                ? knobGroups
+                : [],
+          topologyNodeTypes: options.topologyNodeTypes ?? [
+            { value: "GPU", label: "GPU", prefix: "gpu", category: "compute", participant: true },
+            { value: "Switch", label: "交换机", prefix: "sw", category: "network", participant: false },
+          ],
         });
     },
   });
@@ -187,6 +202,15 @@ describe("structured input panel", () => {
     trace.requests[0].kv_tokens = 10;
     await wrapper.setProps({ modelValue: JSON.stringify(trace) });
     expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+  });
+
+  it("fails closed when the backend publishes no topology node capabilities", async () => {
+    const { wrapper } = mountPanel({ structuredInput: true, topologyNodeTypes: [] });
+    await openModule(wrapper, "topology");
+    expect(wrapper.find(".device-inventory__count input").element).toHaveProperty("disabled", true);
+    expect(wrapper.find(".device-inventory__add select").element).toHaveProperty("disabled", true);
+    expect(wrapper.find(".device-inventory__add select option").exists()).toBe(false);
+    expect(wrapper.find(".device-inventory__add .button").element).toHaveProperty("disabled", true);
   });
 
   it("locates an invalid KV field accessibly in both structured and JSON modes", () => {
@@ -309,8 +333,8 @@ describe("structured input panel", () => {
     // topology editor is mounted without its own textarea and stays editable.
     expect(wrapper.findAll(".structured-stack textarea")).toHaveLength(0);
     expect(wrapper.find(".json-grid").exists()).toBe(false);
-    expect(wrapper.find(".topology-editor .topology-module-binding").exists()).toBe(true);
-    expect(wrapper.find(".topology-model-settings summary").exists()).toBe(false);
+    expect(wrapper.find(".topology-editor .topology-module-binding").exists()).toBe(false);
+    expect(wrapper.find(".topology-model-settings").exists()).toBe(false);
     expect(wrapper.find(".topology-editor--readonly").exists()).toBe(false);
   });
 
@@ -662,17 +686,14 @@ describe("structured input panel", () => {
     expect(wrapper.find('.structured-note--warning[role="alert"]').exists()).toBe(false);
   });
 
-  it("hosts the domain list between the device inventory and the graph", () => {
+  it("keeps the topology tab focused on devices and the graph", () => {
     const { wrapper } = mountPanel({ structuredInput: true });
     return openModule(wrapper, "topology").then(() => {
       const stack = wrapper.get(".structured-stack");
       expect(stack.find(".device-inventory").exists()).toBe(true);
-      expect(stack.find(".domain-inventory").exists()).toBe(true);
+      expect(stack.find(".domain-inventory").exists()).toBe(false);
       expect(stack.find(".topology-editor").exists()).toBe(true);
-      // Same constraint the device inventory lives under: the graph must be a
-      // sibling so it never nests inside a list block.
-      expect(stack.find(".domain-inventory").element.parentElement).toBe(stack.element);
-      expect(wrapper.findAll(".domain-inventory-row")).toHaveLength(1);
+      expect(wrapper.findAll(".domain-inventory-row")).toHaveLength(0);
     });
   });
 
@@ -681,6 +702,18 @@ describe("structured input panel", () => {
     await openModule(wrapper, "topology");
     expect(wrapper.find(".topology-advanced-toggle").exists()).toBe(false);
     expect(wrapper.get(".device-inventory").attributes("style")).toBeUndefined();
+    await openModule(wrapper, "fabric");
     expect(wrapper.get(".domain-inventory").attributes("style")).toBeUndefined();
+  });
+
+  it("keeps module binding parameters in the interconnect tab", async () => {
+    const { wrapper } = mountPanel({ structuredInput: true, withFabric: true });
+    await openModule(wrapper, "topology");
+    expect(wrapper.find(".topology-model-settings").exists()).toBe(false);
+    expect(wrapper.find(".topology-direct-canvas").exists()).toBe(true);
+
+    await openModule(wrapper, "fabric");
+    expect(wrapper.find(".topology-model-settings").exists()).toBe(true);
+    expect(wrapper.find(".topology-direct-canvas").exists()).toBe(false);
   });
 });

@@ -11,6 +11,9 @@ import type {
   ReplayRoute,
   ReplayStage,
 } from "../model/types";
+import type { ReplayLayerVisibility } from "../model/layers";
+import { replayEventLayer, replayStageLayer } from "../model/layers";
+import type { ReplayMode } from "../model/modes";
 
 const props = defineProps<{
   document: ReplayDocument;
@@ -20,6 +23,8 @@ const props = defineProps<{
   selectedFabricEventId?: string | null;
   selectedCollectiveStepId?: string | null;
   selectedStageId?: string | null;
+  visibleLayers?: ReplayLayerVisibility;
+  mode?: ReplayMode;
 }>();
 const emit = defineEmits<{
   selectEvent: [eventId: string];
@@ -42,29 +47,62 @@ const LARGE_LIST_OVERSCAN = 8;
 const largeListScrollTop = ref(0);
 const largeListViewport = ref<HTMLElement | null>(null);
 const largeEvidenceExpanded = ref(false);
+const showCollectiveTrack = computed(() => props.mode === undefined || props.mode === "collective");
+const showRunTracks = computed(() => props.mode !== "collective");
+const showFabricTrack = computed(() => props.mode !== "collective");
+const layerVisible = (key: keyof ReplayLayerVisibility) => props.visibleLayers?.[key] ?? true;
+const stageVisible = (stage: ReplayStage) => layerVisible(replayStageLayer(stage));
+const eventVisible = (event: ReplayEvent) => {
+  const layer = replayEventLayer(event);
+  return layer ? layerVisible(layer) : layerVisible("scheduling") || layerVisible("kv");
+};
 let largeListFrame: number | null = null;
 const hasTimelineRange = computed(() => {
   if (!props.document.startPs || !props.document.endPs) return false;
   return props.document.hasValidRange && BigInt(props.document.endPs) > BigInt(props.document.startPs);
 });
 const timedStages = computed(() =>
-  hasTimelineRange.value ? props.document.stages.filter((stage) => stageCursor(stage) !== null) : [],
+  hasTimelineRange.value
+    ? props.document.stages.filter((stage) => stageVisible(stage) && stageCursor(stage) !== null)
+    : [],
 );
 const untimedStages = computed(() =>
-  hasTimelineRange.value ? props.document.stages.filter((stage) => stageCursor(stage) === null) : props.document.stages,
+  hasTimelineRange.value
+    ? props.document.stages.filter((stage) => stageVisible(stage) && stageCursor(stage) === null)
+    : props.document.stages.filter(stageVisible),
 );
 const timedRoutes = computed(() =>
-  hasTimelineRange.value ? props.document.routes.filter((route) => Boolean(route.timing)) : [],
+  hasTimelineRange.value && layerVisible("fabric")
+    ? props.document.routes.filter((route) => Boolean(route.timing))
+    : [],
 );
 const untimedRoutes = computed(() =>
-  hasTimelineRange.value ? props.document.routes.filter((route) => !route.timing) : props.document.routes,
+  hasTimelineRange.value
+    ? layerVisible("fabric")
+      ? props.document.routes.filter((route) => !route.timing)
+      : []
+    : layerVisible("fabric")
+      ? props.document.routes
+      : [],
 );
-const timedEvents = computed(() => (hasTimelineRange.value ? props.document.events : []));
-const untimedEvents = computed(() => (hasTimelineRange.value ? [] : props.document.events));
-const timedFabricEvents = computed(() => (hasTimelineRange.value ? props.document.fabricEvents : []));
-const untimedFabricEvents = computed(() => (hasTimelineRange.value ? [] : props.document.fabricEvents));
-const timedCollectiveSteps = computed(() => (hasTimelineRange.value ? props.document.collective.steps : []));
-const untimedCollectiveSteps = computed(() => (hasTimelineRange.value ? [] : props.document.collective.steps));
+const timedEvents = computed(() => (hasTimelineRange.value ? props.document.events.filter(eventVisible) : []));
+const untimedEvents = computed(() => (hasTimelineRange.value ? [] : props.document.events.filter(eventVisible)));
+const timedFabricEvents = computed(() =>
+  hasTimelineRange.value && layerVisible("fabric") ? props.document.fabricEvents : [],
+);
+const untimedFabricEvents = computed(() =>
+  hasTimelineRange.value || !layerVisible("fabric") ? [] : props.document.fabricEvents,
+);
+const timedCollectiveSteps = computed(() =>
+  hasTimelineRange.value && showCollectiveTrack.value && layerVisible("collective")
+    ? props.document.collective.steps
+    : [],
+);
+const untimedCollectiveSteps = computed(() =>
+  hasTimelineRange.value || !showCollectiveTrack.value || !layerVisible("collective")
+    ? []
+    : props.document.collective.steps,
+);
 const isLarge = (length: number) => length > LARGE_MARKER_THRESHOLD;
 const largeTrackState = computed(() => ({
   stages: isLarge(timedStages.value.length || untimedStages.value.length),
@@ -91,13 +129,32 @@ const visibleUntimedFabricEvents = computed(() =>
 const visibleUntimedCollectiveSteps = computed(() =>
   largeTrackState.value.collective ? [] : untimedCollectiveSteps.value,
 );
-const evidenceRows = computed<EvidenceRow[]>(() => [
-  ...props.document.stages.map((stage, index) => stageRow(stage, index)),
-  ...props.document.events.map((event, index) => eventRow(event, index)),
-  ...props.document.routes.map((route, index) => routeRow(route, index)),
-  ...props.document.fabricEvents.map((event, index) => fabricEventRow(event, index)),
-  ...props.document.collective.steps.map((step, index) => collectiveRow(step, index)),
-]);
+const evidenceRows = computed<EvidenceRow[]>(() => {
+  if (props.mode === "collective") {
+    return layerVisible("collective")
+      ? props.document.collective.steps.map((step, index) => collectiveRow(step, index))
+      : [];
+  }
+  if (props.mode === "network") {
+    return [
+      ...(layerVisible("fabric") ? props.document.routes.map((route, index) => routeRow(route, index)) : []),
+      ...(layerVisible("fabric")
+        ? props.document.fabricEvents.map((event, index) => fabricEventRow(event, index))
+        : []),
+    ];
+  }
+  return [
+    ...(layerVisible("execution") || layerVisible("device")
+      ? props.document.stages.flatMap((stage, index) => (stageVisible(stage) ? [stageRow(stage, index)] : []))
+      : []),
+    ...props.document.events.flatMap((event, index) => (eventVisible(event) ? [eventRow(event, index)] : [])),
+    ...(layerVisible("fabric") ? props.document.routes.map((route, index) => routeRow(route, index)) : []),
+    ...(layerVisible("fabric") ? props.document.fabricEvents.map((event, index) => fabricEventRow(event, index)) : []),
+    ...(showCollectiveTrack.value && layerVisible("collective")
+      ? props.document.collective.steps.map((step, index) => collectiveRow(step, index))
+      : []),
+  ];
+});
 const largeListStart = computed(() =>
   Math.max(
     0,
@@ -115,38 +172,34 @@ const largeListEnd = computed(() =>
 );
 const visibleEvidenceRows = computed(() => evidenceRows.value.slice(largeListStart.value, largeListEnd.value));
 const largeListHeight = computed(() => evidenceRows.value.length * LARGE_LIST_ROW_HEIGHT);
-const evidenceSummary = computed(() =>
-  (
-    [
-      ["阶段", props.document.stages.length],
-      ["运行期事件", props.document.events.length],
-      ["Fabric 路径", props.document.routes.length],
+const evidenceSummary = computed(() => {
+  const rows: Array<[string, number]> = [];
+  if (showRunTracks.value) {
+    rows.push(["阶段", props.document.stages.length], ["运行期事件", props.document.events.length]);
+  }
+  if (showFabricTrack.value) {
+    rows.push(
+      [props.mode === "overview" ? "设备与通信摘要" : "Fabric 路径", props.document.routes.length],
       ["Fabric 事件", props.document.fabricEvents.length],
-      ["集合步骤", props.document.collective.steps.length],
-    ] as Array<[string, number]>
-  )
+    );
+  }
+  if (showCollectiveTrack.value) rows.push(["集合步骤", props.document.collective.steps.length]);
+  return rows
     .filter(([, count]) => count > 0)
     .map(([label, count]) => `${label} ${count}`)
-    .join(" · "),
-);
-const selectedEvidenceIndex = computed(() => {
-  let offset = props.document.stages.length;
-  const stageIndex = props.document.stages.findIndex((stage) => stage.stageId === props.selectedStageId);
-  if (stageIndex >= 0) return stageIndex;
-  const eventIndex = props.document.events.findIndex((event) => event.eventId === props.selectedEventId);
-  if (eventIndex >= 0) return offset + eventIndex;
-  offset += props.document.events.length;
-  const routeIndex = props.document.routes.findIndex((route) => route.routeId === props.selectedRouteId);
-  if (routeIndex >= 0) return offset + routeIndex;
-  offset += props.document.routes.length;
-  const fabricIndex = props.document.fabricEvents.findIndex((event) => event.eventId === props.selectedFabricEventId);
-  if (fabricIndex >= 0) return offset + fabricIndex;
-  offset += props.document.fabricEvents.length;
-  const collectiveIndex = props.document.collective.steps.findIndex(
-    (step) => step.stepId === props.selectedCollectiveStepId,
-  );
-  return collectiveIndex >= 0 ? offset + collectiveIndex : -1;
+    .join(" · ");
 });
+const selectedEvidenceKey = computed(() => {
+  if (props.selectedStageId) return `stage-${props.selectedStageId}`;
+  if (props.selectedEventId) return `event-${props.selectedEventId}`;
+  if (props.selectedRouteId) return `route-${props.selectedRouteId}`;
+  if (props.selectedFabricEventId) return `fabric-${props.selectedFabricEventId}`;
+  if (props.selectedCollectiveStepId) return `collective-${props.selectedCollectiveStepId}`;
+  return null;
+});
+const selectedEvidenceIndex = computed(() =>
+  selectedEvidenceKey.value ? evidenceRows.value.findIndex((row) => row.key === selectedEvidenceKey.value) : -1,
+);
 
 type EvidenceRow = {
   key: string;
@@ -348,7 +401,7 @@ function activateStage(stage: ReplayDocument["stages"][number]) {
     <p v-if="hasLargeEvidence" class="replay-timeline__limit" role="status">
       {{ evidenceSummary }} · 原始证据未被截断；大数据轨道改用可滚动窗口，逐条证据仍可滚动查看。
     </p>
-    <div v-if="visibleStages.length" class="replay-track replay-track--stages">
+    <div v-if="showRunTracks && visibleStages.length" class="replay-track replay-track--stages">
       <div class="replay-track__label">执行阶段</div>
       <div class="replay-track__canvas">
         <template v-for="(stage, stageIndex) in visibleStages" :key="stage.stageId">
@@ -387,7 +440,7 @@ function activateStage(stage: ReplayDocument["stages"][number]) {
       </div>
     </div>
     <div
-      v-if="untimedStages.length"
+      v-if="showRunTracks && untimedStages.length"
       class="replay-untimed"
       role="group"
       :aria-label="`${fallbackEvidenceLabel} · 阶段`"
@@ -407,7 +460,7 @@ function activateStage(stage: ReplayDocument["stages"][number]) {
         </div>
       </div>
     </div>
-    <div v-if="visibleEvents.length" class="replay-track replay-track--events">
+    <div v-if="showRunTracks && visibleEvents.length" class="replay-track replay-track--events">
       <div class="replay-track__label">运行期事件</div>
       <div class="replay-track__canvas">
         <button
@@ -431,7 +484,11 @@ function activateStage(stage: ReplayDocument["stages"][number]) {
       </div>
     </div>
     <div
-      v-if="untimedEvents.length || untimedFabricEvents.length || untimedCollectiveSteps.length"
+      v-if="
+        (showRunTracks && untimedEvents.length) ||
+        (showFabricTrack && untimedFabricEvents.length) ||
+        (showCollectiveTrack && untimedCollectiveSteps.length)
+      "
       class="replay-untimed"
       role="group"
       :aria-label="`${fallbackEvidenceLabel} · 运行期`"
@@ -439,7 +496,7 @@ function activateStage(stage: ReplayDocument["stages"][number]) {
       <span class="replay-untimed__label">{{ fallbackEvidenceLabel }}</span>
       <div class="replay-untimed__items" role="list">
         <div
-          v-for="event in visibleUntimedEvents"
+          v-for="event in showRunTracks ? visibleUntimedEvents : []"
           :key="`event-${event.eventId}`"
           class="replay-untimed__item"
           role="listitem"
@@ -455,7 +512,7 @@ function activateStage(stage: ReplayDocument["stages"][number]) {
           <ArtifactEvidenceLink :source-path="event.sourcePath" label="证据" />
         </div>
         <div
-          v-for="event in visibleUntimedFabricEvents"
+          v-for="event in showFabricTrack ? visibleUntimedFabricEvents : []"
           :key="`fabric-${event.eventId}`"
           class="replay-untimed__item"
           role="listitem"
@@ -471,7 +528,7 @@ function activateStage(stage: ReplayDocument["stages"][number]) {
           <ArtifactEvidenceLink :source-path="event.sourcePath" label="证据" />
         </div>
         <div
-          v-for="step in visibleUntimedCollectiveSteps"
+          v-for="step in showCollectiveTrack ? visibleUntimedCollectiveSteps : []"
           :key="`collective-${step.stepId}`"
           class="replay-untimed__item"
           role="listitem"
@@ -488,8 +545,11 @@ function activateStage(stage: ReplayDocument["stages"][number]) {
         </div>
       </div>
     </div>
-    <div v-if="visibleRoutes.length || visibleFabricEvents.length" class="replay-track replay-track--routes">
-      <div class="replay-track__label">Fabric 路径</div>
+    <div
+      v-if="showFabricTrack && (visibleRoutes.length || visibleFabricEvents.length)"
+      class="replay-track replay-track--routes"
+    >
+      <div class="replay-track__label">{{ mode === "overview" ? "设备与通信" : "Fabric 路径" }}</div>
       <div class="replay-track__canvas">
         <button
           v-for="(route, routeIndex) in visibleRoutes"
@@ -527,7 +587,7 @@ function activateStage(stage: ReplayDocument["stages"][number]) {
       </div>
     </div>
     <div
-      v-if="untimedRoutes.length"
+      v-if="showFabricTrack && untimedRoutes.length"
       class="replay-untimed"
       role="group"
       :aria-label="`${fallbackEvidenceLabel} · 路径`"
@@ -547,7 +607,7 @@ function activateStage(stage: ReplayDocument["stages"][number]) {
         </div>
       </div>
     </div>
-    <div v-if="visibleCollectiveSteps.length" class="replay-track replay-track--collective">
+    <div v-if="showCollectiveTrack && visibleCollectiveSteps.length" class="replay-track replay-track--collective">
       <div class="replay-track__label">集合步骤</div>
       <div class="replay-track__canvas">
         <button

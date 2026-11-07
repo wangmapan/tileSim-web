@@ -1,0 +1,38 @@
+{
+  "$id": "tilesim.agent_harness.exploration_objective.v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["metric_path", "direction", "minimum_improvement", "plateau_rounds"],
+  "properties": {
+    "metric_path": { "type": "string", "pattern": "^/[^/].*" },
+    "direction": { "enum": ["minimize", "maximize"] },
+    "minimum_improvement": { "type": "number", "minimum": 0 },
+    "plateau_rounds": { "type": "integer", "minimum": 1, "maximum": 20 },
+    "primary_objective": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metric_path", "direction"],
+      "properties": {
+        "metric_path": { "type": "string", "pattern": "^/[^/].*" },
+        "direction": { "enum": ["minimize", "maximize"] }
+      }
+    },
+    "constraints": {
+      "type": "array",
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["metric_path", "operator", "threshold"],
+        "properties": {
+          "metric_path": { "type": "string", "pattern": "^/[^/].*" },
+          "operator": { "enum": ["<", "<=", "=", ">=", ">"] },
+          "threshold": { "type": "number" },
+          "unit": { "type": "string", "maxLength": 32 }
+        }
+      }
+    },
+    "aggregation": { "enum": ["all_scenarios", "mean", "max", "min", "p95"] }
+  }
+}

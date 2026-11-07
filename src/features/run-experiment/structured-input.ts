@@ -23,7 +23,7 @@ import {
   topologyModuleBindingMaxItems,
 } from "./input-schema-meta";
 import type { ExperimentControlDescriptor, ParameterValue } from "./types";
-import { topologyNodeType } from "./topology-node-types";
+import { isTopologyParticipant, type TopologyNodeType } from "./topology-node-types";
 
 export type JsonObject = Record<string, unknown>;
 
@@ -421,10 +421,10 @@ export function deviceIdsOf(document: JsonObject): string[] {
 }
 
 /** Request pairing only follows compute endpoints; fabric nodes are graph-only. */
-export function participantDeviceIdsOf(document: JsonObject): string[] {
+export function participantDeviceIdsOf(document: JsonObject, availableTypes?: readonly TopologyNodeType[]): string[] {
   const devices = topologyDevicesOf(document) || [];
   return devices
-    .filter((entry) => isJsonObject(entry) && topologyNodeType(entry.device_type).participant)
+    .filter((entry) => isJsonObject(entry) && isTopologyParticipant(entry.device_type, availableTypes))
     .map((entry) => (isJsonObject(entry) ? entry.device_id : undefined))
     .filter((value): value is string => typeof value === "string");
 }
@@ -449,10 +449,10 @@ export function deviceReferences(document: JsonObject, deviceId: string): Device
   return { domains, links };
 }
 
-export function nextDeviceId(existing: readonly string[]): string {
+export function nextDeviceId(existing: readonly string[], prefix = DEVICE_ID_PREFIX): string {
   const used = new Set(existing);
   for (let index = 0; index < topologyDeviceMaxItems * 2; index += 1) {
-    const candidate = `${DEVICE_ID_PREFIX}${index}`;
+    const candidate = `${prefix}${index}`;
     if (!used.has(candidate)) return candidate;
   }
   throw new StructuredInputError("无法生成新的 device_id。");
@@ -568,22 +568,30 @@ export function setDeviceCount(document: JsonObject, count: number): DeviceCount
 }
 
 /** Resizes only GPU endpoints; switches, NICs and other fabric nodes remain intact. */
-export function setGpuCount(document: JsonObject, count: number): DeviceCountChange {
+export function setGpuCount(
+  document: JsonObject,
+  count: number,
+  gpuType: Pick<TopologyNodeType, "value" | "prefix"> = { value: "GPU", prefix: DEVICE_ID_PREFIX },
+): DeviceCountChange {
   const topology = topologyOf(document);
   if (!topology) throw new StructuredInputError("topology JSON 缺少 topology 对象。");
   const devices = arrayChild(topology, "devices");
   if (!devices) throw new StructuredInputError("topology JSON 缺少 devices 数组。");
   if (!Number.isInteger(count) || count < 0) throw new StructuredInputError("GPU 卡数必须是非负整数。");
   if (count > topologyDeviceMaxItems) throw new StructuredInputError(`GPU 卡数不能超过 ${topologyDeviceMaxItems}。`);
+  const gpuValue = gpuType.value.trim().toLowerCase();
   const gpuEntries = () =>
     (topologyDevicesOf(document) || []).filter(
-      (entry) => isJsonObject(entry) && topologyNodeType(entry.device_type).participant,
+      (entry) =>
+        isJsonObject(entry) &&
+        typeof entry.device_type === "string" &&
+        entry.device_type.trim().toLowerCase() === gpuValue,
     );
   const existing = deviceIdsOf(document);
   const added: string[] = [];
   while (gpuEntries().length < count) {
-    const deviceId = nextDeviceId(existing.concat(added));
-    devices.push({ device_id: deviceId, device_type: "GPU" });
+    const deviceId = nextDeviceId(existing.concat(added), gpuType.prefix);
+    devices.push({ device_id: deviceId, device_type: gpuType.value });
     added.push(deviceId);
   }
   const removed: string[] = [];

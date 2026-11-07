@@ -100,6 +100,7 @@ const inlineTypeNames = [
   "RenameRunRequest",
   "RenameRunResponse",
   "DeleteRunResponse",
+  "CancelRunResponse",
   "Week7EvidenceMapResponse",
   "Week7CalibrationResponse",
   "Week7OrchestrationResponse",
@@ -285,6 +286,7 @@ const nextCreateRunSchema = await format(createRunSchemaSource, {
 
 const f8SchemaNames = [
   "create-run-request.schema.json",
+  "execution-input.schema.json",
   "run-overrides.schema.json",
   "custom-run-inputs.schema.json",
   "runtime-trace-input.schema.json",
@@ -300,6 +302,7 @@ const ajv = new Ajv2020({ allErrors: true, strict: false, code: { source: true, 
 for (const schema of f8Schemas) ajv.addSchema(schema);
 const validatorIds = {
   createRunRequest: createRunSchema.$id,
+  executionInput: "https://tilesim.local/contracts/execution-input.schema.json",
   experimentDescriptor: experimentDescriptorSchema.$id,
   designSpaceCandidates: designSpaceCandidatesSchema.$id,
   designSpaceCandidatesV2: designSpaceCandidatesV2Schema.$id,
@@ -526,8 +529,8 @@ if (process.argv.includes("--check")) {
     hasGeneratedDrift(currentEvidenceAgentValidators, nextEvidenceAgentValidators) ||
     hasGeneratedDrift(currentAgentOrchestrationCapabilityValidators, nextAgentOrchestrationCapabilityValidators) ||
     hasGeneratedDrift(currentPhase2Validators, nextPhase2Validators) ||
-    hasGeneratedDrift(currentAgentFlowValidators, nextAgentFlowValidators)
-    || hasGeneratedDrift(currentAgentIntentValidators, nextAgentIntentValidators)
+    hasGeneratedDrift(currentAgentFlowValidators, nextAgentFlowValidators) ||
+    hasGeneratedDrift(currentAgentIntentValidators, nextAgentIntentValidators)
   ) {
     process.stderr.write("Generated Bridge client is stale. Run pnpm contracts:generate.\n");
     process.exitCode = 1;

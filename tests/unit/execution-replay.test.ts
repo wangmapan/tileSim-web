@@ -7,6 +7,7 @@ import {
   executionReplayQueryKey,
   sortReplayEvents,
   validateReplayBinding,
+  formatReportedPicoseconds,
   nextPlaybackTime,
   nextStageTime,
   playbackTimes,
@@ -30,6 +31,12 @@ import {
 } from "../fixtures/execution-replay";
 
 describe("execution replay model", () => {
+  it("converts a reported instant for reading and keeps sub-nanosecond values exact", () => {
+    expect(formatReportedPicoseconds("21029082468")).toBe("21.029 ms");
+    expect(formatReportedPicoseconds("100")).toBe("100 ps");
+    expect(formatReportedPicoseconds(null)).toBe("未报告");
+  });
+
   it("normalizes playback boundaries and does not wrap at either edge", () => {
     expect(nextPlaybackTime("10", ["30", "10", "20", "20", "invalid", "-1"], 1)).toBe("20");
     expect(nextPlaybackTime("10", ["30", "10", "20"], -1)).toBe("10");

@@ -134,7 +134,6 @@ const primarySubsystemName = computed(() => {
       </div>
       <div class="analysis-stage__secondary overview-primary-action" data-help-anchor="overview-finding">
         <article v-if="state.bundle.run?.bottleneck_report" class="finding-panel">
-          <p class="section-kicker">{{ t("主要瓶颈 · 后端报告") }}</p>
           <h2>{{ primarySubsystemName }}</h2>
           <button class="button button--secondary" @click="setView('attribution')">
             {{ t("查看归因证据") }}<ArrowRight :size="16" />
@@ -146,7 +145,6 @@ const primarySubsystemName = computed(() => {
           </details>
         </article>
         <article v-else>
-          <p class="section-kicker">{{ t("瓶颈归因") }}</p>
           <h2>{{ t("未提供瓶颈报告") }}</h2>
           <button class="button button--primary" @click="setView('experiment')">
             <Play :size="16" />{{ t("配置新实验") }}

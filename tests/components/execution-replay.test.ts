@@ -500,9 +500,29 @@ describe("ReplayTopologyCanvas", () => {
     });
     expect(wrapper.findAll(".replay-topology__nodes g.is-active")).toHaveLength(3);
     expect(wrapper.findAll(".replay-topology__links line.is-active")).toHaveLength(2);
+    expect(wrapper.findAll(".replay-topology__flow-link")).toHaveLength(2);
+    expect(wrapper.get(".replay-topology__flow-token").attributes("transform")).toContain("rotate(");
     await wrapper.setProps({ cursorPs: "9007199254740998000" });
     expect(wrapper.findAll(".replay-topology__nodes g.is-active")).toHaveLength(0);
     expect(wrapper.findAll(".replay-topology__links line.is-active")).toHaveLength(0);
+    expect(wrapper.findAll(".replay-topology__flow-link")).toHaveLength(0);
+  });
+
+  it("renders one directional token per simultaneously reported route", () => {
+    const baseDocument = normalizeReplayDocument({
+      runId: "run-execution-replay-fixture",
+      topology: executionReplayFabricRouteTopologyFixture,
+      fabricRoutes: executionReplayFabricRouteFixture,
+    });
+    const firstRoute = baseDocument.routes[0];
+    const document = { ...baseDocument, routes: [firstRoute, { ...firstRoute, routeId: "req-1", requestId: "req-1" }] };
+    const cursor = String((BigInt(firstRoute.timing!.startPs) + BigInt(firstRoute.timing!.endPs)) / 2n);
+    const wrapper = mount(ReplayTopologyCanvas, {
+      props: { document, selectedRouteId: null, cursorPs: cursor },
+      global: { stubs: { ArtifactEvidenceLink: { template: "<span />" } } },
+    });
+    expect(wrapper.findAll(".replay-topology__flow-token")).toHaveLength(2);
+    expect(wrapper.findAll(".replay-topology__flow-link")).toHaveLength(4);
   });
 
   it("highlights the backend route joined by a selected collective phase", () => {
@@ -587,7 +607,7 @@ describe("ReplayTopologyCanvas", () => {
     });
     expect(wrapper.get(".replay-flow-readout").text()).toContain("4096 bytes");
     expect(wrapper.get(".replay-flow-readout").text()).toContain("gpu-0 → gpu-1");
-    expect(wrapper.find(".replay-topology__flow-token").exists()).toBe(true);
+    expect(wrapper.findAll(".replay-topology__flow-token")).toHaveLength(1);
 
     const noLinksDocument = {
       ...document,
@@ -596,6 +616,7 @@ describe("ReplayTopologyCanvas", () => {
     return wrapper.setProps({ document: noLinksDocument }).then(() => {
       expect(wrapper.find(".replay-flow-readout").text()).toContain("4096 bytes");
       expect(wrapper.find(".replay-topology__flow-token").exists()).toBe(false);
+      expect(wrapper.find(".replay-topology__flow-link").exists()).toBe(false);
     });
   });
 
@@ -636,7 +657,7 @@ describe("ReplayTopologyCanvas", () => {
 });
 
 describe("ExecutionReplayPanel layout", () => {
-  it("keeps the topology observation rail beside the timeline and collective list below it", async () => {
+  it("places the topology above the timeline and keeps evidence details collapsed", async () => {
     const wrapper = mount(ExecutionReplayPanel, {
       props: {
         runId: "run-execution-replay-fixture",
@@ -661,11 +682,48 @@ describe("ExecutionReplayPanel layout", () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     await wrapper.vm.$nextTick();
 
-    expect(wrapper.find(".replay-main-grid > .replay-side-column").exists()).toBe(true);
-    expect(wrapper.get(".replay-main-grid > .replay-side-column").attributes("aria-label")).toBe("执行回放观察视图");
-    expect(wrapper.find(".replay-main-grid .replay-topology").exists()).toBe(true);
-    expect(wrapper.find(".replay-main-grid .replay-details").exists()).toBe(true);
-    expect(wrapper.find(".replay-evidence-grid .replay-collective").exists()).toBe(true);
+    const overview = wrapper.get(".replay-workspace__overview");
+    expect(overview.find(".replay-topology").exists()).toBe(true);
+    expect(overview.find(".replay-collective").exists()).toBe(false);
+    expect(
+      overview.get(".replay-topology").element.compareDocumentPosition(overview.get(".replay-timeline").element) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(overview.get(".replay-workspace__more").attributes("open")).toBeUndefined();
+    expect(wrapper.get(".replay-layer-selector").text()).toContain("选择要查看的证据层");
+    expect(wrapper.find('input[aria-label="Fabric 路径"]').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("lets the user hide a reported layer without changing replay evidence", async () => {
+    const wrapper = mount(ExecutionReplayPanel, {
+      props: {
+        runId: "run-execution-replay-fixture",
+        bundle: {
+          run: null,
+          metrics: null,
+          validation: null,
+          tail: null,
+          design_space: null,
+          execution_envelope: executionReplayEnvelopeFixture,
+          run_bound_des_evidence: null,
+          unsupported: {},
+          compatibility: {},
+        } as unknown as ReportBundle,
+        inputs: { runtime_trace: null, topology: executionReplayTopologyFixture } as unknown as RunInputs,
+        artifactManifest: null,
+        backendIdentity: "fixture-backend",
+        schemaSetRevision: "fixture-schema",
+        bridgeManifest: null,
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await wrapper.vm.$nextTick();
+    const fabricToggle = wrapper.get('input[aria-label="Fabric 路径"]');
+    await fabricToggle.setValue(false);
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find(".replay-topology__flow-links").exists()).toBe(false);
+    expect(wrapper.get(".replay-coverage-status").text()).toContain("条已报告证据");
     wrapper.unmount();
   });
 });

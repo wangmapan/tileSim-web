@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilesim.local/contracts/operator-execution.schema.json",
+  "title": "OperatorExecutionDescriptor",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "schema_set_revision", "backend_identity", "modes", "examples", "custom_inputs"],
+  "properties": {
+    "schema_version": {
+      "const": "tilesim.bridge.operator_execution.v1"
+    },
+    "schema_set_revision": {
+      "type": "string"
+    },
+    "backend_identity": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "modes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kernel_strategy": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "enum": ["available", "unavailable", "not_covered", "unsupported_schema"]
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "required": ["status", "reason"]
+        },
+        "tilelang_source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "enum": ["available", "unavailable", "not_covered", "unsupported_schema"]
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "required": ["status", "reason"]
+        },
+        "execution_partition": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "enum": ["available", "unavailable", "not_covered", "unsupported_schema"]
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "required": ["status", "reason"]
+        }
+      },
+      "required": ["kernel_strategy", "tilelang_source", "execution_partition"]
+    },
+    "examples": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "execution-input.schema.json"
+          }
+        }
+      ]
+    },
+    "custom_inputs": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "custom-run-inputs.schema.json"
+        }
+      ]
+    }
+  }
+}

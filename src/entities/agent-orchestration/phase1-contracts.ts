@@ -90,6 +90,8 @@ export interface PageContextEnvelope {
   expires_at: string | null;
   display_label: string;
   availability: ContextAvailability;
+  /** Complete validated create-run payload owned by the experiment page. */
+  run_request?: Readonly<Record<string, unknown>>;
 }
 
 export type DraftValueSource = "user" | "profile" | "template" | "calculator" | "system";

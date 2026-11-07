@@ -155,7 +155,7 @@ const blocks: readonly AgentTypedBlock[] = [
   {
     block_type: "formal_error",
     block_id: "error:1",
-    code: "phase1_contract_invalid",
+    code: "intent_unavailable",
     message: "返回结构未通过冻结契约校验。",
     safe_next_action: "刷新能力快照后重试。",
   },
@@ -213,6 +213,8 @@ describe("typed result presentation", () => {
     expect(wrapper.findAll('[data-block-type="clarification"]')).toHaveLength(1);
     expect(wrapper.findAll('[data-block-type="unsupported"]')).toHaveLength(1);
     expect(wrapper.findAll('[data-block-type="formal_error"]')).toHaveLength(1);
+    expect(wrapper.text()).not.toContain("intent_unavailable");
+    expect(wrapper.find("[data-block-type=\"formal_error\"] code").exists()).toBe(false);
     expect(wrapper.text()).toContain("理解结果");
     expect(wrapper.text()).toContain("建议修改");
     expect(wrapper.text()).toContain("限制和下一步");

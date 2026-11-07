@@ -75,9 +75,79 @@ describe("model-driven agent intent API", () => {
       return new Response(JSON.stringify(response()), { status: 200, headers });
     });
     vi.stubGlobal("fetch", fetchMock);
-    const result = await requestAgentIntent(request());
+    const onFailure = vi.fn();
+    const result = await requestAgentIntent(request(), { onFailure });
     expect(result?.intent).toBe("navigation");
     expect(result?.candidate_pages[0]?.page_id).toBe("metrics");
+    expect(onFailure).not.toHaveBeenCalled();
+  });
+
+  it("reports a safe structured diagnostic for an unavailable intent provider", async () => {
+    vi.stubGlobal("window", { location: { port: "" } });
+    const secret = "secret-provider-credential";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              request_id: secret,
+              error: { code: "agent_intent_provider_unavailable", message: secret, retryable: true },
+              raw_response: secret,
+            }),
+            { status: 503, headers: { ...headers, "x-request-id": secret } },
+          ),
+      ),
+    );
+    const onFailure = vi.fn();
+
+    await expect(requestAgentIntent(request(), { onFailure })).resolves.toBeNull();
+
+    expect(onFailure).toHaveBeenCalledTimes(1);
+    expect(onFailure).toHaveBeenCalledWith({
+      kind: "bridge_error",
+      code: "agent_intent_provider_unavailable",
+      status: 503,
+      retryable: true,
+    });
+    expect(JSON.stringify(onFailure.mock.calls)).not.toContain(secret);
+  });
+
+  it("preserves a bounded 404 diagnostic when the Bridge is too old to publish intent", async () => {
+    vi.stubGlobal("window", { location: { port: "" } });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: "not found" }), { status: 404, headers })));
+    const onFailure = vi.fn();
+
+    await expect(requestAgentIntent(request(), { onFailure })).resolves.toBeNull();
+
+    expect(onFailure).toHaveBeenCalledWith({
+      kind: "bridge_error",
+      code: "http_404",
+      status: 404,
+      retryable: false,
+    });
+  });
+
+  it("does not expose arbitrary response-controlled error codes", async () => {
+    vi.stubGlobal("window", { location: { port: "" } });
+    const secret = "sk-provider-secret";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ error: { code: secret, message: secret } }), { status: 503, headers }),
+      ),
+    );
+    const onFailure = vi.fn();
+    await expect(requestAgentIntent(request(), { onFailure })).resolves.toBeNull();
+    expect(onFailure).toHaveBeenCalledTimes(1);
+    expect(onFailure).toHaveBeenCalledWith({
+      kind: "bridge_error",
+      code: "bridge_error",
+      status: 503,
+      retryable: false,
+    });
+    expect(JSON.stringify(onFailure.mock.calls)).not.toContain(secret);
   });
 
   it("rejects an invented page and unknown intent without exposing the payload", async () => {
@@ -99,7 +169,15 @@ describe("model-driven agent intent API", () => {
           ),
       ),
     );
-    await expect(requestAgentIntent(request())).resolves.toBeNull();
+    const onFailure = vi.fn();
+    await expect(requestAgentIntent(request(), { onFailure })).resolves.toBeNull();
+    expect(onFailure).toHaveBeenCalledTimes(1);
+    expect(onFailure).toHaveBeenCalledWith({
+      kind: "invalid_response",
+      code: "invalid_response",
+      status: null,
+      retryable: false,
+    });
   });
 
   it("fails closed when the schema-set response header is stale", async () => {
@@ -114,7 +192,15 @@ describe("model-driven agent intent API", () => {
           }),
       ),
     );
-    await expect(requestAgentIntent(request())).resolves.toBeNull();
+    const onFailure = vi.fn();
+    await expect(requestAgentIntent(request(), { onFailure })).resolves.toBeNull();
+    expect(onFailure).toHaveBeenCalledTimes(1);
+    expect(onFailure).toHaveBeenCalledWith({
+      kind: "schema_revision_mismatch",
+      code: "schema_revision_mismatch",
+      status: null,
+      retryable: false,
+    });
   });
 
   it("fails closed when the model changes the input snapshot binding", async () => {
@@ -176,7 +262,89 @@ describe("model-driven agent intent API", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     const malformed = { ...request(), page_catalog: undefined } as unknown as AgentIntentRequest;
-    await expect(requestAgentIntent(malformed)).resolves.toBeNull();
+    const onFailure = vi.fn();
+    await expect(requestAgentIntent(malformed, { onFailure })).resolves.toBeNull();
+    expect(onFailure).toHaveBeenCalledTimes(1);
+    expect(onFailure).toHaveBeenCalledWith({
+      kind: "preflight_request_invalid",
+      code: "preflight_request_invalid",
+      status: null,
+      retryable: false,
+    });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([null, {}, { page_id: "metrics", capability_ids: null }])(
+    "diagnoses malformed page catalog entries without sending a request: %j",
+    async (entry) => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+      const malformed = { ...request(), page_catalog: [entry] } as unknown as AgentIntentRequest;
+      const onFailure = vi.fn();
+      await expect(requestAgentIntent(malformed, { onFailure })).resolves.toBeNull();
+      expect(onFailure).toHaveBeenCalledTimes(1);
+      expect(onFailure).toHaveBeenCalledWith({
+        kind: "preflight_request_invalid",
+        code: "preflight_request_invalid",
+        status: null,
+        retryable: false,
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it("reports malformed JSON as an invalid response without exposing its contents", async () => {
+    vi.stubGlobal("window", { location: { port: "" } });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("not-json-secret", { status: 200, headers })),
+    );
+    const onFailure = vi.fn();
+    await expect(requestAgentIntent(request(), { onFailure })).resolves.toBeNull();
+    expect(onFailure).toHaveBeenCalledTimes(1);
+    expect(onFailure).toHaveBeenCalledWith({
+      kind: "invalid_response",
+      code: "invalid_response",
+      status: null,
+      retryable: false,
+    });
+  });
+
+  it("reports a non-JSON success response as an invalid response", async () => {
+    vi.stubGlobal("window", { location: { port: "" } });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("provider-secret", { status: 200 })));
+    const onFailure = vi.fn();
+    await expect(requestAgentIntent(request(), { onFailure })).resolves.toBeNull();
+    expect(onFailure).toHaveBeenCalledWith({
+      kind: "invalid_response",
+      code: "invalid_response",
+      status: 200,
+      retryable: false,
+    });
+  });
+
+  it("reports transport failure without exposing an exception's message", async () => {
+    vi.stubGlobal("window", { location: { port: "" } });
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("secret transport detail")));
+    const onFailure = vi.fn();
+    await expect(requestAgentIntent(request(), { onFailure })).resolves.toBeNull();
+    expect(onFailure).toHaveBeenCalledTimes(1);
+    expect(onFailure).toHaveBeenCalledWith({
+      kind: "transport_failure",
+      code: "transport_failure",
+      status: null,
+      retryable: true,
+    });
+  });
+
+  it("keeps fail-closed return behaviour when the diagnostic callback throws", async () => {
+    const malformed = { ...request(), page_catalog: undefined } as unknown as AgentIntentRequest;
+    await expect(
+      requestAgentIntent(malformed, {
+        onFailure() {
+          throw new Error("diagnostic consumer failed");
+        },
+      }),
+    ).resolves.toBeNull();
   });
 });

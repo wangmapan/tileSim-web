@@ -52,5 +52,6 @@ Remove-Item Env:TILESIM_BUNDLED_NODE_SOURCE
 `deploy-local-backend.ps1`，脚本仅在后端源码/build/CLI SHA-256/CTest、WSL 发行版和 Web immutable release
 身份全部匹配时复用；Web 有变化时仍做契约 drift、Bridge 测试/编译和生产构建。身份无法证明时自动走完整流程。
 部署设置中的“强制完整验证”对应完整构建、CTest、Bridge/Web 测试和 Web 构建；脚本直接调用时默认仍是完整流程。
+概览页另有“快速部署（跳过测试）”：它传 `-ReuseVerifiedArtifacts -SkipTests`，仍构建并发布变化的产物，但跳过 CTest、Bridge 测试和 Web 测试，清单写成 `skipped:not-run`。它不能和强制完整验证同时使用，也不能把未跑测试的构建复用成已验证结果。
 
 旧 Python/Tkinter 实现已在 Tauri 原生验收和路径兼容回归通过后退役。回滚使用 `runtime/launcher-fallback/` 中由构建脚本原子保留的上一版 Tauri EXE。

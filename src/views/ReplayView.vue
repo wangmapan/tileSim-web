@@ -27,12 +27,7 @@ const hasResult = computed(() =>
     action-to="/experiment"
   />
   <div v-else class="view-stack replay-view">
-    <section class="replay-view-intro" aria-labelledby="replay-view-title" data-help-anchor="replay-overview">
-      <div>
-        <p class="section-kicker">执行回放</p>
-        <h2 id="replay-view-title">沿时间轴查看已报告执行证据</h2>
-        <p>播放、逐步检查路径、设备通信和集合步骤；所有动画均以当前运行已验证的记录为准。</p>
-      </div>
+    <section class="replay-view-intro" aria-label="执行回放" data-help-anchor="replay-overview">
       <span v-if="state.runId" class="replay-view-run">{{ state.runName || state.runId }}</span>
     </section>
     <ExecutionReplayPanel

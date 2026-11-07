@@ -1,4 +1,164 @@
+## 2026-11-07 算子 / Kernel / 执行划分真实接入（当前工作树，未提交、未部署）
+
+- 实验页新增四种互斥执行来源、结构化 Kernel 策略/TileLang 选择/执行划分编辑、精确实例、来源与范围摘要。descriptor 用当前 backend identity（含 deployment_ref）及 schema revision 绑定；当前请求 CLI 校验收据在输入/身份改变时失效。无效 arguments/数组/高级 JSON 不能拿旧配置提交。
+- 正式 `CreateRunRequest.execution_input` 与 operator descriptor/validation schema 已发布并生成客户端。Kernel 进入 trace 的 `dense_execution.kernel_execution`，源码经受信 backend AST parser（上传 Python 不 import/eval，隔离进程 -I/-B）进入 `dense_execution.tilelang_kernels`，划分通过 `TileSimCLI run --execution-partitions` 执行。创建前真实 CLI 准入，运行后逐 selector/selection 检查消费，不满足即拒绝/failed。限定显式 custom inputs、S1→S6 DES，禁止与 overrides/trace package/design-space candidates 混用。
+- 输入配置/源码/程序 SHA 与 run ID 保存为清单工件；执行页可看 Kernel timing、source/Rank/buffer/partition、依赖和原始 Pointer，并跳到同 run/backend/schema/SHA 的共享回放游标。回放新增已报告片段、Kernel launch、缓冲事件及请求指标；独立 CPU 数值语义结果和 timeline 不叠入 Dense 时钟。缺失 wave/operator 独立区间保持 not_covered。
+- 真实 native 验证使用隔离 5189 Bridge + 4185 Vite + `build-msys-topology-20261031/TileSimCLI.exe`（SHA `6073b64576eee4cf966abc8eab4ac512899bb1e89d75ec53fbcae79ce7990132`），测试身份仅绑定二进制，不把 dirty 源码当作构建证据。三种来源均通过 HTTP 创建并完成；另验证显式 TP2 + rank_programs + tile_ready_allreduce + finite slots + safe_window_v1，以及 allreduce/sendrecv/缓冲划分。
+- 门禁：`pnpm contracts:check` 通过，revision `sha256:bcdc6fe220816a68247353d8d488ad682ca3b3ee585112528e12985a71b0c2a2`；`docs:check` 60 篇、`deps:check` 376 源文件、`typecheck`、`build`、Python py_compile、目标 ESLint、`git diff --check` 通过。`python -m unittest test_server.py test_operator_execution.py` **219/219**（其中本模块 22）；本模块前端定向 **38/38**，相邻回放回归 **93/93**。独立 native Playwright **7/7，最终复跑 47.7s，exit 0**，包含真实创建/拒绝/结果/回放/Pointer、TP2 证据、pending/unavailable/unsupported、light/dark、1440/1180、长中文/长 SHA、reduced motion 与键盘提交。
+- 全仓 `pnpm test` **1512 passed / 8 skipped / 1 failed（141 files）**；唯一失败是既有 TopologyGraphEditor “拓扑输入”缺英文翻译。全仓 `pnpm lint` 仍有既有 4 错（ReplayTopologyCanvas 的 hasReportedPath、两个 tmp Playwright 文件）；`pnpm format:check` 仍报 129 文件（原有 schema/源码/临时工件等）。未为消除这些既有失败覆盖无关用户修改，不能宣称全仓门禁全绿。全量常规 fixture e2e 本批未复跑，native 专项与其分开报告。
+- 当前允许 source claim scope 为 `cpu_source_semantics_and_synthetic_consistency`，cost scope 为 `declared_uncalibrated_not_compiled_gpu_timing`，Kernel timing 为 `modeled_synchronized_waves_not_measured_cta_timing`。没有真实 GPU 编译/实测、真实校准或 held-out validation；Kernel 按实例策略、任意映射/PTX/SASS、Split-K、自动调优、任意异构 Rank、Web restore 仍未覆盖。生产 source/build 不匹配时 capability 仍 unavailable。
+- 完整修改文件、接线、范围与维护计划见 [模块当前基线](features/execution/OPERATOR_KERNEL_CURRENT_BASELINE.md)。开始/结束核对两个仓库 git status；全部原有 dirty 修改保留，未 reset/clean/提交/推送，未改动 D:/tileSim，未替换或重启 5173。验证专用 4185/5189 服务在任务结束时关闭。
+
+## 2026-11-06 启动器快速部署（跳过测试，当前工作树，未部署）
+
+- 概览页新增“快速部署（跳过测试）”。它调用 `deploy-local-backend.ps1 -ReuseVerifiedArtifacts -SkipTests`：源码未变时复用上一份构建，源码变化时仍构建并发布，但跳过 CTest、Bridge unittest 和 Vitest。
+- 清单中的对应项写成 `skipped:not-run`。普通复用路径仍要求 CTest 为 `N/N`，不会把这次未验证构建当成已通过测试。`-SkipTests` 与 `-ForceFullValidation` 不能同时使用；勾选强制完整验证时按钮不可用。
+- 未运行该部署，未替换 5173。
+
+## 2026-11-05 Agent Intent 页面上下文长度修复（当前工作树，已部署到 5173）
+
+- 修复实验页 Agent context revision 超过 `agent-intent` 契约 256 字符上限的问题。部署身份包含多个 revision/state digest 时，原 revision 直接拼接可达 322 字符，前端因此在发出请求前 fail-closed 为 `intent_context_unavailable`，Bridge 不会收到 `/api/agent/intent`。
+- `createPageContextRevisionKeeper()` 现在保留短 revision 的既有可读格式；长前缀会使用有界前缀、稳定哈希和序号压缩到 256 字符以内。新增单元回归覆盖长度上限、内容稳定和内容变化。
+- 通过 `pnpm test`（136 files，1469 passed / 8 skipped）、定向 Agent context/intent 测试 29/29、`pnpm typecheck`、`pnpm build`、契约 drift check、`docs:check`、目标 ESLint 和 `git diff --check`。按用户授权已用 `deploy-local-backend.ps1 -ReuseVerifiedArtifacts` 重建 Web release 并切换 5173；健康检查显示 `execution_ready=true`、schema-set revision 保持不变。
+- 浏览器在部署后的 5173 实测：实验页上下文长度为 256，助手提交会真正发出 `/api/agent/intent`；“自主执行仿真”仍按现有只读安全边界拒绝且未创建运行。当前 Provider 请求返回 503，故“解释当前页面/自动探索”未得到模型结果；这属于 Provider 通道可用性，不再是页面上下文 preflight 错误。`GET /api/agent/explorations` 为空，本轮没有创建探索会话或运行。
+- 仍保持 `local_dev`、`synthetic_trace`、`exploratory`、`not_for_production`。未修改 `D:\tileSim`、临时 Playwright 文件或契约 schema；5173 是按用户明确授权切换的，未读取或输出凭据。
+
+## 2026-11-05 阶段五外部 Provider acceptance（Provider 探测通过，候选执行 blocked）
+
+- 已按用户授权保留并复核 5173 Bridge；当前 AssistantModel 描述为已配置，脱敏身份为 `tilesim_assistant_openai_v1` / `gpt-6-luna`。通过现有 `/api/agent/intent` 完成一次真实线上 Provider 认证结构化输出探测；没有打印、保存或提交 API Key、原始响应、隐藏推理或完整模型文本。探测脱敏记录位于 `tmp/stage5-intent-acceptance-redacted.json`。
+- 已开启 `TILESIM_EXPLORATION_MODEL_CANDIDATES=on`，但能力目录的五类 Profile 实例均为 0，当前已发布且可执行的部署候选数为 0。因此没有调用模型候选接口、没有生成候选、没有创建探索会话或运行、没有占用唯一实验槽位；停止原因是 `no_published_executable_deployment_candidate`，没有用请求体或模型输出伪造候选。脱敏 acceptance manifest：`tmp/stage5-external-provider-acceptance-20261105.json`，digest 为 `sha256:a75e03f5ef7a5468c534a7f99c945690ac8bb21a3f0654cb1b8b6e71cb3e4c0a`。
+- 本次“外部线上 Provider acceptance”只达到 Provider authentication/structured-output probe 通过，模型候选正式执行、两场景运行编号、Pareto 结果均为 blocked；因此不能把本轮称为完整 Provider acceptance。`bridge/test_assistant_model_candidate_provider.py` 的 9/9 是 controlled Provider transport 测试；阶段五候选测试 13/13、LangGraph runtime 24/24、`test_server.py` 197/197 为本地测试。前端定向探索 94/94，全量 Vitest 136 files / 1466 passed / 8 skipped；`contracts:check`、`docs:check`、`typecheck`、`pnpm build`、`eslint src scripts`、`py_compile` 和 `git diff --check` 通过。
+- 失败路径（Provider timeout、非法结构、不可用、无确定性回退）由 controlled Provider 测试覆盖；本次线上探测未触发这些路径。运行边界仍为单 Worker、单实验槽位、串行、LangGraph checkpoint 和 fail-closed 能力目录校验。范围继续是 `local_dev`、`synthetic_trace`、`exploratory`、`not_for_production`，不构成真实 TileSim 或生产验收。
+- 未修改 `D:\\tileSim`、未修改两个临时 Playwright 文件；5173 未被替换，当前仍运行已部署 immutable release。没有契约变化，因此未重复生成契约客户端。
+
+\n
+\n
+
+## 2026-11-05 执行回放分层展示（当前工作树，未提交、未部署）
+
+- 回放面板新增 `ReplayLayerSelector`，用户可以独立选择执行阶段、请求流、调度、KV / 内存、设备执行、集合通信、Fabric 路径、拓扑底图和输出流层；选择状态只属于回放面板，不写入全局 dashboard store，也不修改原始证据文档。
+- 当前真实可用的层只从既有 execution envelope、runtime event、execution replay、collective 和 topology artifact 派生。请求流和输出流暂时明确标为“未覆盖”，没有用 vLLM 的通用概念补造 TileSim 事件；调度与 KV 仅在后端事件 kind 明确匹配时显示。
+- 时间线、拓扑 SVG、路径 token 和集合步骤共用同一层可见性与时间游标。播放仍是证据回放辅助：RAF 只推进模拟时间，SVG/CSS 只为已报告的路径和区间提供平滑高亮；没有把动画描述成模型内部实时推理过程，并继续尊重 `prefers-reduced-motion`。
+- 新增 `tests/unit/execution-replay-layers.test.ts`，并补充组件层选择测试。当前定向回放测试为 66 passed；`pnpm typecheck`、回放目录 ESLint、`pnpm build` 和 `git diff --check` 通过。完整门禁需以本轮后续实测为准。
+- 能力边界保持 `local_dev` / `synthetic_trace` / `exploratory` / `not_for_production`；真实 Provider、真实 TileSim 运行工件、生产 verified artifact 和 citation evidence 没有因本次展示改造而升级。
+
+## 2026-11-05 拓扑分组与横向网络可读性收口（当前工作树，未提交、未部署）
+
+- 拓扑画布现在把 `scale_up` 的设备分组与 `scale_out` 的 endpoint 网络分开表达：设备卡片只显示所属计算组，组内网络只在分组边框标题出现；横向网络的多条跨组 links 在画布中汇总为组间通道，并在画布下方保留每条端点对的可选中编辑入口。
+- 该视图仍严格使用当前 JSON 的 `devices`、`group_id`、`domains` 和 `links`，没有新增后端字段，也没有把 `scale_out.member_devices` 重解释为设备所有权。后端示例允许横向 endpoint 集合与组内成员重叠；前端不再把这种 endpoint 语义渲染成“一张卡属于两个超级节点”。
+- 拓扑与相关文案定向 Vitest **63/63**、拓扑 Playwright **3/3**、`vue-tsc --noEmit`、`pnpm build`、改动代码/测试文件 Prettier、ESLint 和 `git diff --check` 已通过。4173 临时 Vite 仅用于本地验证；未停止、重启或替换 5173，未修改 `D:\tileSim`、`tmp/pw-check.js` 或 `tmp/pw-replay-visual.js`。
+
+## 2026-11-03 阶段五外部 Provider acceptance（未配置，blocked）
+
+- 按要求检查了进程、用户和机器级 `TILESIM_ASSISTANT_BASE_URL`、`TILESIM_ASSISTANT_API_KEY`、`TILESIM_ASSISTANT_MODEL` 与超时配置；没有完整外部 AssistantModel 配置，`config_from_environment()` 返回 `not_configured`。模型候选开关仅在隔离探测进程中显式设为 `TILESIM_EXPLORATION_MODEL_CANDIDATES=on`，没有发起外部请求，也没有打印或保存密钥。
+- 脱敏 manifest 已写入临时目录，canonical schema-set revision 为 `sha256:09279a1e159907caae262557d70ed7ffa6d809b43c5dd55d1f176ced68d65ec3`，状态为 `blocked/provider_not_configured`，模型调用次数为 0；原始响应、完整模型文本和隐藏推理均未持久化。
+- `bridge/test_assistant_model_candidate_provider.py` 在隔离 `.venv` 中 9/9 通过，属于 in-process controlled Provider 测试；阶段五候选测试 13/13、LangGraph runtime 24/24、阶段二至四/规划/Harness 29/29、`test_server.py` 197/197 通过。两场景、单 Worker、单槽位的 smoke 仍属于 `local_dev` / `synthetic_trace` / `exploratory` / `not_for_production`，不构成外部线上 Provider、真实 TileSim 或生产验收。
+- 本轮没有修改 `D:\tileSim`、`127.0.0.1:5173` 或临时 Playwright 文件；能力标记保持不变。外部 Provider acceptance 仍需在真实配置可用时独立执行。
+- 启动器透传补充：`scripts/start-backend.ps1` 现在会在变量被显式设置时通过 `WSLENV` 转发 `TILESIM_EXPLORATION_MODEL_CANDIDATES` 和兼容别名；`start-workbench.ps1` / `start-evidence-agent.ps1` 增加 `-EnableExplorationModelCandidates` 显式开关，未设置时仍保持确定性候选生成器。已确认本地助手配置由 `start-evidence-agent.ps1` 从 DPAPI 文件读取，之前的 blocked 检查是独立进程未经过该启动器造成的。
+
 # TileSim Web AI Handoff
+
+## 2026-11-03 阶段五助手模型通道接入与隔离验收（当前工作树，未提交、未部署）
+
+- 自动探索现在有正式的 `AssistantModelCandidateProvider` 适配器。它复用现有 AssistantModel 的环境配置、认证、超时和 `post_json` transport；只有 `TILESIM_EXPLORATION_MODEL_CANDIDATES=on`（或兼容别名）时，Bridge 初始化才选择 `ModelCandidateGenerator`，默认仍使用确定性候选生成器。
+- 模型请求使用专用闭世界 `json_schema` 响应格式，并绑定当前模型候选 Schema、契约版本和 schema-set revision。适配器只返回解析后的候选 DTO；原始响应 envelope、served model、密钥和隐藏推理不会进入账本或候选摘要。候选边界继续执行能力目录、用户授权、固定资源/场景、重复、幂等和预算校验。
+- 新增 `bridge/test_assistant_model_candidate_provider.py`（9 项）：覆盖四次历史结果进入第五次候选、授权参数调整、未授权/未发布/重复候选拒绝、闭世界禁止字段、非法 JSON/超时确定性回退、无回退时人工处理，以及一次隔离 LangGraph + Worker + `LocalSyntheticRunExecutor` 多场景串行 smoke。该 smoke 只使用测试 transport，不连接 5173、不创建生产实验，也不修改 `D:\\tileSim`。
+- 本次验收证明的是本地 controlled Provider adapter 和 synthetic runtime 接线，不是外部线上模型、真实 TileSim Provider、真实 Profile 或生产 acceptance。能力边界继续保持 `local_dev` / `synthetic_trace` / `exploratory` / `not_for_production`；真实 Provider acceptance、真实硬件和生产 verified artifact 仍待独立执行。
+- 当前 canonical schema-set revision 为 `sha256:09279a1e159907caae262557d70ed7ffa6d809b43c5dd55d1f176ced68d65ec3`，已重新运行 `pnpm contracts:generate` 与 `pnpm contracts:check`。
+
+## 2026-11-02 阶段五模型辅助候选生成（当前工作树，未提交、未部署）
+
+- 阶段五增加了可插拔 `ModelCandidateGenerator` 和仅接收结构化上下文的 `ModelCandidateProvider`。默认图路径仍使用确定性候选生成器；模型路径只能通过显式配置开关启用，Bridge 会在开关打开时接入现有 AssistantModel 通道，但真实外部 Provider acceptance 仍未执行。
+- 模型上下文绑定固定资源、已发布可执行部署候选、授权参数、已确认运行策略、已执行候选完整配置、每个场景的指标/证据/约束判定、当前最佳/Pareto 和剩余预算。模型提案使用闭世界 `exploration_model_candidate.v1`，只允许已授权 JSON Pointer 变化和已发布候选编号；模型名称、设备/GPU 拓扑、并行、物理 KV、集合通信、Profile、Shell、路径、URL 和工具调用均被拒绝。
+- 提案在进入既有 `generate_candidate -> validate_candidate -> RunExecutor` 边界前经过 schema、能力目录、授权范围、固定部署绑定、重复摘要和预算校验。模型异常、非法或不可用时回退确定性扫描；无回退候选进入 `manual_intervention_required/candidate_generation_failed`，不会创建运行。候选仍按场景绑定独立运行幂等键，保持单 Worker、单槽位、串行执行、LangGraph checkpoint、暂停/恢复/取消和未知结果恢复围栏。
+- 新增模型上下文/提案 Schema、OpenAPI 能力声明、生成 TypeScript 类型和事件枚举。阶段五结果仍是本地 `local_dev` / `synthetic_trace` / `exploratory` / `not_for_production`，没有宣称真实 Provider、Profile 或生产验收；本轮只完成 controlled Provider adapter acceptance，外部 Provider acceptance 仍待闭合。
+- 本阶段契约变更后的 canonical schema-set revision 为 `sha256:09279a1e159907caae262557d70ed7ffa6d809b43c5dd55d1f176ced68d65ec3`，并已由 `bridge/check_schema_set_revision.py`、OpenAPI 与生成客户端校验一致。
+- 阶段五定向测试通过：`test_candidate_generator_stage5` 13 项、LangGraph `test_exploration_runtime` 24 项、规划 10 项、Harness exploration 15 项、阶段二至四 4 项、synthetic delay 2 项、`test_server` 197 项；`.venv` 提供 LangGraph 与 SQLite checkpoint 运行时。前端定向探索测试 19 项通过，完整 Vitest 为 1460 passed / 8 skipped / 1 failed，唯一失败是既有 `tests/unit/structured-input-i18n.test.js` 对 `TopologyGraphEditor.vue` 的两个中文文案覆盖断言；`pnpm lint` 仍只被既有临时文件 `tmp/pw-check.js` 和 `tmp/pw-replay-visual.js` 的 3 个 lint 错误阻断。
+
+## 2026-11-01 部署候选执行、运行策略绑定与多指标评估（当前工作树，未提交、未部署）
+
+- 阶段二已从“规划读取候选”推进到执行循环：确定性候选生成器只消费 Bridge 能力目录中的已发布且可执行候选，按部署候选、已确认运行策略和授权参数生成组合；候选摘要、资源绑定、组合键和候选幂等键保留在候选账本中。每个候选按确认场景逐个执行，场景摘要 digest 进入运行幂等键，单 Worker、单实验槽位和串行语义不变。
+- 阶段三已把运行策略从确认草案冻结到授权摘要、候选和正式执行信封。只开放已发布的批处理调度、最大批处理规模、KV Cache 容量和消息大小倍率；正式请求保留完整 baseline，只覆盖本候选实际改变的授权字段。执行副作用账本现在同时保存候选、场景、运行策略和草案摘要。
+- 阶段四已在候选完成全部场景后调用多指标评估：缺少指标/证据的候选不合格，硬约束失败候选只保留审计记录；最终 summary 区分 qualified、constraint-failed、Pareto、推荐候选和停止原因，并保留每个场景的 run id、metric path 和 evidence refs。多个互不支配方案不会被强行压成唯一推荐。
+- 契约补充了部署候选、运行策略、候选/场景绑定、执行摘要和多指标结果字段，并已运行 `pnpm contracts:generate` 生成 TypeScript 类型、校验器和客户端。阶段五默认关闭但已有受控助手模型适配器；真实外部 Provider、Profile 和生产 acceptance 尚未闭合。
+- 本轮新增 `bridge/test_deployment_exploration_stage2_4.py`（4 项）以及候选生成、场景幂等键、缺少证据淘汰和 Pareto 取舍覆盖。已通过规划 10 项、Harness exploration 15 项、阶段二至四 4 项、Bridge `test_server.py`（197 项）、契约 Schema 测试、`contracts:check`、`docs:check`、`typecheck`、`eslint src scripts`、`build`、`py_compile` 和 `git diff --check`。完整 Vitest 当前 1454 passed / 8 skipped，但有 4 个既有拓扑布局/英文文案失败，未由本轮探索改动引入。运行时 24 项在当前 Python 环境因缺少 LangGraph 全部 skipped。结果继续保持 `local_dev`、`synthetic_trace`、`exploratory`、`not_for_production`，未修改 `D:\tileSim`、5173 Bridge 或临时 Playwright 文件。
+
+## 2026-11-01 部署方案探索规划前置与确认（当前工作树，未提交、未部署）
+
+- 自动探索入口现在先经过无副作用规划检查。固定资源、已发布可执行部署候选、工作负载场景、主要目标和能力目录不足时，助手最多展示三个中文问题及推荐值/推荐理由；能力目录明确没有已发布候选或运行闭环时则返回当前能力不支持及可运行替代范围。推荐值不会进入授权摘要。Bridge 规划接口返回 `would_create_run=false`、`would_claim_slot=false`，规划或确认失败也不会创建探索会话、调用执行器、占用槽位或锁页面。
+- 新增规划确认卡片。只有用户显式确认后，前端才调用规划确认接口并把 `draft_ready` 草案传入探索创建；创建后仍需既有一次授权。后端会校验当前 schema-set revision，并拒绝未确认或过期草案。
+- 部署候选只从 Bridge 能力上下文的已发布且可执行列表读取，忽略模型注入的候选列表；未发布 Profile、模型/设备/GPU 拓扑和集合通信自由组合仍不可进入候选。新规划对象带 schema identity、契约版本和 schema-set revision；本工作树当前 schema-set revision 以顶部阶段五条目为准。
+- 规划领域函数覆盖主要指标、硬约束、场景聚合、约束淘汰和 Pareto 前沿；执行循环仍保持 LangGraph、单 Worker、单实验串行、未知结果恢复和确认取消释放槽位的既有边界。结果仍为本地 `synthetic_trace` 探索证据，未升级为真实 Provider 或生产验收。
+- 已把确认后的工作负载场景接入 LangGraph：同一候选按场景生成不同幂等运行，串行收集每个场景的指标和证据后再聚合比较；硬约束不满足的候选会保留审计记录但不会成为最佳方案。规划草案确认摘要现在同时校验当前用户、草案 digest 和每条建议的确认记录。规划卡支持提交用户对建议值的修改并重新规划，建议值仍不会在确认前进入运行请求。
+- 本轮验证：`pnpm contracts:check`、`pnpm docs:check`、`pnpm typecheck`、`pnpm exec eslint src scripts`、`pnpm build`、`pnpm test`（135 files / 1458 passed / 8 skipped）、`node bridge/test_agent_harness_schemas.mjs`、Bridge `test_server.py`（197 passed）、规划测试（10 passed）、Harness exploration（15 passed）、运行时测试（24 passed）、`py_compile` 和 `git diff --check` 通过；未修改 `D:\tileSim`、5173 Bridge 或临时 Playwright 文件。
+
+## 2026-11-01 local synthetic 可控长运行与页面停止收口（当前工作树，未提交、未部署）
+
+- `bridge/services/execution.py` 增加 `TILESIM_LOCAL_SYNTHETIC_EXECUTION_DELAY_SECONDS` 开关。只有显式 `TILESIM_DEPLOYMENT_MODE=local_dev` 且运行 provenance 为 `synthetic_trace` 时生效，默认关闭；它在正式 CLI 子进程边界提供可控等待窗口，未改变生产或真实 Provider 语义。
+- 新增 `bridge/test_synthetic_delay.py`，验证开关隔离、真实子进程句柄和 confirmed cancellation；探索运行时测试增加了取消身份绑定覆盖。Bridge 定向测试 23 项通过，前端 Vitest 134 files / 1450 passed / 8 skipped，自动探索 Playwright 6 passed，`contracts:check`、`typecheck`、`eslint src scripts`、`build` 和 `git diff --check` 通过。
+- 服务停止路径现在把主体、工作区、backend identity 和 schema-set revision 传给正式取消适配器。正式 `POST /api/runs/{id}/cancel` 的直接隔离 smoke 可返回 `confirmed_cancelled`；本轮浏览器助手的意图模型通道不可用，因此没有把 HTTP 授权/取消证据宣称为页面点击成功证据。页面级点击验收仍待助手通道可用时复跑。
+- 能力标记继续保持 `local_dev`、`synthetic_trace`、`exploratory`、`not_for_production`；生产 Provider、生产 artifact、citation evidence 和 5173 部署均未完成。
+
+## 2026-11-01 自动探索正式入口隔离 smoke（当前工作树，未提交、未部署）
+
+- 在隔离 `5174` Bridge 上使用 `TILESIM_EXPLORATION_EXECUTOR=run_intake` 完成一个最多两轮的单探索会话；未触碰 `5173`，也未修改 `D:\\tileSim`。流程真实经过一次授权、完整 `run_request` 模板、正式 `POST /api/runs`、终态轮询、metrics artifact 读取和 LangGraph 比较。
+- 第 1 轮候选 `explore-candidate-f2f7257358ed3eeb`，幂等键以 `exploration:exploration-f163920653fa43deac44f3b8d2813e93:sha256:` 开头，run `run-20261101-012843-4a5b93eb`，终态 `completed`，指标 `/summary/throughput_requests_per_second = 142.29`，metrics artifact SHA-256 为 `5c202d73f33be04d351adadbe462154acd73b2e39a9faf1d4347e577cf37e0c7`。
+- 第 2 轮候选 `explore-candidate-99414020bab864ad` 使用新的幂等键，run `run-20261101-012848-7eb35734`，终态 `completed`，指标同一路径为 `142.66`，metrics artifact SHA-256 为 `e6e2d1a35dcfa2d7018ff6abc916f87ea244a13b850a922a045afcea9b42bced`。两个候选没有复用 `run_id`，最佳方案来自第 2 轮已读取的 artifact，探索以 `budget_exhausted` 停止。
+- 两次运行的 manifest 均包含 `tilesim.metrics_report.v1`、manifest 摘要和运行绑定证据；本次场景是本地 `s1_des_example`，provenance 仍为 `synthetic_trace`，只能证明本地一致性，不能升级为真实 Provider、生产 TileSim 或生产 verified artifact 验收。
+- 当前两个仓库都没有正式 `POST /api/runs/{id}/cancel` 路由；`D:\\tileSim-web` 的 `RunIntakeExecutor.cancel()` 仍只接受显式注入的正式路径，否则稳定返回 unknown 并保持 `recovery_required`。不能用 `POST /api/agent/executions/{id}/cancel` 代替。正式取消的最小跨仓库契约仍需主体/工作区、`agent:cancel_experiment`、run/backend/schema 绑定、取消幂等键、请求摘要、`confirmed_cancelled`/`already_terminal`/`unknown` 返回和迟到完成 fence。
+- 本轮门禁：Vitest **134 files / 1450 passed / 8 skipped**；自动探索浏览器 spec **6 passed**；`bridge/test_exploration_runtime.py` **19 passed**；`bridge/test_agent_harness_exploration.py` **15 passed**；`contracts:check`、`docs:check`、`typecheck`、`eslint src scripts`、`build`、`git diff --check` 通过。完整 `pnpm lint` 仍受既有未跟踪 `tmp/pw-check.js` 与 `tmp/pw-replay-visual.js` 阻断，未修改这些文件。
+- 能力标记保持 `local_dev`、`synthetic_trace`、`exploratory`、`not_for_production`；Provider acceptance、生产持久化、真实 citation evidence 和正式取消仍未接通。
+
+## 2026-10-31 Run Intake v2 接入前边界设计（当前工作树，未提交、未部署）
+
+- 自动探索继续使用不变的 `RunExecutor` 端口。`create_run(candidate, authorization)` 只接收已校验候选和不可变授权，返回带 `run_id`、候选幂等键、执行器类型和 provenance 的运行身份；`wait_for_terminal(run_identity)` 只能返回 `completed`、`failed`、`cancelled` 或 `unknown`；`cancel(run_identity)` 只有确认 `cancelled` 才允许释放唯一实验槽位；未知结果必须进入 `recovery_required`。`read_verified_metrics(run_identity, metric_path)` 必须返回与运行和目标 JSON Pointer 绑定的证据引用，不能只返回裸指标。
+- 默认执行器仍是 `LocalSyntheticRunExecutor`；显式设置 `TILESIM_EXPLORATION_EXECUTOR=run_intake` 时可使用已发布 `/api/runs` 的 `RunIntakeExecutor`。LocalSynthetic 只在内存中生成确定性的 `synthetic_trace` 指标，带有 `artifact_status=synthetic_trace_only`，不代表真实 TileSim 运行、真实工件或生产 verified artifact。Worker、LangGraph 和领域状态机不依赖 CLI、文件路径、Provider 或 TileSim 内部实现。
+- `POST /api/agent/run-intake-preview` 仍是只读 validate/judge preview：`run_creation=not_performed`、`run_acceptance=not_accepted_by_current_api`、`persistence.write_capability=absent`，不能被自动探索当作 create-run 入口。`RunIntakeExecutor` 已实现为显式注入的正式 `/api/runs` 适配器并完成隔离 synthetic-trace smoke；默认 Bridge 仍选择 LocalSynthetic，且正式取消路由尚未发布。
+- Run Intake v2 已发布的输入需要 schema identity/revision、intake/canonical digest、五类 Profile binding、并行/放置/KV/collective/workload/topology、fidelity、GPU participation、trace provenance、SLO 和预算。正式执行器接入前仍缺：接受并持久化该 envelope 的 create-run 路由、稳定幂等 key store、真实 Profile records/lowering/calculator receipts、创建/等待/取消能力、读取带 manifest/evidence 引用的 verified artifact，以及 Provider acceptance、生产持久化和独立 verified-artifact 验收证据。当前五类 Profile records 仍为 `0/unavailable`。
+- 结果证据边界保持不变：`synthetic_trace`、规则扫描和 fixture 只证明本地流程一致性；真实 verified metric 必须来自正式运行工件、manifest digest、JSON Pointer 和证据网关引用。当前能力标记仍为 `local_dev`、`synthetic_trace`、`exploratory`、`not_for_production`，不得描述为真实 TileSim 或生产验收。
+
+### 自动探索状态验收矩阵（2026-10-31）
+
+| 状态 | 当前证据 | 正式执行器/生产证据 |
+| --- | --- | --- |
+| `waiting_authorization` | synthetic HTTP/前端授权卡与一次授权校验已通过 | 未运行真实 Provider |
+| `exploring` | synthetic LangGraph 节点、候选校验和串行 Worker 已通过 | 未接 Run Intake create-run |
+| `waiting_run` | synthetic 单实验等待、暂停/停止竞态和检查点恢复已通过 | 无真实运行终态证据 |
+| `comparing` | synthetic verified-shaped 指标和最佳方案比较已通过 | 无正式 artifact metric |
+| `paused` | synthetic 暂停/恢复和页面锁测试已通过 | 无生产持久化恢复验收 |
+| `completed` | synthetic 预算/无改进终止和浏览器显示已通过 | 未通过 Provider acceptance |
+| `cancelled` | synthetic confirmed cancel 后释放唯一槽位已通过 | 未证明真实运行已取消 |
+| `recovery_required` | unknown 运行/取消结果和锁保持已通过 | 无生产恢复服务或人工处理台 |
+| `manual_intervention_required` | 状态投影、中文提示和锁保持已通过 | 未完成生产人工介入验收 |
+
+上述通过项只覆盖本地 synthetic/runtime 语义；真实 Provider acceptance、生产持久化、Run Intake v2 正式执行和真实 verified artifact 仍为未接通/未运行。
+
+## 2026-10-30 自动探索 v2 状态机边界加固（当前工作树，未提交、未部署）
+
+- 在 successor contract 冻结基础上收紧了纯确定性状态机：授权必须通过 v2 schema identity/revision、当前 schema-set/backend binding、完整 `protected` 上下文、固定 provenance 和 canonical `authorization_digest`；已绑定的 session、objective、parameter grants、**冻结预算**、页面/动作/工具 allowlist 不能被替换或扩大。已绑定 envelope 只允许同 digest 幂等重放；变更授权必须先暂停并使用新的 authorization id，终态不得重新绑定。显式空 context 会 fail closed，观察暂停会话不会隐式恢复。
+- 每个候选的正式 run 必须使用候选预先派生的幂等键；跨轮次复用 `run_id` 或幂等键会 fail closed。已知可重试失败只生成同一候选的确定性 `attempt-N` key；未知结果仍直接进入 `recovery_required`，不得盲目重建。
+- 定向 Bridge 套件 `test_agent_harness test_agent_harness_exploration test_agent_intent` 为 **52 tests / OK**，新增覆盖授权 protected/digest、预算替换防护、授权幂等重放/暂停重授权、显式空上下文拒绝、候选幂等键绑定和 run identity 去重；同一工作树下 Bridge 全量 discovery 为 **649 tests / 7 skipped / OK**。`node bridge/test_agent_harness_schemas.mjs`、`pnpm contracts:check`、`py_compile` 和 `git diff --check` 通过。schema-set oracle 未变化，仍为 `sha256:55cdba067f0d1526b9dbfa1b8e782a83f55c902775d598f3873839e0c51528e6`。
+- 运行时边界不变：exploration HTTP route、worker、LangGraph runtime、Run Intake v2 与真实 Provider 尚未接入；能力仅为 `local_dev + synthetic_trace + exploratory + not_for_production`。未触碰 `D:\tileSim`、`127.0.0.1:5173`、Provider credential、真实用户 run、commit 或 push。
+
+## 2026-10-29 串行自动探索 v2 契约校验收口（当前工作树，未提交、未部署）
+
+- 自动探索 successor contract 已冻结为 `2026-10-29.wpg.v2`，发布 15 个 exploration schema identity：
+  provenance、session、candidate、objective、parameter_grant、budget、iteration、evaluation、checkpoint、
+  summary、event、stop_reason、authorization_request、authorization、authorization_response。带顶层
+  `schema_identity`/`contract_revision` 的记录现在统一执行 identity、contract revision 及可用的 schema-set/backend
+  binding 校验；provenance、budget、objective、parameter grant 等嵌套 support DTO 与 authorization response
+  保持 closed DTO 校验，不虚构不存在的顶层 identity 字段；授权页面/动作只接受已发布的 page id/action 枚举，
+  不接受模型生成的 URL。
+- 授权预算默认 `max_rounds=10`、`max_runs=10`、`max_concurrency=1`，语义为每会话一次授权、每次只运行一个实验，
+  指标只能使用已验证结果；当前仍是 `runtime_status=contract_only`，能力边界为
+  `local_dev + synthetic_trace + exploratory + not_for_production`。
+- exploration HTTP route、worker、LangGraph runtime、Run Intake v2 与真实 Provider 尚未接入；
+  `explore_experiment` 意图识别仍未接入正式 active intent enum。探索契约不能被描述为生产能力。
+- 本轮新增并生成了上述 JSON schemas、Bridge registry/OpenAPI metadata 与 TypeScript DTO；定向 Bridge 套件
+  `test_agent_harness test_agent_harness_exploration test_agent_intent` 为 **49 tests / OK**，
+  `node bridge/test_agent_harness_schemas.mjs` 通过，`pnpm contracts:check` 通过。当前工作树 schema-set
+  oracle 为 `sha256:55cdba067f0d1526b9dbfa1b8e782a83f55c902775d598f3873839e0c51528e6`。
+- 未触碰 `D:\tileSim`、`127.0.0.1:5173`、Provider credential、真实用户 run、commit 或 push。
 
 ## 2026-10-29 部署诊断 SQLite WAL 竞争修复（当前工作树）
 
@@ -1612,9 +1772,114 @@ release-gate manifest 为
 仍是强制阻塞项，阶段 3A 最终结论保持 **NO-GO**；不得启动阶段 3B execution UI、阶段 4、自主候选、多工具循环
 或无人值守执行。
 
+## 2026-10-31 自动探索 v2 本地运行时接入（工作树，未提交）
+
+- 新增独立 `/api/agent/explorations` 资源、SQLite WAL 会话/事件/检查点仓库、唯一实验槽位和暂停/恢复/停止控制；复用 exploration v2 Schema identity。
+- 新增 `RunExecutor` 与 `LocalSyntheticRunExecutor`，以及 LangGraph + SQLite checkpoint 的单消费 Worker。链路可在本地 synthetic 边界完成候选生成、校验、单实验、等待、已验证指标比较和停止摘要。
+- 前端新增 `src/features/agent-exploration/`，助手侧栏真实渲染授权卡和进度面板；授权后启用页面锁，停止后解除。所有展示仍标记 `local_dev` / `synthetic_trace` / `exploratory` / `not_for_production`。
+- 授权时由 SQLite 唯一槽位先行占用实验会话，Worker 使用单消费循环并在 Bridge 重启后重新排队未终态授权会话；实验配置页控件和提交入口在锁定期间只读，路由守卫仅放行授权页面目录。
+- 本地验证补充前端授权/进度组件测试（132 files / 1416 passed / 8 skipped）与 Bridge exploration runtime 4 tests；该批未提交、未部署。
+- Run Intake v2、真实 Provider acceptance 和生产执行仍未接通，不能将本地 synthetic 结果视为生产验收。
+
+## 2026-10-31 自动探索运行时复核与竞态修正（工作树，未提交）
+
+- LangGraph 图节点现在消费一次性外部结果信封并保留 SQLite WAL checkpoint 中的 resume 路由；Worker 只负责串行调度、调用注入的 RunExecutor、提交结果和 CAS 保存，不再复制领域状态机。缺少 LangGraph 时保持稳定 `langgraph_dependency_missing`，不伪造运行时。
+- Worker 在外部调用前后比较 `_state_version`；暂停、停止或终态写入优先，旧 Worker 状态不会覆盖。停止当前运行会先调用 executor.cancel，未知取消进入 `recovery_required` 且保留唯一槽位；已知取消成功后才释放槽位。补充了 Run Intake v2 的未接入执行器边界。
+- 本轮进一步为外部调用写入 in-flight 标记和 pending result envelope；重启时若结果无法证明则进入 `recovery_required`，不会重新创建实验。Worker 只从 LangGraph checkpoint 恢复阶段和一次性外部结果。
+- `ControlledExecutor` 测试覆盖等待期间暂停、未知取消保留槽位、旧 Worker 结果不能覆盖终态，以及 create_run、wait_run、verified metric 阶段模拟进程崩溃后的恢复路径；探索运行时测试现为 8 项通过，领域状态机测试 15 项通过。
+- 确定性候选扫描已支持全部授权参数的逐项组合扫描，候选投影和进度面板显示“确定性扫描”；未接入模型调用，也未伪造模型计数。事件观察器已由 App.vue 接入，以持久化 replay/polling 为事实来源并在终态停止。
+- 前端生命周期复核统一了完整探索终态集合；刷新只恢复已授权活动会话，`waiting_authorization` 和全部终态不加锁。停止仅在后端确认 `cancelled` 后解锁，未知取消、恢复、上下文过期和失败状态继续锁定并显示中文处理提示。观察器回调绑定会话自己的 AbortController，旧会话终态不会停止新会话观察。
+
+## 2026-10-31 自动探索前端生命周期测试收口（工作树，未提交）
+
+- 新增事件观察器隔离测试：会话 A 终态回调不会刷新或终止会话 B；保留 after 游标、缺口检测和终态停止。
+- 新增完整停止生命周期测试：`cancelled` 才解锁，恢复/人工处理/上下文过期/实验失败和 HTTP 失败继续保持锁并显示中文提示。
+- 新增刷新恢复和上下文绑定测试：活动状态必须有授权编号，全部终态及 `waiting_authorization` 不恢复锁；恢复查询失败清理旧本地锁；context revision/run identity 变化只标记过期，不解除页面锁。
+- 前端探索锁增加主体工作区活动会话恢复、context revision/run identity 绑定、上下文变化过期标记和停止成功后解锁；结果/概览页在具备页面导航能力时只按发布的 experiment page id 跳转，重新发布上下文后才创建会话。事件观察以带序列游标的持久化 replay/polling 为事实来源，SSE 仍是短连接回放。
+- 定向 synthetic runtime 4 tests、Web Vitest 132 files / 1416 passed / 8 skipped、contracts/typecheck/lint/build 和 py_compile 通过。`format:check` 仍受工作树既有 92 个格式文件影响，未对非自动探索文件做全局重排；Bridge 全量 discovery 仍需按仓库既有入口完成。
+
+## 2026-10-31 自动探索前端生命周期浏览器验证（工作树，未提交）
+
+- `lifecycle.ts` 统一停止生命周期：只有后端确认 `cancelled` 才解除页面锁；恢复、人工处理、上下文过期和失败状态继续保持锁并显示中文提示。
+- 刷新恢复只接受具有授权编号的 `exploring`、`waiting_run`、`comparing`、`paused` 会话；`waiting_authorization` 和完整终态不会恢复页面锁，恢复查询失败会清理旧本地锁。
+- 事件观察器按会话隔离 controller；旧会话终态回调不会刷新或终止新会话观察，after 游标、缺口检测和持久化轮询回退保持不变。
+- 新增浏览器生命周期 spec，覆盖授权后只读、刷新恢复、等待授权/终态不锁和确认取消恢复编辑；上下文过期、恢复类状态不解锁和旧会话观察隔离由定向单元/组件测试覆盖。定向前端测试 29 passed；完整 Vitest 当前为 134 files / 1444 passed / 8 skipped，`pnpm test` 已通过。此前关于 `DeviceInventoryForm.vue` i18n 失败的描述已不再是当前事实。
+- 结果页/概览页自动导航继续只允许发布目录中的 `experiment` page id；导航完成后等待新的页面上下文再创建探索会话，没有导航授权时显示中文提示且不创建会话。
+- Run Intake v2、真实 Provider、真实 TileSim 运行和生产 verified artifact 仍未接通；当前能力继续标记为 `local_dev`、`synthetic_trace`、`exploratory`、`not_for_production`。
+
+## 2026-10-31 Run Intake v2 边界与浏览器补充验证（工作树，未提交）
+
+- 执行器端口增加了明确的 `RunIdentity`、终态观察、verified metric/evidence 语义和稳定的 `run_intake_executor_not_connected` 边界错误；LocalSynthetic 结果标记 `synthetic_trace_only`，不升级为真实 TileSim 工件。
+- 自动导航后的实验创建会等待新的 experiment 页面上下文 revision，再提交等待授权会话；旧 context revision 浏览器测试保持页面只读。当前发布的结果页/概览页上下文没有 `configure_current_subset` 导航授权，因此浏览器测试验证其 fail-closed：不跳转、不创建探索会话；未来发布该授权后沿用同一等待新 revision 的分支。
+- 新增 Bridge 执行器边界测试 2 项；定向浏览器生命周期与 preflight 测试通过。`pnpm test` 当前为 **134 files / 1446 passed / 8 skipped**，`pnpm contracts:check`、`pnpm typecheck`、`pnpm lint`、`pnpm build` 和 `git diff --check` 通过。
+- 当前仍未接通 Run Intake v2 create-run、真实 Provider acceptance、真实 TileSim 运行、生产持久化和生产 verified artifact/citation 证据；能力标记保持 `local_dev`、`synthetic_trace`、`exploratory`、`not_for_production`。
+
+## 2026-10-31 RunIntakeExecutor 正式入口适配（工作树，未提交、未部署）
+
+- `bridge/services/run_executor.py` 新增可注入的 `RunIntakeTransport`/`UrllibRunIntakeTransport` 与正式 `RunIntakeExecutor`。创建只调用已发布 `POST /api/runs`，复用实验页发布的完整 `create_run` 请求模板，候选叶值必须命中授权参数，且使用候选幂等键；Worker 仅把不可变上下文中的请求模板透传给执行器，不拼装 CLI、Provider 或 TileSim 私有请求。
+- 正式等待通过 `GET /api/runs/{id}` 观察 `completed`/`failed`/`cancelled`，超时或传输不确定返回 `unknown`；指标读取必须先取得 `GET /api/runs/{id}/artifacts` 中受支持且 ready 的 `metrics` 工件，再读取 allow-listed JSON，返回绑定 run_id、JSON Pointer、manifest digest、工具输出 digest 的证据封套。裸数值不会被接受。
+- 普通 `/api/runs/{id}/cancel` 当前没有已发布路由；适配器默认不猜测路径，取消结果为未知并触发探索 `recovery_required`，只有显式注入未来发布的取消路径才会确认 `cancelled`。因此尚未执行真实自动探索 smoke，也没有把正式入口声明为已验收。
+- 实验页上下文可携带已由现有请求构造器校验的完整 `run_request`；当前运行时默认仍使用 `LocalSyntheticRunExecutor`，只有显式 `TILESIM_EXPLORATION_EXECUTOR=run_intake` 才选择正式适配器。当前能力继续标记为 `local_dev`、`synthetic_trace`、`exploratory`、`not_for_production`。
+- 受控适配器 smoke（未部署本轮工作树，使用当前健康的本地 Bridge，单实验、无并发）实际调用了 `POST /api/runs`：`run_id=run-20261031-194332-1c9f5fd0`，终态 `completed`；读取了正式 `metrics` 工件，目标 `/summary/throughput_requests_per_second`，值 `142.66`，工件摘要 `sha256:44080e9797ab06f5fd8c5f616ef6c5ed413d45f7b27f6762ce818c0d641e256c`，证据封套包含 manifest digest `sha256:0193f000725f71fb957875ec5526e17e53799782808a68a3b810dce94d668e61` 和工具输出 digest `sha256:3c8b20f1b2b64fd7a3c47ea076e5337c399c702b5d84e650fd5452f6a934a6f7`。该场景来源仍为 `synthetic_trace`，不能当作真实 Provider、真实 TileSim 生产验收或生产 verified artifact；正式取消路由仍缺失。
+- 本轮门禁：`contracts:check`、`typecheck`、`lint`、`build`、`git diff --check`、Bridge `py_compile`、`test_exploration_runtime.py`（15/15）和 `test_agent_harness_exploration.py`（15/15）通过。完整 Vitest 为 134 files、1448 passed、8 skipped、1 failed；唯一失败是既有 `structured-input-i18n.test.js` 对 `TopologyGraphEditor.vue` 的“超级节点分组”英文覆盖，不属于本轮正式执行适配，未修改无关组件。定向探索/上下文测试 73/73 通过。
+
+## 2026-10-31 RunIntakeExecutor 隔离正式链路 smoke（工作树，未提交）
+
+- 在不触碰 5173 用户 Bridge 的前提下，使用 5174 隔离 Bridge、`TILESIM_EXPLORATION_EXECUTOR=run_intake`、匹配当前 TileSimCLI 构建身份，完成了一次最多 1 轮、1 个实验的自动探索链路：授权 → 确定性候选 → `POST /api/runs` → 轮询终态 → verified metrics 工件读取 → 最佳方案比较 → `budget_exhausted`。
+- 真实本地运行身份为 `run-20261031-203421-306f040d`，终态 `completed`；探索会话为 `exploration-0ac0eabc7fe548749ef379598fdcf474`，候选值为 `/overrides/runtime/max_batch_size=1`，指标 `/summary/throughput_requests_per_second=142.29`。读取到 `metrics` artifact（SHA-256 `c6967b01ebec97e9a147e4a386dccc2c763f3cfbed881de6cc071e74164c020c`），探索状态保存的证据封套包含 manifest digest `sha256:f2a27e1f2ecc9691b836c924b1cfda244ee00e49e8461c3f0d20ec7863f25183`、JSON Pointer 和工具输出 digest `sha256:8d242ab58c989dde928f5feac6819bc58fac3d19c61ed6e59c2a46431fafe5be`。
+- 该运行使用本地 `s1_des_example` synthetic trace 场景；报告的 `validation_lane=synthetic_consistency`、`evidence_tier=synthetic_consistency_with_resource_convergence`，因此不能作为真实 Provider、真实 TileSim 生产验收或生产 verified artifact 证据。能力标记继续为 `local_dev`、`synthetic_trace`、`exploratory`、`not_for_production`。
+- 同一 smoke 的第一次尝试因 source/build identity 不匹配被正式 `/api/runs` 返回 503 `backend_identity_mismatch`，探索稳定进入 `recovery_required`，没有重建第二个实验；这确认了执行前身份绑定与未知结果 fail-closed 行为。
+- 当前正式取消入口仍未发布；`RunIntakeExecutor.cancel()` 在未注入显式已发布路径时返回 `unknown`，会保留唯一槽位并进入恢复处理。Run Intake v2 envelope 持久化、真实 Provider acceptance、生产恢复持久化和正式 verified artifact/citation 验收仍未完成。
+- 新增 `test_run_intake_executor_drives_serial_langgraph_session`，用注入 transport 验证 Worker/LangGraph 的正式适配器请求、候选幂等键、终态和带证据指标读取；`test_exploration_runtime.py` 现为 16/16 通过。
+
+## 2026-10-31 LangGraph 运行环境与 5173 部署复核（工作树，未提交）
+
+- 固定依赖补齐为 `langgraph-checkpoint-sqlite==3.1.2`、`aiosqlite==0.22.1`、`sqlite-vec==0.1.9`；此前仅安装 `langgraph-checkpoint` 会导致 `langgraph.checkpoint.sqlite` 在 WSL 缺失。Windows venv 和 WSL Python 均可导入 LangGraph 1.2.17 与 SQLite saver。
+- `scripts/start-backend.ps1` 现在以 WSLENV 透传显式的 `TILESIM_EXPLORATION_EXECUTOR` 和 `TILESIM_RUN_INTAKE_BASE_URL`；默认值仍为 synthetic，只有部署环境显式设置 `run_intake` 才启用正式适配器。
+- 按现有部署脚本重启了当前 5173 Bridge（用户已授权），健康检查 `execution_ready=true`，schema-set revision 为 `sha256:a76a7321d09cc6dd929616c8ef9874207da3fa15653be65095856f2608c07991`，正式入口为 `POST /api/runs`，探索列表返回 200；能力目录五类 Profile records 仍为 0。
+- 本轮唯一真实运行仍是隔离 5174 smoke 中的 `run-20261031-203421-306f040d`；5173 部署后只做健康/能力/探索入口检查，没有再创建第二个实验。正式取消路由、Run Intake v2 envelope 持久化、真实 Provider acceptance、生产 verified artifact/citation 仍未接通。
+
 ## 2026-10-29 LangGraph flow 前端生命周期收口（工作树，未提交）
 
 - Web 端导航 flow 继续只使用已发布的 page id、显式 `navigate` 授权和有限预算；用户在导航卡点击一次即为页面跳转授权，通用 durable flow 卡中的 `confirm_navigation` 只作状态提示，不再产生第二次批准按钮。
 - SSE、polling、重载恢复和不可重试观察错误都会按 `flow_id` 更新同一导航卡；页面、context revision、Bridge identity 或 schema revision 变化会 fail-closed 标记 stale，旧卡不会继续暴露“打开页面”操作。导航执行器保留 visited-page/attempt cursor，禁止重复已访问页面。
 - 当前工作树 schema-set revision 为 `sha256:69e724a56d73a1b4fe14c698cb9ba7823de587c17e810c439377655fa4cbb237`，与 Bridge canonical 计算和 generated client 一致；本轮未修改正式 schema、generated client 或 revision 常量。
 - 定向 flow/navigation/copilot lifecycle 测试 62 passed；全量 Web Vitest 130 files / 1381 passed / 8 skipped；typecheck、lint、contracts/docs/deps、Vite build 通过；Bridge `test_agent_flow.py test_agent_orchestrator.py test_server.py test_agent_intent.py` 为 258 tests / 7 skipped / OK。上述证据仍仅为 `local_dev + synthetic_trace + exploratory + not_for_production`，Run Intake v2、Provider/live acceptance 和生产执行继续 blocked。
+
+### 本轮验证结果
+
+- `pnpm contracts:check`、`pnpm typecheck`、`pnpm lint`、`pnpm build`、`pnpm docs:check`、Bridge `py_compile`、`test_exploration_runtime.py`（16/16）、`test_agent_harness_exploration.py`（15/15）和 `git diff --check` 通过；定向探索锁/事件/组件测试 29/29 通过。
+- 完整 Vitest 为 134 files、1448 passed、8 skipped、1 failed，唯一失败仍是无关的 `structured-input-i18n.test.js` 对 `TopologyGraphEditor.vue` 的“超级节点分组”英文覆盖；未修改该组件。
+## 2026-10-31 Run Intake v2 envelope 持久化收口（工作树，未提交）
+
+- `ExplorationRepository` 新增正式执行副作用账本：保存请求摘要、请求摘要哈希、探索/候选/运行身份、执行器类型、提交时间、等待阶段、副作用状态和最后一次可确认结果。`RunIntakeExecutor` 在已注入正式执行上下文时按候选幂等键写入账本；同键同请求可恢复已确认 `run_id`，同键不同请求拒绝。
+- Worker 重启时只恢复已持久化的正式提交结果；创建阶段没有可确认结果会进入 `recovery_required`，不盲目再次创建。基于 GET 的等待/工件读取在已有正式 envelope 时可安全重新观察；synthetic 执行器没有正式 envelope 时仍 fail-closed。
+- 本轮未猜测或伪造 `/api/runs/{id}/cancel`：当前 Bridge 未发布正式取消入口，`RunIntakeExecutor.cancel()` 仍需显式注入已发布路径，否则返回未知并保留探索槽位。正式取消、生产持久化和 Provider acceptance 仍未完成。
+- 仍保持能力标记：`local_dev`、`synthetic_trace`、`exploratory`、`not_for_production`。本地 smoke 的 `/api/runs` 运行沿用 synthetic trace，不能作为真实 TileSim 或生产 verified artifact 验收。
+- 本轮门禁：完整 Vitest **134 files / 1450 passed / 8 skipped**；`contracts:check`、`docs:check`、`typecheck`、`build`、定向探索浏览器 spec **5/5**、Bridge 自动探索运行时 **18/18**、Agent Harness 探索测试 **15/15**、`py_compile` 与 `git diff --check` 通过。完整 `pnpm lint` 仍被工作树既有 `tmp/pw-check.js` 与 `tmp/pw-replay-visual.js` 的 ESLint 错误阻断，未修改这些临时文件；使用本地构建预览服务复跑浏览器 spec 以验证真实刷新/锁生命周期。
+- 追加账本字段 `last_confirmed_at` 与 `result_summary`，并覆盖 create 保存失败后的同键恢复、摘要冲突、wait/metric 重启、确认取消、未知取消和槽位保持；`test_exploration_runtime.py` 当前 **19/19**。正式源码范围 `pnpm exec eslint src scripts` 通过；完整 `pnpm lint` 的唯一阻断仍是未纳入忽略规则的 `tmp/pw-check.js`、`tmp/pw-replay-visual.js`，没有缩小正式源码检查范围来掩盖问题。
+- 取消评估确认：正式 `/api/runs/{id}/cancel` 在当前 Web Bridge 与 `D:\tileSim` 中均未发布；已存在的 `/api/agent/executions/{id}/cancel` 属于 Agent Harness，不是 Run Intake 正式运行取消入口。由于约束禁止自行修改 `D:\tileSim`，正式取消仍是明确跨仓库阻塞项；当前适配器保留稳定未接入/未知结果语义，未知时不释放唯一槽位。
+
+## 2026-11-01 正式运行取消边界（工作树，未提交、未部署）
+
+- 取消 canonical 位置确认在 `D:\tileSim-web` Bridge；`D:\tileSim` 是 C++/CLI 仿真仓库，没有 HTTP `/api/runs` 服务，因此本轮未跨仓库修改。
+- Bridge 新增 `POST /api/runs/{run_id}/cancel`。请求绑定主体、工作区、`agent:cancel_experiment` 权限、run、backend identity、schema-set revision 和 `Idempotency-Key`；相同键与摘要可重放，摘要冲突返回 `request_conflict`。响应区分 `confirmed_cancelled`、`already_terminal` 和 `cancel_unknown`，取消账本写入 `run-metadata.json`，重启后可查询。
+- 默认执行线程现在保留本地 TileSimCLI 进程句柄；只有确认进程终止后才写入 `cancelled`。执行完成发布前检查状态围栏，迟到结果不能覆盖已确认取消；无法确认进程时返回 `cancel_unknown`，探索槽位保持占用。
+- `RunIntakeExecutor.cancel()` 默认调用正式取消路径（仅对已发布 HTTP transport），发送取消幂等键及运行绑定信息；`confirmed_cancelled` 才释放探索槽位，未知或网络错误继续进入恢复处理。既有注入 transport 的兼容测试仍支持其明确的 `cancelled` 响应。
+- 隔离 Bridge smoke 验证了运行中、无可确认本地进程时返回 HTTP 202 `cancel_unknown`；未触碰 5173 Bridge。Bridge 自动探索测试 **20/20**、Harness 测试 **15/15**、`typecheck`、`contracts:check`、`git diff --check` 通过。
+- 本地真实入口仍使用 `s1_des_example` `synthetic_trace`；尚未完成真实 Provider acceptance、生产 verified artifact/citation evidence、生产级持久化验收，能力标记继续为 `local_dev`、`synthetic_trace`、`exploratory`、`not_for_production`。
+
+## 2026-11-01 confirmed cancellation smoke（工作树，未提交）
+
+- 5175 隔离 Bridge 使用当前 Bridge 取消实现和一个仅延长等待的本地 CLI 包装，创建正式运行 `run-20261101-034953-72eb68a4`，先确认返回 `running`，随后调用 `POST /api/runs/{run_id}/cancel`，得到 HTTP 200 `confirmed_cancelled`；再次查询终态为 `cancelled`。
+- 运行 metadata 持久化了取消幂等键、请求摘要、`cancel_status=confirmed_cancelled`、`cancelled_at` 和 `finished_at`。相同幂等键重放返回 `confirmed_cancelled` 且 `idempotent_replay=true`；相同键不同摘要返回 HTTP 409 `request_conflict`。执行线程没有迟到完成覆盖已确认取消。
+- 同一隔离实例曾用未捕获进程的短运行验证 `cancel_unknown`，HTTP 202 后保持运行事实不变；该结果没有被升级为 cancelled。探索级停止 smoke 未重新创建第二个会话，避免引入额外真实运行；现有 `cancel_unknown -> recovery_required` 测试继续通过。
+- 5173 部署检查：旧 immutable release 可启动且健康检查通过，但取消路由探测返回 `unknown_endpoint`。随后按现有 `update-backend.ps1 -SkipTests` 尝试生成当前发布；后端构建在既有 `D:\tileSim` SUE 测试缺少 `<cstdint>` 等错误处失败，未完成新版本部署。5173 仍运行旧 release，不能宣称已包含取消接口。
+- 本轮门禁：`contracts:check`、`typecheck`、Bridge 自动探索 **20/20**、Harness **15/15** 和 `git diff --check` 通过。运行来源仍是本地 `s1_des_example` `synthetic_trace`，Provider acceptance、生产 artifact、citation evidence 和生产持久化验收仍未完成。
+## 2026-11-06 执行回放工作区重构（当前工作树，未提交、未部署）
+
+- 执行回放改为三种一级模式：执行概览、集合通信、设备与链路；三种模式共享同一 `cursorPs`、播放控制、逐步操作和选中证据，右侧检查器保留当前选择的证据详情。
+- 概览以阶段、运行期事件和设备/通信摘要为主轨；集合模式把 canonical collective step 的逻辑参与者与 `actual_path` 物理路径分开；网络模式以 topology 作为空间投影，只让同时具备后端 `actual_path` 与有效 `execution_events` 的路径进入活动状态、路径高亮和流 token。
+- 回放路径和节点不再使用默认无限 CSS 动画；活动状态只由单一 RAF 播放游标驱动的静态 SVG/CSS 状态表达。未报告、未覆盖、预期缺省和不支持 Schema 继续显示为中文证据边界，不生成推断路径或动画。
+- 定向回放 Vitest 为 4 files / 34 passed；`pnpm eslint src/features/execution-replay`、`pnpm typecheck`、目标文件 `prettier --check`、`pnpm build` 和 `git diff --check` 通过。隔离 Vite 可在 4181 启动，但 Playwright CLI 在本机 npx 安装/启动阶段无输出，未取得浏览器截图；临时进程已停止，未触碰 5173。
+- 能力边界仍为 `local_dev` / `synthetic_trace` / `exploratory` / `not_for_production`；本轮未新增 contract，未修改 `D:\tileSim` 或 `tmp`。

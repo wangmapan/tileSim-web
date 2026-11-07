@@ -77,7 +77,7 @@ test("deployed Week 8 Bridge serves metrics-backed F7 Fabric evidence", async ({
 
   await page.goto(`${liveBaseUrl}/fabric?run=${encodeURIComponent(liveRunId)}`, { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { name: "当前主要通信瓶颈" })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole("heading", { name: "请求级 Fabric contribution" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "请求级通信贡献" })).toBeVisible();
   await expect(page.locator(".fabric-request-table tbody tr")).not.toHaveCount(0);
   const targets = await page.locator(".fabric-request-table a.artifact-evidence-link").evaluateAll((links) =>
     links.map((link) => {
@@ -129,7 +129,7 @@ test("deployed Week 8 Bridge serves formal F7 design-space evidence", async ({ p
     waitUntil: "domcontentloaded",
   });
 
-  await expect(page.getByRole("heading", { name: "Pareto 与 artifact-record 证据" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "候选关系与证据记录" })).toBeVisible({ timeout: 30_000 });
   await expect(page.locator(".f7-formal-summary")).toContainText("artifact_record");
   await expect(page.locator(".candidate-detail")).not.toHaveCount(0);
   const targets = await page.locator(".candidate-detail a.artifact-evidence-link").evaluateAll((links) =>

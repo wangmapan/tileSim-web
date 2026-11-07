@@ -43,8 +43,8 @@ const { t } = useI18n();
       </label>
       <label class="field">
         <span
-          >{{ t("请求 fidelity")
-          }}<InlineHelp v-if="!props.compact" :text="t('以运行后的验证报告为准')" :label="t('查看 fidelity 说明')"
+          >{{ t("请求精度")
+          }}<InlineHelp v-if="!props.compact" :text="t('以运行后的验证报告为准')" :label="t('查看请求精度说明')"
         /></span>
         <select v-model="form.fidelity_policy" :aria-invalid="fieldPath === '/fidelity_policy'">
           <option v-for="fidelity in surface.fidelityPolicies" :key="fidelity" :value="fidelity">

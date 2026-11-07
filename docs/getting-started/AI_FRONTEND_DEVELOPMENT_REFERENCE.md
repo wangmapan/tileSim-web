@@ -284,3 +284,11 @@ git diff --check -- <你改的文件…>
 - 新增前端模块、改变代码边界或状态归属时**必须更新本文**（§2、§4）。
 - 门禁数字变化只在**有新实测**时才改 §7，并更新「事实日期」；**不要**把本文当成历史账本。
 - 本文按 `docs/README.md` 的规则登记在**活跃文档索引**中，且必须从该页可达。
+
+## 算子 / Kernel / 执行划分模块
+
+代码归属：`kernel-authoring` 保存实验页草案和当前请求 CLI 准入收据；`execution-partition-editor` 编辑显式资源 DAG；两者通过公共 `index.ts` 复用。`ExecutionInputFields` 是通用精确值字段编辑器，不访问 store/feature/API。descriptor 和 verified artifact 使用 TanStack Query，草案/选中行在组件本地，未重新集中到 dashboard controller。
+
+`run-experiment/request.ts` 发送正式 `CreateRunRequest.execution_input`；API 由生成客户端声明。`execution-inspector` 拥有输入/CPU/片段证据，回放依旧只用 `execution-replay` 的游标。默认来源不会附加执行输入；其他来源必须经真实 CLI 校验，身份/revision/文档改变后失效，后端创建时再次检查。
+
+完整合同、修改文件、实际 CLI 路径、隔离 native 浏览器命令和未覆盖项见 [模块当前基线](../features/execution/OPERATOR_KERNEL_CURRENT_BASELINE.md)。修改该模块时保持无损整数、来源互斥、逐 selector/selection 消费检查和 CPU/声明/合成证据边界。

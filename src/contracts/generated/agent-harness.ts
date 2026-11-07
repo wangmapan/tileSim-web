@@ -2,14 +2,16 @@
 
 export const AGENT_HARNESS_CONTRACT_REVISION = "2026-10-17.wpa.v1" as const;
 export const AGENT_HARNESS_SCHEMA_SET_REVISION =
-  "sha256:0085e3a4e89576fff168f29d811be581c7107b9bd3f8fabf9834d651f3c606b3" as const;
+  "sha256:bcdc6fe220816a68247353d8d488ad682ca3b3ee585112528e12985a71b0c2a2" as const;
 export const AGENT_HARNESS_SUCCESSOR_CONTRACT_REVISION = "2026-10-18.wpb.v1" as const;
 export const AGENT_HARNESS_SUCCESSOR_SCHEMA_SET_REVISION =
-  "sha256:0085e3a4e89576fff168f29d811be581c7107b9bd3f8fabf9834d651f3c606b3" as const;
+  "sha256:bcdc6fe220816a68247353d8d488ad682ca3b3ee585112528e12985a71b0c2a2" as const;
 export const AGENT_HARNESS_EXECUTION_CONTRACT_REVISION = "2026-10-18.wpc.v1" as const;
 export const AGENT_HARNESS_OPTIMIZATION_CONTRACT_REVISION = "2026-10-19.wpd.v1" as const;
 export const AGENT_HARNESS_AUTHORIZATION_CONTRACT_REVISION = "2026-10-28.wpf.v1" as const;
+export const AGENT_HARNESS_EXPLORATION_CONTRACT_REVISION = "2026-10-29.wpg.v2" as const;
 export const AGENT_HARNESS_BATCH_CONTRACT_REVISION = "2026-10-19.wpe.v1" as const;
+export const AGENT_HARNESS_MODEL_CANDIDATE_CONTRACT_REVISION = "2026-11-02.wpi.v1" as const;
 export const AGENT_HARNESS_TOOL_REGISTRY_REVISION = "2026-10-17.tools.v1" as const;
 export const AGENT_HARNESS_BATCH_TOOL_REGISTRY_REVISION = "2026-10-19.tools.v3" as const;
 export const AGENT_HARNESS_API_VERSION = "tilesim.bridge.api.v1" as const;
@@ -89,6 +91,52 @@ export type AgentHarnessAuthorizationSchemaIdentity =
   | "tilesim.agent_harness.optimization_authorization_request.v1"
   | "tilesim.agent_harness.optimization_authorization.v1"
   | "tilesim.agent_harness.optimization_authorization_response.v1";
+
+export type AgentHarnessExplorationState =
+  | "waiting_authorization"
+  | "exploring"
+  | "waiting_run"
+  | "comparing"
+  | "paused"
+  | "completed"
+  | "parameter_validation_failed"
+  | "run_failed"
+  | "authorization_expired"
+  | "authorization_revoked"
+  | "budget_exhausted"
+  | "context_expired"
+  | "recovery_required"
+  | "manual_intervention_required"
+  | "cancelled";
+export type AgentHarnessExplorationSchemaIdentity =
+  | "tilesim.agent_harness.exploration_provenance.v2"
+  | "tilesim.agent_harness.exploration_budget.v2"
+  | "tilesim.agent_harness.exploration_objective.v2"
+  | "tilesim.agent_harness.exploration_parameter_grant.v2"
+  | "tilesim.agent_harness.exploration_session.v2"
+  | "tilesim.agent_harness.exploration_candidate.v2"
+  | "tilesim.agent_harness.exploration_iteration.v2"
+  | "tilesim.agent_harness.exploration_evaluation.v2"
+  | "tilesim.agent_harness.exploration_checkpoint.v2"
+  | "tilesim.agent_harness.exploration_summary.v2"
+  | "tilesim.agent_harness.exploration_event.v2"
+  | "tilesim.agent_harness.exploration_stop_reason.v2"
+  | "tilesim.agent_harness.exploration_authorization_request.v2"
+  | "tilesim.agent_harness.exploration_authorization.v2"
+  | "tilesim.agent_harness.exploration_authorization_response.v2";
+export type AgentHarnessDeploymentExplorationSchemaIdentity =
+  | "tilesim.agent_harness.deployment_exploration_fixed_resources.v1"
+  | "tilesim.agent_harness.deployment_exploration_deployment_candidate.v1"
+  | "tilesim.agent_harness.deployment_exploration_workload_scenario.v1"
+  | "tilesim.agent_harness.deployment_exploration_run_strategy.v1"
+  | "tilesim.agent_harness.deployment_exploration_constraint.v1"
+  | "tilesim.agent_harness.deployment_exploration_aggregation.v1"
+  | "tilesim.agent_harness.deployment_exploration_recommendation.v1"
+  | "tilesim.agent_harness.deployment_exploration_plan.v1"
+  | "tilesim.agent_harness.deployment_exploration_confirmation.v1"
+  | "tilesim.agent_harness.deployment_exploration_evaluation.v1";
+export type AgentHarnessModelCandidateSchemaIdentity =
+  "tilesim.agent_harness.exploration_model_context.v1" | "tilesim.agent_harness.exploration_model_candidate.v1";
 
 export type AgentHarnessBatchState =
   | "draft"
@@ -725,6 +773,384 @@ export interface AgentHarnessOptimizationActionRequest {
   action: "pause" | "resume" | "cancel" | "retry";
   recovery_acknowledged?: boolean;
   idempotency_key?: string;
+}
+export interface AgentHarnessExplorationBudget {
+  max_rounds: number;
+  max_runs: number;
+  max_concurrency: 1;
+  max_no_improvement: number;
+  max_failures: number;
+  max_execution_time_ms: number;
+  max_model_calls: number;
+  max_tool_calls_per_round: number;
+}
+export interface AgentHarnessExplorationObjective {
+  metric_path: string;
+  direction: "minimize" | "maximize";
+  minimum_improvement: number;
+  plateau_rounds: number;
+  primary_objective?: { metric_path: string; direction: "minimize" | "maximize" };
+  constraints?: Array<{
+    metric_path: string;
+    operator: "<" | "<=" | "=" | ">=" | ">";
+    threshold: number;
+    unit?: string;
+  }>;
+  aggregation?: "all_scenarios" | "mean" | "max" | "min" | "p95";
+}
+export interface AgentHarnessDeploymentExplorationPlan {
+  schema_identity: "tilesim.agent_harness.deployment_exploration_plan.v1";
+  contract_revision: "2026-11-01.wph.v1";
+  schema_set_revision: string;
+  policy_revision: "tilesim.agent_harness.deployment_exploration.policy.v1";
+  status: "needs_clarification" | "unsupported" | "awaiting_confirmation" | "draft_ready";
+  missing?: string[];
+  questions?: Array<Record<string, unknown>>;
+  recommendations?: Array<Record<string, unknown>>;
+  unsupported_fields?: string[];
+  message?: string;
+  fixed_resources?: Record<string, unknown>;
+  deployment_candidates?: Array<Record<string, unknown>>;
+  workload_scenarios?: Array<Record<string, unknown>>;
+  run_strategy?: Record<string, unknown> | null;
+  objective?: Record<string, unknown>;
+  confirmation?: Record<string, unknown> | null;
+  draft_digest?: string;
+  would_create_run: false;
+  would_claim_slot: false;
+}
+export interface AgentHarnessExplorationModelCandidate {
+  schema_identity: "tilesim.agent_harness.exploration_model_candidate.v1";
+  contract_revision: "2026-11-02.wpi.v1";
+  schema_set_revision: string;
+  deployment_candidate_id: string | null;
+  changes: Record<string, number | string>;
+  reason: string | null;
+  source: "model";
+}
+export interface AgentHarnessExplorationModelContext {
+  schema_identity: "tilesim.agent_harness.exploration_model_context.v1";
+  contract_revision: "2026-11-02.wpi.v1";
+  schema_set_revision: string;
+  fixed_resources: Record<string, unknown>;
+  deployment_candidates: Array<Record<string, unknown>>;
+  authorized_parameter_grants: Array<Record<string, unknown>>;
+  run_strategy: Record<string, unknown> | null;
+  workload_scenarios: Array<Record<string, unknown>>;
+  executed_candidates: Array<Record<string, unknown>>;
+  candidate_evaluations: Array<Record<string, unknown>>;
+  current_best: { candidate_id: string | null; value: number | null };
+  pareto_candidates: string[];
+  remaining_budget: { rounds: number; runs: number; model_calls: number; tool_calls_this_round: number };
+  objective: Record<string, unknown>;
+  context_digest: string;
+}
+export interface AgentHarnessExplorationParameterGrant {
+  pointer: string;
+  min: number;
+  max: number;
+  step: number;
+  kind: "int" | "integer" | "number" | "float";
+}
+export interface AgentHarnessExplorationProvenance {
+  deployment_mode: "local_dev";
+  source_mode: "synthetic_trace";
+  claim_scope: "exploratory";
+  production_status: "not_for_production";
+}
+export type AgentHarnessExplorationStopReasonCode =
+  | "budget_exhausted"
+  | "max_rounds"
+  | "max_runs"
+  | "max_no_improvement"
+  | "max_failures"
+  | "max_execution_time"
+  | "max_model_calls"
+  | "max_tool_calls_per_round"
+  | "authorization_expired"
+  | "authorization_revoked"
+  | "context_expired"
+  | "manual_stop"
+  | "run_failed"
+  | "run_cancelled"
+  | "completed"
+  | "recovery_required"
+  | "manual_intervention_required";
+export interface AgentHarnessExplorationStopReason {
+  schema_identity: "tilesim.agent_harness.exploration_stop_reason.v2";
+  contract_revision: typeof AGENT_HARNESS_EXPLORATION_CONTRACT_REVISION;
+  reason: AgentHarnessExplorationStopReasonCode;
+  detail: string;
+  unknown_outcome?: boolean;
+  provenance: AgentHarnessExplorationProvenance;
+}
+export interface AgentHarnessExplorationCandidate {
+  schema_identity: "tilesim.agent_harness.exploration_candidate.v2";
+  contract_revision: typeof AGENT_HARNESS_EXPLORATION_CONTRACT_REVISION;
+  candidate_id: string;
+  session_id: string;
+  sequence: number;
+  parent_candidate_id: string | null;
+  candidate_digest: string;
+  config: Record<string, unknown>;
+  changed_fields: string[];
+  origin?: "model" | "rule";
+  reason?: string | null;
+  status: "generated" | "validated" | "running" | "best" | "evaluated" | "failed" | "rejected" | "recovery_required";
+  authorization_id: string;
+  run_id: string | null;
+  run_idempotency_key: string;
+  metric_value: number | null;
+  metric_verified: boolean;
+  deployment_candidate?: Record<string, unknown> | null;
+  deployment_candidate_id?: string | null;
+  deployment_candidate_summary?: Record<string, unknown> | null;
+  candidate_summary?: Record<string, unknown> | null;
+  resource_binding?: Record<string, unknown> | null;
+  run_strategy?: Record<string, unknown> | null;
+  run_strategy_digest?: string | null;
+  combination_key?: string | null;
+  candidate_idempotency_key?: string | null;
+  scenario_id?: string | null;
+  scenario_summary?: Record<string, unknown> | null;
+  model_proposal?: AgentHarnessExplorationModelCandidate | null;
+  model_context_digest?: string | null;
+  provenance: AgentHarnessExplorationProvenance;
+}
+export type AgentHarnessExplorationIterationState =
+  "generated" | "validated" | "waiting_run" | "comparing" | "completed" | "failed" | "recovery_required";
+export interface AgentHarnessExplorationIteration {
+  schema_identity: "tilesim.agent_harness.exploration_iteration.v2";
+  contract_revision: typeof AGENT_HARNESS_EXPLORATION_CONTRACT_REVISION;
+  session_id: string;
+  iteration_id: string;
+  sequence: number;
+  candidate_id: string;
+  state: AgentHarnessExplorationIterationState;
+  run_id: string | null;
+  metric_verified: boolean;
+  created_at: string;
+  provenance: AgentHarnessExplorationProvenance;
+}
+export interface AgentHarnessExplorationEvaluationObjective {
+  metric_path: string;
+  direction: "minimize" | "maximize";
+  value: number;
+  status: "verified";
+  unit?: string;
+}
+export interface AgentHarnessExplorationEvidence {
+  run_id: string;
+  manifest_digest: string;
+  json_pointer: string;
+  tool_output_digest: string;
+}
+export interface AgentHarnessExplorationEvaluation {
+  schema_identity: "tilesim.agent_harness.exploration_evaluation.v2";
+  contract_revision: typeof AGENT_HARNESS_EXPLORATION_CONTRACT_REVISION;
+  session_id: string;
+  candidate_id: string;
+  run_id: string;
+  objective: AgentHarnessExplorationEvaluationObjective;
+  evidence: AgentHarnessExplorationEvidence[];
+  provenance: AgentHarnessExplorationProvenance;
+}
+export interface AgentHarnessExplorationCheckpoint {
+  schema_identity: "tilesim.agent_harness.exploration_checkpoint.v2";
+  contract_revision: typeof AGENT_HARNESS_EXPLORATION_CONTRACT_REVISION;
+  session_id: string;
+  checkpoint_id: string;
+  state_digest: string;
+  last_event_sequence: number;
+  active_run_id: string | null;
+  context_revision: string;
+  authorization_digest: string;
+  provenance: AgentHarnessExplorationProvenance;
+}
+export interface AgentHarnessExplorationProtectedContext {
+  context_revision: string;
+  run_context_revision: string | null;
+  input_snapshot_digest: string;
+  schema_set_revision: string;
+  backend_identity: AgentHarnessBackendIdentity;
+  parameter_catalog_revision: string;
+}
+export type AgentHarnessExplorationPageId = "experiment" | "execution" | "metrics";
+export type AgentHarnessExplorationAction = "navigate" | "analyze" | "execute" | "report";
+export interface AgentHarnessExplorationRound {
+  candidate_id: string;
+  sequence: number;
+  status: string;
+  changed_fields: string[];
+  metric: { value?: number; metric_path?: string; status?: string } | null;
+}
+export interface AgentHarnessExplorationSummary {
+  schema_identity: "tilesim.agent_harness.exploration_summary.v2";
+  contract_revision: typeof AGENT_HARNESS_EXPLORATION_CONTRACT_REVISION;
+  session_id: string;
+  state: string;
+  round_count: number;
+  evaluated_count: number;
+  run_count: number;
+  failure_count: number;
+  best_candidate_id: string | null;
+  best_value: number | null;
+  stop_reason: AgentHarnessExplorationStopReason;
+  rounds: AgentHarnessExplorationRound[];
+  qualified_candidates?: string[];
+  constraint_failed_candidates?: string[];
+  pareto_candidates?: string[];
+  recommended_candidate_id?: string | null;
+  candidate_evaluations?: Array<Record<string, unknown>>;
+  stop_reason_code?: string | null;
+  provenance: AgentHarnessExplorationProvenance;
+}
+export type AgentHarnessExplorationEventType =
+  | "created"
+  | "prepare"
+  | "authorized"
+  | "context_snapshot"
+  | "candidate_generated"
+  | "candidate_validated"
+  | "model_candidate_fallback"
+  | "run_created"
+  | "run_retry"
+  | "run_completed"
+  | "metric_verified"
+  | "best_updated"
+  | "no_improvement"
+  | "continue"
+  | "stopped"
+  | "paused"
+  | "resumed"
+  | "finished";
+export type AgentHarnessExplorationEventNode =
+  | "prepare_exploration"
+  | "snapshot_context"
+  | "generate_candidate"
+  | "generate_model_candidate"
+  | "validate_candidate"
+  | "create_one_run"
+  | "wait_run_terminal"
+  | "read_verified_metric"
+  | "update_best_candidate"
+  | "should_continue"
+  | "finish_report"
+  | "pause"
+  | "stop"
+  | "recover";
+export interface AgentHarnessExplorationEvent {
+  schema_identity: "tilesim.agent_harness.exploration_event.v2";
+  contract_revision: typeof AGENT_HARNESS_EXPLORATION_CONTRACT_REVISION;
+  event_id: string;
+  session_id: string;
+  sequence: number;
+  event_type: AgentHarnessExplorationEventType;
+  node: AgentHarnessExplorationEventNode;
+  state: string;
+  payload_digest: string;
+  created_at: string;
+  provenance: AgentHarnessExplorationProvenance;
+}
+export interface AgentHarnessExplorationSession {
+  schema_identity: "tilesim.agent_harness.exploration_session.v2";
+  contract_revision: typeof AGENT_HARNESS_EXPLORATION_CONTRACT_REVISION;
+  session_id: string;
+  task_type: "explore_experiment";
+  principal: string;
+  workspace_id: string;
+  run_id: string | null;
+  context_revision: string;
+  run_context_revision: string | null;
+  input_snapshot_digest: string;
+  schema_set_revision: string;
+  backend_identity: AgentHarnessBackendIdentity;
+  parameter_catalog_revision: string;
+  policy_revision: "tilesim.agent_harness.serial_exploration.policy.v2";
+  objective: AgentHarnessExplorationObjective;
+  parameter_grants: AgentHarnessExplorationParameterGrant[];
+  budget: AgentHarnessExplorationBudget;
+  base_config: Record<string, unknown>;
+  allowed_pages: AgentHarnessExplorationPageId[];
+  allowed_actions: AgentHarnessExplorationAction[];
+  state: AgentHarnessExplorationState;
+  current_page_id: AgentHarnessExplorationPageId;
+  current_round: number;
+  run_count: number;
+  failure_count: number;
+  no_improvement_count: number;
+  active_run_id: string | null;
+  best_candidate_id: string | null;
+  authorization_id: string | null;
+  authorization_digest: string | null;
+  planning_plan_digest?: string | null;
+  planning_confirmation?: Record<string, unknown> | null;
+  deployment_candidates?: Array<Record<string, unknown>>;
+  run_strategy?: Record<string, unknown> | null;
+  run_strategy_digest?: string | null;
+  context_lock: {
+    page_ids: AgentHarnessExplorationPageId[];
+    context_revision: string;
+    input_snapshot_digest: string;
+    locked: true;
+  };
+  local_dev: true;
+  automatic_submission: true;
+  provenance: AgentHarnessExplorationProvenance;
+  stop_reason: AgentHarnessExplorationStopReason | null;
+  created_at: string;
+  updated_at: string;
+  error?: Record<string, unknown> | null;
+}
+export interface AgentHarnessExplorationAuthorizationRequest {
+  schema_identity: "tilesim.agent_harness.exploration_authorization_request.v2";
+  contract_revision: typeof AGENT_HARNESS_EXPLORATION_CONTRACT_REVISION;
+  session_id: string;
+  task_type: "explore_experiment";
+  context_revision: string;
+  run_context_revision: string | null;
+  input_snapshot_digest: string;
+  schema_set_revision: string;
+  backend_identity: AgentHarnessBackendIdentity;
+  parameter_catalog_revision: string;
+  autonomy_level: "bounded_autonomous";
+  budget: AgentHarnessExplorationBudget;
+  parameter_grants: AgentHarnessExplorationParameterGrant[];
+  objective: AgentHarnessExplorationObjective;
+  tool_allowlist: string[];
+  allowed_pages: AgentHarnessExplorationPageId[];
+  allowed_actions: AgentHarnessExplorationAction[];
+  ttl_seconds?: number;
+}
+export interface AgentHarnessExplorationAuthorization extends Omit<
+  AgentHarnessExplorationAuthorizationRequest,
+  "schema_identity" | "ttl_seconds"
+> {
+  schema_identity: "tilesim.agent_harness.exploration_authorization.v2";
+  authorization_id: string;
+  principal: string;
+  workspace_id: string;
+  protected: AgentHarnessExplorationProtectedContext;
+  status: "active" | "exhausted" | "revoked" | "expired";
+  issued_by: string;
+  issued_at: string;
+  expires_at: string;
+  revoked_at: string | null;
+  provenance: AgentHarnessExplorationProvenance;
+  authorization_digest: string;
+  planning_plan_digest?: string | null;
+  planning_confirmation?: Record<string, unknown> | null;
+  run_strategy?: Record<string, unknown> | null;
+  run_strategy_digest?: string | null;
+  deployment_candidates?: Array<Record<string, unknown>>;
+}
+export interface AgentHarnessExplorationAuthorizationResponse {
+  authorization: AgentHarnessExplorationAuthorization;
+  session: AgentHarnessExplorationSession;
+  detail: Record<string, unknown>;
+  autonomous_started: boolean;
+  idempotent_replay?: boolean;
+  provenance: AgentHarnessExplorationProvenance;
 }
 export interface AgentHarnessBatchSession {
   schema_identity: "tilesim.agent_harness.batch_session.v1";

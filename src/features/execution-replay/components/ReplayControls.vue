@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatReportedPicoseconds } from "../model/playback";
 import { REPLAY_SPEED_OPTIONS, replaySpeedLabel } from "../model/speed";
 
 defineProps<{
@@ -96,7 +97,10 @@ const emit = defineEmits<{
       </select>
     </label>
     <small v-if="reducedMotion" class="replay-reduced-motion">已启用减少动态效果，自动播放已停用</small>
-    <code v-if="cursorPs !== null" class="replay-cursor-readout">{{ cursorPs }} ps</code>
+    <code v-if="cursorPs !== null" class="replay-cursor-readout" :title="`${cursorPs} ps`">
+      {{ formatReportedPicoseconds(cursorPs) }}
+      <small>{{ cursorPs }} ps</small>
+    </code>
   </div>
 </template>
 
@@ -253,6 +257,8 @@ const emit = defineEmits<{
 }
 
 .replay-cursor-readout {
+  display: grid;
+  justify-items: end;
   min-width: 9ch;
   padding: 5px 8px;
   border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--line));
@@ -260,6 +266,10 @@ const emit = defineEmits<{
   color: var(--accent);
   background: color-mix(in srgb, var(--accent-soft) 64%, var(--surface));
   text-align: right;
+}
+.replay-cursor-readout small {
+  color: var(--muted);
+  font-size: 10px;
 }
 
 @media (max-width: 900px) {

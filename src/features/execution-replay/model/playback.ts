@@ -24,6 +24,35 @@ function normalizedTimes(times: string[]): string[] {
 }
 
 /**
+ * Display-only conversion of a reported picosecond instant. The stored value
+ * stays a lossless decimal string; this never feeds a metric back into evidence.
+ */
+export function formatReportedPicoseconds(value: string | null | undefined): string {
+  if (!value || !/^-?\d+$/.test(value)) return "未报告";
+  const picoseconds = BigInt(value);
+  const sign = picoseconds < 0n ? "-" : "";
+  const magnitude = picoseconds < 0n ? -picoseconds : picoseconds;
+  const scales: Array<[bigint, string]> = [
+    [1_000_000_000_000n, "s"],
+    [1_000_000_000n, "ms"],
+    [1_000_000n, "µs"],
+    [1_000n, "ns"],
+  ];
+  for (const [scale, unit] of scales) {
+    if (magnitude < scale) continue;
+    const whole = magnitude / scale;
+    const fraction = magnitude % scale;
+    const digits = 3n;
+    const factor = 10n ** digits;
+    const rounded = (fraction * factor + scale / 2n) / scale;
+    if (rounded >= factor) return `${sign}${whole + 1n} ${unit}`;
+    const fractionText = rounded.toString().padStart(Number(digits), "0").replace(/0+$/, "");
+    return fractionText ? `${sign}${whole}.${fractionText} ${unit}` : `${sign}${whole} ${unit}`;
+  }
+  return `${sign}${magnitude} ps`;
+}
+
+/**
  * Return a bounded progress value without converting 64-bit simulation times
  * to Number before subtracting. The replay timeline keeps ps values lossless;
  * the topology token is the one place that needs a fractional display value.

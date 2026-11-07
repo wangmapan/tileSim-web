@@ -49,6 +49,28 @@ describe("TopologyGraphEditor", () => {
     expect(wrapper.text()).not.toContain("空白区域可平移画布");
   });
 
+  it("organizes the editor as resources, canvas, and selected-object details", async () => {
+    const wrapper = mountEditor();
+    expect(wrapper.find(".topology-workspace").exists()).toBe(true);
+    expect(wrapper.find(".topology-resource-list").exists()).toBe(true);
+    await wrapper.findAll(".topology-device")[0].trigger("click");
+    expect(wrapper.find(".topology-device-inspector").text()).toContain("gpu0");
+    expect(wrapper.find(".topology-device-inspector").text()).toContain("计算组");
+  });
+
+  it("can render the interconnect model section without embedding another topology canvas", () => {
+    const wrapper = mountEditor(topology, { showGraph: false, showModuleSettings: true });
+    expect(wrapper.find(".topology-direct-canvas").exists()).toBe(false);
+    expect(wrapper.find(".topology-model-settings").exists()).toBe(true);
+    expect(wrapper.text()).toContain("模块绑定参数");
+  });
+
+  it("keeps module binding parameters out of the topology canvas", () => {
+    const wrapper = mountEditor(topology, { showModuleSettings: false });
+    expect(wrapper.find(".topology-direct-canvas").exists()).toBe(true);
+    expect(wrapper.find(".topology-model-settings").exists()).toBe(false);
+  });
+
   it("zooms only the graph scene without changing the canvas viewport or topology JSON", async () => {
     const wrapper = mountEditor();
     const svg = wrapper.get(".topology-canvas");
@@ -122,6 +144,53 @@ describe("TopologyGraphEditor", () => {
     expect(wrapper.text()).not.toContain("仿真跨域连接");
   });
 
+  it("renders physical group partitions as separate super nodes", () => {
+    const value = structuredClone(topology);
+    value.topology.devices = value.topology.devices.map((device, index) => ({
+      ...device,
+      group_id: index < 2 ? "node0" : "node1",
+    }));
+    value.topology.links = [
+      { src_device: "gpu0", dst_device: "gpu1", domain_id: "su0" },
+      { src_device: "gpu2", dst_device: "gpu3", domain_id: "su0" },
+      { src_device: "gpu0", dst_device: "gpu2", domain_id: "so0" },
+    ];
+    value.topology.domains.push({
+      domain_id: "so0",
+      domain_type: "scale_out",
+      member_devices: ["gpu0", "gpu1", "gpu2", "gpu3"],
+      module_binding: "m",
+    });
+    const wrapper = mountEditor(value);
+    expect(wrapper.findAll(".topology-supernode")).toHaveLength(2);
+    expect(wrapper.text()).toContain("计算组 node0");
+    expect(wrapper.text()).toContain("计算组 node1");
+  });
+
+  it("collapses multiple scale-out endpoint links into one group channel while keeping each endpoint editable", () => {
+    const value = structuredClone(topology);
+    value.topology.devices = value.topology.devices.map((device, index) => ({
+      ...device,
+      group_id: index < 2 ? "node0" : "node1",
+    }));
+    value.topology.domains.push({
+      domain_id: "so0",
+      domain_type: "scale_out",
+      member_devices: ["gpu0", "gpu1", "gpu2", "gpu3"],
+      module_binding: "m",
+    });
+    value.topology.links = [
+      { src_device: "gpu0", dst_device: "gpu2", domain_id: "so0" },
+      { src_device: "gpu0", dst_device: "gpu3", domain_id: "so0" },
+      { src_device: "gpu1", dst_device: "gpu2", domain_id: "so0" },
+      { src_device: "gpu1", dst_device: "gpu3", domain_id: "so0" },
+    ];
+    const wrapper = mountEditor(value);
+    expect(wrapper.findAll(".topology-group-link")).toHaveLength(1);
+    expect(wrapper.findAll(".topology-cross-links__item")).toHaveLength(4);
+    expect(wrapper.findAll(".topology-link__badge")).toHaveLength(0);
+  });
+
   it("adds a link by dragging from one GPU to another and chooses the shared domain", async () => {
     const wrapper = mountEditor();
     const nodes = wrapper.findAll(".topology-device");
@@ -157,10 +226,10 @@ describe("TopologyGraphEditor", () => {
     value.topology.links = [{ src_device: "gpu0", dst_device: "gpu2", domain_id: "so1" }];
     const wrapper = mountEditor(value);
     expect(wrapper.findAll(".topology-link--cross")).toHaveLength(1);
-    expect(wrapper.text()).toContain("虚线：跨域通信");
-    expect(wrapper.get(".topology-link").attributes("aria-label")).toContain("跨域通信");
-    expect(wrapper.get(".topology-link__kind").text()).toContain("跨域通信 · so1");
-    expect(wrapper.findAll(".topology-device__domain")[0].text()).toContain("su0");
+    expect(wrapper.text()).toContain("虚线：不同计算组的端点");
+    expect(wrapper.get(".topology-link").attributes("aria-label")).toContain("组间通信（scale_out）");
+    expect(wrapper.get(".topology-link__kind").text()).toContain("组间通信（scale_out）");
+    expect(wrapper.findAll(".topology-device")[0].attributes("aria-label")).toContain("计算组 默认计算组");
   });
 
   it("uses the explicit domain type for the communication label", () => {
@@ -170,7 +239,7 @@ describe("TopologyGraphEditor", () => {
     const wrapper = mountEditor(value);
     expect(wrapper.findAll(".topology-link--inside")).toHaveLength(1);
     expect(wrapper.findAll(".topology-link--cross")).toHaveLength(0);
-    expect(wrapper.get(".topology-link__kind").text()).toContain("域内通信 · su0");
+    expect(wrapper.get(".topology-link__kind").text()).toContain("组内通信（scale_up）");
   });
 
   it("prefers the cross-domain fabric for cards in different groups", async () => {
@@ -234,8 +303,12 @@ describe("TopologyGraphEditor", () => {
     expect(wrapper.find(".topology-module-binding").exists()).toBe(true);
   });
 
-  it("arranges cards by domain without changing the topology JSON", async () => {
+  it("arranges cards by compute group without changing the topology JSON", async () => {
     const value = structuredClone(topology);
+    value.topology.devices = value.topology.devices.map((device, index) => ({
+      ...device,
+      group_id: index < 2 ? "node0" : "node1",
+    }));
     value.topology.domains = [
       { ...topology.topology.domains[0], domain_id: "su0", member_devices: ["gpu0", "gpu1"] },
       { ...topology.topology.domains[0], domain_id: "su1", member_devices: ["gpu2", "gpu3"] },
@@ -321,10 +394,10 @@ describe("TopologyGraphEditor", () => {
     });
     expect(wrapper.find(".topology-canvas-scroll").exists()).toBe(true);
     expect(new Set(coordinates.slice(0, 4).map(({ y }) => y)).size).toBe(2);
-    expect(new Set(coordinates.slice(4, 8).map(({ y }) => y)).size).toBe(2);
-    expect(Math.min(...coordinates.slice(8).map(({ y }) => y))).toBeGreaterThan(
-      Math.max(...coordinates.slice(0, 8).map(({ y }) => y)),
-    );
+    // The second declared scale_up domain spans two physical group IDs, so
+    // the projection keeps those partitions visually distinct instead of
+    // implying a single super node.
+    expect(new Set(coordinates.slice(4, 8).map(({ y }) => y)).size).toBeGreaterThan(1);
     expect(coordinates.slice(8).every(({ x, y }) => Number.isFinite(x) && Number.isFinite(y))).toBe(true);
   });
 
@@ -382,7 +455,7 @@ describe("TopologyGraphEditor", () => {
     expect(Number(coordinates?.[2])).toBeLessThanOrEqual(204);
   });
 
-  it("merges overlapping domains into one visual group without duplicating cards", async () => {
+  it("does not merge a scale_out endpoint list into one visual super node", async () => {
     const value = structuredClone(topology);
     value.topology.domains = [
       { ...topology.topology.domains[0], domain_id: "su0", member_devices: ["gpu0", "gpu1"] },
@@ -394,10 +467,33 @@ describe("TopologyGraphEditor", () => {
     const transforms = wrapper.findAll(".topology-device").map((node) => node.attributes("transform") || "");
     const coordinates = transforms.map((transform) => transform.match(/translate\(([^,]+),([^)]+)\)/));
     expect(coordinates[0]?.[2]).toBe(coordinates[1]?.[2]);
-    expect(coordinates[0]?.[1]).toBe(coordinates[2]?.[1]);
+    expect(coordinates[0]?.[1]).not.toBe(coordinates[2]?.[1]);
     expect(coordinates[0]?.[1]).not.toBe(coordinates[1]?.[1]);
-    expect(coordinates[2]?.[2]).not.toBe(coordinates[0]?.[2]);
-    expect(coordinates[3]?.[2]).toBe(coordinates[0]?.[2]);
+    expect(coordinates[2]?.[2]).toBe(coordinates[3]?.[2]);
+  });
+
+  it("renders each device once and keeps communication domains out of device cards", () => {
+    const value = structuredClone(topology);
+    value.topology.devices = value.topology.devices.map((device, index) => ({
+      ...device,
+      group_id: index < 2 ? "node0" : "node1",
+    }));
+    value.topology.domains.push({
+      domain_id: "so0",
+      domain_type: "scale_out",
+      member_devices: ["gpu0", "gpu1", "gpu2", "gpu3"],
+      module_binding: "m",
+    });
+    const wrapper = mountEditor(value);
+    expect(wrapper.findAll(".topology-device")).toHaveLength(4);
+    for (const device of value.topology.devices) {
+      expect(wrapper.findAll(".topology-device").filter((node) => node.text().includes(device.device_id))).toHaveLength(
+        1,
+      );
+    }
+    expect(wrapper.findAll(".topology-device__domain")).toHaveLength(0);
+    expect(wrapper.text()).toContain("计算组 node0");
+    expect(wrapper.text()).toContain("计算组 node1");
   });
 
   it("hides the arrangement action in JSON preview mode", () => {

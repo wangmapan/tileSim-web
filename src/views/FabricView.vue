@@ -135,14 +135,20 @@ function moduleBinding(value: string | undefined) {
       </article>
     </section>
 
-    <section class="analysis-visualization-stack" :aria-label="t('通信时间构成图')">
-      <ExecutionVisualizationPanel
-        v-for="visualization in compositionVisualizations"
-        :key="visualization.id"
-        :visualization="visualization"
-        show-boundary
-      />
-    </section>
+    <details class="panel fabric-visualization-disclosure">
+      <summary class="panel-header">
+        <h2>{{ t("通信时间构成") }}</h2>
+        <ChevronDown :size="17" />
+      </summary>
+      <section class="analysis-visualization-stack" :aria-label="t('通信时间构成图')">
+        <ExecutionVisualizationPanel
+          v-for="visualization in compositionVisualizations"
+          :key="visualization.id"
+          :visualization="visualization"
+          show-boundary
+        />
+      </section>
+    </details>
 
     <details class="panel fabric-contract-strip">
       <summary>
@@ -200,7 +206,7 @@ function moduleBinding(value: string | undefined) {
           <header>
             <div class="domain-icon"><Network :size="19" /></div>
             <div>
-              <small>FABRIC DOMAIN</small>
+              <small>{{ t("通信域") }}</small>
               <h2>{{ domain.domain_id }}</h2>
             </div>
             <strong>{{ formatPercent(domain.utilization_ratio) }}</strong>
@@ -238,7 +244,7 @@ function moduleBinding(value: string | undefined) {
           </div>
           <section v-if="domain.topologyDomain" class="domain-topology-contract">
             <header>
-              <strong>{{ t("Topology domain") }}</strong>
+              <strong>{{ t("拓扑域") }}</strong>
               <span>{{ domain.topologyDomain.domain_type }} / {{ domain.topologyDomain.domain_kind }}</span>
             </header>
             <dl>
@@ -269,14 +275,11 @@ function moduleBinding(value: string | undefined) {
       <RecordPager v-if="domainsOpen" v-model:page="domainPage" :pages="domainPages" :label="t('通信范围详情分页')" />
     </details>
 
-    <article class="panel">
+    <article class="panel fabric-domain-table-disclosure">
       <header class="panel-header">
         <div>
-          <p class="section-kicker">{{ t("逐项比较") }}</p>
-          <h2>
-            {{ t("通信范围明细") }}
-            <InlineHelp :text="t('利用率描述模拟 Fabric 的占用，不等同于真实集群链路计数器。')" />
-          </h2>
+          <h2>{{ t("通信范围明细") }}</h2>
+          <small>{{ t("记录数、利用率、延迟与证据") }}</small>
         </div>
       </header>
       <div class="table-wrap fabric-table-scroll" role="region" :aria-label="t('通信范围明细')" tabindex="0">
@@ -318,19 +321,15 @@ function moduleBinding(value: string | undefined) {
       <RecordPager v-model:page="domainPage" :pages="domainPages" :label="t('通信范围明细分页')" />
     </article>
 
-    <article class="panel" data-help-anchor="fabric-requests">
-      <header class="panel-header panel-header--row">
+    <details class="panel fabric-request-disclosure" data-help-anchor="fabric-requests">
+      <summary class="panel-header panel-header--row">
         <div>
-          <p class="section-kicker">{{ t("请求与主导阶段") }}</p>
-          <h2>
-            {{ t("请求级 Fabric contribution") }}
-            <InlineHelp
-              :text="t('按后端报告顺序展示 request；dominant phase 只通过 request_id 和 phase_id 的唯一稳定匹配连接。')"
-            />
-          </h2>
+          <h2>{{ t("请求级通信贡献") }}</h2>
+          <small>{{ t("按请求查看主导域与阶段") }}</small>
         </div>
-        <div class="panel-count">{{ requests.length }} requests</div>
-      </header>
+        <div class="panel-count">{{ t("{count} 个请求", { count: requests.length }) }}</div>
+        <ChevronDown :size="17" />
+      </summary>
       <div
         v-if="requests.length"
         class="table-wrap fabric-table-scroll"
@@ -392,7 +391,7 @@ function moduleBinding(value: string | undefined) {
       </div>
       <p v-else class="panel-empty-copy">{{ t("没有 request_fabric_contributions") }}</p>
       <RecordPager v-model:page="requestPage" :pages="requestPages" :label="t('请求通信贡献分页')" />
-    </article>
+    </details>
 
     <section
       class="design-scope-banner fabric-topology-gap"

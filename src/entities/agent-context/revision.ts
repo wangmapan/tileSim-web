@@ -36,6 +36,29 @@ export interface PageContextRevision {
   readonly changed: boolean;
 }
 
+const MAX_CONTEXT_REVISION_LENGTH = 256;
+
+/**
+ * Keep the published revision inside the Bridge contract's bounded identity
+ * field.  Page prefixes normally remain human-readable; when a deployment
+ * identity makes the prefix longer than the contract allows, retain its
+ * stable leading context and add a deterministic suffix for the omitted
+ * portion.  The keeper's sequence still distinguishes successive content
+ * publications within the page lifetime.
+ */
+function boundedRevision(prefix: string, sequence: number): string {
+  const plain = `${prefix}:${sequence}`;
+  if (plain.length <= MAX_CONTEXT_REVISION_LENGTH) return plain;
+
+  let hash = 2166136261;
+  for (let index = 0; index < prefix.length; index += 1) {
+    hash ^= prefix.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  const suffix = `:h${(hash >>> 0).toString(16).padStart(8, "0")}:${sequence}`;
+  return `${prefix.slice(0, Math.max(1, MAX_CONTEXT_REVISION_LENGTH - suffix.length))}${suffix}`;
+}
+
 /** Creates the holder one page uses for every context it publishes. */
 export function createPageContextRevisionKeeper(): (prefix: string, content: unknown) => PageContextRevision {
   let sequence = 0;
@@ -49,7 +72,7 @@ export function createPageContextRevisionKeeper(): (prefix: string, content: unk
     }
     sequence += 1;
     publishedContent = nextContent;
-    publishedRevision = `${prefix}:${sequence}`;
+    publishedRevision = boundedRevision(prefix, sequence);
     return { revision: publishedRevision, changed: true };
   };
 }

@@ -29,6 +29,7 @@ import type {
   BatchEventsResponse,
   BatchListResponse,
   BatchResponse,
+  CancelRunResponse,
   CapabilitiesResponse,
   CatalogResponse,
   CreateRunRequest,
@@ -39,6 +40,8 @@ import type {
   EvidenceAgentResponse,
   ExperimentDescriptorResponse,
   HealthResponse,
+  OperatorExecutionDescriptor,
+  OperatorExecutionValidation,
   OptimizationActionRequest,
   OptimizationApprovalRequest,
   OptimizationApprovalResponse,
@@ -100,6 +103,16 @@ export const bridgePaths = {
   approveBatch: (batchId: string) => `/agent/batches/${encodeURIComponent(batchId)}/approve`,
   mutateBatch: (batchId: string, action: string) =>
     `/agent/batches/${encodeURIComponent(batchId)}/${encodeURIComponent(action)}`,
+  agentExplorationPlan: () => "/agent/explorations/plan",
+  agentExplorationPlanConfirm: () => "/agent/explorations/plan/confirm",
+  agentExplorationGet: () => "/agent/explorations",
+  agentExplorationGetById: () => "/agent/explorations/{id}",
+  agentExplorationAuthorize: () => "/agent/explorations/{id}/authorization",
+  agentExplorationEvents: () => "/agent/explorations/{id}/events",
+  agentExplorationEventStream: () => "/agent/explorations/{id}/events/stream",
+  agentExplorationPause: () => "/agent/explorations/{id}/pause",
+  agentExplorationResume: () => "/agent/explorations/{id}/resume",
+  agentExplorationCancel: () => "/agent/explorations/{id}/cancel",
   startAgentFlow: () => "/agent/flows",
   getAgentFlow: (flowId: string) => `/agent/flows/${encodeURIComponent(flowId)}`,
   getAgentFlowEvents: (flowId: string) => `/agent/flows/${encodeURIComponent(flowId)}/events`,
@@ -122,6 +135,7 @@ export const bridgePaths = {
   createRun: () => "/runs",
   getRun: (runId: string) => `/runs/${encodeURIComponent(runId)}`,
   deleteRun: (runId: string) => `/runs/${encodeURIComponent(runId)}`,
+  cancelRun: (runId: string) => `/runs/${encodeURIComponent(runId)}/cancel`,
   getRunEvents: (runId: string) => `/runs/${encodeURIComponent(runId)}/events`,
   getReports: (runId: string) => `/runs/${encodeURIComponent(runId)}/reports`,
   getArtifactManifest: (runId: string) => `/runs/${encodeURIComponent(runId)}/artifacts`,
@@ -129,6 +143,8 @@ export const bridgePaths = {
     `/runs/${encodeURIComponent(runId)}/files/${encodeURIComponent(artifactId)}`,
   renameRun: (runId: string) => `/runs/${encodeURIComponent(runId)}/name`,
   createEvidenceAnalysis: (runId: string) => `/runs/${encodeURIComponent(runId)}/agent/evidence-analyses`,
+  operatorExecution: () => "/operator-execution",
+  validateOperatorExecution: () => "/operator-execution/validate",
 } as const;
 
 export class GeneratedBridgeClient {
@@ -482,6 +498,13 @@ export class GeneratedBridgeClient {
     return this.transport.request<DeleteRunResponse>(bridgePaths.deleteRun(runId), { method: "DELETE" });
   }
 
+  cancelRun(runId: string, idempotencyKey: string): Promise<CancelRunResponse> {
+    return this.transport.request<CancelRunResponse>(bridgePaths.cancelRun(runId), {
+      method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey },
+    });
+  }
+
   getReports(runId: string): Promise<ReportsResponse> {
     return this.transport.request<ReportsResponse>(bridgePaths.getReports(runId), {});
   }
@@ -510,6 +533,18 @@ export class GeneratedBridgeClient {
     return this.transport.request<EvidenceAgentResponse>(bridgePaths.createEvidenceAnalysis(runId), {
       method: "POST",
       headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+      body: JSON.stringify(body),
+    });
+  }
+
+  operatorExecution(): Promise<OperatorExecutionDescriptor> {
+    return this.transport.request<OperatorExecutionDescriptor>(bridgePaths.operatorExecution(), {});
+  }
+
+  validateOperatorExecution(body: CreateRunRequest): Promise<OperatorExecutionValidation> {
+    return this.transport.request<OperatorExecutionValidation>(bridgePaths.validateOperatorExecution(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
   }

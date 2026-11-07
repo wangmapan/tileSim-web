@@ -642,10 +642,6 @@ function formatBlockTime(value: string | undefined): string {
           <h4>下一步</h4>
           <p>{{ block.safe_next_action }}</p>
         </section>
-        <details class="agent-block__details">
-          <summary>错误详情</summary>
-          <code>{{ block.code }}</code>
-        </details>
       </template>
 
       <template v-else-if="!isKnownBlock(block)">

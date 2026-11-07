@@ -1,0 +1,26 @@
+{
+  "$id": "tilesim.agent_harness.exploration_budget.v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "max_rounds",
+    "max_runs",
+    "max_concurrency",
+    "max_no_improvement",
+    "max_failures",
+    "max_execution_time_ms",
+    "max_model_calls",
+    "max_tool_calls_per_round"
+  ],
+  "properties": {
+    "max_rounds": { "type": "integer", "minimum": 1, "maximum": 50 },
+    "max_runs": { "type": "integer", "minimum": 1, "maximum": 50 },
+    "max_concurrency": { "const": 1 },
+    "max_no_improvement": { "type": "integer", "minimum": 1, "maximum": 20 },
+    "max_failures": { "type": "integer", "minimum": 1, "maximum": 10 },
+    "max_execution_time_ms": { "type": "integer", "minimum": 1, "maximum": 3600000 },
+    "max_model_calls": { "type": "integer", "minimum": 1, "maximum": 200 },
+    "max_tool_calls_per_round": { "type": "integer", "minimum": 1, "maximum": 16 }
+  }
+}

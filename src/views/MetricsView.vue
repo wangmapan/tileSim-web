@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TimerReset } from "@lucide/vue";
+import { ChevronDown, TimerReset } from "@lucide/vue";
 import { computed } from "vue";
 import EmptyState from "../components/EmptyState.vue";
 import InlineHelp from "../components/InlineHelp.vue";
@@ -330,16 +330,14 @@ function placementAssignmentLabel(assignments: typeof pdPlacementAssignments.val
 
     <ReportCoveragePanel section="metrics" :bundle="state.bundle" />
 
-    <section class="panel metrics-provenance" data-help-anchor="metrics-provenance">
-      <header class="panel-header">
+    <details class="panel metrics-provenance" data-help-anchor="metrics-provenance">
+      <summary class="panel-header">
         <div>
-          <p class="section-kicker">{{ t("指标来源与声明范围") }}</p>
-          <h2>
-            {{ t("Trace provenance") }}
-            <InlineHelp :text="t('以下字段由后端报告直接提供；缺失时保持未知，不推断采集或校准状态。')" />
-          </h2>
+          <h2>{{ t("指标来源与声明范围") }}</h2>
+          <small>{{ t("来源模式 · 校准级别 · 声明范围") }}</small>
         </div>
-      </header>
+        <ChevronDown :size="17" />
+      </summary>
       <dl class="metrics-pd-summary metrics-provenance-grid">
         <div class="metrics-summary-item">
           <dt>{{ t("来源模式") }}</dt>
@@ -366,9 +364,15 @@ function placementAssignmentLabel(assignments: typeof pdPlacementAssignments.val
           </dd>
         </div>
       </dl>
-    </section>
+    </details>
 
-    <ExecutionVisualizationPanel :visualization="requestLatencyVisualization" />
+    <details class="panel metrics-visualization-disclosure">
+      <summary class="panel-header">
+        <h2>{{ t("请求延迟分布") }}</h2>
+        <ChevronDown :size="17" />
+      </summary>
+      <ExecutionVisualizationPanel :visualization="requestLatencyVisualization" />
+    </details>
 
     <article class="panel" data-help-anchor="metrics-requests">
       <header class="panel-header panel-header--row">
@@ -441,18 +445,19 @@ function placementAssignmentLabel(assignments: typeof pdPlacementAssignments.val
       </div>
     </article>
 
-    <section class="panel metrics-diagnostics" data-help-anchor="metrics-waits">
-      <header class="panel-header">
+    <details class="panel metrics-diagnostics metrics-detail-disclosure" data-help-anchor="metrics-waits">
+      <summary class="panel-header">
         <div>
           <p class="section-kicker">{{ t("请求级等待与归因") }}</p>
           <h2>
             {{ t("网络、KV、设备与集合通信等待") }}
             <InlineHelp
               :text="t('这些字段由后端直接报告；KV、设备和网络分项可能重叠，不能相加替代父级等待或请求延迟。')"
+              :interactive="false"
             />
           </h2>
         </div>
-      </header>
+      </summary>
       <div class="table-wrap">
         <table>
           <thead>
@@ -530,24 +535,20 @@ function placementAssignmentLabel(assignments: typeof pdPlacementAssignments.val
           </tbody>
         </table>
       </div>
-    </section>
+    </details>
 
-    <section
+    <details
       v-if="deviceMetrics.length || pdDisaggregation || hasFabricEvidence || resourceConvergence"
-      class="panel metrics-device-summary"
+      class="panel metrics-device-summary metrics-detail-disclosure"
       data-help-anchor="metrics-devices"
     >
-      <header class="panel-header">
+      <summary class="panel-header">
         <div>
-          <p class="section-kicker">{{ t("模型化设备与虚拟 Fabric") }}</p>
-          <h2>
-            {{ t("仿真设备参与与拓扑通信") }}
-            <InlineHelp
-              :text="t('这里只展示后端报告的模型化设备任务和虚拟 Fabric 记录；设备采集状态缺失不等于仿真未执行。')"
-            />
-          </h2>
+          <h2>{{ t("仿真设备参与与拓扑通信") }}</h2>
+          <small>{{ t("设备与通信诊断 · 等待归因与放置详情") }}</small>
         </div>
-      </header>
+        <ChevronDown :size="17" />
+      </summary>
       <div
         class="metrics-device-participation"
         :class="`metrics-device-participation--${deviceParticipationTone}`"
@@ -588,7 +589,7 @@ function placementAssignmentLabel(assignments: typeof pdPlacementAssignments.val
       <details class="metrics-detail-disclosure">
         <summary>
           <span>
-            {{ t("查看设备与 Fabric 诊断字段") }}
+            {{ t("查看设备与通信诊断字段") }}
             <InlineHelp :text="t('未映射任务、忙碌时间、拥塞和设备采集状态')" :interactive="false" />
           </span>
         </summary>
@@ -724,13 +725,13 @@ function placementAssignmentLabel(assignments: typeof pdPlacementAssignments.val
       <details v-if="pdDisaggregation" class="metrics-detail-disclosure metrics-pd-detail">
         <summary>
           <span>
-            {{ t("查看 PD handoff 与放置归属") }}
+            {{ t("查看交接与放置归属") }}
             <InlineHelp :text="t('交接证据、源/目的 placement group 和请求参与设备')" :interactive="false" />
           </span>
         </summary>
         <dl class="metrics-pd-summary metrics-pd-summary--handoff">
           <div class="metrics-summary-item">
-            <dt>{{ t("handoff 证据") }}</dt>
+            <dt>{{ t("交接证据") }}</dt>
             <dd>{{ pdDisaggregation.has_handoff_evidence ? t("已报告") : t("未关联") }}</dd>
           </div>
           <div class="metrics-summary-item">
@@ -738,7 +739,7 @@ function placementAssignmentLabel(assignments: typeof pdPlacementAssignments.val
             <dd>{{ pdDisaggregation.dominant_handoff_request_id || t("未关联") }}</dd>
           </div>
           <div class="metrics-summary-item">
-            <dt>{{ t("handoff / disaggregation group") }}</dt>
+            <dt>{{ t("交接 / 拆分分组") }}</dt>
             <dd>
               {{ pdDisaggregation.dominant_handoff_id || t("未关联") }} /
               {{ pdDisaggregation.dominant_source_placement_group_id || t("未关联") }} →
@@ -777,6 +778,6 @@ function placementAssignmentLabel(assignments: typeof pdPlacementAssignments.val
           </div>
         </dl>
       </details>
-    </section>
+    </details>
   </div>
 </template>

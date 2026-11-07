@@ -14,7 +14,6 @@ import {
 import { useI18n } from "../../i18n";
 import InlineHelp from "../../components/InlineHelp.vue";
 import DeviceInventoryForm from "./DeviceInventoryForm.vue";
-import DomainInventoryForm from "./DomainInventoryForm.vue";
 import TopologyLinkProperties from "./TopologyLinkProperties.vue";
 import bridgeIllustration from "../../assets/topology-nodes/bridge.png";
 import cpuHostIllustration from "../../assets/topology-nodes/cpu-host.png";
@@ -28,6 +27,7 @@ import { moduleBindingFields, moduleBindingOverrideFields, type SchemaFieldMeta 
 import {
   addModuleBinding,
   moduleBindingNamesOf,
+  isJsonObject,
   nextModuleBindingName,
   patchJsonDocument,
   removeModuleBinding,
@@ -35,6 +35,7 @@ import {
   setModuleBindingKind,
   setModuleBindingText,
   StructuredInputError,
+  topologyDomainsOf,
   type DomainType,
   type JsonObject,
 } from "./structured-input";
@@ -45,8 +46,18 @@ import {
   type TopologyDocument,
   type TopologyLink,
 } from "./topology-graph";
-import { topologyNodeCategory, topologyNodeLabel, topologyNodeType } from "./topology-node-types";
-import { layoutTopology } from "./topology-layout";
+import {
+  topologyNodeCategory,
+  topologyNodeLabel,
+  topologyNodeType,
+  type TopologyNodeType,
+} from "./topology-node-types";
+import {
+  decideTopologyConnection,
+  superNodeForDevice,
+  topologySuperNodes,
+  type TopologySuperNode,
+} from "./topology-supernodes";
 
 const props = withDefaults(
   defineProps<{
@@ -54,8 +65,18 @@ const props = withDefaults(
     fieldPath?: string;
     readOnly?: boolean;
     showJson?: boolean;
+    showGraph?: boolean;
+    showModuleSettings?: boolean;
+    topologyNodeTypes?: readonly TopologyNodeType[];
   }>(),
-  { fieldPath: "", readOnly: false, showJson: true },
+  {
+    fieldPath: "",
+    readOnly: false,
+    showJson: true,
+    showGraph: true,
+    showModuleSettings: true,
+    topologyNodeTypes: () => [],
+  },
 );
 const emit = defineEmits<{
   (event: "update:modelValue", value: string): void;
@@ -72,6 +93,7 @@ const jsonErrorId = computed(() => `topology-json-editor-error-${instanceId}`);
 const parsed = ref(parseTopologyDocument(props.modelValue));
 const envelope = ref<Record<string, unknown> | null>(parsed.value.envelope);
 const selectedLink = ref<number | null>(null);
+const selectedDeviceId = ref<string | null>(null);
 const pendingConnection = ref<string | null>(null);
 const drag = ref<{
   id: string;
@@ -105,14 +127,17 @@ const CANVAS_WIDTH = 760;
 const DEVICE_X_GAP = 190;
 const DEVICE_Y_START = 86;
 const DEVICE_Y_GAP = 110;
-const ARRANGEMENT_DEVICE_Y_GAP = 180;
+const ARRANGEMENT_DEVICE_Y_GAP = 132;
 const ARRANGEMENT_GROUP_ROW_GAP = 72;
-const ARRANGEMENT_CARD_HEIGHT = 72;
-const ARRANGEMENT_INNER_X_GAP = 150;
+const ARRANGEMENT_CARD_HEIGHT = 86;
+const ARRANGEMENT_INNER_X_GAP = 144;
 const ARRANGEMENT_ROW_GAP = 48;
 const ARRANGEMENT_SIDE_INSET = 48;
-const NODE_HALF_WIDTH = 68;
+const NODE_HALF_WIDTH = 58;
 const NODE_HALF_HEIGHT = 36;
+const GROUP_PADDING_X = 68;
+const GROUP_PADDING_TOP = 78;
+const GROUP_PADDING_BOTTOM = 54;
 const topologyIllustrations: Record<string, string> = {
   bridge: bridgeIllustration,
   cpu: cpuHostIllustration,
@@ -127,41 +152,75 @@ const links = computed(() => graph.value?.links || []);
 const domains = computed(() => graph.value?.domains || []);
 const devices = computed(() => graph.value?.devices || []);
 const hasGraph = computed(() => Boolean(graph.value));
+const editableEmptyGraph = computed(() => props.showGraph && !props.readOnly && !props.modelValue.trim() && !parsed.value.error);
+const showGraphWorkspace = computed(() => props.showGraph && (hasGraph.value || editableEmptyGraph.value));
+const emptyWorkbenchDocument = JSON.stringify({
+  topology: { devices: [], module_bindings: [], domains: [], links: [] },
+});
+const workbenchModelValue = computed(() => (props.modelValue.trim() ? props.modelValue : emptyWorkbenchDocument));
 const selected = computed(() => (selectedLink.value === null ? null : links.value[selectedLink.value] || null));
+const selectedDevice = computed(() =>
+  selectedDeviceId.value ? devices.value.find((device) => device.device_id === selectedDeviceId.value) || null : null,
+);
+const superNodes = computed(() => topologySuperNodes(devices.value, domains.value));
 /**
- * A device may belong to more than one domain. Treat overlapping domains as
- * one visual component so the one-click layout never duplicates a card.
- * Devices without a domain remain one-card components.
+ * Layout follows compute-group display projections. The scale_out domain is
+ * an endpoint scope and therefore never creates a layout group of its own.
  */
 const domainComponents = computed<TopologyDevice[][]>(() => {
-  const parent = new Map<string, string>();
-  devices.value.forEach((device) => parent.set(device.device_id, device.device_id));
-  const find = (id: string): string => {
-    const current = parent.get(id) || id;
-    if (current === id) return current;
-    const root = find(current);
-    parent.set(id, root);
-    return root;
-  };
-  const join = (left: string, right: string) => {
-    if (!parent.has(left) || !parent.has(right)) return;
-    const leftRoot = find(left);
-    const rightRoot = find(right);
-    if (leftRoot !== rightRoot) parent.set(rightRoot, leftRoot);
-  };
-  domains.value.forEach((domain) => {
-    const members = domain.member_devices.filter((id) => parent.has(id));
-    members.slice(1).forEach((member) => join(members[0], member));
-  });
-  const groups = new Map<string, TopologyDevice[]>();
-  devices.value.forEach((device) => {
-    const root = find(device.device_id);
-    const group = groups.get(root) || [];
-    group.push(device);
-    groups.set(root, group);
-  });
-  return [...groups.values()];
+  const owned = new Set(superNodes.value.flatMap((node) => node.devices.map((device) => device.device_id)));
+  const unowned = devices.value.filter((device) => !owned.has(device.device_id));
+  return [...superNodes.value.map((node) => node.devices), ...(unowned.length ? [unowned] : [])];
 });
+const superNodeBounds = computed(() =>
+  superNodes.value
+    .map((node) => {
+      const members = node.devices
+        .map((device) => positions.value[device.device_id])
+        .filter((position): position is { x: number; y: number } => Boolean(position));
+      if (!members.length) return null;
+      const minX = Math.min(...members.map((position) => position.x));
+      const maxX = Math.max(...members.map((position) => position.x));
+      const minY = Math.min(...members.map((position) => position.y));
+      const maxY = Math.max(...members.map((position) => position.y));
+      return {
+        node,
+        x: minX - GROUP_PADDING_X,
+        y: minY - GROUP_PADDING_TOP,
+        width: Math.max(200, maxX - minX + GROUP_PADDING_X * 2),
+        height: Math.max(160, maxY - minY + GROUP_PADDING_TOP + GROUP_PADDING_BOTTOM),
+      };
+    })
+    .filter((bounds): bounds is { node: TopologySuperNode; x: number; y: number; width: number; height: number } =>
+      Boolean(bounds),
+    ),
+);
+type CrossLinkBundle = {
+  key: string;
+  domainId: string;
+  sourceNodeId: string;
+  targetNodeId: string;
+  linkIndexes: number[];
+};
+const crossLinkBundles = computed<CrossLinkBundle[]>(() => {
+  const bundles = new Map<string, CrossLinkBundle>();
+  links.value.forEach((link, index) => {
+    if (linkKind(link) !== "cross") return;
+    const sourceNode = superNodeForDevice(link.src_device, superNodes.value);
+    const targetNode = superNodeForDevice(link.dst_device, superNodes.value);
+    if (!sourceNode || !targetNode || sourceNode.id === targetNode.id) return;
+    const [sourceNodeId, targetNodeId] = [sourceNode.id, targetNode.id].sort();
+    const key = `${link.domain_id}::${sourceNodeId}::${targetNodeId}`;
+    const existing = bundles.get(key);
+    if (existing) existing.linkIndexes.push(index);
+    else bundles.set(key, { key, domainId: link.domain_id, sourceNodeId, targetNodeId, linkIndexes: [index] });
+  });
+  return [...bundles.values()];
+});
+function groupDisplayLabel(node: TopologySuperNode) {
+  const groupIds = [...new Set(node.devices.map((device) => device.group_id).filter(Boolean))];
+  return groupIds.length === 1 ? groupIds[0] || node.label : node.label;
+}
 const arrangementGroups = computed(() =>
   domainComponents.value.map((devicesInGroup) => {
     const columns = groupColumns(devicesInGroup.length);
@@ -358,13 +417,6 @@ function resetPositions(items: TopologyDevice[]) {
 }
 function arrangeByDomain() {
   if (props.readOnly || !devices.value.length) return;
-  if (links.value.length) {
-    positions.value = layoutTopology(devices.value, links.value, domains.value);
-    arrangementApplied.value = true;
-    if (graph.value) arrangementSignature.value = layoutSignature(graph.value);
-    pendingConnection.value = null;
-    return;
-  }
   const next: Record<string, { x: number; y: number }> = {};
   let groupStartY = DEVICE_Y_START;
   arrangementRows.value.forEach((row) => {
@@ -402,8 +454,18 @@ watch(
         arrangementApplied.value = false;
         arrangementSignature.value = "";
       }
+      const physicalGroupCount = new Set(next.document.devices.map((device) => device.group_id).filter(Boolean)).size;
+      const shouldArrange =
+        !Object.keys(positions.value).length && next.document.devices.length > 0 && physicalGroupCount > 1;
       resetPositions(next.document.devices);
+      if (shouldArrange) arrangeByDomain();
       if (selectedLink.value !== null && !next.document.links?.[selectedLink.value]) selectedLink.value = null;
+      if (
+        selectedDeviceId.value &&
+        !next.document.devices.some((device) => device.device_id === selectedDeviceId.value)
+      ) {
+        selectedDeviceId.value = null;
+      }
     } else {
       selectedLink.value = null;
       positions.value = {};
@@ -498,6 +560,7 @@ function releaseDragPointer(event: PointerEvent) {
   }
 }
 function startNode(event: PointerEvent, device: TopologyDevice) {
+  selectDevice(device);
   if (props.readOnly) return;
   if (drag.value) return;
   event.preventDefault();
@@ -580,7 +643,7 @@ function endNode(event: PointerEvent, target: TopologyDevice) {
       };
     }
     completeConnection(source, target.device_id);
-  } else if (drag.value?.moved) pendingConnection.value = null;
+  } else if (drag.value?.moved || source === target.device_id) pendingConnection.value = null;
   releaseDragPointer(event);
   drag.value = null;
 }
@@ -624,26 +687,11 @@ function cancelDrag(event: PointerEvent) {
 function completeConnection(source: string, target: string) {
   if (props.readOnly || source === target) return;
   pendingConnection.value = null;
-  const sourceDevice = devices.value.find((device) => device.device_id === source);
-  const targetDevice = devices.value.find((device) => device.device_id === target);
-  const sameGroup = Boolean(
-    sourceDevice?.group_id && targetDevice?.group_id && sourceDevice.group_id === targetDevice.group_id,
-  );
-  const preferredDomainType = sameGroup ? "scale_up" : "scale_out";
-  const domain =
-    domains.value.find(
-      (candidate) =>
-        candidate.domain_type === preferredDomainType &&
-        candidate.member_devices.includes(source) &&
-        candidate.member_devices.includes(target),
-    ) ||
-    domains.value.find(
-      (candidate) => candidate.member_devices.includes(source) && candidate.member_devices.includes(target),
-    ) ||
-    domains.value.find((candidate) => candidate.domain_type === preferredDomainType) ||
-    domains.value[0];
-  if (!domain) {
-    parsed.value = { document: graph.value, envelope: envelope.value, error: "无法连接：请先定义至少一个 domain。" };
+  const decision = decideTopologyConnection(source, target, devices.value, domains.value);
+  if (!decision.allowed) {
+    const message = decision.reason;
+    parsed.value = { document: graph.value, envelope: envelope.value, error: message };
+    emit("notice", { tone: "warning", message });
     return;
   }
   const existingIndex = links.value.findIndex(
@@ -661,7 +709,7 @@ function completeConnection(source: string, target: string) {
   updateDocument((document) => {
     document.links = [
       ...(document.links || []),
-      { src_device: source, dst_device: target, domain_id: domain.domain_id },
+      { src_device: source, dst_device: target, domain_id: decision.domain.domain_id },
     ];
   });
   selectedLink.value = links.value.length - 1;
@@ -672,7 +720,12 @@ function selectConnectionDevice(device: TopologyDevice) {
   else completeConnection(pendingConnection.value, device.device_id);
 }
 function selectLink(index: number) {
-  if (!props.readOnly) selectedLink.value = index;
+  selectedLink.value = index;
+  selectedDeviceId.value = null;
+}
+function selectDevice(device: TopologyDevice) {
+  selectedDeviceId.value = device.device_id;
+  selectedLink.value = null;
 }
 function deleteSelected() {
   if (selectedLink.value === null) return;
@@ -752,10 +805,13 @@ function deviceIllustration(device: TopologyDevice) {
   return topologyIllustrations[key] || unknownIllustration;
 }
 function deviceTitle(device: TopologyDevice) {
-  return t("设备 {device}，类型 {type}，{domain}", {
+  const group = deviceGroupLabel(device);
+  if (!group)
+    return t("设备 {device}，类型 {type}", { device: deviceLabel(device), type: device.device_type || t("未指定") });
+  return t("设备 {device}，类型 {type}，计算组 {group}", {
     device: deviceLabel(device),
     type: device.device_type || t("未指定"),
-    domain: deviceDomainLabel(device),
+    group,
   });
 }
 function linkLabel(link: TopologyLink) {
@@ -767,24 +823,33 @@ function linkLabel(link: TopologyLink) {
   });
 }
 function linkKind(link: TopologyLink): "inside" | "cross" {
+  const source = devices.value.find((device) => device.device_id === link.src_device);
+  const target = devices.value.find((device) => device.device_id === link.dst_device);
+  if (source?.group_id && target?.group_id) return source.group_id === target.group_id ? "inside" : "cross";
   const domain = domains.value.find((candidate) => candidate.domain_id === link.domain_id);
   return domain?.domain_type === "scale_up" ? "inside" : "cross";
 }
 function linkKindLabel(link: TopologyLink) {
-  return t(linkKind(link) === "inside" ? "域内通信" : "跨域通信");
+  return t(linkKind(link) === "inside" ? "组内通信（scale_up）" : "组间通信（scale_out）");
 }
 function linkKindText(link: TopologyLink) {
-  return `${linkKindLabel(link)} · ${compactNodeText(link.domain_id, 14)}`;
+  const domain = domains.value.find((candidate) => candidate.domain_id === link.domain_id);
+  const relation = linkKind(link);
+  const expected = relation === "inside" ? "scale_up" : "scale_out";
+  const domainType = domain?.domain_type;
+  if (!domainType || domainType === expected) return linkKindLabel(link);
+  return t("{relation} · {domain}（域类型 {domainType}）", {
+    relation: linkKindLabel(link),
+    domain: compactNodeText(link.domain_id, 14),
+    domainType,
+  });
 }
 function linkBadgeWidth(link: TopologyLink) {
   return Math.min(190, Math.max(92, [...linkKindText(link)].length * 7 + 18));
 }
-function deviceDomainLabel(device: TopologyDevice) {
-  const ids = domains.value
-    .filter((domain) => domain.member_devices.includes(device.device_id))
-    .map((domain) => domain.domain_id);
-  if (!ids.length) return t("未入域");
-  return t("域 {domains}", { domains: ids.length === 1 ? ids[0] : `${ids[0]} +${ids.length - 1}` });
+function deviceGroupLabel(device: TopologyDevice) {
+  const superNode = superNodeForDevice(device.device_id, superNodes.value);
+  return superNode ? superNode.label : t("未分配");
 }
 function linkMidpoint(link: TopologyLink) {
   const source = positions.value[link.src_device];
@@ -906,6 +971,71 @@ function linkPath(link: TopologyLink) {
   if (!source || !target) return "";
   const controlY = Math.max(20, (source.y + target.y) / 2 - 60);
   return `M ${source.x} ${source.y} Q ${(source.x + target.x) / 2} ${controlY} ${target.x} ${target.y}`;
+}
+function crossBundleBounds(bundle: CrossLinkBundle) {
+  const source = superNodeBounds.value.find((bounds) => bounds.node.id === bundle.sourceNodeId);
+  const target = superNodeBounds.value.find((bounds) => bounds.node.id === bundle.targetNodeId);
+  return source && target ? { source, target } : null;
+}
+function crossBundleLane(bundle: CrossLinkBundle) {
+  const siblings = crossLinkBundles.value.filter(
+    (candidate) => candidate.sourceNodeId === bundle.sourceNodeId && candidate.targetNodeId === bundle.targetNodeId,
+  );
+  const index = siblings.findIndex((candidate) => candidate.key === bundle.key);
+  return { index: Math.max(0, index), count: Math.max(1, siblings.length) };
+}
+function crossBundlePath(bundle: CrossLinkBundle) {
+  const bounds = crossBundleBounds(bundle);
+  if (!bounds) return "";
+  const { source, target } = bounds;
+  const sourceCenter = { x: source.x + source.width / 2, y: source.y + source.height / 2 };
+  const targetCenter = { x: target.x + target.width / 2, y: target.y + target.height / 2 };
+  const lane = crossBundleLane(bundle);
+  const laneOffset = (lane.index - (lane.count - 1) / 2) * 24;
+  if (Math.abs(targetCenter.x - sourceCenter.x) >= Math.abs(targetCenter.y - sourceCenter.y)) {
+    const forward = targetCenter.x >= sourceCenter.x;
+    const start = { x: forward ? source.x + source.width : source.x, y: sourceCenter.y + laneOffset };
+    const end = { x: forward ? target.x : target.x + target.width, y: targetCenter.y + laneOffset };
+    const curve = Math.max(28, Math.abs(end.x - start.x) * 0.3);
+    return `M ${start.x} ${start.y} C ${start.x + (forward ? curve : -curve)} ${start.y}, ${end.x - (forward ? curve : -curve)} ${end.y}, ${end.x} ${end.y}`;
+  }
+  const forward = targetCenter.y >= sourceCenter.y;
+  const start = { x: sourceCenter.x + laneOffset, y: forward ? source.y + source.height : source.y };
+  const end = { x: targetCenter.x + laneOffset, y: forward ? target.y : target.y + target.height };
+  const curve = Math.max(28, Math.abs(end.y - start.y) * 0.3);
+  return `M ${start.x} ${start.y} C ${start.x} ${start.y + (forward ? curve : -curve)}, ${end.x} ${end.y - (forward ? curve : -curve)}, ${end.x} ${end.y}`;
+}
+function crossBundlePosition(bundle: CrossLinkBundle) {
+  const bounds = crossBundleBounds(bundle);
+  if (!bounds) return { x: 0, y: 0 };
+  const source = bounds.source;
+  const target = bounds.target;
+  const lane = crossBundleLane(bundle);
+  const laneOffset = (lane.index - (lane.count - 1) / 2) * 24;
+  return {
+    x:
+      (source.x + source.width / 2 + target.x + target.width / 2) / 2 +
+      (Math.abs(target.x + target.width / 2 - (source.x + source.width / 2)) <
+      Math.abs(target.y + target.height / 2 - (source.y + source.height / 2))
+        ? laneOffset
+        : 0),
+    y:
+      (source.y + source.height / 2 + target.y + target.height / 2) / 2 -
+      18 +
+      (Math.abs(target.x + target.width / 2 - (source.x + source.width / 2)) >=
+      Math.abs(target.y + target.height / 2 - (source.y + source.height / 2))
+        ? laneOffset
+        : 0),
+  };
+}
+function crossBundleLabel(bundle: CrossLinkBundle) {
+  return t("组间通道 · {count} 条", { count: bundle.linkIndexes.length });
+}
+function crossBundleLabelWidth(bundle: CrossLinkBundle) {
+  return Math.min(230, Math.max(150, [...crossBundleLabel(bundle)].length * 7 + 18));
+}
+function crossLinkIsBundled(index: number) {
+  return crossLinkBundles.value.some((bundle) => bundle.linkIndexes.includes(index));
 }
 function linkParallelOffset(link: TopologyLink, index: number) {
   const offset = linkParallelOffsetVector(link, index);
@@ -1062,6 +1192,22 @@ function updateModuleKind(index: number, event: Event) {
   const next = eventValue(event) as DomainType;
   if (!name || next === bindingText(index, "module_kind")) return;
   updateModuleList((document) => {
+    const mismatched = (topologyDomainsOf(document) || [])
+      .filter(
+        (entry): entry is JsonObject =>
+          isJsonObject(entry) && entry.module_binding === name && entry.domain_type !== next,
+      )
+      .map((entry) => String(entry.domain_id || ""))
+      .filter(Boolean);
+    if (mismatched.length) {
+      throw new StructuredInputError(
+        t("模型 {name} 仍被这些通信域使用：{domains}，不能改成 {kind}；请先在通信域中改绑匹配模型。", {
+          name,
+          domains: mismatched.join("、"),
+          kind: moduleKindLabel(next),
+        }),
+      );
+    }
     setModuleBindingKind(document, name, next);
     return { tone: "info", text: t("模型 {name} 的类型已改为 {kind}。", { name, kind: moduleKindLabel(next) }) };
   });
@@ -1089,12 +1235,12 @@ function dropModule(index: number) {
 <template>
   <section
     class="topology-editor"
-    :class="{ 'topology-editor--readonly': readOnly }"
+    :class="{ 'topology-editor--readonly': readOnly, 'topology-editor--settings-only': !showGraph }"
     :aria-label="t('网络拓扑可视化编辑器')"
     tabindex="-1"
     @keydown="keydown"
   >
-    <div class="topology-editor__toolbar">
+    <div v-if="showGraph" class="topology-editor__toolbar">
       <strong class="visually-hidden">{{ t("拓扑连接") }}</strong>
       <div v-if="!readOnly" class="topology-editor__toolbar-actions">
         <button
@@ -1118,7 +1264,7 @@ function dropModule(index: number) {
         </button>
       </div>
     </div>
-    <div v-if="hasGraph" class="topology-summary" :aria-label="t('拓扑摘要')">
+    <div v-if="showGraph && hasGraph" class="topology-summary" :aria-label="t('拓扑摘要')">
       <div class="topology-summary__metric">
         <strong>{{ devices.length }}</strong
         ><span>{{ t("节点") }}</span>
@@ -1129,281 +1275,430 @@ function dropModule(index: number) {
       </div>
       <div class="topology-summary__metric">
         <strong>{{ domains.length }}</strong
-        ><span>{{ t("仿真域") }}</span>
+        ><span>{{ t("通信域") }}</span>
+      </div>
+      <div class="topology-summary__metric">
+        <strong>{{ superNodes.length }}</strong
+        ><span>{{ t("计算组") }}</span>
       </div>
     </div>
-    <p v-if="parsed.error" class="topology-editor__error" role="alert">{{ parsed.error }}</p>
-    <div
-      v-if="hasGraph"
-      ref="editorRegion"
-      class="topology-direct-canvas"
-      :data-arrangement-applied="arrangementApplied ? 'true' : undefined"
-    >
-      <div class="topology-direct-canvas__controls">
-        <div v-if="isFullscreen" class="topology-workbench__title">
-          <strong>{{ t("拓扑编辑工作台") }}</strong>
-          <span>{{ t("添加节点、分配域并编辑连接") }}</span>
-        </div>
-        <button
-          v-if="isFullscreen && !readOnly"
-          type="button"
-          class="button button--secondary button--small topology-arrange-button topology-fullscreen-arrange"
-          :aria-label="t('自动排布')"
-          :title="t('自动排布')"
-          data-fullscreen-arrange
-          @click="arrangeByDomain"
-        >
-          <LayoutGrid :size="14" />{{ t("自动排布") }}
-        </button>
-        <button
-          v-if="isFullscreen && !readOnly"
-          type="button"
-          class="button button--danger button--small topology-clear-button"
-          :aria-label="t('清除画布')"
-          :title="t('清除画布')"
-          data-fullscreen-clear-canvas
-          @click="requestClearCanvas"
-        >
-          <Trash2 :size="14" />{{ t("清除画布") }}
-        </button>
-        <div class="topology-zoom-controls" role="group" :aria-label="t('画布缩放')">
-          <button
-            type="button"
-            class="icon-button"
-            :aria-label="t('缩小')"
-            :title="t('缩小')"
-            :disabled="zoom <= ZOOM_MIN"
-            data-zoom-out
-            @click="zoomOut"
-          >
-            <ZoomOut :size="15" />
-          </button>
-          <select
-            class="topology-zoom-controls__select"
-            :value="String(zoom)"
-            :aria-label="t('选择缩放比例')"
-            :title="t('选择缩放比例')"
-            data-zoom-select
-            @change="selectZoom"
-          >
-            <option v-for="value in zoomOptions" :key="value" :value="String(value)">
-              {{ zoomOptionLabel(value) }}
-            </option>
-          </select>
-          <button
-            type="button"
-            class="icon-button"
-            :aria-label="t('重置视图')"
-            :title="t('重置视图')"
-            data-view-reset
-            @click="resetView"
-          >
-            <LocateFixed :size="15" />
-          </button>
-          <button
-            type="button"
-            class="icon-button"
-            :aria-label="t('放大')"
-            :title="t('放大')"
-            :disabled="zoom >= ZOOM_MAX"
-            data-zoom-in
-            @click="zoomIn"
-          >
-            <ZoomIn :size="15" />
-          </button>
-        </div>
-        <button
-          v-if="fullscreenSupported"
-          type="button"
-          class="button button--secondary button--small topology-fullscreen-button"
-          :aria-label="isFullscreen ? t('退出全屏') : t('全屏编辑')"
-          :title="isFullscreen ? t('退出全屏') : t('全屏编辑')"
-          data-fullscreen-toggle
-          @click="toggleFullscreen"
-        >
-          <Minimize2 v-if="isFullscreen" :size="14" />
-          <Maximize2 v-else :size="14" />
-          {{ isFullscreen ? t("退出全屏") : t("全屏编辑") }}
-        </button>
-        <div
-          v-if="clearPending"
-          class="topology-canvas-confirmation"
-          role="alertdialog"
-          :aria-label="t('确认清除画布')"
-        >
-          <div>
-            <strong>{{ t("确认清除画布？") }}</strong>
-            <span>{{ t("会删除当前拓扑中的所有节点、仿真域和连接；网络模型参数保留。") }}</span>
+    <p v-if="showGraph && hasGraph" class="topology-graph-note topology-graph-note--workflow">
+      {{
+        t("先在设备清单中给每张卡指定一个计算组，再在「互联参数」中配置通信域；这里仅查看和编辑设备之间的后端 links。")
+      }}
+    </p>
+    <p v-if="showGraph && parsed.error" class="topology-editor__error" role="alert">{{ parsed.error }}</p>
+    <div v-if="showGraphWorkspace" class="topology-workspace">
+      <DeviceInventoryForm
+        v-if="!isFullscreen && !readOnly"
+        class="topology-resource-list"
+        :model-value="workbenchModelValue"
+        :field-path="fieldPath"
+        :topology-node-types="props.topologyNodeTypes"
+        @update:model-value="updateFromWorkbench"
+        @device-count-change="handleWorkbenchDeviceCount"
+        @notice="handleWorkbenchNotice"
+      />
+      <div
+        ref="editorRegion"
+        class="topology-direct-canvas"
+        :data-arrangement-applied="arrangementApplied ? 'true' : undefined"
+      >
+        <div class="topology-direct-canvas__controls">
+          <div v-if="isFullscreen" class="topology-workbench__title">
+            <strong>{{ t("拓扑编辑工作台") }}</strong>
+            <span>{{ t("添加节点、分配域并编辑连接") }}</span>
           </div>
-          <div class="topology-canvas-confirmation__actions">
-            <button type="button" class="button button--danger button--small" data-clear-confirm @click="clearCanvas">
-              {{ t("确认清除") }}
+          <button
+            v-if="isFullscreen && !readOnly"
+            type="button"
+            class="button button--secondary button--small topology-arrange-button topology-fullscreen-arrange"
+            :aria-label="t('自动排布')"
+            :title="t('自动排布')"
+            data-fullscreen-arrange
+            @click="arrangeByDomain"
+          >
+            <LayoutGrid :size="14" />{{ t("自动排布") }}
+          </button>
+          <button
+            v-if="isFullscreen && !readOnly"
+            type="button"
+            class="button button--danger button--small topology-clear-button"
+            :aria-label="t('清除画布')"
+            :title="t('清除画布')"
+            data-fullscreen-clear-canvas
+            @click="requestClearCanvas"
+          >
+            <Trash2 :size="14" />{{ t("清除画布") }}
+          </button>
+          <div class="topology-zoom-controls" role="group" :aria-label="t('画布缩放')">
+            <button
+              type="button"
+              class="icon-button"
+              :aria-label="t('缩小')"
+              :title="t('缩小')"
+              :disabled="zoom <= ZOOM_MIN"
+              data-zoom-out
+              @click="zoomOut"
+            >
+              <ZoomOut :size="15" />
+            </button>
+            <select
+              class="topology-zoom-controls__select"
+              :value="String(zoom)"
+              :aria-label="t('选择缩放比例')"
+              :title="t('选择缩放比例')"
+              data-zoom-select
+              @change="selectZoom"
+            >
+              <option v-for="value in zoomOptions" :key="value" :value="String(value)">
+                {{ zoomOptionLabel(value) }}
+              </option>
+            </select>
+            <button
+              type="button"
+              class="icon-button"
+              :aria-label="t('重置视图')"
+              :title="t('重置视图')"
+              data-view-reset
+              @click="resetView"
+            >
+              <LocateFixed :size="15" />
             </button>
             <button
               type="button"
-              class="button button--secondary button--small"
-              data-clear-cancel
-              @click="cancelClearCanvas"
+              class="icon-button"
+              :aria-label="t('放大')"
+              :title="t('放大')"
+              :disabled="zoom >= ZOOM_MAX"
+              data-zoom-in
+              @click="zoomIn"
             >
-              {{ t("取消") }}
+              <ZoomIn :size="15" />
             </button>
           </div>
-        </div>
-      </div>
-      <aside v-if="isFullscreen" class="topology-workbench__sidebar" :aria-label="t('拓扑节点与仿真域')">
-        <header class="topology-workbench__panel-header">
-          <div>
-            <strong>{{ t("拓扑节点与仿真域") }}</strong>
-          </div>
-        </header>
-        <DeviceInventoryForm
-          :model-value="modelValue"
-          :field-path="fieldPath"
-          @update:model-value="updateFromWorkbench"
-          @device-count-change="handleWorkbenchDeviceCount"
-          @notice="handleWorkbenchNotice"
-        />
-        <DomainInventoryForm
-          :model-value="modelValue"
-          :field-path="fieldPath"
-          @update:model-value="updateFromWorkbench"
-          @notice="handleWorkbenchNotice"
-        />
-        <p
-          v-if="workbenchNotice"
-          class="topology-workbench__notice"
-          :class="{ 'topology-workbench__notice--warning': workbenchNotice.tone === 'warning' }"
-          role="status"
-        >
-          {{ workbenchNotice.message }}
-        </p>
-      </aside>
-      <aside v-if="isFullscreen && selected && !readOnly" class="topology-workbench__properties">
-        <TopologyLinkProperties
-          :link="selected"
-          :domains="domains"
-          @delete="deleteSelected"
-          @update-field="updateLinkField($event.field, $event.value)"
-        />
-      </aside>
-      <div v-if="pendingConnection" class="topology-direct-canvas__instruction">
-        <MousePointer2 :size="15" />
-        <span>{{ t("已选择 {device}，拖到另一个节点。", { device: pendingConnection }) }}</span>
-      </div>
-      <div class="topology-canvas-scroll">
-        <svg
-          class="topology-canvas topology-canvas--direct"
-          :class="{ 'topology-canvas--panning': panDrag }"
-          :viewBox="`0 0 ${CANVAS_WIDTH} ${viewBoxHeight}`"
-          :height="viewBoxHeight"
-          :style="canvasStyle"
-          role="group"
-          :aria-label="t('设备连接图')"
-          @pointerdown="startPan"
-          @pointermove="moveNode"
-          @pointerup="endCanvasPointer"
-          @pointercancel="cancelDrag"
-        >
-          <rect class="topology-canvas__background" x="0" y="0" width="100%" height="100%" aria-hidden="true" />
-          <g class="topology-scene" :transform="sceneTransform">
-            <g class="topology-links">
-              <g
-                v-for="(link, index) in links"
-                :key="`${link.src_device}-${link.dst_device}-${index}`"
-                class="topology-link"
-                :class="[`topology-link--${linkKind(link)}`, { selected: selectedLink === index }]"
-                :transform="linkParallelOffset(link, index)"
-                :tabindex="readOnly ? -1 : 0"
-                :role="readOnly ? 'img' : 'button'"
-                :aria-label="linkLabel(link)"
-                @pointerdown.stop
-                @click.stop="selectLink(index)"
-                @keydown="linkKeydown($event, index)"
+          <button
+            v-if="fullscreenSupported"
+            type="button"
+            class="button button--secondary button--small topology-fullscreen-button"
+            :aria-label="isFullscreen ? t('退出全屏') : t('全屏编辑')"
+            :title="isFullscreen ? t('退出全屏') : t('全屏编辑')"
+            data-fullscreen-toggle
+            @click="toggleFullscreen"
+          >
+            <Minimize2 v-if="isFullscreen" :size="14" />
+            <Maximize2 v-else :size="14" />
+            {{ isFullscreen ? t("退出全屏") : t("全屏编辑") }}
+          </button>
+          <div
+            v-if="clearPending"
+            class="topology-canvas-confirmation"
+            role="alertdialog"
+            :aria-label="t('确认清除画布')"
+          >
+            <div>
+              <strong>{{ t("确认清除画布？") }}</strong>
+              <span>{{ t("会删除当前拓扑中的所有节点、仿真域和连接；网络模型参数保留。") }}</span>
+            </div>
+            <div class="topology-canvas-confirmation__actions">
+              <button type="button" class="button button--danger button--small" data-clear-confirm @click="clearCanvas">
+                {{ t("确认清除") }}
+              </button>
+              <button
+                type="button"
+                class="button button--secondary button--small"
+                data-clear-cancel
+                @click="cancelClearCanvas"
               >
-                <line
-                  v-if="linkKind(link) === 'inside'"
-                  class="topology-link__hit"
-                  :x1="positions[link.src_device]?.x"
-                  :y1="positions[link.src_device]?.y"
-                  :x2="positions[link.dst_device]?.x"
-                  :y2="positions[link.dst_device]?.y"
-                />
-                <path v-else class="topology-link__hit" :d="linkPath(link)" />
-                <line
-                  v-if="linkKind(link) === 'inside'"
-                  :x1="positions[link.src_device]?.x"
-                  :y1="positions[link.src_device]?.y"
-                  :x2="positions[link.dst_device]?.x"
-                  :y2="positions[link.dst_device]?.y"
-                />
-                <path v-else :d="linkPath(link)" />
-                <g
-                  class="topology-link__badge"
-                  :transform="`translate(${linkBadgePosition(link, index).x}, ${linkBadgePosition(link, index).y - 13})`"
-                >
-                  <title>{{ linkLabel(link) }}</title>
-                  <rect :x="-linkBadgeWidth(link) / 2" y="-10" :width="linkBadgeWidth(link)" height="18" rx="4" />
-                  <text class="topology-link__kind" text-anchor="middle" y="3">
-                    {{ linkKindText(link) }}
+                {{ t("取消") }}
+              </button>
+            </div>
+          </div>
+        </div>
+        <aside v-if="isFullscreen" class="topology-workbench__sidebar" :aria-label="t('拓扑节点')">
+          <header class="topology-workbench__panel-header">
+            <div>
+              <strong>{{ t("拓扑节点") }}</strong>
+            </div>
+          </header>
+          <DeviceInventoryForm
+            :model-value="modelValue"
+            :field-path="fieldPath"
+            :topology-node-types="props.topologyNodeTypes"
+            @update:model-value="updateFromWorkbench"
+            @device-count-change="handleWorkbenchDeviceCount"
+            @notice="handleWorkbenchNotice"
+          />
+          <p
+            v-if="workbenchNotice"
+            class="topology-workbench__notice"
+            :class="{ 'topology-workbench__notice--warning': workbenchNotice.tone === 'warning' }"
+            role="status"
+          >
+            {{ workbenchNotice.message }}
+          </p>
+        </aside>
+        <aside v-if="isFullscreen && selected && !readOnly" class="topology-workbench__properties">
+          <TopologyLinkProperties
+            :link="selected"
+            :domains="domains"
+            @delete="deleteSelected"
+            @update-field="updateLinkField($event.field, $event.value)"
+          />
+        </aside>
+        <div v-if="pendingConnection" class="topology-direct-canvas__instruction">
+          <MousePointer2 :size="15" />
+          <span>{{ t("已选择 {device}，拖到另一个节点。", { device: pendingConnection }) }}</span>
+        </div>
+        <div class="topology-canvas-scroll">
+          <svg
+            class="topology-canvas topology-canvas--direct"
+            :class="{ 'topology-canvas--panning': panDrag }"
+            :viewBox="`0 0 ${CANVAS_WIDTH} ${viewBoxHeight}`"
+            :height="viewBoxHeight"
+            :style="canvasStyle"
+            role="group"
+            :aria-label="t('设备连接图')"
+            @pointerdown="startPan"
+            @pointermove="moveNode"
+            @pointerup="endCanvasPointer"
+            @pointercancel="cancelDrag"
+          >
+            <rect class="topology-canvas__background" x="0" y="0" width="100%" height="100%" aria-hidden="true" />
+            <g class="topology-scene" :transform="sceneTransform">
+              <g class="topology-supernodes" :aria-label="t('计算组')">
+                <g v-for="bounds in superNodeBounds" :key="`super-node-${bounds.node.id}`" class="topology-supernode">
+                  <rect
+                    class="topology-supernode__container"
+                    :x="bounds.x"
+                    :y="bounds.y"
+                    :width="bounds.width"
+                    :height="bounds.height"
+                    rx="18"
+                  />
+                  <text class="topology-supernode__label" :x="bounds.x + 16" :y="bounds.y + 24">
+                    {{ t("计算组 {id}", { id: groupDisplayLabel(bounds.node) }) }}
+                  </text>
+                  <text class="topology-supernode__kind" :x="bounds.x + 16" :y="bounds.y + 42">
+                    {{ t("{count} 个设备 · 设备归属", { count: bounds.node.devices.length }) }}
                   </text>
                 </g>
               </g>
+              <g
+                v-for="bundle in crossLinkBundles"
+                :key="`cross-bundle-${bundle.key}`"
+                class="topology-group-link"
+                :class="{ selected: selectedLink !== null && bundle.linkIndexes.includes(selectedLink) }"
+                :tabindex="readOnly ? -1 : 0"
+                :role="readOnly ? 'img' : 'button'"
+                :aria-label="crossBundleLabel(bundle)"
+                @click.stop="selectLink(bundle.linkIndexes[0])"
+                @keydown.enter.prevent="selectLink(bundle.linkIndexes[0])"
+                @keydown.space.prevent="selectLink(bundle.linkIndexes[0])"
+              >
+                <title>{{ crossBundleLabel(bundle) }}</title>
+                <path class="topology-group-link__hit" :d="crossBundlePath(bundle)" />
+                <path class="topology-group-link__path" :d="crossBundlePath(bundle)" />
+                <g
+                  class="topology-group-link__badge"
+                  :transform="`translate(${crossBundlePosition(bundle).x}, ${crossBundlePosition(bundle).y})`"
+                >
+                  <rect
+                    :x="-crossBundleLabelWidth(bundle) / 2"
+                    y="-10"
+                    :width="crossBundleLabelWidth(bundle)"
+                    height="18"
+                    rx="4"
+                  />
+                  <text class="topology-group-link__kind" text-anchor="middle" y="3">
+                    {{ crossBundleLabel(bundle) }}
+                  </text>
+                </g>
+              </g>
+              <g class="topology-links">
+                <g
+                  v-for="(link, index) in links"
+                  :key="`${link.src_device}-${link.dst_device}-${index}`"
+                  class="topology-link"
+                  :class="[`topology-link--${linkKind(link)}`, { selected: selectedLink === index }]"
+                  :transform="linkParallelOffset(link, index)"
+                  :tabindex="readOnly ? -1 : 0"
+                  :role="readOnly ? 'img' : 'button'"
+                  :aria-label="linkLabel(link)"
+                  @pointerdown.stop
+                  @click.stop="selectLink(index)"
+                  @keydown="linkKeydown($event, index)"
+                >
+                  <line
+                    v-if="linkKind(link) === 'inside'"
+                    class="topology-link__hit"
+                    :x1="positions[link.src_device]?.x"
+                    :y1="positions[link.src_device]?.y"
+                    :x2="positions[link.dst_device]?.x"
+                    :y2="positions[link.dst_device]?.y"
+                  />
+                  <path v-else-if="!crossLinkIsBundled(index)" class="topology-link__hit" :d="linkPath(link)" />
+                  <line
+                    v-if="linkKind(link) === 'inside'"
+                    :x1="positions[link.src_device]?.x"
+                    :y1="positions[link.src_device]?.y"
+                    :x2="positions[link.dst_device]?.x"
+                    :y2="positions[link.dst_device]?.y"
+                  />
+                  <path v-else-if="!crossLinkIsBundled(index)" :d="linkPath(link)" />
+                  <g
+                    v-if="linkKind(link) === 'inside' || !crossLinkIsBundled(index)"
+                    class="topology-link__badge"
+                    :transform="`translate(${linkBadgePosition(link, index).x}, ${linkBadgePosition(link, index).y - 13})`"
+                  >
+                    <title>{{ linkLabel(link) }}</title>
+                    <rect :x="-linkBadgeWidth(link) / 2" y="-10" :width="linkBadgeWidth(link)" height="18" rx="4" />
+                    <text class="topology-link__kind" text-anchor="middle" y="3">
+                      {{ linkKindText(link) }}
+                    </text>
+                  </g>
+                </g>
+              </g>
+              <g
+                v-for="device in devices"
+                :key="device.device_id"
+                class="topology-device"
+                :class="[
+                  `topology-device--${topologyNodeCategory(device.device_type)}`,
+                  { pending: pendingConnection === device.device_id },
+                ]"
+                :transform="`translate(${positions[device.device_id]?.x || 0},${positions[device.device_id]?.y || 0})`"
+                :tabindex="readOnly ? -1 : 0"
+                :role="readOnly ? 'img' : 'button'"
+                :aria-label="deviceTitle(device)"
+                @keydown="nodeKeydown($event, device)"
+                @pointerdown.stop="startNode($event, device)"
+                @pointerup.stop="endNode($event, device)"
+                @click.stop="selectDevice(device)"
+              >
+                <title>{{ deviceTitle(device) }}</title>
+                <image
+                  class="topology-device__illustration"
+                  :href="deviceIllustration(device)"
+                  x="-42"
+                  y="-34"
+                  width="84"
+                  height="54"
+                  preserveAspectRatio="xMidYMid meet"
+                  aria-hidden="true"
+                  draggable="false"
+                />
+                <rect class="topology-device__hit-area" x="-58" y="-36" width="116" height="72" rx="8" />
+                <text class="topology-device__id" text-anchor="middle" y="12">{{ deviceCardId(device) }}</text>
+                <text v-if="device.device_type" class="topology-device__type" text-anchor="middle" y="27">
+                  {{ deviceCardType(device) }}
+                </text>
+              </g>
             </g>
-            <g
-              v-for="device in devices"
-              :key="device.device_id"
-              class="topology-device"
-              :class="[
-                `topology-device--${topologyNodeCategory(device.device_type)}`,
-                { pending: pendingConnection === device.device_id },
-              ]"
-              :transform="`translate(${positions[device.device_id]?.x || 0},${positions[device.device_id]?.y || 0})`"
-              :tabindex="readOnly ? -1 : 0"
-              :role="readOnly ? 'img' : 'button'"
-              :aria-label="deviceTitle(device)"
-              @keydown="nodeKeydown($event, device)"
-              @pointerdown.stop="startNode($event, device)"
-              @pointerup.stop="endNode($event, device)"
-            >
-              <title>{{ deviceTitle(device) }}</title>
-              <image
-                class="topology-device__illustration"
-                :href="deviceIllustration(device)"
-                x="-76"
-                y="-68"
-                width="152"
-                height="100"
-                preserveAspectRatio="xMidYMid meet"
-                aria-hidden="true"
-                draggable="false"
-              />
-              <rect class="topology-device__hit-area" x="-68" y="-36" width="136" height="72" rx="8" />
-              <text class="topology-device__id" text-anchor="middle" y="-4">{{ deviceCardId(device) }}</text>
-              <text v-if="device.device_type" class="topology-device__type" text-anchor="middle" y="12">
-                {{ deviceCardType(device) }}
-              </text>
-              <text class="topology-device__domain" text-anchor="middle" y="28">{{ deviceDomainLabel(device) }}</text>
-            </g>
-          </g>
-        </svg>
+          </svg>
+        </div>
+        <div class="topology-direct-canvas__legend">
+          <span><i class="topology-legend-line topology-legend-line--inside" />{{ t("实线：同一计算组的端点") }}</span>
+          <span><i class="topology-legend-line topology-legend-line--cross" />{{ t("虚线：不同计算组的端点") }}</span>
+          <span v-if="superNodes.length"
+            ><i class="topology-legend-box" />{{ t("边框：计算组（来自 devices[].group_id）") }}</span
+          >
+          <span v-if="!links.length" class="topology-direct-canvas__empty">{{ t("当前还没有节点连接") }}</span>
+        </div>
+        <p v-if="links.length || superNodes.length" class="topology-graph-note topology-graph-note--semantics">
+          {{
+            t(
+              "设备卡只属于一个计算组；通信域是后端的网络资源。scale_up 表示组内连接，scale_out 表示组间连接，后者的端点集合可以与前者重叠，但不会让设备再次归属另一个计算组。",
+            )
+          }}
+        </p>
+        <div v-if="crossLinkBundles.length" class="topology-cross-links">
+          <span class="topology-cross-links__note">{{
+            t("组间连接在图中汇总为通信通道；点击下方端点对可编辑单条后端 link。")
+          }}</span>
+          <div
+            v-for="bundle in crossLinkBundles"
+            :key="`cross-list-${bundle.key}`"
+            class="topology-cross-links__bundle"
+          >
+            <strong>{{ crossBundleLabel(bundle) }}</strong>
+            <div class="topology-cross-links__items">
+              <button
+                v-for="linkIndex in bundle.linkIndexes"
+                :key="`cross-detail-${linkIndex}`"
+                type="button"
+                class="topology-cross-links__item"
+                @click="selectLink(linkIndex)"
+              >
+                {{ links[linkIndex].src_device }} → {{ links[linkIndex].dst_device }}
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="topology-direct-canvas__legend">
-        <span><i class="topology-legend-line topology-legend-line--inside" />{{ t("实线：域内通信") }}</span>
-        <span><i class="topology-legend-line topology-legend-line--cross" />{{ t("虚线：跨域通信") }}</span>
-        <span v-if="!links.length" class="topology-direct-canvas__empty">{{ t("当前还没有节点连接") }}</span>
+      <div v-if="showGraph && !hasGraph && readOnly" class="topology-editor__empty">
+        <MousePointer2 :size="18" /><span>{{ t("输入合法拓扑 JSON 后，这里会显示节点与连接。") }}</span>
       </div>
+      <aside v-if="selectedDevice && !isFullscreen" class="topology-device-inspector" :aria-label="t('选中对象详情')">
+        <header>
+          <strong>{{ t("选中对象") }}</strong>
+          <span>{{ t("设备") }}</span>
+        </header>
+        <dl>
+          <div>
+            <dt>{{ t("设备编号") }}</dt>
+            <dd>
+              <code>{{ selectedDevice.device_id }}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>{{ t("设备类型") }}</dt>
+            <dd>{{ topologyNodeLabel(selectedDevice.device_type) }}</dd>
+          </div>
+          <div>
+            <dt>{{ t("计算组") }}</dt>
+            <dd>{{ selectedDevice.group_id || t("未分配") }}</dd>
+          </div>
+        </dl>
+        <p class="topology-inspector-note">{{ t("设备只属于一个计算组；通信域端点在互联参数中单独管理。") }}</p>
+      </aside>
+      <TopologyLinkProperties
+        v-if="selected && !readOnly && !isFullscreen"
+        :link="selected"
+        :domains="domains"
+        @delete="deleteSelected"
+        @update-field="updateLinkField($event.field, $event.value)"
+      />
+      <aside
+        v-if="selected && readOnly && !isFullscreen"
+        class="topology-device-inspector topology-link-inspector-readonly"
+        :aria-label="t('选中连接详情')"
+      >
+        <header>
+          <strong>{{ t("选中对象") }}</strong>
+          <span>{{ t("连接") }}</span>
+        </header>
+        <dl>
+          <div>
+            <dt>{{ t("端点") }}</dt>
+            <dd>
+              <code>{{ selected.src_device }} ↔ {{ selected.dst_device }}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>{{ t("通信关系") }}</dt>
+            <dd>{{ linkKindLabel(selected) }}</dd>
+          </div>
+          <div>
+            <dt>{{ t("通信域") }}</dt>
+            <dd>
+              <code>{{ selected.domain_id }}</code>
+            </dd>
+          </div>
+        </dl>
+      </aside>
     </div>
-    <div v-if="!hasGraph" class="topology-editor__empty">
-      <MousePointer2 :size="18" /><span>{{ t("输入合法拓扑 JSON 后，这里会显示节点与连接。") }}</span>
-    </div>
-    <TopologyLinkProperties
-      v-if="selected && !readOnly && !isFullscreen"
-      :link="selected"
-      :domains="domains"
-      @delete="deleteSelected"
-      @update-field="updateLinkField($event.field, $event.value)"
-    />
-    <section v-if="graph && !readOnly" class="topology-model-settings">
+    <section v-if="graph && !readOnly && showModuleSettings" class="topology-model-settings">
       <div class="topology-model-settings__body">
         <header class="topology-section-header">
           <div>
@@ -1504,7 +1799,7 @@ function dropModule(index: number) {
       </div>
     </section>
     <div v-if="showJson" class="topology-editor__json">
-      <label :for="jsonEditorId">{{ t("Fabric topology JSON") }}</label
+      <label :for="jsonEditorId">{{ t("拓扑输入") }}</label
       ><textarea
         :id="jsonEditorId"
         :value="modelValue"

@@ -12,7 +12,16 @@
     "protocol": { "const": "tilesim.agent_intent.v1" },
     "session_id": { "type": "string", "minLength": 1, "maxLength": 128 },
     "user_goal": { "type": "string", "minLength": 1, "maxLength": 20000 },
-    "intent": { "enum": ["explain", "existing_run_analysis", "user_report", "configuration_draft", "navigation", "simulation_execution", "unsupported_execution"] },
+    "intent": { "enum": ["explain", "existing_run_analysis", "user_report", "configuration_draft", "navigation", "simulation_execution", "explore_experiment", "unsupported_execution"] },
+    "exploration_objective": {
+      "type": ["object", "null"], "additionalProperties": false,
+      "required": ["metric_path", "direction"],
+      "properties": {
+        "metric_path": { "type": "string", "pattern": "^/", "minLength": 2, "maxLength": 256 },
+        "direction": { "enum": ["minimize", "maximize"] }
+      }
+    },
+    "requested_rounds": { "type": ["integer", "null"], "minimum": 1, "maximum": 50 },
     "current_page_id": { "type": "string", "minLength": 1, "maxLength": 128 },
     "current_context_revision": { "type": "string", "minLength": 1, "maxLength": 256 },
     "run_id": { "type": ["string", "null"], "minLength": 1, "maxLength": 128 },

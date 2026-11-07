@@ -1,0 +1,15 @@
+{
+  "$id": "tilesim.agent_harness.exploration_stop_reason.v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_identity", "contract_revision", "reason", "detail", "provenance"],
+  "properties": {
+    "schema_identity": { "const": "tilesim.agent_harness.exploration_stop_reason.v2" },
+    "contract_revision": { "const": "2026-10-29.wpg.v2" },
+    "reason": { "enum": ["budget_exhausted", "max_rounds", "max_runs", "max_no_improvement", "max_failures", "max_execution_time", "max_model_calls", "max_tool_calls_per_round", "authorization_expired", "authorization_revoked", "context_expired", "manual_stop", "run_failed", "run_cancelled", "completed", "recovery_required", "manual_intervention_required"] },
+    "detail": { "type": "string", "minLength": 1 },
+    "unknown_outcome": { "type": "boolean" },
+    "provenance": { "$ref": "./exploration-provenance.schema.json" }
+  }
+}

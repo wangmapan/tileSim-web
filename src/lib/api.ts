@@ -1,4 +1,8 @@
-import type { CreateRunRequest } from "../contracts/bridge-api";
+import type {
+  AgentOrchestrationRunIntakePreviewRequest,
+  AgentOrchestrationRunIntakePreviewResponse,
+  CreateRunRequest,
+} from "../contracts/bridge-api";
 import { generatedBridgeClient } from "./api/client";
 import { getApiManifest, SUPPORTED_BRIDGE_API_VERSION } from "./api/manifest";
 import {
@@ -50,6 +54,8 @@ export type {
   Week7CalibrationResponse,
   Week7EvidenceMapResponse,
   Week7OrchestrationResponse,
+  AgentOrchestrationRunIntakePreviewRequest,
+  AgentOrchestrationRunIntakePreviewResponse,
 } from "../contracts/bridge-api";
 export type { WaitForRunOptions } from "./api/run-events";
 export { BridgeApiError } from "./api/errors";
@@ -72,6 +78,8 @@ export {
 } from "./api/agent-harness";
 
 export const bridgeApi = {
+  operatorExecution: () => generatedBridgeClient.operatorExecution(),
+  validateOperatorExecution: (payload: CreateRunRequest) => generatedBridgeClient.validateOperatorExecution(payload),
   manifest: getApiManifest,
   health: () => generatedBridgeClient.health(),
   catalog: () => generatedBridgeClient.catalog(),
@@ -84,6 +92,10 @@ export const bridgeApi = {
   week7EvidenceMap: () => generatedBridgeClient.week7EvidenceMap(),
   runWeek7CalibrationExample: () => generatedBridgeClient.runWeek7CalibrationExample(),
   runWeek7OrchestrationExample: () => generatedBridgeClient.runWeek7OrchestrationExample(),
+  /** Read-only Run Intake v2 judgement; never creates or persists a run. */
+  previewAgentRunIntake: (
+    body: AgentOrchestrationRunIntakePreviewRequest,
+  ): Promise<AgentOrchestrationRunIntakePreviewResponse> => generatedBridgeClient.previewAgentRunIntake(body),
   listRuns: () => generatedBridgeClient.listRuns(),
   getRun: (runId: string) => generatedBridgeClient.getRun(runId),
   getReports: (runId: string) => generatedBridgeClient.getReports(runId),

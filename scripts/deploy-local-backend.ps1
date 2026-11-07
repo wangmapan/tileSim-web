@@ -5,6 +5,7 @@ param(
     [string]$BuildDirWsl = "",
     [switch]$ReuseVerifiedArtifacts,
     [switch]$ForceFullValidation,
+    [switch]$SkipTests,
     [switch]$NoRestart
 )
 
@@ -22,6 +23,9 @@ $runtimeRoot = Join-Path $webRoot "runtime"
 $manifestPath = Join-Path $runtimeRoot "backend-current.json"
 $node = Resolve-TileSimNode
 $mutex = [System.Threading.Mutex]::new($false, "Local\TileSimBackendUpdate")
+if ($SkipTests -and $ForceFullValidation) {
+    throw "SkipTests and ForceFullValidation cannot be combined."
+}
 $fastPath = $ReuseVerifiedArtifacts -and -not $ForceFullValidation
 $validationStateRootWsl = "/tmp/tilesim-web-deploy-validation-$([guid]::NewGuid().ToString('N'))"
 
@@ -107,8 +111,20 @@ function Remove-BridgeValidationState {
 function Test-WslExecutable {
     param([string]$Path)
     if ([string]::IsNullOrWhiteSpace($Path)) { return $false }
-    & wsl.exe -d $WslDistro --exec test -x $Path *> $null
-    return $LASTEXITCODE -eq 0
+    # Recent WSL builds emit the localhost-proxy notice on stderr even when
+    # the command succeeds.  With PowerShell's native-command error handling
+    # enabled by this script, redirecting all streams to $null can still turn
+    # that diagnostic into a terminating NativeCommandError.  Keep the probe
+    # fail-closed on the exit code while treating the known stderr diagnostic
+    # as non-fatal.
+    $previousPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        & wsl.exe -d $WslDistro --exec test -x $Path 2>$null 1>$null
+        return $LASTEXITCODE -eq 0
+    } finally {
+        $ErrorActionPreference = $previousPreference
+    }
 }
 
 function Get-WslFileDigest {
@@ -135,7 +151,8 @@ function Test-ReusableBackendBuild {
         [string]$SourceRoot,
         [string]$Revision,
         [string]$SourceDigest,
-        [string]$BuildDirectory
+        [string]$BuildDirectory,
+        [switch]$AllowSkippedTests
     )
     if (-not $fastPath -or $null -eq $Manifest) { return $false }
     if ((Get-ManifestValue $Manifest "deployment_mode") -ne "local_worktree_snapshot") { return $false }
@@ -155,8 +172,10 @@ function Test-ReusableBackendBuild {
         return $false
     }
     $validation = Get-ManifestValue $Manifest "validation"
-    $ctestStatus = Get-ManifestValue $validation "tilesim_ctest"
-    if ([string]$ctestStatus -notmatch '^([1-9][0-9]*)/\1$') { return $false }
+    $ctestStatus = [string](Get-ManifestValue $validation "tilesim_ctest")
+    $ctestVerified = $ctestStatus -match '^([1-9][0-9]*)/\1$'
+    $ctestSkipped = $ctestStatus -eq "skipped:not-run"
+    if (-not $ctestVerified -and -not ($AllowSkippedTests -and $ctestSkipped)) { return $false }
     $cliPath = [string](Get-ManifestValue $Manifest "tilesim_cli_wsl")
     if ($cliPath -ne "$BuildDirectory/TileSimCLI" -or -not (Test-WslExecutable $cliPath)) { return $false }
     $declaredCliDigest = [string](Get-ManifestValue $Manifest "tilesim_cli_digest")
@@ -272,26 +291,39 @@ try {
 
     $schemaSetRevision = Get-SchemaSetRevision
     $backendReused = Test-ReusableBackendBuild $previousManifest $source $revision $sourceDigest $BuildDirWsl
+    if (-not $backendReused -and $SkipTests) {
+        $backendReused = Test-ReusableBackendBuild $previousManifest $source $revision $sourceDigest $BuildDirWsl -AllowSkippedTests
+    }
     $webRelease = Get-ReusableWebRelease $previousManifest $webSourceDigest $schemaSetRevision
     $webReused = $null -ne $webRelease
+    $webTestsSkipped = $false
 
     if ($backendReused) {
-        Write-Output "Reusing verified TileSim build and CTest result for unchanged backend state. Use -ForceFullValidation to rerun them."
         $testStatus = [string](Get-ManifestValue (Get-ManifestValue $previousManifest "validation") "tilesim_ctest")
+        if ($testStatus -eq "skipped:not-run") {
+            Write-Output "Reusing the previous local TileSim build without a verified test result. Use -ForceFullValidation to run the full checks."
+        } else {
+            Write-Output "Reusing verified TileSim build and CTest result for unchanged backend state. Use -ForceFullValidation to rerun them."
+        }
     } else {
         Write-Output "Building local TileSim snapshot $branch at state $sourceDigest"
         Invoke-Checked "wsl.exe" @(
             "-d", $WslDistro, "--exec", "env", "TILESIM_WSL_BUILD_DIR=$BuildDirWsl",
             "bash", "$sourceWsl/scripts/build_wsl.sh"
         )
-        Invoke-Checked "wsl.exe" @(
-            "-d", $WslDistro, "--exec", "ctest", "--test-dir", $BuildDirWsl,
-            "--output-on-failure", "-j1", "--repeat", "until-pass:2"
-        )
-        $testInventory = (& wsl.exe -d $WslDistro --exec ctest --test-dir $BuildDirWsl --show-only=json-v1 | Out-String) | ConvertFrom-Json
-        if ($LASTEXITCODE -ne 0) { throw "Could not read the local backend CTest inventory." }
-        $testCount = @($testInventory.tests).Count
-        $testStatus = "$testCount/$testCount"
+        if ($SkipTests) {
+            Write-Output "SkipTests: backend test suite was not run. This deployment is not a verified acceptance."
+            $testStatus = "skipped:not-run"
+        } else {
+            Invoke-Checked "wsl.exe" @(
+                "-d", $WslDistro, "--exec", "ctest", "--test-dir", $BuildDirWsl,
+                "--output-on-failure", "-j1", "--repeat", "until-pass:2"
+            )
+            $testInventory = (& wsl.exe -d $WslDistro --exec ctest --test-dir $BuildDirWsl --show-only=json-v1 | Out-String) | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0) { throw "Could not read the local backend CTest inventory." }
+            $testCount = @($testInventory.tests).Count
+            $testStatus = "$testCount/$testCount"
+        }
     }
     $cliPath = "$BuildDirWsl/TileSimCLI"
     $cliDigest = Get-WslFileDigest $cliPath
@@ -299,6 +331,21 @@ try {
     if ($webReused) {
         Write-Output "Reusing verified immutable Web release for unchanged Web state. Use -ForceFullValidation to rerun Web tests and build."
         $webBuildDigest = [string](Get-ManifestValue $previousManifest "web_build_digest")
+    } elseif ($SkipTests) {
+        Write-Output "SkipTests: rebuilding changed Web sources without Python or frontend test suites."
+        Invoke-Checked $node @((Join-Path $webRoot "scripts\generate-contract-types.mjs"), "--check") $webRoot
+        Invoke-Checked $node @((Join-Path $webRoot "scripts\generate-bridge-client.mjs"), "--check") $webRoot
+        Invoke-Checked "wsl.exe" @(
+            "-d", $WslDistro, "--cd", "$webRootWsl/bridge", "--exec",
+            "python3", "check_schema_set_revision.py"
+        )
+        Invoke-Checked "wsl.exe" @(
+            "-d", $WslDistro, "--exec", "python3", "-m", "py_compile",
+            "$webRootWsl/bridge/server.py"
+        )
+        Invoke-Checked $node @((Join-Path $webRoot "node_modules\vite\bin\vite.js"), "build") $webRoot
+        $webBuildDigest = Get-DirectoryDigest (Join-Path $webRoot "dist") ""
+        $webTestsSkipped = $true
     } elseif ($fastPath -and $null -ne $previousManifest) {
         Write-Output "Fast path: validating contract drift and rebuilding changed Web sources; use -ForceFullValidation to rerun the full Vitest suite."
         Invoke-Checked $node @((Join-Path $webRoot "scripts\generate-contract-types.mjs"), "--check") $webRoot
@@ -370,8 +417,8 @@ try {
         validation = [ordered]@{
             tilesim_ctest = $testStatus
             source_state = "sha256:$sourceDigest"
-            frontend_bridge = if ($webReused) { "reused:verified-release" } elseif ($fastPath -and $null -ne $previousManifest) { "fast:contract+bridge+compile" } else { "passed" }
-            web = if ($webReused) { "reused:verified-release" } elseif ($fastPath -and $null -ne $previousManifest) { "fast:production-build" } else { "passed" }
+            frontend_bridge = if ($webReused) { "reused:verified-release" } elseif ($webTestsSkipped) { "skipped:not-run" } elseif ($fastPath -and $null -ne $previousManifest) { "fast:contract+bridge+compile" } else { "passed" }
+            web = if ($webReused) { "reused:verified-release" } elseif ($webTestsSkipped) { "skipped:not-run" } elseif ($fastPath -and $null -ne $previousManifest) { "fast:production-build" } else { "passed" }
             backend_build = if ($backendReused) { "reused:verified-build" } else { "passed" }
         }
     }

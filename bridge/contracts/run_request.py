@@ -12,6 +12,7 @@ from .validation import (
     validate_overrides,
     validate_run_name,
 )
+from .execution_input import validate_execution_input
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,7 @@ class ValidatedRunRequest:
     design_space_candidates: dict | None
     design_space_candidate_schema_identity: str | None
     trace_package_id: str | None
+    execution_input: dict | None
 
 
 def validate_run_request(
@@ -44,6 +46,7 @@ def validate_run_request(
         "custom_inputs",
         "design_space_candidates",
         "trace_package_id",
+        "execution_input",
     }
     if unknown := set(request) - allowed_request_fields:
         field = sorted(unknown)[0]
@@ -73,6 +76,9 @@ def validate_run_request(
     has_overrides = "overrides" in request
     has_custom_inputs = "custom_inputs" in request
     has_trace_package = "trace_package_id" in request
+    has_execution_input = "execution_input" in request
+    if has_execution_input and (request["execution_input"] is None or "design_space_candidates" in request):
+        raise RequestValidationError("execution_input must be an object and cannot be combined with design_space_candidates.", "/execution_input")
     if scenario_id == "dense_des_package" and not has_trace_package:
         raise RequestValidationError(
             "The dense DES topology scenario requires a validated Trace package.",
@@ -95,6 +101,8 @@ def validate_run_request(
             "Trace-package mode cannot be combined with overrides or custom_inputs.",
             "/trace_package_id",
         )
+    if has_execution_input and (has_overrides or has_trace_package):
+        raise RequestValidationError("execution_input must use custom_inputs and cannot be combined with overrides or trace_package_id.", "/execution_input")
     if has_trace_package and "design_space_candidates" in request:
         raise RequestValidationError(
             "Trace-package mode cannot be combined with design_space_candidates.",
@@ -117,6 +125,10 @@ def validate_run_request(
             else {}
         )
         custom_inputs = validate_custom_inputs(request["custom_inputs"]) if has_custom_inputs else None
+        execution_input = validate_execution_input(
+            request.get("execution_input"), custom_inputs,
+            scenario_id=scenario_id, fidelity_policy=fidelity_policy,
+        ) if has_execution_input else None
         design_space_candidates = (
             validate_design_space_candidates(
                 request["design_space_candidates"],
@@ -149,4 +161,5 @@ def validate_run_request(
             else None
         ),
         trace_package_id=trace_package_id if has_trace_package else None,
+        execution_input=execution_input,
     )

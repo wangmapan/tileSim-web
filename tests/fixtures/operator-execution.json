@@ -1,0 +1,288 @@
+{
+  "custom_inputs": {
+    "runtime_trace": {
+      "trace_name": "source-kernel-model-cpu",
+      "engine_type": "vllm",
+      "engine_semantic_version": "vllm.0.6.semantic.v1",
+      "requested_features": ["continuous_batching"],
+      "trace_provenance": {
+        "source_mode": "synthetic_trace",
+        "calibration_level": "uncalibrated",
+        "allowed_claim_scope": "exploratory",
+        "source_id": "synthetic://dense-timing-regression",
+        "generation_path": "dense_execution.v1",
+        "notes": ["Model-derived analytical demands in global DES; not hardware calibration."]
+      },
+      "policy": {
+        "kv_capacity_tokens": 65536,
+        "initial_kv_tokens": 0,
+        "max_active_requests": 8,
+        "max_batch_size": 1,
+        "batch_scheduler": "decode_priority",
+        "kv_page_size_tokens": 64,
+        "kv_fragmentation_overhead": 0,
+        "kv_admission_watermark": 1,
+        "long_context_threshold_tokens": 512,
+        "decode_penalty_per_threshold": 0.25
+      },
+      "requests": [
+        {
+          "request_id": "req000",
+          "model_id": "cpu-dense-2layer",
+          "arrival_time_ps": 0,
+          "prompt_tokens": 8,
+          "decode_tokens": 1,
+          "priority_class": 0,
+          "phase": "request",
+          "kv_tokens": 9,
+          "tp_degree": 1,
+          "participants": ["gpu0"],
+          "message_size_bytes": 0
+        }
+      ]
+    },
+    "topology": {
+      "scenario_name": "week8-acceptance",
+      "topology": {
+        "topology_name": "acceptance-2-devices",
+        "devices": [
+          {
+            "device_id": "gpu0",
+            "device_type": "GPU",
+            "group_id": "node0"
+          },
+          {
+            "device_id": "gpu1",
+            "device_type": "GPU",
+            "group_id": "node0"
+          }
+        ],
+        "module_bindings": [
+          {
+            "module_name": "flow_scale_up_des",
+            "module_version": "1",
+            "module_kind": "scale_up",
+            "config_profile": "default",
+            "override_params": {
+              "bandwidth_gbps": 100,
+              "latency_us": 1
+            }
+          }
+        ],
+        "domains": [
+          {
+            "domain_id": "su0",
+            "domain_type": "scale_up",
+            "member_devices": ["gpu0", "gpu1"],
+            "module_binding": "flow_scale_up_des",
+            "default_fidelity": "des",
+            "failure_policy": "fail_closed"
+          }
+        ],
+        "links": [
+          {
+            "src_device": "gpu0",
+            "dst_device": "gpu1",
+            "domain_id": "su0",
+            "bandwidth_gbps": 100,
+            "latency_us": 1
+          }
+        ]
+      }
+    }
+  },
+  "examples": {
+    "kernel_strategy": {
+      "mode": "kernel_strategy",
+      "dense_execution": {
+        "schema_version": "tilesim.dense_execution.v1",
+        "model_id": "cpu-dense-2layer",
+        "model_revision": "cpu-dense-2layer-v1",
+        "layers": 2,
+        "hidden_size": 8,
+        "intermediate_size": 16,
+        "attention_heads": 2,
+        "kv_heads": 2,
+        "vocab_size": 32,
+        "element_bytes": 2,
+        "device_profile_id": "declared-100TF-2000GBps-uncalibrated-v1",
+        "peak_tflops": 100,
+        "memory_bandwidth_GBps": 2000,
+        "launch_overhead_ps": 2,
+        "device_memory_bytes": 85899345920,
+        "kv_capacity_bytes_per_rank": 34359738368,
+        "kernel_efficiency": {
+          "schema_version": "tilesim.kernel_efficiency.v1",
+          "compute_units": 4,
+          "scalar_tflops": 10,
+          "compute_efficiency": 0.75,
+          "memory_efficiency": 0.8,
+          "tile_m": 2,
+          "tile_n": 2,
+          "tile_k": 2,
+          "attention_tile_q": 2
+        }
+      },
+      "kernel_execution": {
+        "schema_version": "tilesim.kernel_execution.v1",
+        "hardware": {
+          "target_profile_id": "declared-100TF-2000GBps-uncalibrated-v1",
+          "matrix_dtype": "fp16",
+          "compute_units": 4,
+          "threads_per_unit": 1024,
+          "blocks_per_unit": 4,
+          "shared_bytes_per_unit": 65536,
+          "registers_per_unit": 65536,
+          "threads_per_block": 1024
+        },
+        "operations": {
+          "prefill/norm_qkv": {
+            "view": "expanded",
+            "strategy": {
+              "implementation_id": "declared-example-v1",
+              "source": "declared",
+              "dtype": "fp16",
+              "accumulator_dtype": "fp32",
+              "memory_policy": "reload_operands",
+              "mapping": "output_tile_per_block",
+              "tile_m": 2,
+              "tile_n": 2,
+              "tile_k": 2,
+              "threads": 128,
+              "pipeline_stages": 2,
+              "shared_bytes": 8192,
+              "registers_per_thread": 32
+            }
+          }
+        }
+      }
+    },
+    "tilelang_source": {
+      "mode": "tilelang_source",
+      "dense_execution": {
+        "schema_version": "tilesim.dense_execution.v1",
+        "model_id": "cpu-dense-2layer",
+        "model_revision": "cpu-dense-2layer-v1",
+        "layers": 2,
+        "hidden_size": 8,
+        "intermediate_size": 16,
+        "attention_heads": 2,
+        "kv_heads": 2,
+        "vocab_size": 32,
+        "element_bytes": 2,
+        "device_profile_id": "declared-100TF-2000GBps-uncalibrated-v1",
+        "peak_tflops": 100,
+        "memory_bandwidth_GBps": 2000,
+        "launch_overhead_ps": 2,
+        "device_memory_bytes": 85899345920,
+        "kv_capacity_bytes_per_rank": 34359738368
+      },
+      "tilelang_model_dtype": "float16",
+      "tilelang_kernels": [
+        {
+          "selection_id": "output-gemm",
+          "phase": "prefill",
+          "operation": "attention_output",
+          "instances": ["layer_0::attention_output"],
+          "source": {
+            "source_text": "import tilelang\nimport tilelang.language as T\nfrom tilelang.carver.arch import driver\nimport argparse\n\n\n@tilelang.jit(out_idx=[-1])\ndef matmul_non_persistent(M,\n                          N,\n                          K,\n                          block_M,\n                          block_N,\n                          block_K,\n                          threads,\n                          num_stages,\n                          dtype=\"float16\",\n                          accum_dtype=\"float\"):\n\n    @T.prim_func\n    def main(\n            A: T.Tensor((M, K), dtype),\n            B: T.Tensor((K, N), dtype),\n            C: T.Tensor((M, N), dtype),\n    ):\n        with T.Kernel(T.ceildiv(M, block_M), T.ceildiv(N, block_N), threads=threads) as (bx, by):\n            A_shared = T.alloc_shared((block_M, block_K), dtype)\n            B_shared = T.alloc_shared((block_K, block_N), dtype)\n            C_local = T.alloc_fragment((block_M, block_N), accum_dtype)\n            C_shared = T.alloc_shared((block_M, block_N), dtype)\n\n            T.use_swizzle(10)\n\n            T.clear(C_local)\n            for k in T.Pipelined(T.ceildiv(K, block_K), num_stages=num_stages):\n                T.copy(A[bx * block_M, k * block_K], A_shared)\n                T.copy(B[k * block_K, by * block_N], B_shared)\n                T.gemm(A_shared, B_shared, C_local)\n\n            T.copy(C_local, C_shared)\n            T.copy(C_shared, C[bx * block_M, by * block_N])\n\n    return main\n\n\n@tilelang.jit(out_idx=[-1])\ndef matmul_persistent(M,\n                      N,\n                      K,\n                      block_M,\n                      block_N,\n                      block_K,\n                      threads,\n                      num_stages,\n                      dtype=\"float16\",\n                      accum_dtype=\"float\",\n                      use_persistent_primitive=True):\n\n    sm_num = driver.get_num_sms()\n    m_blocks = T.ceildiv(M, block_M)\n    n_blocks = T.ceildiv(N, block_N)\n    waves = T.ceildiv(m_blocks * n_blocks, sm_num)\n    group_size = 8\n\n    @T.prim_func\n    def main(\n            A: T.Tensor((M, K), dtype),\n            B: T.Tensor((K, N), dtype),\n            C: T.Tensor((M, N), dtype),\n    ):\n        with T.Kernel(sm_num, threads=threads) as (block_id):\n            A_shared = T.alloc_shared((block_M, block_K), dtype)\n            B_shared = T.alloc_shared((block_K, block_N), dtype)\n            C_local = T.alloc_fragment((block_M, block_N), accum_dtype)\n            C_shared = T.alloc_shared((block_M, block_N), dtype)\n\n            for w in T.serial(waves):\n                tile_id = sm_num * w + block_id\n                bx = (tile_id // group_size) % m_blocks\n                by = (tile_id % group_size) + (tile_id // group_size) // m_blocks * group_size\n\n                if bx * block_M < M and by * block_N < N:\n                    T.clear(C_local)\n                    for k in T.Pipelined(T.ceildiv(K, block_K), num_stages=num_stages):\n                        T.copy(A[bx * block_M, k * block_K], A_shared)\n                        T.copy(B[k * block_K, by * block_N], B_shared)\n                        T.gemm(A_shared, B_shared, C_local)\n\n                    T.copy(C_local, C_shared)\n                    T.copy(C_shared, C[bx * block_M, by * block_N])\n\n    @T.prim_func\n    def main_persistent_primitive(\n            A: T.Tensor((M, K), dtype),\n            B: T.Tensor((K, N), dtype),\n            C: T.Tensor((M, N), dtype),\n    ):\n        with T.Kernel(sm_num, threads=threads) as (block_id):\n            A_shared = T.alloc_shared((block_M, block_K), dtype)\n            B_shared = T.alloc_shared((block_K, block_N), dtype)\n            C_local = T.alloc_fragment((block_M, block_N), accum_dtype)\n            C_shared = T.alloc_shared((block_M, block_N), dtype)\n\n            for bx, by in T.Persistent(\n                [T.ceildiv(M, block_M), T.ceildiv(N, block_N)], sm_num, block_id):\n                T.clear(C_local)\n                for k in T.Pipelined(T.ceildiv(K, block_K), num_stages=num_stages):\n                    T.copy(A[bx * block_M, k * block_K], A_shared)\n                    T.copy(B[k * block_K, by * block_N], B_shared)\n                    T.gemm(A_shared, B_shared, C_local)\n\n                T.copy(C_local, C_shared)\n                T.copy(C_shared, C[bx * block_M, by * block_N])\n\n    return main_persistent_primitive if use_persistent_primitive else main\n\n\ndef ref_program(A, B):\n    return A @ B\n\n\ndef main():\n    parser = argparse.ArgumentParser()\n    parser.add_argument('--M', type=int, default=8192, help='M dimension')\n    parser.add_argument('--N', type=int, default=8192, help='N dimension')\n    parser.add_argument('--K', type=int, default=8192, help='K dimension')\n    args = parser.parse_args()\n    M, N, K = args.M, args.N, args.K\n    total_flops = 2 * M * N * K\n\n    BLOCK_M = 128\n    BLOCK_N = 256\n    BLOCK_K = 64\n    threads = 256\n    num_stages = 3\n\n    persistent_kernel = matmul_persistent(M, N, K, BLOCK_M, BLOCK_N, BLOCK_K, threads, num_stages)\n    persistent_profiler = persistent_kernel.get_profiler(\n        tensor_supply_type=tilelang.TensorSupplyType.Randn)\n    persistent_profiler.assert_allclose(ref_program, rtol=0.01, atol=0.01)\n    print(\"Persistent GEMM: All check passed.\")\n    persistent_latency = persistent_profiler.do_bench(warmup=500)\n    print(f\"Persistent GEMM Latency: {persistent_latency} ms\")\n    print(f\"Persistent GEMM TFlops: {total_flops / persistent_latency * 1e-9} TFlops\")\n\n    non_persistent_kernel = matmul_non_persistent(M, N, K, BLOCK_M, BLOCK_N, BLOCK_K, threads,\n                                                  num_stages)\n    non_persistent_profiler = non_persistent_kernel.get_profiler(\n        tensor_supply_type=tilelang.TensorSupplyType.Randn)\n    non_persistent_profiler.assert_allclose(ref_program, rtol=0.01, atol=0.01)\n    print(\"Non-Persistent GEMM: All check passed.\")\n    non_persistent_latency = non_persistent_profiler.do_bench(warmup=500)\n    print(f\"Non-Persistent GEMM Latency: {non_persistent_latency} ms\")\n    print(f\"Non-Persistent GEMM TFlops: {total_flops / non_persistent_latency * 1e-9} TFlops\")\n\n    print(f\"Persistent GEMM Speedup: {non_persistent_latency / persistent_latency}\")\n\n\nif __name__ == \"__main__\":\n    main()\n",
+            "arguments": {
+              "M": 8,
+              "N": 8,
+              "K": 8,
+              "block_M": 2,
+              "block_N": 1,
+              "block_K": 2,
+              "threads": 128,
+              "num_stages": 2,
+              "sm_num": 2,
+              "dtype": "float16",
+              "accum_dtype": "float",
+              "use_persistent_primitive": false,
+              "costs": {
+                "copy_bytes_per_ps": 4,
+                "compute_flops_per_ps": 8,
+                "control_ps": 1,
+                "epilogue_ps": 2
+              }
+            },
+            "payload_mode": "structure_only"
+          },
+          "output_policy": "operator_barrier",
+          "output_buffer_slots": 0,
+          "output_admission_policy": "direct_v1"
+        }
+      ]
+    },
+    "execution_partition": {
+      "mode": "execution_partition",
+      "dense_execution": {
+        "schema_version": "tilesim.dense_execution.v1",
+        "model_id": "cpu-dense-2layer",
+        "model_revision": "cpu-dense-2layer-v1",
+        "layers": 2,
+        "hidden_size": 8,
+        "intermediate_size": 16,
+        "attention_heads": 2,
+        "kv_heads": 2,
+        "vocab_size": 32,
+        "element_bytes": 2,
+        "device_profile_id": "declared-100TF-2000GBps-uncalibrated-v1",
+        "peak_tflops": 100,
+        "memory_bandwidth_GBps": 2000,
+        "launch_overhead_ps": 2,
+        "device_memory_bytes": 85899345920,
+        "kv_capacity_bytes_per_rank": 34359738368
+      },
+      "execution_partition_program": {
+        "schema_version": "tilesim.execution_partition_program.v1",
+        "program_id": "explicit-example",
+        "model_id": "cpu-dense-2layer",
+        "model_revision": "cpu-dense-2layer-v1",
+        "windows": [
+          {
+            "request_id": "req000",
+            "phase": "prefill",
+            "token_begin": 0,
+            "token_end": 8,
+            "partition": {
+              "schema_version": "tilesim.execution_partition.v1",
+              "partition_reference": "synthetic://author-example",
+              "source_kind": "generated",
+              "evidence": {
+                "source_mode": "synthetic_trace",
+                "source_id": "author-example",
+                "generation_method": "explicit-functional-dag",
+                "calibration_level": "uncalibrated",
+                "allowed_claim_scope": "synthetic_consistency",
+                "observed_fields": [],
+                "inferred_fields": ["slices", "resources"]
+              },
+              "slices": [
+                {
+                  "local_partition_id": "compute",
+                  "operation_kind": "declared_device",
+                  "dependency_partition_ids": [],
+                  "completion_condition": "device_task_completed",
+                  "token_offsets": [0, 8],
+                  "tensor_shape": [8, 8],
+                  "tensor_offset": [0, 0],
+                  "tensor_extent": [8, 8]
+                }
+              ]
+            },
+            "resources": {
+              "compute": {
+                "kind": "device",
+                "placement": "gpu0",
+                "stream": "default",
+                "flops": 1024,
+                "memory_bytes": 256
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

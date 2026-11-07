@@ -9,6 +9,7 @@ param(
     [string]$WslDistro = "Ubuntu-24.04",
     [int]$TimeoutMs = 30000,
     [int]$ProbeCacheSeconds = 60,
+    [switch]$EnableExplorationModelCandidates,
     [switch]$ValidateConfigOnly
 )
 
@@ -72,6 +73,14 @@ if ($ValidateConfigOnly) {
 
 $secretPointer = [IntPtr]::Zero
 $apiKey = $null
+$explorationSwitchNames = @(
+    "TILESIM_EXPLORATION_MODEL_CANDIDATES",
+    "TILESIM_AGENT_EXPLORATION_MODEL_CANDIDATES"
+)
+$previousExplorationSwitchValues = @{}
+foreach ($name in $explorationSwitchNames) {
+    $previousExplorationSwitchValues[$name] = [Environment]::GetEnvironmentVariable($name, "Process")
+}
 $environmentNames = @(
     "TILESIM_EVIDENCE_AGENT_PROVIDER",
     "TILESIM_EVIDENCE_AGENT_ENDPOINT",
@@ -107,6 +116,10 @@ try {
     $env:TILESIM_ASSISTANT_API_KEY = $apiKey
     $env:TILESIM_ASSISTANT_MODEL = $Model
 
+    if ($EnableExplorationModelCandidates) {
+        $env:TILESIM_EXPLORATION_MODEL_CANDIDATES = "on"
+    }
+
     & (Join-Path $PSScriptRoot "start-backend.ps1") `
         -ManifestPath $ManifestPath `
         -TracePackageRoot $TracePackageRoot `
@@ -139,5 +152,13 @@ try {
     }
     foreach ($name in $environmentNames) {
         Remove-Item "Env:$name" -ErrorAction SilentlyContinue
+    }
+    foreach ($name in $explorationSwitchNames) {
+        $previous = $previousExplorationSwitchValues[$name]
+        if ($null -eq $previous) {
+            Remove-Item "Env:$name" -ErrorAction SilentlyContinue
+        } else {
+            Set-Item "Env:$name" $previous
+        }
     }
 }

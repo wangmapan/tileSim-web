@@ -44,12 +44,20 @@ from agent_harness.contracts import (
     CONTRACT_REVISION as AGENT_HARNESS_CONTRACT_REVISION,
     ERROR_SCHEMA_IDENTITY as AGENT_HARNESS_ERROR_SCHEMA_IDENTITY,
     POLICY_REVISION as AGENT_HARNESS_POLICY_REVISION,
+    EXPLORATION_CONTRACT_REVISION,
+    EXPLORATION_POLICY_REVISION,
+    EXPLORATION_SCHEMA_IDENTITIES,
+    DEPLOYMENT_EXPLORATION_CONTRACT_REVISION,
+    DEPLOYMENT_EXPLORATION_POLICY_REVISION,
+    DEPLOYMENT_EXPLORATION_SCHEMA_IDENTITIES,
+    MODEL_CANDIDATE_CONTRACT_REVISION,
     canonical_sha256 as harness_canonical_sha256,
     HarnessContractError,
 )
 from agent_harness.store import DurableHarnessStore, HarnessStoreError
 from agent_harness.queue import HarnessQueue, QueueConfig
 from agent_harness import tools as harness_tools
+from agent_harness import exploration as exploration_domain
 from agent_harness.stage2 import (
     APPROVAL_STATUSES,
     STAGE2_SCHEMA_IDENTITIES,
@@ -112,6 +120,11 @@ from agent_harness.batch import (
     validate_batch_request,
 )
 from repositories.agent_flows import AgentFlowStore, AgentFlowStoreError
+from repositories.explorations import ExplorationRepository, ExplorationRepositoryError
+from services.exploration_service import ExplorationService, ExplorationServiceError
+from services.exploration_graph import ExplorationGraphDependencyError, build_exploration_graph
+from services.candidate_generator import ModelCandidateGenerator
+from services.run_executor import LocalSyntheticRunExecutor, RunIntakeExecutor, UrllibRunIntakeTransport
 from services.agent_flow import (
     AgentFlowError,
     AgentFlowService,
@@ -157,6 +170,7 @@ from contracts.validation import (
     validate_run_name,
 )
 from contracts.run_request import validate_run_request
+from services import operator_execution
 
 
 BRIDGE_ROOT = Path(__file__).resolve().parent
@@ -355,6 +369,9 @@ BATCH_DB = Path(
 AGENT_FLOW_DB = Path(
     os.environ.get("TILESIM_AGENT_FLOW_DB", str(STATE_ROOT / "runtime" / "agent-flow.sqlite3"))
 )
+EXPLORATION_DB = Path(
+    os.environ.get("TILESIM_AGENT_EXPLORATION_DB", str(STATE_ROOT / "runtime" / "agent-exploration.sqlite3"))
+)
 if _READ_ONLY_CLI:
     # These names remain defined because the rest of this module contains the
     # normal HTTP handlers.  None is safe here: the read-only command exits
@@ -364,7 +381,16 @@ if _READ_ONLY_CLI:
     agent_flow_store = None
     agent_flow_service = None
     agent_deletion_coordinator = None
+    exploration_repository = None
+    exploration_service = None
+    exploration_runtime_error = None
 else:
+    # Initialize the exploration globals before dependency construction so a
+    # missing LangGraph dependency fails through the stable HTTP error instead
+    # of leaving the request handler with an undefined name.
+    exploration_repository = None
+    exploration_service = None
+    exploration_runtime_error = None
     optimization_store = OptimizationStore(OPTIMIZATION_DB)
     optimization_store.recover_inflight()
     batch_store = BatchStore(BATCH_DB)
@@ -384,6 +410,48 @@ else:
         },
         STATE_ROOT / "runtime" / "agent-deletion.sqlite3",
     )
+    try:
+        exploration_repository = ExplorationRepository(EXPLORATION_DB)
+        exploration_candidate_generator = None
+        if assistant_model.exploration_model_candidates_enabled():
+            # The provider is opt-in and uses only the existing assistant
+            # channel configuration.  All candidate/schema/authorization
+            # checks remain in ModelCandidateGenerator and the graph.
+            exploration_candidate_generator = ModelCandidateGenerator(
+                assistant_model.AssistantModelCandidateProvider()
+            )
+        exploration_graph, _exploration_saver = build_exploration_graph(
+            str(EXPLORATION_DB.with_name("agent-exploration-checkpoints.sqlite3")),
+            candidate_generator=exploration_candidate_generator,
+        )
+        from services.exploration_worker import ExplorationWorker
+        exploration_executor = None
+        if os.environ.get("TILESIM_EXPLORATION_EXECUTOR", "synthetic").strip().lower() == "run_intake":
+            base_url = os.environ.get("TILESIM_RUN_INTAKE_BASE_URL", "http://127.0.0.1:5173")
+            exploration_executor = RunIntakeExecutor(UrllibRunIntakeTransport(base_url), repository=exploration_repository)
+        else:
+            # The delay is a local synthetic acceptance aid only.  It keeps a
+            # synthetic run observable long enough to exercise page-level
+            # cancellation; normal local synthetic runs remain immediate.
+            delay_seconds = 0.0
+            if os.environ.get("TILESIM_DEPLOYMENT_MODE", "").strip().lower() == "local_dev":
+                try:
+                    delay_seconds = max(0.0, float(os.environ.get("TILESIM_LOCAL_SYNTHETIC_EXECUTION_DELAY_SECONDS", "0")))
+                except ValueError:
+                    delay_seconds = 0.0
+            exploration_executor = LocalSyntheticRunExecutor(delay_seconds=delay_seconds)
+        exploration_worker = ExplorationWorker(exploration_repository, executor=exploration_executor, graph=exploration_graph)
+        exploration_service = ExplorationService(
+            exploration_repository,
+            schema_set_revision=SCHEMA_SET_REVISION,
+            backend_identity=lambda: harness_backend_identity(),
+            worker=exploration_worker,
+        )
+        for persisted in exploration_repository.list():
+            if persisted.get("authorization") and persisted.get("status") not in exploration_domain.TERMINAL_STATES:
+                exploration_worker.start(persisted["session_id"])
+    except ExplorationGraphDependencyError as error:
+        exploration_runtime_error = error
 batch_workers: dict[str, threading.Thread] = {}
 batch_workers_lock = threading.RLock()
 optimization_workers: dict[str, threading.Thread] = {}
@@ -613,6 +681,94 @@ def harness_capability_snapshot() -> dict:
             "tool_registry_revision": "2026-10-19.tools.v2",
             "tools": OPTIMIZATION_TOOL_REGISTRY,
         },
+        "serial_exploration": {
+            "contract_revision": EXPLORATION_CONTRACT_REVISION,
+            "policy_revision": EXPLORATION_POLICY_REVISION,
+            "schema_identities": list(EXPLORATION_SCHEMA_IDENTITIES.values()),
+            "task_type": "explore_experiment",
+            "states": [
+                "waiting_authorization", "exploring", "waiting_run", "comparing", "paused", "completed",
+                "parameter_validation_failed", "run_failed", "authorization_expired", "authorization_revoked",
+                "budget_exhausted", "context_expired", "recovery_required", "manual_intervention_required", "cancelled",
+            ],
+            "local_dev": True,
+            "automatic_submission": True,
+            "approval": "one_authorization_per_session",
+            "candidate_approval": "not_required_after_authorization",
+            "max_concurrency": 1,
+            "budget": {
+                "max_rounds": {"default": 10, "maximum": 50},
+                "max_runs": {"default": 10, "maximum": 50},
+                "max_concurrency": 1,
+                "max_no_improvement": {"default": 3, "maximum": 20},
+                "max_failures": {"default": 2, "maximum": 10},
+                "max_execution_time_ms": {"maximum": 3_600_000},
+                "max_model_calls": {"maximum": 200},
+                "max_tool_calls_per_round": {"maximum": 16},
+            },
+            "execution": "serial_one_run_at_a_time",
+            "metric_source": "verified_only",
+            "context_lock": "immutable_input_snapshot_and_context_revision",
+            "endpoints": [
+                "POST /api/agent/explorations", "GET /api/agent/explorations", "GET /api/agent/explorations/{id}",
+                "POST /api/agent/explorations/{id}/authorization", "GET /api/agent/explorations/{id}/events", "GET /api/agent/explorations/{id}/events/stream",
+                "POST /api/agent/explorations/{id}/pause", "POST /api/agent/explorations/{id}/resume", "POST /api/agent/explorations/{id}/cancel",
+            ],
+            "active_endpoints": [
+                "POST /api/agent/explorations", "GET /api/agent/explorations", "GET /api/agent/explorations/{id}",
+                "POST /api/agent/explorations/{id}/authorization", "GET /api/agent/explorations/{id}/events", "GET /api/agent/explorations/{id}/events/stream",
+                "POST /api/agent/explorations/{id}/pause", "POST /api/agent/explorations/{id}/resume", "POST /api/agent/explorations/{id}/cancel",
+            ],
+            "planned_endpoints": ["POST /api/agent/explorations/plan", "POST /api/agent/explorations/plan/confirm"],
+            "adapter_status": "active_local_synthetic",
+            "runtime_status": "active_local_synthetic_langgraph",
+            "source_mode": "synthetic_trace",
+            "claim_scope": "exploratory",
+            "production_status": "not_for_production",
+            "deployment_planning": {
+                "contract_revision": DEPLOYMENT_EXPLORATION_CONTRACT_REVISION,
+                "policy_revision": DEPLOYMENT_EXPLORATION_POLICY_REVISION,
+                "schema_identities": list(DEPLOYMENT_EXPLORATION_SCHEMA_IDENTITIES.values()),
+                "planning_only_until_confirmation": True,
+                "published_candidates_only": True,
+                "multi_metric_constraints": True,
+                "scenario_aggregation": ["all_scenarios", "mean", "max", "min", "p95"],
+                "pareto_candidates": True,
+                "model_candidate_generation": {
+                    "contract_revision": MODEL_CANDIDATE_CONTRACT_REVISION,
+                    "default": "deterministic",
+                    "activation": "explicit_configuration_switch",
+                    "configuration_switch": assistant_model.EXPLORATION_MODEL_CANDIDATES_ENV,
+                    "configuration_switch_alias": assistant_model.AGENT_EXPLORATION_MODEL_CANDIDATES_ENV,
+                    "enabled": assistant_model.exploration_model_candidates_enabled(),
+                    "provider_channel": assistant_model.PROVIDER_ID,
+                    "uses_assistant_model_configuration": True,
+                    "raw_response_persistence": False,
+                    "hidden_reasoning_persistence": False,
+                    "fallback": "deterministic_candidate_generator",
+                    "execution_gate": [
+                        "closed_schema", "published_capability", "authorized_parameters",
+                        "baseline_pointer", "fixed_resource_binding", "scenario_binding",
+                        "duplicate_check", "budget_check",
+                    ],
+                    "forbidden_generation": [
+                        "model_name", "device_type", "gpu_count", "tensor_parallel",
+                        "pipeline_parallel", "expert_parallel", "physical_kv",
+                        "collective_algorithm", "profile", "shell", "path", "url", "tool_call",
+                    ],
+                },
+                "side_effects_before_confirmation": {
+                    "run_created": False,
+                    "slot_claimed": False,
+                    "executor_called": False,
+                    "page_locked": False,
+                },
+                "endpoints": [
+                    "POST /api/agent/explorations/plan",
+                    "POST /api/agent/explorations/plan/confirm",
+                ],
+            },
+        },
         "batch": {
             "contract_revision": BATCH_CONTRACT_REVISION,
             "schema_identities": list(BATCH_SCHEMA_IDENTITIES.values()),
@@ -663,7 +819,7 @@ def harness_principal(handler: SimpleHTTPRequestHandler) -> tuple[str, set[str]]
     principal = handler.headers.get("X-TileSim-Principal", "local-user").strip()
     if not re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", principal):
         raise HarnessContractError("principal_invalid", "Principal identity is invalid.", "/headers/X-TileSim-Principal", status=403)
-    raw_scope = handler.headers.get("X-TileSim-Scopes", "agent:read_capability,agent:read_run,agent:read_evidence,agent:read_draft,agent:write_draft,agent:approve_draft,agent:start_flow,agent:read_flow,agent:resume_flow")
+    raw_scope = handler.headers.get("X-TileSim-Scopes", "agent:read_capability,agent:read_run,agent:read_evidence,agent:read_draft,agent:write_draft,agent:approve_draft,agent:submit_experiment,agent:cancel_experiment,agent:resume_experiment,agent:start_flow,agent:read_flow,agent:resume_flow")
     scopes = {item.strip() for item in raw_scope.split(",") if item.strip()}
     allowed = {"agent:read_capability", "agent:read_run", "agent:read_evidence", "agent:read_draft", "agent:write_draft", "agent:approve_draft", "agent:submit_experiment", "agent:cancel_experiment", "agent:retry_experiment", "agent:resume_experiment", "agent:start_flow", "agent:read_flow", "agent:resume_flow"}
     if not scopes.issubset(allowed):
@@ -678,7 +834,149 @@ def harness_workspace(handler: SimpleHTTPRequestHandler) -> str:
     return workspace
 
 
-def harness_json_body(handler: SimpleHTTPRequestHandler, *, max_bytes: int = MAX_REQUEST_BYTES) -> dict:
+def exploration_scope(handler: SimpleHTTPRequestHandler, required: str | set[str] = "agent:read_run") -> tuple[str, str]:
+    principal, scopes = harness_principal(handler)
+    required_scopes = {required} if isinstance(required, str) else set(required)
+    if not required_scopes.issubset(scopes):
+        missing = sorted(required_scopes - scopes)
+        labels = {
+            "agent:submit_experiment": "创建实验",
+            "agent:read_run": "读取运行",
+            "agent:read_evidence": "读取已验证指标",
+            "agent:read_capability": "读取能力",
+            "agent:cancel_experiment": "停止实验",
+            "agent:resume_experiment": "恢复实验",
+        }
+        label = labels.get(missing[0], "自动探索") if missing else "自动探索"
+        raise ExplorationServiceError("scope_denied", f"当前主体没有{label}能力。", status=403)
+    return principal, harness_workspace(handler)
+
+
+def exploration_body(handler: SimpleHTTPRequestHandler) -> dict[str, Any]:
+    try:
+        return harness_json_body(handler)
+    except HarnessContractError as error:
+        raise ExplorationServiceError(error.code, str(error), field_path=error.field_path or "/") from error
+
+
+def exploration_error(handler: SimpleHTTPRequestHandler, error: ExplorationServiceError | ExplorationRepositoryError) -> None:
+    status = getattr(error, "status", None) or ({"exploration_not_found": HTTPStatus.NOT_FOUND, "exploration_busy": HTTPStatus.CONFLICT, "scope_denied": HTTPStatus.FORBIDDEN}.get(getattr(error, "code", ""), HTTPStatus.BAD_REQUEST))
+    return write_error(handler, status, getattr(error, "code", "exploration_error"), str(error), field_path=getattr(error, "field_path", "/"), retryable=False)
+
+
+def require_exploration_runtime() -> None:
+    if exploration_service is None:
+        raise ExplorationServiceError(
+            "langgraph_dependency_missing",
+            "当前 Bridge 未安装自动探索所需的 LangGraph 依赖。",
+            status=503,
+        )
+
+
+def create_exploration(handler: SimpleHTTPRequestHandler) -> None:
+    try:
+        require_exploration_runtime()
+        principal, workspace = exploration_scope(handler, {"agent:submit_experiment", "agent:read_run", "agent:read_evidence", "agent:read_capability"})
+        return write_json(handler, HTTPStatus.CREATED, exploration_service.create(exploration_body(handler), principal, workspace))
+    except (ExplorationServiceError, ExplorationRepositoryError, HarnessContractError) as error:
+        return exploration_error(handler, error)
+
+
+def plan_exploration(handler: SimpleHTTPRequestHandler) -> None:
+    """Validate and advise before session creation; deliberately side-effect free."""
+    try:
+        require_exploration_runtime()
+        exploration_scope(handler, {"agent:read_capability"})
+        return write_json(handler, HTTPStatus.OK, exploration_service.plan(exploration_body(handler)))
+    except (ExplorationServiceError, ExplorationRepositoryError, HarnessContractError) as error:
+        return exploration_error(handler, error)
+
+
+def confirm_exploration_plan(handler: SimpleHTTPRequestHandler) -> None:
+    try:
+        require_exploration_runtime()
+        principal, _workspace = exploration_scope(handler, {"agent:submit_experiment"})
+        return write_json(handler, HTTPStatus.OK, exploration_service.confirm_plan(exploration_body(handler), principal))
+    except (ExplorationServiceError, ExplorationRepositoryError, HarnessContractError) as error:
+        return exploration_error(handler, error)
+
+
+def list_explorations(handler: SimpleHTTPRequestHandler) -> None:
+    try:
+        require_exploration_runtime()
+        principal, workspace = exploration_scope(handler)
+        return write_json(handler, HTTPStatus.OK, exploration_service.list(principal, workspace))
+    except (ExplorationServiceError, ExplorationRepositoryError, HarnessContractError) as error:
+        return exploration_error(handler, error)
+
+
+def get_exploration(handler: SimpleHTTPRequestHandler, session_id: str) -> None:
+    try:
+        require_exploration_runtime()
+        principal, workspace = exploration_scope(handler)
+        return write_json(handler, HTTPStatus.OK, exploration_service.get(session_id, principal, workspace))
+    except (ExplorationServiceError, ExplorationRepositoryError, HarnessContractError) as error:
+        return exploration_error(handler, error)
+
+
+def exploration_authorize(handler: SimpleHTTPRequestHandler, session_id: str) -> None:
+    try:
+        require_exploration_runtime()
+        principal, workspace = exploration_scope(handler, {"agent:submit_experiment", "agent:read_run", "agent:read_evidence", "agent:read_capability"})
+        return write_json(handler, HTTPStatus.OK, exploration_service.authorize(session_id, exploration_body(handler), principal, workspace))
+    except (ExplorationServiceError, ExplorationRepositoryError, HarnessContractError) as error:
+        return exploration_error(handler, error)
+
+
+def exploration_events(handler: SimpleHTTPRequestHandler, session_id: str) -> None:
+    try:
+        require_exploration_runtime()
+        principal, workspace = exploration_scope(handler)
+        exploration_service._owned(session_id, principal, workspace)
+        raw = handler.headers.get("Last-Event-ID", "0")
+        query_after = parse_qs(urlparse(handler.path).query, keep_blank_values=True).get("after", [None])[0]
+        if query_after is not None:
+            raw = query_after
+        after = int(raw) if raw.isdigit() else 0
+        return write_json(handler, HTTPStatus.OK, {"session_id": session_id, "events": exploration_repository.events(session_id, after), "after_sequence": after, "terminal": (exploration_repository.get(session_id) or {}).get("status") in exploration_domain.TERMINAL_STATES})
+    except (ExplorationServiceError, ExplorationRepositoryError, HarnessContractError) as error:
+        return exploration_error(handler, error)
+
+
+def exploration_event_stream(handler: SimpleHTTPRequestHandler, session_id: str) -> None:
+    try:
+        require_exploration_runtime()
+        principal, workspace = exploration_scope(handler)
+        state = exploration_service._owned(session_id, principal, workspace)
+        raw = handler.headers.get("Last-Event-ID", "0")
+        query_after = parse_qs(urlparse(handler.path).query, keep_blank_values=True).get("after", [None])[0]
+        if query_after is not None:
+            raw = query_after
+        after = int(raw) if raw.isdigit() else 0
+        events = exploration_repository.events(session_id, after)
+        handler.send_response(HTTPStatus.OK)
+        handler.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        handler.send_header("Cache-Control", "no-store")
+        handler.send_header("Connection", "close")
+        add_contract_headers(handler); add_cors_headers(handler); handler.end_headers()
+        for event in events:
+            responses.write_sse_event(handler, event="exploration", event_id=str(event.get("sequence")), data=event)
+        if state.get("status") in exploration_domain.TERMINAL_STATES:
+            responses.write_sse_event(handler, event="terminal", data={"session_id": session_id, "state": state.get("status")})
+    except (ExplorationServiceError, ExplorationRepositoryError, HarnessContractError) as error:
+        return exploration_error(handler, error)
+
+
+def exploration_action(handler: SimpleHTTPRequestHandler, session_id: str, action: str) -> None:
+    try:
+        require_exploration_runtime()
+        principal, workspace = exploration_scope(handler, "agent:cancel_experiment" if action in {"pause", "cancel"} else "agent:resume_experiment")
+        return write_json(handler, HTTPStatus.OK, exploration_service.action(session_id, action, principal, workspace))
+    except (ExplorationServiceError, ExplorationRepositoryError, HarnessContractError) as error:
+        return exploration_error(handler, error)
+
+
+def harness_json_body(handler: SimpleHTTPRequestHandler, *, max_bytes: int = MAX_REQUEST_BYTES, reject_duplicates: bool = False) -> dict:
     try:
         length = int(handler.headers.get("Content-Length", "0"))
     except ValueError as error:
@@ -686,7 +984,8 @@ def harness_json_body(handler: SimpleHTTPRequestHandler, *, max_bytes: int = MAX
     if length <= 0 or length > max_bytes:
         raise HarnessContractError("input_too_large", "Request body is outside the bounded input size.", "/")
     try:
-        value = json.loads(handler.rfile.read(length), parse_constant=reject_nonfinite_json)
+        value = json.loads(handler.rfile.read(length), parse_constant=reject_nonfinite_json,
+                           object_pairs_hook=operator_execution.reject_duplicate_keys if reject_duplicates else None)
     except (ValueError, json.JSONDecodeError) as error:
         raise HarnessContractError("invalid_json", "Request body is not strict JSON.", "/") from error
     if not isinstance(value, dict):
@@ -3970,6 +4269,10 @@ def is_terminal_run(run: dict) -> bool:
     return run_repository.is_terminal_run(run)
 
 
+def cancel_request_digest(run_id: str, request: dict, principal: str, workspace_id: str) -> str:
+    return hashlib.sha256(json.dumps({"run_id": run_id, "request": request, "principal": principal, "workspace_id": workspace_id}, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
 def write_sse_event(
     handler: SimpleHTTPRequestHandler,
     *,
@@ -4056,6 +4359,7 @@ def execute_run(run_id: str, scenario: dict, fidelity_policy: str) -> None:
         runs_lock=runs_lock,
         report_paths_for=report_paths_for,
         is_valid_json_file=is_valid_json_file,
+        read_run_metadata=lambda run_dir: read_json_file(run_dir / "run-metadata.json"),
         validate_execution_replay=validate_execution_replay,
         update_run_metadata=update_run_metadata,
         now=now,
@@ -4109,6 +4413,16 @@ class BridgeHandler(SimpleHTTPRequestHandler):
                 return agent_flow_events(self, parts[3])
             if len(parts) == 6 and parts[:5] == ["api", "agent", "flows", parts[3], "events"] and parts[5] == "stream":
                 return stream_agent_flow_events(self, parts[3])
+        if path == "/api/agent/explorations":
+            return list_explorations(self)
+        if path.startswith("/api/agent/explorations/"):
+            parts = path.strip("/").split("/")
+            if len(parts) == 4 and parts[:3] == ["api", "agent", "explorations"]:
+                return get_exploration(self, parts[3])
+            if len(parts) == 5 and parts[:4] == ["api", "agent", "explorations", parts[3]] and parts[4] == "events":
+                return exploration_events(self, parts[3])
+            if len(parts) == 6 and parts[:5] == ["api", "agent", "explorations", parts[3], "events"] and parts[5] == "stream":
+                return exploration_event_stream(self, parts[3])
         if path == "/api/agent/optimization/sessions":
             return list_optimization_sessions(self)
         if path == "/api/agent/batches":
@@ -4188,6 +4502,15 @@ class BridgeHandler(SimpleHTTPRequestHandler):
             })
         if path == "/api/capabilities":
             return write_json(self, HTTPStatus.OK, runtime_capabilities())
+        if path == "/api/operator-execution":
+            if not week7_operation_lock.acquire(blocking=False):
+                return write_error(self, HTTPStatus.TOO_MANY_REQUESTS, "operator_execution_busy", "Bridge CLI slot is busy", retryable=True)
+            try:
+                return write_json(self, HTTPStatus.OK, operator_execution.descriptor(
+                    cli=TILESIM_CLI, root=TILESIM_ROOT, identity=backend_identity(), revision=SCHEMA_SET_REVISION,
+                ))
+            finally:
+                week7_operation_lock.release()
         if path == "/api/experiment-schema":
             return write_json(
                 self,
@@ -4598,8 +4921,38 @@ class BridgeHandler(SimpleHTTPRequestHandler):
         _remember_bridge_server(self)
         path = urlparse(self.path).path
         parts = path.strip("/").split("/")
+        if path == "/api/operator-execution/validate":
+            if not week7_operation_lock.acquire(blocking=False):
+                return write_error(self, HTTPStatus.TOO_MANY_REQUESTS, "operator_execution_busy", "Bridge CLI slot is busy", retryable=True)
+            try:
+                document = harness_json_body(self, reject_duplicates=True)
+                command = validate_run_request(document, scenario_ids=set(SCENARIOS), fidelity_policies=ALLOWED_FIDELITY_POLICIES, gpu_participation_modes=ALLOWED_GPU_PARTICIPATION_MODES, capabilities=runtime_capabilities())
+                if command.execution_input is None:
+                    raise RequestValidationError("execution_input is required", "/execution_input")
+                if not backend_identity()["versions_match"]:
+                    raise RequestValidationError("Backend source/build identity mismatch", "/execution_input")
+                prepared = operator_execution.prepare(command.execution_input, TILESIM_ROOT)
+                result = operator_execution.preflight(prepared, command.custom_inputs, cli=TILESIM_CLI, root=TILESIM_ROOT)
+                return write_json(self, HTTPStatus.OK, result)
+            except HarnessContractError as error:
+                return harness_error(self, error)
+            except (ValueError, OSError) as error:
+                validation = request_validation_error(error, "/execution_input")
+                return write_error(self, HTTPStatus.BAD_REQUEST, "execution_input_rejected", str(error), field_path=validation.field_path, retryable=False)
+            finally:
+                week7_operation_lock.release()
         if path == "/api/agent/flows":
             return create_agent_flow(self)
+        if path == "/api/agent/explorations":
+            return create_exploration(self)
+        if path == "/api/agent/explorations/plan":
+            return plan_exploration(self)
+        if path == "/api/agent/explorations/plan/confirm":
+            return confirm_exploration_plan(self)
+        if len(parts) == 5 and parts[:4] == ["api", "agent", "explorations", parts[3]] and parts[4] == "authorization":
+            return exploration_authorize(self, parts[3])
+        if len(parts) == 5 and parts[:4] == ["api", "agent", "explorations", parts[3]] and parts[4] in {"pause", "resume", "cancel"}:
+            return exploration_action(self, parts[3], parts[4])
         if len(parts) == 5 and parts[:4] == ["api", "agent", "flows", parts[3]] and parts[4] == "resume":
             return resume_agent_flow(self, parts[3])
         if len(parts) == 6 and parts[:4] == ["api", "agent", "flows", parts[3]] and parts[4:] == ["authorization", "revoke"]:
@@ -4660,6 +5013,8 @@ class BridgeHandler(SimpleHTTPRequestHandler):
             return self.run_week7_operation("orchestration_example")
         if len(parts) == 4 and parts[:2] == ["api", "runs"] and parts[3] == "name":
             return self.rename_run(parts[2])
+        if len(parts) == 4 and parts[:2] == ["api", "runs"] and parts[3] == "cancel":
+            return self.cancel_run(parts[2])
         if (
             len(parts) == 5
             and parts[:2] == ["api", "runs"]
@@ -4701,7 +5056,7 @@ class BridgeHandler(SimpleHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", "0"))
             if length <= 0 or length > MAX_REQUEST_BYTES:
                 raise RequestValidationError("Request body must be between 1 byte and 2.1 MB.", "/")
-            request = json.loads(self.rfile.read(length), parse_constant=reject_nonfinite_json)
+            request = json.loads(self.rfile.read(length), parse_constant=reject_nonfinite_json, object_pairs_hook=operator_execution.reject_duplicate_keys)
             if not isinstance(request, dict):
                 raise RequestValidationError("Request body must be a JSON object.", "/")
             idempotency_key = idempotency_key_for(self)
@@ -4755,6 +5110,7 @@ class BridgeHandler(SimpleHTTPRequestHandler):
                 command.design_space_candidate_schema_identity
             )
             trace_package_id = command.trace_package_id
+            execution_input = command.execution_input
         except (ValueError, json.JSONDecodeError) as error:
             validation = request_validation_error(error)
             return write_error(
@@ -4785,6 +5141,18 @@ class BridgeHandler(SimpleHTTPRequestHandler):
 
         trace_package_candidate = None
         trace_package_inspection = None
+        prepared_execution = None
+        if execution_input is not None:
+            if not week7_operation_lock.acquire(blocking=False):
+                return write_error(self, HTTPStatus.TOO_MANY_REQUESTS, "operator_execution_busy", "Bridge CLI slot is busy", retryable=True)
+            try:
+                prepared_execution = operator_execution.prepare(execution_input, TILESIM_ROOT)
+                operator_execution.preflight(prepared_execution, custom_inputs, cli=TILESIM_CLI, root=TILESIM_ROOT)
+            except (ValueError, OSError) as error:
+                validation = request_validation_error(error, "/execution_input")
+                return write_error(self, HTTPStatus.BAD_REQUEST, "execution_input_rejected", str(error), field_path=validation.field_path, retryable=False)
+            finally:
+                week7_operation_lock.release()
         if trace_package_id is not None:
             try:
                 trace_package_candidate, trace_package_inspection = inspect_trace_package(
@@ -4866,6 +5234,8 @@ class BridgeHandler(SimpleHTTPRequestHandler):
                         "bridge_pid": os.getpid(),
                         "principal": self.headers.get("X-TileSim-Principal", "local-user"),
                         "workspace_id": self.headers.get("X-TileSim-Workspace", "local-workspace"),
+                        "backend_identity": harness_backend_identity(),
+                        "schema_set_revision": SCHEMA_SET_REVISION,
                     }
                     if trace_package_inspection is not None:
                         metadata["trace_package"] = {
@@ -4939,6 +5309,10 @@ class BridgeHandler(SimpleHTTPRequestHandler):
                 run_dir,
                 design_space_candidates,
             )
+            if prepared_execution is not None:
+                resolved_scenario = operator_execution.materialize(run_dir, resolved_scenario, prepared_execution)
+                metadata["execution_input_summary"] = {"mode": execution_input["mode"], "config_sha256": prepared_execution["config_sha256"], "sources": prepared_execution["sources"]}
+                metadata["input_files"]["execution"] = "input-execution.json"
             metadata["status"] = "running"
             atomic_write_json(run_dir / "run-metadata.json", metadata)
         except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
@@ -5534,6 +5908,87 @@ class BridgeHandler(SimpleHTTPRequestHandler):
         if run is None:
             return write_error(self, HTTPStatus.NOT_FOUND, "run_not_found", "Run was not found.", retryable=False)
         return write_json(self, HTTPStatus.OK, public_run(run))
+
+    def cancel_run(self, run_id: str) -> None:
+        """Cancel one formal run through the Bridge-owned execution boundary."""
+        try:
+            principal, scopes = harness_principal(self)
+            if "agent:cancel_experiment" not in scopes:
+                return write_error(self, HTTPStatus.FORBIDDEN, "scope_denied", "取消实验需要 agent:cancel_experiment 权限。", field_path="/headers/X-TileSim-Scopes", retryable=False)
+            workspace_id = harness_workspace(self)
+            key = idempotency_key_for(self)
+            length = int(self.headers.get("Content-Length", "0"))
+            if length <= 0 or length > MAX_REQUEST_BYTES:
+                raise RequestValidationError("Request body must be between 1 byte and 2.1 MB.", "/")
+            body = json.loads(self.rfile.read(length), parse_constant=reject_nonfinite_json)
+            if not isinstance(body, dict):
+                raise RequestValidationError("Request body must be a JSON object.", "/")
+            if body.get("run_id") != run_id:
+                raise RequestValidationError("run_id must match the URL path.", "/run_id")
+        except (ValueError, json.JSONDecodeError, RequestValidationError) as error:
+            validation = request_validation_error(error)
+            return write_error(self, HTTPStatus.BAD_REQUEST, "invalid_run_cancel_request", str(validation), field_path=validation.field_path, retryable=False)
+
+        run_dir = safe_run_directory(run_id)
+        if run_dir is None:
+            return write_error(self, HTTPStatus.NOT_FOUND, "run_not_found", "Run was not found.", retryable=False)
+        with metadata_lock:
+            metadata = read_json_file(run_dir / "run-metadata.json")
+            if not metadata:
+                return write_error(self, HTTPStatus.NOT_FOUND, "run_not_found", "Run was not found.", retryable=False)
+            if metadata.get("principal", "local-user") != principal or metadata.get("workspace_id", "local-workspace") != workspace_id:
+                return write_error(self, HTTPStatus.FORBIDDEN, "run_owner_mismatch", "运行主体或工作区不匹配。", retryable=False)
+            requested_backend = body.get("backend_identity")
+            if not isinstance(requested_backend, dict):
+                return write_error(self, HTTPStatus.BAD_REQUEST, "invalid_run_cancel_request", "取消请求必须绑定后端身份。", field_path="/backend_identity", retryable=False)
+            if requested_backend != harness_backend_identity():
+                return write_error(self, HTTPStatus.CONFLICT, "backend_identity_mismatch", "取消请求绑定的后端身份已过期。", retryable=False)
+            requested_schema = body.get("schema_set_revision")
+            if not isinstance(requested_schema, str):
+                return write_error(self, HTTPStatus.BAD_REQUEST, "invalid_run_cancel_request", "取消请求必须绑定契约版本。", field_path="/schema_set_revision", retryable=False)
+            if requested_schema != SCHEMA_SET_REVISION:
+                return write_error(self, HTTPStatus.CONFLICT, "schema_set_revision_mismatch", "取消请求绑定的契约版本已过期。", retryable=False)
+            digest = cancel_request_digest(run_id, body, principal, workspace_id)
+            requests = metadata.setdefault("cancel_requests", {})
+            previous = requests.get(key)
+            if previous is not None:
+                if previous.get("request_digest") != digest:
+                    return write_error(self, HTTPStatus.CONFLICT, "request_conflict", "取消幂等键已绑定到不同的请求摘要。", retryable=False)
+                return write_json(self, HTTPStatus.OK, {"run_id": run_id, "status": previous.get("status", "cancel_unknown"), "idempotent_replay": True})
+            status = metadata.get("status")
+            if status in {"completed", "failed", "cancelled"}:
+                result = "already_terminal" if status != "cancelled" else "confirmed_cancelled"
+                requests[key] = {"request_digest": digest, "status": result, "recorded_at": now()}
+                atomic_write_json(run_dir / "run-metadata.json", metadata)
+                with runs_lock:
+                    runs[run_id] = metadata.copy()
+                return write_json(self, HTTPStatus.OK, {"run_id": run_id, "status": result, "idempotent_replay": False})
+            if status not in {"preparing", "running"}:
+                result = "cancel_rejected"
+                requests[key] = {"request_digest": digest, "status": result, "recorded_at": now()}
+                atomic_write_json(run_dir / "run-metadata.json", metadata)
+                return write_json(self, HTTPStatus.CONFLICT, {"run_id": run_id, "status": result, "idempotent_replay": False})
+
+        outcome = execution.cancel_run(run_id)
+        with metadata_lock:
+            metadata = read_json_file(run_dir / "run-metadata.json") or metadata
+            requests = metadata.setdefault("cancel_requests", {})
+            if outcome == "confirmed_cancelled":
+                timestamp = now()
+                metadata.update({"status": "cancelled", "finished_at": timestamp, "cancelled_at": timestamp, "cancel_status": "confirmed_cancelled"})
+                result = "confirmed_cancelled"
+            elif outcome == "already_terminal":
+                result = "already_terminal"
+            else:
+                metadata["cancel_status"] = "cancel_unknown"
+                result = "cancel_unknown"
+            requests[key] = {"request_digest": digest, "status": result, "recorded_at": now()}
+            atomic_write_json(run_dir / "run-metadata.json", metadata)
+            with runs_lock:
+                runs[run_id] = metadata.copy()
+        if result == "cancel_unknown":
+            return write_json(self, HTTPStatus.ACCEPTED, {"run_id": run_id, "status": result, "idempotent_replay": False})
+        return write_json(self, HTTPStatus.OK, {"run_id": run_id, "status": result, "idempotent_replay": False})
 
     def get_run_events(self, run_id: str) -> None:
         raw_last_event_id = self.headers.get("Last-Event-ID", "").strip()
