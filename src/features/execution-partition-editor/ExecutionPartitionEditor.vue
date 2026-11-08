@@ -117,7 +117,7 @@ function addWindow() {
 }
 </script>
 <template>
-  <section aria-label="执行划分编辑器">
+  <section class="partition-editor" aria-label="执行划分编辑器">
     <StructuredFields
       :value="{ program_id: program.program_id, model_id: program.model_id, model_revision: program.model_revision }"
       @change="patch"
@@ -200,9 +200,6 @@ function addWindow() {
         @invalid="(path, message) => emit('invalid', path, message)"
       />
     </details>
-    <p>
-      只声明需求、依赖、边界和来源。完成时间、物理 KV 状态及真实网络完成事件由后端产生。缓冲容量死锁与实际窗口覆盖由 CLI
-      预检拒绝，不自动补全。
-    </p>
+    <p>只提交需求、依赖、边界和来源；完成时间、物理 KV 状态与网络事件由后端产生。</p>
   </section>
 </template>

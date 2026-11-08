@@ -1,14 +1,28 @@
 .operator-authoring {
-  margin-block: 20px;
-  border-block: 1px solid var(--line);
-  padding-block: 18px;
+  margin: 22px 0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-panel, 10px);
   min-width: 0;
   color: var(--ink);
-  background: var(--panel);
+  background: var(--panel-strong, var(--panel));
+  box-shadow: var(--shadow, 0 1px 2px rgba(16, 30, 42, 0.05));
+  overflow: hidden;
+}
+.operator-authoring > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface-subtle) 88%, var(--panel));
 }
 .operator-authoring header h2 {
-  font-size: 18px;
-  margin: 0 0 5px;
+  margin: 0;
+  color: var(--ink);
+  font-size: 19px;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
 }
 .operator-authoring p {
   font-size: 12px;
@@ -17,29 +31,47 @@
 }
 .operator-steps {
   display: flex;
-  gap: 20px;
+  gap: 0;
   list-style: none;
-  padding: 12px 0;
+  padding: 0 22px;
   margin: 0;
   border-bottom: 1px solid var(--line);
+  color: var(--muted);
   font-size: 12px;
+  counter-reset: operator-step;
+}
+.operator-steps li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 42px;
+  padding: 0 18px 0 0;
+  white-space: nowrap;
+}
+.operator-steps li::first-letter {
+  color: var(--accent);
+  font-weight: 700;
 }
 .operator-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 24px;
-  margin-top: 16px;
+  gap: 0;
 }
 .operator-main {
   min-width: 0;
+  padding: 18px 22px 22px;
 }
 .operator-summary {
   border-left: 1px solid var(--line);
-  padding-left: 20px;
+  padding: 18px 20px 22px;
   min-width: 0;
+  background: var(--surface-subtle);
 }
 .operator-summary h3 {
-  font-size: 14px;
+  margin: 0 0 18px;
+  color: var(--ink);
+  font-size: 13px;
+  letter-spacing: 0.01em;
 }
 .operator-source-checks {
   display: grid;
@@ -66,29 +98,77 @@
 .operator-source {
   display: flex;
   flex-wrap: wrap;
-  gap: 14px;
-  padding: 10px 0;
+  gap: 8px;
+  padding: 0;
+  margin: 0 0 14px;
   border: 0;
+}
+.operator-source legend {
+  width: 100%;
+  margin-bottom: 7px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
 }
 .operator-source label {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control, 6px);
+  color: var(--ink-soft);
+  background: var(--control-bg);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    border-color var(--motion-interaction, 0ms) var(--ease-standard),
+    background-color var(--motion-interaction, 0ms) var(--ease-standard),
+    color var(--motion-interaction, 0ms) var(--ease-standard);
+}
+.operator-source label:hover,
+.operator-source label:has(input:checked) {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line-strong));
+  color: var(--accent-ink);
+  background: color-mix(in srgb, var(--accent-soft) 78%, var(--control-bg));
+}
+.operator-source input {
+  accent-color: var(--accent);
 }
 .operator-capability {
-  border-block: 1px solid var(--line);
-  padding: 10px 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 7px 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control, 6px);
+  background: var(--surface-subtle);
   overflow-wrap: anywhere;
 }
 .operator-capability strong {
-  margin-right: 10px;
+  color: var(--positive-ink, var(--accent-ink));
+  font: 700 11px var(--font-mono, Consolas, monospace);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 .operator-capability span {
   font-size: 12px;
+  color: var(--muted);
+}
+.operator-capability details {
+  flex-basis: 100%;
+  margin: 3px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
 }
 .operator-warning {
-  color: var(--warning, #a36810);
+  margin: 14px 0;
+  padding: 8px 10px;
+  border-left: 2px solid var(--warning);
+  color: var(--warning-ink, var(--warning));
+  background: color-mix(in srgb, var(--warning-soft) 46%, transparent);
 }
 .operator-fields {
   display: grid;
@@ -112,15 +192,21 @@
   grid-column: 1/-1;
 }
 .operator-authoring details {
-  margin: 10px 0;
+  margin: 14px 0;
   border-top: 1px solid var(--line);
-  padding-top: 10px;
+  padding-top: 11px;
   min-width: 0;
 }
 .operator-authoring summary {
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
+  color: var(--ink-soft);
+  outline: none;
+}
+.operator-authoring summary:hover,
+.operator-authoring summary:focus-visible {
+  color: var(--accent-ink);
 }
 .operator-authoring input:not([type="radio"]):not([type="checkbox"]),
 .operator-authoring select,
@@ -131,9 +217,20 @@
   background: var(--control-bg);
   color: inherit;
   border: 1px solid var(--line-strong);
-  border-radius: 3px;
-  padding: 7px;
+  border-radius: var(--radius-control, 6px);
+  padding: 8px 9px;
   font-size: 12px;
+  outline: none;
+  transition:
+    border-color var(--motion-interaction, 0ms) var(--ease-standard),
+    box-shadow var(--motion-interaction, 0ms) var(--ease-standard),
+    background-color var(--motion-interaction, 0ms) var(--ease-standard);
+}
+.operator-authoring input:not([type="radio"]):not([type="checkbox"]):focus,
+.operator-authoring select:focus,
+.operator-authoring textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
 }
 .operator-authoring textarea {
   display: block;
@@ -142,15 +239,29 @@
   resize: vertical;
   font-family: var(--font-mono, Consolas, monospace);
   line-height: 1.5;
+  background: var(--editor-bg, var(--control-bg));
+  color: var(--editor-text, var(--ink));
 }
 .operator-authoring button {
   color: var(--ink);
   background: var(--control-bg);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-control, 3px);
+  border-radius: var(--radius-control, 6px);
   font-size: 12px;
-  padding: 6px 9px;
+  min-height: 32px;
+  padding: 6px 10px;
   cursor: pointer;
+  transition:
+    border-color var(--motion-interaction, 0ms) var(--ease-standard),
+    background-color var(--motion-interaction, 0ms) var(--ease-standard),
+    color var(--motion-interaction, 0ms) var(--ease-standard),
+    transform var(--motion-interaction, 0ms) var(--ease-emphasized);
+}
+.operator-authoring button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  background: var(--accent-soft);
+  transform: translateY(-1px);
 }
 .operator-authoring button:disabled {
   cursor: default;
@@ -165,7 +276,7 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  margin: 14px 0;
+  margin: 16px 0;
   font-size: 12px;
 }
 .operator-toolbar strong {
@@ -192,13 +303,21 @@
 }
 .operator-authoring th,
 .operator-authoring td {
-  padding: 8px;
+  padding: 9px 10px;
   text-align: left;
   border-bottom: 1px solid var(--line);
   overflow-wrap: anywhere;
 }
 .operator-authoring th {
   font-weight: 600;
+  color: var(--muted);
+  background: var(--table-header, var(--surface-muted));
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.operator-authoring tbody tr:hover td {
+  background: color-mix(in srgb, var(--accent-soft) 56%, var(--panel));
 }
 .operator-authoring pre {
   white-space: pre-wrap;
@@ -224,7 +343,8 @@
 }
 .operator-instances {
   border: 1px solid var(--line);
-  padding: 12px;
+  border-radius: var(--radius-control, 6px);
+  padding: 11px 12px;
   margin: 12px 0;
   display: flex;
   flex-wrap: wrap;
@@ -234,4 +354,88 @@
 .operator-instances label {
   font-size: 12px;
   overflow-wrap: anywhere;
+}
+
+.operator-authoring > .operator-layout .operator-main > section[aria-label="执行划分编辑器"] {
+  margin-top: 18px;
+  padding-top: 2px;
+}
+.operator-authoring > .operator-layout .operator-main > section[aria-label="执行划分编辑器"] > details {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control, 6px);
+  background: var(--surface-subtle);
+}
+.operator-authoring > .operator-layout .operator-main > section[aria-label="执行划分编辑器"] > details + details {
+  margin-top: 10px;
+}
+.operator-authoring > .operator-layout .operator-main > section[aria-label="执行划分编辑器"] > p:last-child {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.operator-contract {
+  display: block;
+  margin: 14px 0 0;
+  padding: 8px 10px;
+  border-left: 2px solid var(--accent);
+  color: var(--muted);
+  background: var(--surface-muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+.operator-summary dl {
+  margin: 0;
+}
+.operator-summary dd code,
+.operator-summary dd {
+  color: var(--ink);
+}
+.operator-summary > details {
+  margin-top: 16px;
+}
+.operator-summary > button {
+  margin-top: 14px;
+}
+
+@media (max-width: 980px) {
+  .operator-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .operator-summary {
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 680px) {
+  .operator-authoring > header,
+  .operator-main,
+  .operator-summary {
+    padding-inline: 14px;
+  }
+
+  .operator-steps {
+    padding-inline: 14px;
+    overflow-x: auto;
+  }
+
+  .operator-steps li {
+    padding-right: 14px;
+  }
+
+  .operator-source label {
+    flex: 1 1 200px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .operator-source label,
+  .operator-authoring button,
+  .operator-authoring input,
+  .operator-authoring select,
+  .operator-authoring textarea {
+    transition: none;
+  }
 }

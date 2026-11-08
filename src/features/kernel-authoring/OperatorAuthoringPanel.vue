@@ -88,7 +88,7 @@ const modeFacts: Record<
     operators: "默认模型已发布算子",
     ranks: "沿用场景准入",
     network: "沿用拓扑与后端能力",
-    recovery: "当前 Web 未开放恢复提交",
+    recovery: "not_covered",
   },
   kernel_strategy: {
     fidelity: "DES",
@@ -96,23 +96,23 @@ const modeFacts: Record<
     operators: operations.join(" / "),
     ranks: "条件支持 · CLI 验证模型参与方",
     network: "条件支持 · 由正式拓扑与 CLI 验证",
-    recovery: "not_covered · 当前 Web 未开放恢复提交",
+    recovery: "not_covered",
   },
   tilelang_source: {
     fidelity: "DES + 独立 CPU 语义检查",
     phases: "prefill / decode",
     operators: operations.join(" / "),
-    ranks: "代表 Rank 或显式同构 TP2 · 不支持任意 Rank",
-    network: "operator_barrier / 条件性 tile_ready_allreduce",
-    recovery: "not_covered · 后端部分 Flow DES 可恢复；Web 未接恢复入口",
+    ranks: "代表 Rank / 显式同构 TP2",
+    network: "operator_barrier / 条件性 allreduce",
+    recovery: "not_covered",
   },
   execution_partition: {
     fidelity: "DES",
     phases: "prefill / decode",
     operators: "显式 slices；不推断模型算子",
-    ranks: "device / participants 显式绑定拓扑",
-    network: "allreduce / sendrecv · CLI 精确准入",
-    recovery: "not_covered · 当前 Web 未开放恢复提交",
+    ranks: "device / participants 显式绑定",
+    network: "allreduce / sendrecv",
+    recovery: "not_covered",
   },
 };
 const traceProvenance = computed(() => {
@@ -385,7 +385,6 @@ const sourceBlocked = computed<Record<string, Record<string, string>>>(() => {
   <section class="operator-authoring" aria-label="算子与 Kernel">
     <header>
       <h2>算子与 Kernel</h2>
-      <p>显式配置 → 结构校验 → CLI 准入 → 提交仿真</p>
     </header>
     <ol class="operator-steps">
       <li>1 选择执行来源</li>
@@ -418,7 +417,7 @@ const sourceBlocked = computed<Record<string, Record<string, string>>>(() => {
               <dt>可用 operator</dt>
               <dd>{{ modeFacts[mode].operators }}</dd>
               <dt>真实 Trace</dt>
-              <dd>不要求；合成输入保持 synthetic_trace，声明成本不获得校准资格</dd>
+              <dd>不要求 · synthetic_trace</dd>
               <dt>多 Rank</dt>
               <dd>{{ modeFacts[mode].ranks }}</dd>
               <dt>网络通信</dt>
@@ -429,10 +428,7 @@ const sourceBlocked = computed<Record<string, Record<string, string>>>(() => {
           </details>
         </div>
         <template v-if="mode !== 'default' && document">
-          <p class="operator-warning">
-            声明成本不是实测 GPU 时延；当前不执行 GPU 编译器，也不是逐 CTA 实测时序。未校准 · synthetic_trace ·
-            exploratory。
-          </p>
+          <p class="operator-warning">未校准 · synthetic_trace · 声明成本不代表 GPU 实测</p>
           <button
             type="button"
             :disabled="!query.data.value?.custom_inputs"
@@ -470,10 +466,7 @@ const sourceBlocked = computed<Record<string, Record<string, string>>>(() => {
                 删除策略
               </button>
             </div>
-            <p>
-              aggregate：整 Kernel 观察粒度。expanded：CTA/Tile 粒度执行片段观察。后端策略 selector
-              覆盖该类别全部实例，精确实例选择为 not_covered。
-            </p>
+            <p>aggregate = 整 Kernel；expanded = CTA/Tile 片段。selector 按类别覆盖，精确实例暂不覆盖。</p>
             <div class="operator-scroll">
               <table class="operator-strategies">
                 <thead>
@@ -571,13 +564,10 @@ const sourceBlocked = computed<Record<string, Record<string, string>>>(() => {
                   "
               /></label>
             </section>
-            <p>不支持 persistent、Split-K、任意映射、PTX/SASS 或自动调优。</p>
+            <p>不支持 persistent / Split-K / 任意映射 / PTX/SASS / 自动调优。</p>
           </template>
           <template v-if="mode === 'tilelang_source' && sourceSelection">
-            <p>
-              源码未执行（不直接执行上传的 Python） · 当前仅支持严格源码子集 · 不支持任意 Python / TileLang 编译 ·
-              不支持自动调用 GPU 编译器。AST lowering 与独立 CPU 语义执行由后端受限入口完成。
-            </p>
+            <p>源码未执行 · 仅支持严格源码子集 · 不调用 GPU 编译器；AST lowering / CPU 语义由受限入口完成。</p>
             <StructuredFields
               :value="{ tilelang_model_dtype: document.tilelang_model_dtype }"
               @change="patch"
@@ -669,7 +659,7 @@ const sourceBlocked = computed<Record<string, Record<string, string>>>(() => {
             </label>
             <h3>operator 绑定与输出策略</h3>
             <fieldset class="operator-instances">
-              <legend>精确 operator instances · 按声明模型列出，CLI 验证实际命中</legend>
+              <legend>operator instances · CLI 验证实际命中</legend>
               <label
                 ><input
                   type="checkbox"
@@ -689,9 +679,7 @@ const sourceBlocked = computed<Record<string, Record<string, string>>>(() => {
                   @change="toggleInstance(id, ($event.target as HTMLInputElement).checked)"
                 />{{ id }}</label
               >
-              <p v-if="!instanceCatalog.length">
-                not_covered · 声明模型无法列出实例；可在高级 JSON 中明确绑定并由 CLI 拒绝不合法实例。
-              </p>
+              <p v-if="!instanceCatalog.length">not_covered · 声明模型未列出实例，可在 JSON 中绑定后由 CLI 校验。</p>
               <p v-if="sourceSelection.instances.some((id: string) => !instanceCatalog.includes(id))">
                 error · 存在不属于声明模型的实例；不会自动替换。
               </p>
@@ -726,10 +714,7 @@ const sourceBlocked = computed<Record<string, Record<string, string>>>(() => {
                 <option>materialized</option>
               </select></label
             >
-            <p>
-              仅结构模式不要求数值 payload 可物化。CPU 数值语义、合成一致性、真实 Trace、校准和 held-out validation
-              是独立证据。
-            </p>
+            <p>structure_only 不要求数值 payload；CPU 语义、合成一致性、真实 Trace 与校准分别计证。</p>
             <dl class="operator-source-checks">
               <dt>结构合法</dt>
               <dd>{{ issues.length ? "error · 查看字段路径" : "available · 前端合同检查通过" }}</dd>
@@ -767,10 +752,7 @@ const sourceBlocked = computed<Record<string, Record<string, string>>>(() => {
             </dl>
             <details>
               <summary>高级 Rank / 成本 / output admission</summary>
-              <p>
-                rank_programs 按实际 endpoint 完整提供两份 source/arguments/payload_mode。rank_cost_profiles 必须绑定各
-                Rank 的程序与 device placement；所有组合交由 CLI 精确准入。
-              </p>
+              <p>rank_programs、rank_cost_profiles 与 device placement 必须完整匹配；由 CLI 准入。</p>
               <StructuredFields
                 :value="document.dense_execution"
                 path="/dense_execution"
@@ -799,12 +781,10 @@ const sourceBlocked = computed<Record<string, Record<string, string>>>(() => {
                 />
               </label>
             </details>
-            <p>
-              <code>tilesim.tilelang_kernel_program.v1</code> · <code>declared_async_ring_v1</code><br /><code
-                >bounded_integer_A3K5mod7_B2N3mod5_v1</code
-              >
-              / <code>not_materialized_execution_structure_v1</code>
-            </p>
+            <small class="operator-contract"
+              ><code>tilesim.tilelang_kernel_program.v1</code> · <code>declared_async_ring_v1</code> ·
+              <code>bounded_integer_A3K5mod7_B2N3mod5_v1</code> / <code>not_materialized_execution_structure_v1</code>
+            </small>
           </template>
           <ExecutionPartitionEditor
             v-if="mode === 'execution_partition'"
@@ -921,10 +901,13 @@ const sourceBlocked = computed<Record<string, Record<string, string>>>(() => {
             {{ validation?.claim_scope || traceProvenance.allowed_claim_scope || "missing" }} · 声明成本保持未校准
           </dd>
         </dl>
-        <p>
-          声明成本不等于 measured latency；CPU 源码语义不等于 GPU numerical correctness；当前未提供真实 Trace 校准或
-          held-out validation。
-        </p>
+        <details>
+          <summary>证据边界</summary>
+          <p>
+            声明成本不是 measured latency；CPU 源码语义不是 GPU numerical correctness；当前无真实 Trace 校准或 held-out
+            validation。
+          </p>
+        </details>
         <button type="button" @click="query.refetch()">刷新能力</button>
       </aside>
     </div>
